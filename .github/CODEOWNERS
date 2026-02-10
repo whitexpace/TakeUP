@@ -1,0 +1,4 @@
+/server/      @your-org/backend-leads
+/prisma/      @your-org/backend-leads
+/app/         @your-org/frontend-leads
+/shared/      @your-org/frontend-leads
