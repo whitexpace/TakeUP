@@ -1,4 +1,4 @@
-# Nuxt 4 + tRPC + Prisma + Supabase
+# Nuxt 4 + tRPC + Prisma + Supabase Pro
 
 This repo is scaffolded for a student scrum team workflow:
 
