@@ -2,8 +2,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['trpc-nuxt', '@nuxtjs/supabase', '@nuxt/eslint'],
-  build: { transpile: ['trpc-nuxt'] },
+  modules: ['@nuxtjs/supabase', '@nuxt/eslint'],
   typescript: { strict: true },
   supabase: {
     redirectOptions: {
