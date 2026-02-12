@@ -1,6 +1,6 @@
 <template>
   <main class="page">
-    <h1>Nuxt 4 + tRPC + Prisma + Supabase</h1>
+    <h1>This is the home page</h1>
     <p>{{ status }}</p>
   </main>
 </template>
