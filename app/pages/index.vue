@@ -13,12 +13,12 @@
       <div class="content">
       <div class="section one">
         <div class="left">
-          <h1 class="slogan">SHARE WHAT YOU <span class="highlight orange">HAVE</span><br>GET WHAT YOU <span class="highlight blue">NEED</span></h1>
+          <h2 class="slogan">SHARE WHAT YOU <span class="highlight orange">HAVE</span><br>GET WHAT YOU <span class="highlight blue">NEED</span></h2>
           <p class="description">Borrow essential gear for free or rent items for your projects within a trusted campus network.</p>
           <div class="stats">
-            <StatCard />
-            <StatCard />
-            <StatCard />
+            <StatCard class="statcard" />
+            <StatCard class="statcard" />
+            <StatCard class="statcard" />
           </div>
         </div>
         <div class="right">
@@ -111,8 +111,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .content {
-  padding: 0 168px 0 168px;
-  margin-top: 48px;
+  padding: 120px 168px 0 168px;
 }
 
 .section.one {
@@ -126,6 +125,36 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.slogan{
+  color: #202124;
+  font-size: 55px;
+  margin: 0;
+  margin-bottom: 16px;
+}
+
+.description {
+  font-size: 24px;
+  margin: 0;
+  margin-bottom: 32px;
+}
+
+.stats {
+  flex-wrap: wrap;
+}
+
+.highlight.orange {
+  color: #FF7124;
+}
+
+.highlight.blue {
+  color: #3b4883;
+}
+
+.statcard {
+  margin-right: 16px;
+  margin-bottom: 32px;
 }
 
 .section.one .right {
