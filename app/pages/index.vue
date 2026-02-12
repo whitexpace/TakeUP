@@ -13,7 +13,7 @@
       <div class="content">
       <div class="section one">
         <div class="left">
-          <h2 class="slogan">SHARE WHAT YOU <span class="highlight orange">HAVE</span><br>GET WHAT YOU <span class="highlight blue">NEED</span></h2>
+          <h2 class="slogan">SHARE WHAT YOU <span class="highlight orange">HAVE</span>.<br>GET WHAT YOU <span class="highlight blue">NEED</span>.</h2>
           <p class="description">Borrow essential gear for free or rent items for your projects within a trusted campus network.</p>
           <div class="stats">
             <StatCard class="statcard" />
@@ -162,8 +162,49 @@
     padding: 0 16px;
   }
 
+  .content {
+    padding-top: 40px;
+  }
+
+  .section.one {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 28px;
+  }
+
+  .section.one .left,
+  .section.one .right {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .slogan {
+    font-size: 34px;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+
+  .description {
+    font-size: 16px;
+    line-height: 1.45;
+    margin-bottom: 20px;
+  }
+
+  .stats {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+  }
+
   .left > div {
     font-size: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .slogan {
+    font-size: 28px;
   }
 }
 
