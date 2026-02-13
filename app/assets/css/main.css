@@ -1,9 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Rewon:wght@400&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/geist.woff2') format('woff2'),
+       url('/fonts/geist.woff') format('woff');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Rewon';
+  src: url('/fonts/Rewon.woff2') format('woff2'),
+       url('/fonts/Rewon.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --color-pale-cashmere: #e8dfd5;
+  --color-cinnamon-ice: #dbbba7;
+  --color-burning-orange: #ff7124;
+  --color-blue-estate: #3b4883;
+  --color-wahoo: #272d4e;
+  --color-noble-black: #202124;
+  --color-white: #ffffff;
+  --color-cream: #f9f3ec;
+}
 
 html,
 body {
   font-family: 'Geist', 'Rewon', sans-serif;
   margin: 0;
-  background-color: #F9F3EC;
+  background-color: var(--color-cream);
 }

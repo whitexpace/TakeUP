@@ -16,9 +16,9 @@
           <h2 class="slogan">SHARE WHAT YOU <span class="highlight orange">HAVE</span>.<br>GET WHAT YOU <span class="highlight blue">NEED</span>.</h2>
           <p class="description">Borrow essential gear for free or rent items for your projects within a trusted campus network.</p>
           <div class="stats">
-            <StatCard class="statcard" />
-            <StatCard class="statcard" />
-            <StatCard class="statcard" />
+            <StatCard class="statcard" value="1,500+" label="Items" />
+            <StatCard class="statcard" value="500+" label="Iskos" />
+            <StatCard class="statcard" value="4.9" label="Average Rating" />
           </div>
         </div>
         <div class="right">
@@ -44,7 +44,6 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 <style scoped>
 .page {
   min-height: 100vh;
-  padding: 2rem;
   font-family:
     ui-sans-serif,
     system-ui,
@@ -53,16 +52,19 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .header {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 77px;
   box-sizing: border-box;
-  background-color: #fff;
-  border-bottom: 1px solid #dbbba7;
-  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
+  background-color: var(--color-white);
+  border-bottom: 1px solid var(--color-cinnamon-ice);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 168px 0 168px;
+  padding: 0 168px;
+  z-index: 1000;
 }
 
 .left {
@@ -72,7 +74,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .left > div {
-  color: #3b4883;
+  color: var(--color-blue-estate);
   font-family: 'Rewon', 'Geist', sans-serif;
   font-size: 28px;
   line-height: 1;
@@ -100,7 +102,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .sign-in {
-  color: #202124;
+  color: var(--color-noble-black);
   font-size: 16px;
   font-weight: 400;
   line-height: 1;
@@ -111,7 +113,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .content {
-  padding: 120px 168px 0 168px;
+  padding: 160px 168px 0 168px;
 }
 
 .section.one {
@@ -128,13 +130,17 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .slogan{
-  color: #202124;
+  color: var(--color-noble-black);
+  font-family: 'Rewon', sans-serif;
   font-size: 55px;
   margin: 0;
   margin-bottom: 16px;
 }
 
 .description {
+  color: var(--color-noble-black);
+  opacity: 0.8;
+  font-family: 'Geist', sans-serif;
   font-size: 24px;
   margin: 0;
   margin-bottom: 32px;
@@ -145,11 +151,11 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .highlight.orange {
-  color: #FF7124;
+  color: var(--color-burning-orange);
 }
 
 .highlight.blue {
-  color: #3b4883;
+  color: var(--color-blue-estate);
 }
 
 .statcard {
@@ -168,12 +174,11 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 
 
 @media (max-width: 768px) {
-  .header, .content {
+  .header {
     padding: 0 16px;
   }
-
   .content {
-    padding-top: 40px;
+    padding: 120px 16px 0 16px;
   }
 
   .section.one {
