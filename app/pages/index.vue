@@ -115,7 +115,21 @@
           <ItemCard />
         </div>        
       </div>
-
+      
+      <div class="section six">
+        <div class="container">
+          <div class="title">
+            READY TO START SHARING?
+          </div>
+          <div class="description">
+            Join hundreds of UP Cebu students already borrowing and leanding on campus.
+          </div>
+          <div class="actions">
+            <BorrowNowButton />
+            <LendItemButton />
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </template>
