@@ -2,19 +2,25 @@
   <main class="page">
     <div class="header">
       <div class="left">
-        <img src="/images/logo.svg" alt="TakeUP Logo" href="" class="left-img">
+        <img src="/images/logo.svg" alt="TakeUP Logo" href="" class="left-img" />
       </div>
       <div class="right">
-        <img src="/images/login-button.svg" alt="Login button" href="">
+        <img src="/images/login-button.svg" alt="Login button" href="" />
         <div class="sign-in">Sign in</div>
       </div>
     </div>
 
-      <div class="content">
+    <div class="content">
       <div class="section one">
         <div class="left">
-          <h2 class="slogan">SHARE WHAT YOU <span class="highlight orange">HAVE</span>.<br>GET WHAT YOU <span class="highlight blue">NEED</span>.</h2>
-          <p class="description">Borrow essential gear for free or rent items for your projects within a trusted campus network.</p>
+          <h2 class="slogan">
+            SHARE WHAT YOU <span class="highlight orange">HAVE</span>.<br />GET WHAT YOU
+            <span class="highlight blue">NEED</span>.
+          </h2>
+          <p class="description">
+            Borrow essential gear for free or rent items for your projects within a trusted campus
+            network.
+          </p>
           <div class="stats">
             <StatCard class="statcard" value="1,500+" label="Items" />
             <StatCard class="statcard" value="500+" label="Iskos" />
@@ -29,7 +35,9 @@
               <img src="/images/google-icon.svg" alt="Google" class="google-icon" />
               <span>Sign in using your UP mail</span>
             </button>
-            <p class="login-note">Only accounts ending with <span class="semibold">up.edu.ph</span> are accepted</p>
+            <p class="login-note">
+              Only accounts ending with <span class="semibold">up.edu.ph</span> are accepted
+            </p>
           </div>
           <div class="features-list">
             <FeatureItem text="Verified UP Students only" />
@@ -38,16 +46,27 @@
           </div>
         </div>
       </div>
+
+      <div class="section two">
+        <div class="left">Image</div>
+        <div class="right">
+          <div class="slogan">BORROW LOCALLY. LEND SAFELY. SAVE MONEY.</div>
+          <div class="description">
+            <p>
+              No “neighbors” — just students. Our campus-exclusive platform connects you with
+              verified UP students who have what you need or want what you have.
+            </p>
+          </div>
+          <div class="actions-container">
+            <!-- TODO: add call-to-action buttons -->
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </template>
 
-<script setup lang="ts">
-const { $trpc } = useNuxtApp()
-
-const { data } = await useAsyncData("health", () => $trpc.health.ping.query())
-const status = computed(() => (data.value?.ok ? "API is healthy" : "API not ready"))
-</script>
+<script setup lang="ts"></script>
 
 <style scoped>
 .page {
@@ -89,7 +108,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 
 .left > div {
   color: var(--color-blue-estate);
-  font-family: 'Rewon', 'Geist', sans-serif;
+  font-family: "Rewon", "Geist", sans-serif;
   font-size: 28px;
   line-height: 1;
 }
@@ -144,9 +163,9 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
   align-items: flex-start;
 }
 
-.slogan{
+.slogan {
   color: var(--color-noble-black);
-  font-family: 'Rewon', sans-serif;
+  font-family: "Rewon", sans-serif;
   font-size: 55px;
   margin: 0;
   margin-bottom: 16px;
@@ -155,7 +174,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 .description {
   color: var(--color-noble-black);
   opacity: 0.8;
-  font-family: 'Geist', sans-serif;
+  font-family: "Geist", sans-serif;
   font-size: 24px;
   margin: 0;
   margin-bottom: 32px;
@@ -198,7 +217,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .login-title {
-  font-family: 'Geist', sans-serif;
+  font-family: "Geist", sans-serif;
   font-weight: 700;
   font-size: 30px;
   color: var(--color-noble-black);
@@ -206,7 +225,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .login-subtitle {
-  font-family: 'Geist', sans-serif;
+  font-family: "Geist", sans-serif;
   font-weight: 300;
   font-size: 17px;
   color: var(--color-noble-black);
@@ -227,7 +246,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
   cursor: pointer;
   margin-bottom: 16px;
   color: var(--color-white);
-  font-family: 'Geist', sans-serif;
+  font-family: "Geist", sans-serif;
   font-weight: 500;
   font-size: 16px;
 }
@@ -243,7 +262,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .login-note {
-  font-family: 'Geist', sans-serif;
+  font-family: "Geist", sans-serif;
   font-weight: 300;
   font-size: 15px;
   color: var(--color-noble-black);
@@ -265,10 +284,9 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
   gap: 24px;
 }
 
-
-
 @media (max-width: 1440px) {
-  .header, .content {
+  .header,
+  .content {
     padding-left: 60px;
     padding-right: 60px;
   }
@@ -316,7 +334,7 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
     align-items: center;
     text-align: center;
   }
-  
+
   .section.one .right {
     max-width: 100%;
     width: 100%;
@@ -378,5 +396,4 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
     font-size: 28px;
   }
 }
-
 </style>
