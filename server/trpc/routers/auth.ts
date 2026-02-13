@@ -6,7 +6,8 @@ export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => ({ user: ctx.user })),
 
   signIn: publicProcedure.input(signInSchema).mutation(async ({ ctx, input }) => {
-    const { data, error } = await ctx.supabase.auth.signInWithPassword({
+    const supabase = ctx.supabase as unknown as { auth: any }
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: input.email,
       password: input.password,
     })
@@ -19,7 +20,8 @@ export const authRouter = router({
   }),
 
   signOut: protectedProcedure.mutation(async ({ ctx }) => {
-    const { error } = await ctx.supabase.auth.signOut()
+    const supabase = ctx.supabase as unknown as { auth: any }
+    const { error } = await supabase.auth.signOut()
     if (error) {
       throw error
     }
