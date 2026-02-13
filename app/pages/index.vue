@@ -50,6 +50,12 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
     -apple-system,
     sans-serif;
   min-height: 100vh;
+  padding: 2rem;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 .header {
