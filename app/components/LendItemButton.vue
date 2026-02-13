@@ -1,19 +1,29 @@
 <template>
-  <button
-    class="w-max h-[62px] flex bg-white rounded-2xl font-geist font-medium text-[20px] text-noble-black items-center justify-center px-8 gap-3 hover:scale-105 active:scale-95 transition-all hover:bg-pale-cashmere shadow-sm"
-  >
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      class="mr-2"
-    >
-      <circle cx="10" cy="10" r="9.25" stroke="currentColor" stroke-width="1.5" />
-      <line x1="9.75" y1="4" x2="9.75" y2="16" stroke="currentColor" stroke-width="1.5" />
-      <path d="M4 10.25L16 10.25" stroke="currentColor" stroke-width="1.5" />
-    </svg>
-    Lend an Item
-  </button>
+    <button><img class="add item" src="/images/add-icon.svg" alt="Search Icon">Lend an Item</button>
 </template>
+
+<style scoped>
+.search-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+button {
+ width: max-content;
+ height: 62px;
+ display: flex;
+ border: none;
+ background-color: #ffffff;
+ border-radius: 16px;
+ font-family: "Geist", sans-serif;
+ font-weight: 500;
+ font-size: 20px;
+ color: #3B4883;
+ align-items: center;
+ justify-content: center;
+ padding: 16px 32px;
+ border: 1px solid #DBBBA7;
+ gap: 12px;
+}
+</style>

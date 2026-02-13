@@ -1,8 +1,27 @@
 <template>
-  <button
-    class="w-max h-[62px] flex border-none bg-burning-orange rounded-2xl font-geist font-medium text-[20px] text-white items-center justify-center px-8 hover:scale-105 active:scale-95 transition-all hover:opacity-95 shadow-md"
-  >
-    <img class="w-6 h-6 mr-2" src="/images/search-icon.svg" alt="Search Icon" />
-    Borrow Now
-  </button>
+    <button><img class="search-icon" src="/images/search-icon.svg" alt="Search Icon">Borrow Now</button>
 </template>
+
+<style scoped>
+.search-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+button {
+ width: max-content;
+ height: 62px;
+ display: flex;
+ border: none;
+ background-color: #FF7124;
+ border-radius: 16px;
+ font-family: "Geist", sans-serif;
+ font-weight: 500;
+ font-size: 20px;
+ color: #ffffff;
+ align-items: center;
+ justify-content: center;
+ padding: 16px 32px;
+}
+</style>
