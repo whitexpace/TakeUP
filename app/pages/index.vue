@@ -131,6 +131,12 @@
         </div>
       </div>
     </div>
+
+    <footer>
+      <div class="container">
+        <p>2026 &copy; TakeUP. Made with love for the UP Cebu Community.</p>
+      </div>
+    </footer>
   </main>
 </template>
 
