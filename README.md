@@ -49,6 +49,12 @@ pnpm prisma generate
 pnpm dev
 ```
 
+## Formatting workflow
+
+- Run `pnpm format` before pushing changes.
+- Prisma schema formatting is included in `pnpm format` via `prisma format`.
+- CI enforces formatting and will fail if files are not formatted.
+
 ## Editor integration
 
 - VSCode settings live in `.vscode/`

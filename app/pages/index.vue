@@ -40,6 +40,12 @@
 <style scoped>
 .page {
   min-height: 100vh;
+  padding: 2rem;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 .header {
