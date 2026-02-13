@@ -598,6 +598,10 @@ const handleGoogleLogin = () => {
     -apple-system,
     sans-serif;
   min-height: 100vh;
+<<<<<<< HEAD
+=======
+  padding: 2rem;
+>>>>>>> 19e17ff (rules: update formatting)
   font-family:
     ui-sans-serif,
     system-ui,
