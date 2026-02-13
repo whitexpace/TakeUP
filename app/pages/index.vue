@@ -58,10 +58,12 @@
             </p>
           </div>
           <div class="actions-container">
-            <!-- TODO: add call-to-action buttons -->
+             <BorrowNowButton />
+             <LendItemButton />
           </div>
         </div>
       </div>
+
     </div>
   </main>
 </template>
