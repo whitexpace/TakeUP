@@ -32,9 +32,9 @@
             <p class="login-note">Only accounts ending with <span class="semibold">up.edu.ph</span> are accepted</p>
           </div>
           <div class="features-list">
-            <p>Verified UP Students only</p>  
-            <p>Secure transactions</p>
-            <p>Campus-based meetups</p>
+            <FeatureItem text="Verified UP Students only" />
+            <FeatureItem text="Secure transactions" />
+            <FeatureItem text="Campus-based meetups" />
           </div>
         </div>
       </div>
@@ -127,13 +127,14 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .content {
-  padding: 160px 168px 0 168px;
+  padding: 0 168px;
 }
 
 .section.one {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  padding-top: 200px;
 }
 
 .section.one .left {
@@ -178,11 +179,11 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .section.one .right {
-  max-width: 50%;
+  width: fit-content;
   justify-content: flex-start;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .login-card {
@@ -255,21 +256,13 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 }
 
 .features-list {
-  margin-top: 32px;
+  margin-top: 24px;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.features-list p {
-  margin: 0;
-  font-family: 'Geist', sans-serif;
-  color: var(--color-noble-black);
-  font-size: 16px;
-  opacity: 0.8;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: row;
+  justify-content: center;
+  width: 100%;
+  max-width: 450px;
+  gap: 24px;
 }
 
 
@@ -278,6 +271,10 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
   .header, .content {
     padding-left: 60px;
     padding-right: 60px;
+  }
+
+  .section.one {
+    padding-top: 160px;
   }
 
   .slogan {
@@ -293,7 +290,8 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
   }
 
   .section.one .right {
-    max-width: 450px;
+    width: fit-content;
+    align-items: center;
   }
 }
 
@@ -302,13 +300,14 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
     padding: 0 16px;
   }
   .content {
-    padding: 120px 16px 0 16px;
+    padding: 0 16px;
   }
 
   .section.one {
     flex-direction: column;
     align-items: center;
     gap: 48px;
+    padding-top: 160px;
   }
 
   .section.one .left {
@@ -322,6 +321,11 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
     max-width: 100%;
     width: 100%;
     align-items: center;
+  }
+
+  .features-list {
+    justify-content: center;
+    flex-wrap: wrap;
   }
 
   .slogan {
