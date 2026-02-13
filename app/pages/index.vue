@@ -377,6 +377,7 @@ const handleGoogleLogin = () => {
               ]"
             />
           </div>
+<<<<<<< HEAD
 
           <!-- Top-Right Badge -->
           <div
@@ -557,9 +558,15 @@ const handleGoogleLogin = () => {
           <div class="flex flex-col sm:flex-row gap-6">
             <BorrowNowButton />
             <LendItemButton />
+=======
+          <div class="actions-container">
+             <BorrowNowButton />
+             <LendItemButton />
+>>>>>>> 615a475 (feat(home): add section two markup)
           </div>
         </div>
       </div>
+
     </div>
 
     <footer
