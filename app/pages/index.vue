@@ -15,6 +15,10 @@ const status = computed(() => (data.value?.ok ? 'API is healthy' : 'API not read
 <style scoped>
 .page {
   padding: 2rem;
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 </style>

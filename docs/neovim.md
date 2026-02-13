@@ -14,15 +14,29 @@ Example for `conform.nvim`:
 
 ```lua
 require("conform").setup({
+  formatters = {
+    prisma = {
+      command = "pnpm",
+      args = { "exec", "prisma", "format", "--schema", "$FILENAME" },
+      stdin = false,
+    },
+  },
   formatters_by_ft = {
     javascript = { "prettier" },
     typescript = { "prettier" },
     vue = { "prettier" },
     json = { "prettier" },
     markdown = { "prettier" },
+    prisma = { "prisma" },
   },
   format_on_save = { timeout_ms = 2000, lsp_fallback = true },
 })
+```
+
+If formatting does not run on save for `schema.prisma`, verify Neovim sees the filetype as `prisma`:
+
+```vim
+:set filetype?
 ```
 
 3. ESLint diagnostics

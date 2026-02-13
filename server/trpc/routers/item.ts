@@ -10,17 +10,15 @@ export const itemRouter = router({
     })
   }),
 
-  create: protectedProcedure
-    .input(createItemSchema)
-    .mutation(({ ctx, input }) => {
-      return ctx.prisma.item.create({
-        data: {
-          title: input.title,
-          description: input.description ?? null,
-          ownerId: ctx.user.id,
-        },
-      })
-    }),
+  create: protectedProcedure.input(createItemSchema).mutation(({ ctx, input }) => {
+    return ctx.prisma.item.create({
+      data: {
+        title: input.title,
+        description: input.description ?? null,
+        ownerId: ctx.user.id,
+      },
+    })
+  }),
 
   byId: publicProcedure.input(itemIdSchema).query(({ ctx, input }) => {
     return ctx.prisma.item.findUnique({ where: { id: input.id } })
