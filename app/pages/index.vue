@@ -76,8 +76,46 @@
         </div>
       </div>
 
+      <div class="section four">
+        <div class="header">
+          <h2>BROWSE CATEGORIES</h2>
+          <div class="actions" href="">
+            View Categories
+          </div>
+        </div>
+        <div class="description">
+          Find Exactly what you need across popular categories
+        </div>
+        <div class="category-panel">
+            <CategoryCard text="Audio Visual" />
+            <CategoryCard text="Sports & Outdoors" />
+            <CategoryCard text="Tools & Equipment" />
+            <CategoryCard text="Books & Stationery" />
+            <CategoryCard text="Clothing & Accessories" />
+            <CategoryCard text="Hobbies & Crafts" />
+        </div>
+      </div>  
 
-      
+      <div class="section five">
+        <div class="header">
+          <h2>POPULAR ON CAMPUS</h2>
+          <div class="actions" href="">
+            View All Items
+          </div>
+        </div>
+        <div class="description">
+          Most borrowed items this week
+        </div>
+        <div class="items-panel">
+          <ItemCard />
+          <ItemCard />
+          <ItemCard />
+          <ItemCard />
+          <ItemCard />
+          <ItemCard />
+        </div>        
+      </div>
+
     </div>
   </main>
 </template>
