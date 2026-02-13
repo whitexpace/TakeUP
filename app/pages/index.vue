@@ -35,6 +35,10 @@
 </template>
 
 <script setup lang="ts">
+const { $trpc } = useNuxtApp()
+
+const { data } = await useAsyncData("health", () => $trpc.health.ping.query())
+const status = computed(() => (data.value?.ok ? "API is healthy" : "API not ready"))
 </script>
 
 <style scoped>
