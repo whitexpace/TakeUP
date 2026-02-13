@@ -1,5 +1,5 @@
 <template>
-  <header class="app-header"></header>
+  <header class="app-header"/>
 </template>
 
 <style scoped>
