@@ -22,9 +22,9 @@
             network.
           </p>
           <div class="stats">
-            <StatCard class="statcard" value="1,500+" label="Items" />
-            <StatCard class="statcard" value="500+" label="Iskos" />
-            <StatCard class="statcard" value="4.9" label="Average Rating" />
+            <StatCard1 class="statcard" value="1,500+" label="Items" />
+            <StatCard1 class="statcard" value="500+" label="Iskos" />
+            <StatCard1 class="statcard" value="4.9" label="Average Rating" />
           </div>
         </div>
         <div class="right">
@@ -63,6 +63,19 @@
           </div>
         </div>
       </div>
+
+      <div class="section three">
+        <div class="container">
+          <h2>What are you looking for?</h2>
+          <SearchBar />
+          <div class="stats-container"> 
+            <StatCard2 class="statcard" value="6" label="Borrowed Today" />
+            <StatCard2 class="statcard" value="4.9" label="Average Rating" />
+            <StatCard2 class="statcard" value="67" label="Active Items" />
+          </div>  
+        </div>
+      </div>
+
 
       
     </div>
