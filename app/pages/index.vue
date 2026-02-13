@@ -22,8 +22,16 @@
           </div>
         </div>
         <div class="right">
-          <div>Login component</div>
-          <div>
+          <div class="login-card">
+            <h3 class="login-title">Get started today.</h3>
+            <p class="login-subtitle">Sign in with your UP mail to join the community.</p>
+            <button class="login-button">
+              <img src="/images/google-icon.svg" alt="Google" class="google-icon" />
+              <span>Sign in using your UP mail</span>
+            </button>
+            <p class="login-note">Only accounts ending with <span class="semibold">up.edu.ph</span> are accepted</p>
+          </div>
+          <div class="features-list">
             <p>Verified UP Students only</p>  
             <p>Secure transactions</p>
             <p>Campus-based meetups</p>
@@ -174,12 +182,122 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
   justify-content: flex-start;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
+}
+
+.login-card {
+  background-color: var(--color-white);
+  box-shadow: 6px 8px 50px rgba(0, 0, 0, 0.15);
+  border-radius: 30px;
+  padding: 40px;
+  width: 100%;
+  max-width: 450px;
+  display: flex;
+  flex-direction: column;
+}
+
+.login-title {
+  font-family: 'Geist', sans-serif;
+  font-weight: 700;
+  font-size: 30px;
+  color: var(--color-noble-black);
+  margin: 0 0 16px 0;
+}
+
+.login-subtitle {
+  font-family: 'Geist', sans-serif;
+  font-weight: 300;
+  font-size: 17px;
+  color: var(--color-noble-black);
+  margin: 0 0 32px 0;
+  text-align: left;
+}
+
+.login-button {
+  background-color: var(--color-burning-orange);
+  border-radius: 10px;
+  border: none;
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  margin-bottom: 16px;
+  color: var(--color-white);
+  font-family: 'Geist', sans-serif;
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.login-button:hover {
+  opacity: 0.9;
+}
+
+.google-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.login-note {
+  font-family: 'Geist', sans-serif;
+  font-weight: 300;
+  font-size: 15px;
+  color: var(--color-noble-black);
+  margin: 0;
+  text-align: center;
+}
+
+.semibold {
+  font-weight: 600;
+}
+
+.features-list {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.features-list p {
+  margin: 0;
+  font-family: 'Geist', sans-serif;
+  color: var(--color-noble-black);
+  font-size: 16px;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 
 
-@media (max-width: 768px) {
+@media (max-width: 1440px) {
+  .header, .content {
+    padding-left: 60px;
+    padding-right: 60px;
+  }
+
+  .slogan {
+    font-size: 42px;
+  }
+
+  .description {
+    font-size: 20px;
+  }
+
+  .section.one .left {
+    max-width: calc(100% - 480px);
+  }
+
+  .section.one .right {
+    max-width: 450px;
+  }
+}
+
+@media (max-width: 1024px) {
   .header {
     padding: 0 16px;
   }
@@ -189,24 +307,31 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
 
   .section.one {
     flex-direction: column;
-    align-items: stretch;
-    gap: 28px;
+    align-items: center;
+    gap: 48px;
   }
 
-  .section.one .left,
+  .section.one .left {
+    max-width: 100%;
+    width: 100%;
+    align-items: center;
+    text-align: center;
+  }
+  
   .section.one .right {
     max-width: 100%;
     width: 100%;
+    align-items: center;
   }
 
   .slogan {
-    font-size: 34px;
+    font-size: 48px;
     line-height: 1.1;
     margin-bottom: 12px;
   }
 
   .description {
-    font-size: 16px;
+    font-size: 20px;
     line-height: 1.45;
     margin-bottom: 20px;
   }
@@ -216,10 +341,31 @@ const status = computed(() => (data.value?.ok ? "API is healthy" : "API not read
     flex-direction: row;
     justify-content: center;
     align-items: center;
+    gap: 16px;
+  }
+
+  .statcard {
+    margin-right: 0;
+    margin-bottom: 16px;
   }
 
   .left > div {
     font-size: 22px;
+  }
+}
+
+@media (max-width: 768px) {
+  .slogan {
+    font-size: 34px;
+  }
+  .description {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 24px;
   }
 }
 
