@@ -1,8 +1,8 @@
 <template>
-  <div class="stat-card">
-    <div class="panel">
-        <div class="stat">{{ label }}</div>
-      <div class="value">{{ value }}</div>
+  <div class="inline-block w-fit h-[82px]">
+    <div class="box-border bg-cream rounded-[16px] p-[18px]">
+        <div class="mt-[9px] mb-0 font-geist text-base font-medium leading-none text-noble-black opacity-60">{{ label }}</div>
+      <div class="m-0 font-geist text-[32px] font-bold leading-none text-blue-estate">{{ value }}</div>
     </div>
   </div>
 </template>
@@ -14,36 +14,3 @@ defineProps<{
 }>()
 </script>
 
-<style scoped>
-.stat-card {
-  display: inline-block;
-  width: fit-content;
-  height: 82px;
-}
-
-.panel {
-  box-sizing: border-box;
-  background: #F9F3EC;
-  border-radius: 16px;
-  padding: 18px;
-}
-
-.value {
-  margin: 0;
-  font-family: 'Geist', sans-serif;
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--color-blue-estate);
-}
-
-.stat {
-  margin: 9px 0 0;
-  font-family: 'Geist', sans-serif;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1;
-  color: var(--color-noble-black);
-  opacity: 0.6;
-}
-</style>
