@@ -23,8 +23,7 @@
 }
 
 @layer base {
-  html,
-  body {
+  html, body {
     @apply font-geist bg-cream m-0;
   }
 }
