@@ -1,15 +1,15 @@
 <template>
-  <form class="search-bar" role="search" @submit.prevent="onSubmit">
-    <img class="search-icon" src="/images/search-icon.svg" alt="" aria-hidden="true" />
+  <form class="w-full max-w-[760px] min-h-[68px] flex items-center gap-3 px-5 py-[10px] pl-[20px] pr-[12px] border border-cinnamon-ice rounded-[18px] bg-white" role="search" @submit.prevent="onSubmit">
+    <img class="w-6 h-6 opacity-70" src="/images/search-icon.svg" alt="" aria-hidden="true" />
     <input
       v-model="query"
-      class="search-input"
+      class="flex-1 min-w-0 border-none outline-none text-[#1f1f1f] font-geist text-[18px] leading-[1.2] placeholder-[#6b7280] bg-transparent"
       type="search"
       placeholder="Search items, categories, or keywords"
       autocomplete="off"
       @keydown.enter.prevent="onSubmit"
     />
-    <button class="search-button" type="submit">Search</button>
+    <button class="h-[46px] border-none rounded-[12px] px-5 bg-burning-orange text-white font-geist text-base font-semibold cursor-pointer" type="submit">Search</button>
   </form>
 </template>
 
@@ -28,51 +28,3 @@ function onSubmit() {
 }
 </script>
 
-<style scoped>
-.search-bar {
-  width: 100%;
-  max-width: 760px;
-  min-height: 68px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px 10px 20px;
-  border: 1px solid #dbbba7;
-  border-radius: 18px;
-  background-color: #ffffff;
-}
-
-.search-icon {
-  width: 24px;
-  height: 24px;
-  opacity: 0.7;
-}
-
-.search-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  color: #1f1f1f;
-  font-family: "Geist", sans-serif;
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.search-input::placeholder {
-  color: #6b7280;
-}
-
-.search-button {
-  height: 46px;
-  border: none;
-  border-radius: 12px;
-  padding: 0 20px;
-  background-color: #ff7124;
-  color: #ffffff;
-  font-family: "Geist", sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-</style>

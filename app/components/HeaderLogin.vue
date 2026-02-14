@@ -1,17 +1,4 @@
 <template>
-  <header class="app-header" />
+  <header class="fixed top-0 left-0 w-full h-[77px] box-border bg-white border-b border-cinnamon-ice z-[1000]" />
 </template>
 
-<style scoped>
-.app-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 77px;
-  box-sizing: border-box;
-  background-color: var(--color-white);
-  border-bottom: 1px solid var(--color-cinnamon-ice);
-  z-index: 1000;
-}
-</style>

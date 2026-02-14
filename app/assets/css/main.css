@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @font-face {
   font-family: 'Geist';
   src: url('/fonts/geist.woff2') format('woff2'),
@@ -16,20 +20,8 @@
   font-display: swap;
 }
 
-:root {
-  --color-pale-cashmere: #e8dfd5;
-  --color-cinnamon-ice: #dbbba7;
-  --color-burning-orange: #ff7124;
-  --color-blue-estate: #3b4883;
-  --color-wahoo: #272d4e;
-  --color-noble-black: #202124;
-  --color-white: #ffffff;
-  --color-cream: #f9f3ec;
-}
-
-html,
-body {
-  font-family: 'Geist', 'Rewon', sans-serif;
-  margin: 0;
-  background-color: var(--color-cream);
+@layer base {
+  html, body {
+    @apply font-geist bg-cream m-0;
+  }
 }
