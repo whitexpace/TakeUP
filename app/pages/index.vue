@@ -58,17 +58,33 @@
 
       </div>
 
-      <div class="section two">
-        <div class="left">Image</div>
-        <div class="right">
-          <div class="slogan">BORROW LOCALLY. LEND SAFELY. SAVE MONEY.</div>
-          <div class="description">
-            <p>
-              No “neighbors” — just students. Our campus-exclusive platform connects you with
-              verified UP students who have what you need or want what you have.
-            </p>
+      <!-- Section Two -->
+      <div class="flex flex-col lg:flex-row items-center gap-12 py-20 lg:py-32">
+        <!-- Left: Image with Floating Badges -->
+        <div class="relative w-full lg:w-1/2">
+          <img src="/images/landing-pic.jpg" alt="Campus Sharing" class="w-full h-auto rounded-[30px] shadow-lg" />
+          
+          <!-- Top-Right Badge -->
+          <div class="absolute -top-6 -right-4 md:-right-8 bg-cream border border-cinnamon-ice rounded-full px-6 py-3 shadow-md z-10">
+            <span class="font-geist text-[20px] text-noble-black font-normal whitespace-nowrap">500+ Iskos</span>
           </div>
-          <div class="actions-container">
+
+          <!-- Bottom-Left Badge -->
+          <div class="absolute -bottom-6 -left-4 md:-left-8 bg-blue-estate rounded-full px-6 py-3 shadow-md z-10">
+            <span class="font-geist text-[20px] text-cream font-normal whitespace-nowrap">1,500+ Items</span>
+          </div>
+        </div>
+
+        <!-- Right Content -->
+        <div class="w-full lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left">
+          <div class="font-rewon text-noble-black m-0 mb-6 leading-[1.1] uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]">
+            BORROW <span class="text-burning-orange">LOCALLY</span>. LEND <span class="text-blue-estate">SAFELY</span>. SAVE <span class="text-burning-orange">MONEY</span>.
+          </div>
+          <p class="text-noble-black opacity-80 font-geist m-0 mb-10 leading-[1.45] text-base md:text-xl lg:text-2xl">
+            No “neighbors” — just students. Our campus-exclusive platform connects you with
+            verified UP students who have what you need or want what you have.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4">
              <BorrowNowButton />
              <LendItemButton />
           </div>
