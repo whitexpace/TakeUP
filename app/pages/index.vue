@@ -598,7 +598,9 @@ const handleGoogleLogin = () => {
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[1px] bg-cinnamon-ice rounded-[30px] overflow-hidden shadow-[6px_8px_50px_rgba(0,0,0,0.15)]">
           <!-- Item 1: Books & Academics -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/book.png" alt="Books" class="w-[80px] h-[80px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[80px] h-[80px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/book.png" alt="Books" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Books &<br>Academics</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">342 items</div>
@@ -606,7 +608,9 @@ const handleGoogleLogin = () => {
           </div>
           <!-- Item 2: Electronics -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/phone.png" alt="Electronics" class="w-[80px] h-[80px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[80px] h-[80px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/phone.png" alt="Electronics" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Electronics</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">256 items</div>
@@ -614,7 +618,9 @@ const handleGoogleLogin = () => {
           </div>
           <!-- Item 3: Arts & Craft Supplies -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/palette.png" alt="Arts" class="w-[80px] h-[80px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[80px] h-[80px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/palette.png" alt="Arts" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Arts & Craft<br>Supplies</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">189 items</div>
@@ -622,7 +628,9 @@ const handleGoogleLogin = () => {
           </div>
           <!-- Item 4: Event & Party -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/disco-ball.png" alt="Party" class="w-[80px] h-[80px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[80px] h-[80px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/disco-ball.png" alt="Party" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Event &<br>Party</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">167 items</div>
@@ -630,7 +638,9 @@ const handleGoogleLogin = () => {
           </div>
           <!-- Item 5: Sports Equipment -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/ball.png" alt="Sports" class="w-[95px] h-[95px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[95px] h-[95px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/ball.png" alt="Sports" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Sports<br>Equipment</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">145 items</div>
@@ -638,7 +648,9 @@ const handleGoogleLogin = () => {
           </div>
           <!-- Item 6: Dorm Essentials -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/lamp.png" alt="Dorm" class="w-[95px] h-[95px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[95px] h-[95px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/lamp.png" alt="Dorm" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Dorm<br>Essentials</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">198 items</div>
@@ -646,7 +658,9 @@ const handleGoogleLogin = () => {
           </div>
           <!-- Item 7: Photography -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/camera.png" alt="Photo" class="w-[95px] h-[95px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[95px] h-[95px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/camera.png" alt="Photo" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Photography</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">87 items</div>
@@ -654,7 +668,9 @@ const handleGoogleLogin = () => {
           </div>
           <!-- Item 8: Music & Audio -->
           <div class="bg-white p-6 flex flex-row items-center justify-between h-full hover:bg-cream transition-colors cursor-pointer group">
-             <img src="/images/categories/headphones.png" alt="Music" class="w-[95px] h-[95px] object-contain group-hover:scale-110 transition-transform duration-300">
+             <div class="w-[95px] h-[95px] flex items-center justify-center shrink-0">
+               <img src="/images/categories/headphones.png" alt="Music" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300">
+             </div>
              <div class="text-right flex flex-col items-end">
                <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">Music &<br>Audio</div>
                <div class="font-geist font-normal text-xl text-noble-black opacity-70">116 items</div>
@@ -663,23 +679,59 @@ const handleGoogleLogin = () => {
         </div>
       </div>  
 
-      <div class="section five">
-        <div class="header">
-          <h2>POPULAR ON CAMPUS</h2>
-          <div class="actions" href="">
+      <!-- Section Five -->
+      <div class="py-20 lg:py-32">
+        <div class="flex justify-between items-center mb-4 lg:mb-6">
+          <h2 class="font-rewon text-noble-black m-0 p-0 leading-none uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]">
+            POPULAR ON CAMPUS
+          </h2>
+          <a href="#" class="text-burning-orange font-geist font-medium text-lg hover:underline leading-none">
             View All Items
-          </div>
+          </a>
         </div>
-        <div class="description">
+        <p class="text-noble-black opacity-80 font-geist m-0 mb-10 leading-[1.45] text-base md:text-xl lg:text-2xl">
           Most borrowed items this week
-        </div>
-        <div class="items-panel">
-          <ItemCard />
-          <ItemCard />
-          <ItemCard />
-          <ItemCard />
-          <ItemCard />
-          <ItemCard />
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <ItemCard 
+            type="Rent"
+            image="/images/popular/macbook.jpg"
+            category="Electronics"
+            name="Macbook Air 13&quot; M1"
+            rating="4.9"
+            reviews="67"
+            price="300"
+            owner="Paolo F."
+          />
+          <ItemCard 
+            type="Borrow"
+            image="/images/popular/scical.jpg"
+            category="Electronics"
+            name="Casio FX-991EX ClassWiz"
+            rating="4.8"
+            reviews="8"
+            owner="Dave S."
+          />
+          <ItemCard 
+            type="Rent"
+            image="/images/popular/camera.jpg"
+            category="Photography"
+            name="Sony A7 IV Camera Kit"
+            rating="5.0"
+            reviews="35"
+            price="500"
+            owner="Issa S."
+          />
+          <ItemCard 
+            type="Rent"
+            image="/images/popular/dress.jpg"
+            category="Attire"
+            name="Long Green Dress"
+            rating="4.8"
+            reviews="27"
+            price="100"
+            owner="Issa S."
+          />
         </div>        
       </div>
       
