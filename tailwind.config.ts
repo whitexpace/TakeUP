@@ -19,6 +19,7 @@ export default <Config>{
         'wahoo': '#272d4e',
         'noble-black': '#202124',
         'cream': '#f9f3ec',
+        'cinnabar-red': '#eb4335',
       },
       fontFamily: {
         geist: ['Geist', 'sans-serif'],
