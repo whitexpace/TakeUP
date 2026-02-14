@@ -1,9 +1,9 @@
-import { TRPCError } from '@trpc/server'
-import { middleware } from '../init'
+import { TRPCError } from "@trpc/server"
+import { middleware } from "../init"
 
 export const requireUser = middleware(({ ctx, next }) => {
   if (!ctx.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' })
+    throw new TRPCError({ code: "UNAUTHORIZED" })
   }
 
   return next({

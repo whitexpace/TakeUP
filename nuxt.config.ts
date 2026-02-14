@@ -12,5 +12,5 @@ export default defineNuxtConfig({
       exclude: ["/", "/about", "/account"],
     },
   },
-  css: ['~/assets/css/main.css'],
+  css: ["~/assets/css/main.css"],
 })

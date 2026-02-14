@@ -1,6 +1,6 @@
-import { router } from '../init'
-import { protectedProcedure, publicProcedure } from '../procedures'
-import { signInSchema } from '../../../shared/schemas/auth'
+import { router } from "../init"
+import { protectedProcedure, publicProcedure } from "../procedures"
+import { signInSchema } from "../../../shared/schemas/auth"
 
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => ({ user: ctx.user })),

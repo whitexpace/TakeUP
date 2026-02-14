@@ -85,7 +85,7 @@ onUnmounted(() => {
             src="/images/logo.svg"
             alt="TakeUP Logo"
             class="cursor-pointer hover:cursor-pointer"
-          >
+          />
         </div>
       </div>
       <div class="flex items-center gap-3 h-full">
@@ -93,7 +93,7 @@ onUnmounted(() => {
           src="/images/login-button.svg"
           alt="Login button"
           class="w-6 h-6 block cursor-pointer hover:cursor-pointer"
-        >
+        />
         <div
           class="text-noble-black text-base font-normal leading-none cursor-pointer hover:cursor-pointer"
         >
@@ -115,7 +115,7 @@ onUnmounted(() => {
           <h2
             class="text-noble-black font-rewon m-0 mb-4 leading-[1.1] text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px] lg:mb-4"
           >
-            SHARE WHAT YOU <span class="text-burning-orange">HAVE</span>.<br>GET WHAT YOU
+            SHARE WHAT YOU <span class="text-burning-orange">HAVE</span>.<br />GET WHAT YOU
             <span class="text-blue-estate">NEED</span>.
           </h2>
           <p
@@ -145,7 +145,7 @@ onUnmounted(() => {
             <button
               class="bg-burning-orange rounded-[10px] border-none w-full h-[52px] flex items-center justify-center gap-3 cursor-pointer mb-4 text-white font-geist font-medium text-base hover:opacity-90"
             >
-              <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" >
+              <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" />
               <span>Sign in using your UP mail</span>
             </button>
             <p class="font-geist font-light text-[15px] text-noble-black m-0 text-center">
@@ -170,7 +170,7 @@ onUnmounted(() => {
               src="/images/landing-pic.jpg"
               alt=""
               class="w-full h-auto invisible opacity-0 pointer-events-none relative z-0"
-            >
+            />
 
             <!-- Slideshow Images -->
             <img
@@ -183,7 +183,7 @@ onUnmounted(() => {
                 index === currentImageIndex ? 'opacity-100 z-10' : 'opacity-0 z-0',
                 img.position,
               ]"
-            >
+            />
           </div>
 
           <!-- Top-Right Badge -->
