@@ -259,15 +259,16 @@
         </div>        
       </div>
       
-      <div class="section six">
-        <div class="container">
-          <div class="title">
+      <!-- Section Six -->
+      <div class="w-full bg-[linear-gradient(90deg,#202124_0%,#272d4e_51%,#3b4883_95%)] py-20 lg:py-32 flex flex-col items-center text-center px-4 mt-20 lg:mt-32 rounded-[30px] overflow-hidden">
+        <div class="max-w-[1200px] flex flex-col items-center">
+          <h2 class="font-rewon text-[34px] sm:text-[42px] md:text-[50px] text-cream leading-tight mb-6 uppercase">
             READY TO START SHARING?
-          </div>
-          <div class="description">
-            Join hundreds of UP Cebu students already borrowing and leanding on campus.
-          </div>
-          <div class="actions">
+          </h2>
+          <p class="font-geist font-medium text-lg md:text-2xl text-cream mb-12 max-w-[800px] opacity-90">
+            Join hundreds of UP Cebu students already borrowing and lending on campus.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-6">
             <BorrowNowButton />
             <LendItemButton />
           </div>
@@ -275,9 +276,13 @@
       </div>
     </div>
 
-    <footer>
-      <div class="container">
-        <p>2026 &copy; TakeUP. Made with love for the UP Cebu Community.</p>
+    <footer class="w-full mt-20 lg:mt-32 border-t border-cinnamon-ice border-[1px] py-6 flex items-center justify-center bg-cream">
+      <div class="flex items-center justify-center gap-1 font-geist font-semibold text-xs text-noble-black opacity-60">
+        2026 &copy; TakeUP. Made with 
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#eb4335" xmlns="http://www.w3.org/2000/svg" class="inline-block mx-0.5">
+           <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg> 
+        for the UP Cebu Community.
       </div>
     </footer>
   </main>
