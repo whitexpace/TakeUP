@@ -91,14 +91,17 @@
         </div>
       </div>
 
-      <div class="section three">
-        <div class="container">
-          <h2>What are you looking for?</h2>
-          <SearchBar />
-          <div class="stats-container"> 
-            <StatCard2 class="statcard" value="6" label="Borrowed Today" />
-            <StatCard2 class="statcard" value="4.9" label="Average Rating" />
-            <StatCard2 class="statcard" value="67" label="Active Items" />
+      <!-- Section Three -->
+      <div class="py-20 lg:py-32 w-full flex justify-center px-4 lg:px-0">
+        <div class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] p-8 lg:p-[60px] w-full max-w-[900px] flex flex-col items-center">
+          <h2 class="font-geist font-bold text-[30px] text-noble-black m-0 mb-8 text-center">What are you looking for?</h2>
+          <div class="w-full flex justify-center mb-6">
+            <SearchBar />
+          </div>
+          <div class="w-full max-w-[760px] grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6"> 
+            <StatCard2 value="6" label="Borrowed Today" />
+            <StatCard2 value="4.9" label="Average Rating" />
+            <StatCard2 value="67" label="Active Items" />
           </div>  
         </div>
       </div>
