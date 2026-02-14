@@ -1,13 +1,13 @@
-import type { Config } from 'tailwindcss'
+import type { Config } from "tailwindcss"
 
 export default <Config>{
   content: [
-    './app/components/**/*.{js,vue,ts}',
-    './app/layouts/**/*.vue',
-    './app/pages/**/*.vue',
-    './app/plugins/**/*.{js,ts}',
-    './app/app.vue',
-    './app/error.vue',
+    "./app/components/**/*.{js,vue,ts}",
+    "./app/layouts/**/*.vue",
+    "./app/pages/**/*.vue",
+    "./app/plugins/**/*.{js,ts}",
+    "./app/app.vue",
+    "./app/error.vue",
   ],
   theme: {
     extend: {
@@ -23,8 +23,8 @@ export default <Config>{
         "success-green": "#34A853",
       },
       fontFamily: {
-        geist: ['Geist', 'sans-serif'],
-        rewon: ['Rewon', 'sans-serif'],
+        geist: ["Geist", "sans-serif"],
+        rewon: ["Rewon", "sans-serif"],
       },
     },
   },
