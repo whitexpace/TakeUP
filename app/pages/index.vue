@@ -1,3 +1,27 @@
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const images = [
+  { src: '/images/landing-pic.jpg', position: 'object-[50%_50%]' },
+  { src: '/images/landing-pic1.jpg', position: 'object-[50%_35%]' },
+  { src: '/images/landing-pic2.jpg', position: 'object-[50%_65%]' },
+  { src: '/images/landing-pic3.jpg', position: 'object-[50%_50%]' }
+]
+
+const currentImageIndex = ref(0)
+let slideshowInterval: NodeJS.Timeout | null = null
+
+onMounted(() => {
+  slideshowInterval = setInterval(() => {
+    currentImageIndex.value = (currentImageIndex.value + 1) % images.length
+  }, 5000) // Change image every 5 seconds
+})
+
+onUnmounted(() => {
+  if (slideshowInterval) clearInterval(slideshowInterval)
+})
+</script>
+
 <template>
   <main class="min-h-screen font-sans">
     <!-- Header -->
@@ -60,17 +84,29 @@
 
       <!-- Section Two -->
       <div class="flex flex-col lg:flex-row items-center gap-12 py-20 lg:py-32">
-        <!-- Left: Image with Floating Badges -->
+        <!-- Left: Image Slideshow with Floating Badges -->
         <div class="relative w-full lg:w-1/2">
-          <img src="/images/landing-pic.jpg" alt="Campus Sharing" class="w-full h-auto rounded-[30px] shadow-lg" />
+          <div class="relative w-full h-auto rounded-[30px] shadow-lg overflow-hidden">
+             <!-- Ghost image to maintain aspect ratio/height -->
+             <img src="/images/landing-pic.jpg" alt="" class="w-full h-auto invisible opacity-0 pointer-events-none relative z-0" />
+             
+             <!-- Slideshow Images -->
+             <img v-for="(img, index) in images" 
+                  :key="img.src" 
+                  :src="img.src" 
+                  alt="Campus Sharing" 
+                  class="absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-[2000ms] ease-in-out"
+                  :class="[index === currentImageIndex ? 'opacity-100 z-10' : 'opacity-0 z-0', img.position]"
+             />
+          </div>
           
           <!-- Top-Right Badge -->
-          <div class="absolute -top-6 -right-4 md:-right-8 bg-cream border border-cinnamon-ice rounded-full px-6 py-3 shadow-md z-10">
+          <div class="absolute -top-6 -right-4 md:-right-8 bg-cream border border-cinnamon-ice rounded-full px-6 py-3 shadow-md z-20">
             <span class="font-geist text-[20px] text-noble-black font-normal whitespace-nowrap">500+ Iskos</span>
           </div>
 
           <!-- Bottom-Left Badge -->
-          <div class="absolute -bottom-6 -left-4 md:-left-8 bg-blue-estate rounded-full px-6 py-3 shadow-md z-10">
+          <div class="absolute -bottom-6 -left-4 md:-left-8 bg-blue-estate rounded-full px-6 py-3 shadow-md z-20">
             <span class="font-geist text-[20px] text-cream font-normal whitespace-nowrap">1,500+ Items</span>
           </div>
         </div>
