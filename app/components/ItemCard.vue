@@ -2,11 +2,10 @@
   <div class="bg-white rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto">
     <!-- Image Section (~70% of card) -->
     <div class="relative h-[280px] w-full bg-gray-50">
-      <img :src="image" :alt="name" class="w-full h-full object-cover" />
+      <img :src="image" :alt="name" class="w-full h-full object-cover" >
       
       <!-- Type Tag -->
-      <div class="absolute top-4 left-4 px-4 py-1.5 min-w-[80px] h-[32px] rounded-full font-geist text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm"
-           :class="type === 'Rent' ? 'bg-cinnamon-ice text-noble-black' : 'bg-blue-estate text-white'">
+      <div class="absolute top-4 left-4 px-4 py-1.5 min-w-[80px] h-[32px] rounded-full font-geist text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm" :class="type === 'Rent' ? 'bg-cinnamon-ice text-noble-black' : 'bg-blue-estate text-white'">
         {{ type }}
       </div>
 
@@ -42,7 +41,7 @@
     </div>
 
     <!-- Divider -->
-    <div class="h-[0.5px] bg-cinnamon-ice w-full"></div>
+    <div class="h-[0.5px] bg-cinnamon-ice w-full" />
 
     <!-- Owner Section -->
     <div class="px-5 py-4 flex justify-between items-center bg-white">

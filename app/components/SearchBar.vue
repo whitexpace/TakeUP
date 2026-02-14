@@ -7,7 +7,7 @@
     </svg>
 
     <!-- Clear Icon (Visible when query has text) -->
-    <button v-else type="button" @click="clearSearch" class="text-noble-black opacity-70 flex-shrink-0 hover:opacity-100 transition-opacity">
+    <button v-else type="button" class="text-noble-black opacity-70 flex-shrink-0 hover:opacity-100 transition-opacity" @click="clearSearch">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -20,7 +20,7 @@
       placeholder="Search for items, categories, or keywords"
       autocomplete="off"
       @keydown.enter.prevent="onSubmit"
-    />
+    >
     <button class="h-[46px] border-none rounded-[12px] px-5 bg-burning-orange text-white font-geist text-base font-semibold cursor-pointer hover:opacity-90 transition-opacity" type="submit">Search</button>
   </form>
 </template>
