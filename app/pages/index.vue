@@ -106,11 +106,11 @@ onUnmounted(() => {
     <div class="px-4 lg:px-[60px] 2xl:px-[168px]">
       <!-- Section One -->
       <div
-        class="flex flex-col items-center pt-[160px] gap-12 lg:flex-row lg:items-start lg:justify-between lg:pt-[200px] lg:gap-0"
+        class="flex flex-col items-center pt-[160px] gap-12 lg:flex-row lg:items-start lg:justify-between lg:pt-[200px] lg:gap-16 xl:gap-24"
       >
         <!-- Left Column -->
         <div
-          class="w-full flex flex-col items-center text-center lg:max-w-[50%] lg:items-start lg:text-left 2xl:max-w-[calc(100%-480px)]"
+          class="w-full flex flex-col items-center text-center lg:max-w-[40%] lg:items-start lg:text-left 2xl:max-w-[calc(100%-600px)]"
         >
           <h2
             class="text-noble-black font-rewon m-0 mb-4 leading-[1.1] text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px] lg:mb-4"
@@ -132,9 +132,9 @@ onUnmounted(() => {
         </div>
 
         <!-- Right Column -->
-        <div class="w-full flex flex-col items-center lg:w-fit lg:items-end">
+        <div class="w-full flex flex-col items-center lg:w-2/5 lg:items-end">
           <div
-            class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] w-full max-w-[450px] flex flex-col p-6 lg:p-10"
+            class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] w-full max-w-[600px] flex flex-col p-6 lg:p-10"
           >
             <h3 class="font-geist font-bold text-[30px] text-noble-black m-0 mb-4">
               Get started today.
@@ -152,7 +152,7 @@ onUnmounted(() => {
               Only accounts ending with <span class="font-semibold">up.edu.ph</span> are accepted
             </p>
           </div>
-          <div class="mt-6 flex flex-wrap justify-center w-full max-w-[450px] gap-6">
+          <div class="mt-6 flex flex-wrap justify-center w-full max-w-[600px] gap-6">
             <FeatureItem text="Verified UP Students only" />
             <FeatureItem text="Secure transactions" />
             <FeatureItem text="Campus-based meetups" />
