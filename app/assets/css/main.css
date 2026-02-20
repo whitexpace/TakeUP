@@ -15,8 +15,8 @@
 @font-face {
   font-family: "Rewon";
   src:
-    url("/fonts/rewon.woff2") format("woff2"),
-    url("/fonts/rewon.woff") format("woff");
+    url("/fonts/Rewon.woff2") format("woff2"),
+    url("/fonts/Rewon.woff") format("woff");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
