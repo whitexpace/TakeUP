@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Geist";
+  src:
+    url("/fonts/geist.woff2") format("woff2"),
+    url("/fonts/geist.woff") format("woff");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Rewon";
+  src:
+    url("/fonts/Rewon.woff2") format("woff2"),
+    url("/fonts/Rewon.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  html,
+  body {
+    @apply font-geist bg-cream m-0;
+  }
+}
