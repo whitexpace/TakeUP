@@ -75,6 +75,41 @@ onUnmounted(() => {
 const loginStatus = ref<"idle" | "loading" | "success" | "error" | "blocked_domain">("idle")
 const errorMessage = ref("")
 
+const signInRef = ref<HTMLElement | null>(null)
+const categoriesRef = ref<HTMLElement | null>(null)
+const popularItemsRef = ref<HTMLElement | null>(null)
+const isSignInHighlighted = ref(false)
+
+const scrollToSection = (element: HTMLElement | null) => {
+  if (element) {
+    element.scrollIntoView({ behavior: "smooth", block: "center" })
+  }
+}
+
+const scrollToSignIn = () => {
+  scrollToSection(signInRef.value)
+  isSignInHighlighted.value = true
+  setTimeout(() => {
+    isSignInHighlighted.value = false
+  }, 1000)
+}
+
+const scrollToCategories = () => {
+  if (loginStatus.value === "success") {
+    scrollToSection(categoriesRef.value)
+  } else {
+    scrollToSignIn()
+  }
+}
+
+const scrollToPopularItems = () => {
+  if (loginStatus.value === "success") {
+    scrollToSection(popularItemsRef.value)
+  } else {
+    scrollToSignIn()
+  }
+}
+
 const simulateLogin = () => {
   loginStatus.value = "loading"
   errorMessage.value = ""
@@ -112,7 +147,7 @@ const simulateLogin = () => {
           />
         </div>
       </div>
-      <div class="flex items-center gap-3 h-full">
+      <div class="flex items-center gap-3 h-full" @click="scrollToSignIn">
         <img
           src="/images/login-button.svg"
           alt="Login button"
@@ -158,7 +193,9 @@ const simulateLogin = () => {
         <!-- Right Column -->
         <div class="w-full flex flex-col items-center lg:w-2/5 lg:items-end">
           <div
-            class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] w-full max-w-[600px] flex flex-col p-6 lg:p-10"
+            ref="signInRef"
+            class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] w-full max-w-[600px] flex flex-col p-6 lg:p-10 transition-transform duration-500 ease-in-out"
+            :class="{ 'scale-105': isSignInHighlighted }"
           >
             <h3 class="font-geist font-bold text-[30px] text-noble-black m-0 mb-4">
               Get started today.
@@ -369,7 +406,7 @@ const simulateLogin = () => {
       </div>
 
       <!-- Section Four -->
-      <div class="py-20 lg:py-32">
+      <div class="py-20 lg:py-32" ref="categoriesRef">
         <div class="flex justify-between items-center mb-4 lg:mb-6">
           <h2
             class="font-rewon text-noble-black m-0 p-0 leading-none uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]"
@@ -379,6 +416,7 @@ const simulateLogin = () => {
           <a
             href="#"
             class="text-burning-orange font-geist font-medium text-lg hover:underline leading-none"
+            @click.prevent="scrollToCategories"
           >
             View Categories
           </a>
@@ -403,7 +441,7 @@ const simulateLogin = () => {
       </div>
 
       <!-- Section Five -->
-      <div class="py-20 lg:py-32">
+      <div class="py-20 lg:py-32" ref="popularItemsRef">
         <div class="flex justify-between items-center mb-4 lg:mb-6">
           <h2
             class="font-rewon text-noble-black m-0 p-0 leading-none uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]"
@@ -413,6 +451,7 @@ const simulateLogin = () => {
           <a
             href="#"
             class="text-burning-orange font-geist font-medium text-lg hover:underline leading-none"
+            @click.prevent="scrollToPopularItems"
           >
             View All Items
           </a>
