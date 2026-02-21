@@ -71,6 +71,30 @@ onMounted(() => {
 onUnmounted(() => {
   if (slideshowInterval) clearInterval(slideshowInterval)
 })
+
+const loginStatus = ref<"idle" | "loading" | "success" | "error" | "blocked_domain">("idle")
+const errorMessage = ref("")
+
+const simulateLogin = () => {
+  loginStatus.value = "loading"
+  errorMessage.value = ""
+
+  setTimeout(() => {
+    const states: ("success" | "error" | "blocked_domain")[] = [
+      "success",
+      "error",
+      "blocked_domain",
+    ]
+    const randomState = states[Math.floor(Math.random() * states.length)]
+    if (randomState) {
+      loginStatus.value = randomState
+
+      if (randomState === "error") {
+        errorMessage.value = "Google Sign-In failed. Please try again."
+      }
+    }
+  }, 2000)
+}
 </script>
 
 <template>
@@ -139,14 +163,110 @@ onUnmounted(() => {
             <h3 class="font-geist font-bold text-[30px] text-noble-black m-0 mb-4">
               Get started today.
             </h3>
+
+            <!-- Success State -->
+            <div
+              v-if="loginStatus === 'success'"
+              class="bg-success-green/10 border border-success-green text-success-green rounded-[10px] p-4 mb-4 flex items-center gap-3"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <span class="font-geist font-medium">Authentication successful! Redirecting...</span>
+            </div>
+
+            <!-- Blocked Domain State -->
+            <div
+              v-else-if="loginStatus === 'blocked_domain'"
+              class="bg-burning-orange/10 border border-burning-orange text-burning-orange rounded-[10px] p-4 mb-4 flex items-start gap-3"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <span class="font-geist font-medium"
+                >Access Denied: You must use a valid up.edu.ph email address to register.</span
+              >
+            </div>
+
+            <!-- Error State -->
+            <div
+              v-else-if="loginStatus === 'error'"
+              class="bg-cinnabar-red/10 border border-cinnabar-red text-cinnabar-red rounded-[10px] p-4 mb-4 flex items-center gap-3"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span class="font-geist font-medium">{{ errorMessage }}</span>
+            </div>
+
             <p class="font-geist font-light text-[17px] text-noble-black m-0 mb-8 text-left">
               Sign in with your UP mail to join the community.
             </p>
             <button
-              class="bg-burning-orange rounded-[10px] border-none w-full h-[52px] flex items-center justify-center gap-3 cursor-pointer mb-4 text-white font-geist font-medium text-base hover:opacity-90"
+              class="bg-burning-orange rounded-[10px] border-none w-full h-[52px] flex items-center justify-center gap-3 cursor-pointer mb-4 text-white font-geist font-medium text-base hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              :disabled="loginStatus === 'loading' || loginStatus === 'success'"
+              @click="simulateLogin"
             >
-              <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" />
-              <span>Sign in using your UP mail</span>
+              <template v-if="loginStatus === 'loading'">
+                <svg
+                  class="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  />
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                <span>Signing in...</span>
+              </template>
+              <template v-else>
+                <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" />
+                <span>Sign in using your UP mail</span>
+              </template>
             </button>
             <p class="font-geist font-light text-[15px] text-noble-black m-0 text-center">
               Only accounts ending with <span class="font-semibold">up.edu.ph</span> are accepted
