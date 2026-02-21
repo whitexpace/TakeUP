@@ -195,11 +195,11 @@ const handleGoogleLogin = () => {
     <div class="px-4 lg:px-[60px] 2xl:px-[168px]">
       <!-- Section One -->
       <div
-        class="flex flex-col items-center pt-[160px] gap-12 lg:flex-row lg:items-start lg:justify-between lg:pt-[200px] lg:gap-16 xl:gap-24"
+        class="flex flex-col items-center pt-[160px] gap-12 xl:flex-row xl:items-start xl:justify-center xl:pt-[200px] xl:gap-24"
       >
         <!-- Left Column -->
         <div
-          class="w-full flex flex-col items-center text-center lg:max-w-[40%] lg:items-start lg:text-left 2xl:max-w-[calc(100%-600px)]"
+          class="w-full flex flex-col items-center text-center xl:max-w-[600px] xl:items-start xl:text-left 2xl:max-w-[calc(100%-600px)]"
         >
           <h2
             class="text-noble-black font-rewon m-0 mb-4 leading-[1.1] text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px] lg:mb-4"
@@ -213,7 +213,7 @@ const handleGoogleLogin = () => {
             Borrow essential gear for free or rent items for your projects within a trusted campus
             network.
           </p>
-          <div class="flex flex-wrap justify-center gap-4 lg:justify-start">
+          <div class="flex flex-row flex-wrap justify-center gap-4 xl:justify-start">
             <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="1,500+" label="Items" />
             <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="500+" label="Iskos" />
             <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="4.9" label="Average Rating" />
@@ -221,7 +221,7 @@ const handleGoogleLogin = () => {
         </div>
 
         <!-- Right Column -->
-        <div class="w-full flex flex-col items-center lg:w-2/5 lg:items-end">
+        <div class="w-full flex flex-col items-center xl:w-fit xl:max-w-[600px] xl:items-end">
           <div
             ref="signInRef"
             class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] w-full max-w-[600px] flex flex-col p-6 lg:p-10 transition-transform duration-500 ease-in-out"
