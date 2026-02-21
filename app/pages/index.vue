@@ -117,7 +117,9 @@ const scrollToPopularItems = () => {
 
 async function restoreSession() {
   try {
-    const response = await $fetch<{ user: { id: string; email: string; name: string } }>("/api/auth/me")
+    const response = await $fetch<{ user: { id: string; email: string; name: string } }>(
+      "/api/auth/me",
+    )
     currentUser.value = response.user
     loginStatus.value = "success"
   } catch {
