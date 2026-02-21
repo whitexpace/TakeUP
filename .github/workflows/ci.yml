@@ -49,6 +49,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --no-frozen-lockfile
+      - run: npx prisma generate
       - run: pnpm typecheck
 
   test:
