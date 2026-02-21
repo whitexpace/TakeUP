@@ -10,6 +10,8 @@ const images = [
 
 const currentImageIndex = ref(0)
 let slideshowInterval: NodeJS.Timeout | null = null
+const runtimeConfig = useRuntimeConfig()
+const googleClientId = runtimeConfig.public.googleClientId
 
 const categories = [
   {
@@ -62,10 +64,12 @@ const categories = [
   },
 ]
 
-onMounted(() => {
+onMounted(async () => {
   slideshowInterval = setInterval(() => {
     currentImageIndex.value = (currentImageIndex.value + 1) % images.length
   }, 5000) // Change image every 5 seconds
+
+  await restoreSession()
 })
 
 onUnmounted(() => {
@@ -74,6 +78,7 @@ onUnmounted(() => {
 
 const loginStatus = ref<"idle" | "loading" | "success" | "error" | "blocked_domain">("idle")
 const errorMessage = ref("")
+const currentUser = ref<{ id: string; email: string; name: string } | null>(null)
 
 const signInRef = ref<HTMLElement | null>(null)
 const categoriesRef = ref<HTMLElement | null>(null)
@@ -110,25 +115,43 @@ const scrollToPopularItems = () => {
   }
 }
 
-const simulateLogin = () => {
-  loginStatus.value = "loading"
+async function restoreSession() {
+  try {
+    const response = await $fetch<{ user: { id: string; email: string; name: string } }>("/api/auth/me")
+    currentUser.value = response.user
+    loginStatus.value = "success"
+  } catch {
+    currentUser.value = null
+    loginStatus.value = "idle"
+  }
+}
+
+const handleGoogleLogin = () => {
   errorMessage.value = ""
 
-  setTimeout(() => {
-    const states: ("success" | "error" | "blocked_domain")[] = [
-      "success",
-      "error",
-      "blocked_domain",
-    ]
-    const randomState = states[Math.floor(Math.random() * states.length)]
-    if (randomState) {
-      loginStatus.value = randomState
+  if (!googleClientId) {
+    loginStatus.value = "error"
+    errorMessage.value = "Google Sign-In is not configured."
+    return
+  }
 
-      if (randomState === "error") {
-        errorMessage.value = "Google Sign-In failed. Please try again."
-      }
-    }
-  }, 2000)
+  const redirectUri = `${window.location.origin}/auth/callback`
+  const state = crypto.randomUUID()
+  const nonce = crypto.randomUUID()
+  sessionStorage.setItem("oauth_state", state)
+  sessionStorage.setItem("oauth_nonce", nonce)
+
+  const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth")
+  googleAuthUrl.searchParams.set("client_id", googleClientId)
+  googleAuthUrl.searchParams.set("redirect_uri", redirectUri)
+  googleAuthUrl.searchParams.set("response_type", "id_token")
+  googleAuthUrl.searchParams.set("scope", "openid email profile")
+  googleAuthUrl.searchParams.set("state", state)
+  googleAuthUrl.searchParams.set("nonce", nonce)
+  googleAuthUrl.searchParams.set("prompt", "select_account")
+  googleAuthUrl.searchParams.set("hd", "up.edu.ph")
+
+  window.location.assign(googleAuthUrl.toString())
 }
 </script>
 
@@ -147,10 +170,15 @@ const simulateLogin = () => {
           />
         </div>
       </div>
-      <div class="flex items-center gap-3 h-full" @click="scrollToSignIn">
+      <button
+        type="button"
+        class="flex items-center gap-3 h-full bg-transparent border-none p-0 cursor-pointer"
+        :disabled="loginStatus === 'loading'"
+        @click="handleGoogleLogin"
+      >
         <img
           src="/images/login-button.svg"
-          alt="Login button"
+          alt="Sign in with Google"
           class="w-6 h-6 block cursor-pointer hover:cursor-pointer"
         />
         <div
@@ -158,7 +186,7 @@ const simulateLogin = () => {
         >
           Sign in
         </div>
-      </div>
+      </button>
     </div>
 
     <!-- Main Content -->
@@ -220,7 +248,12 @@ const simulateLogin = () => {
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              <span class="font-geist font-medium">Authentication successful! Redirecting...</span>
+              <span class="font-geist font-medium">
+                Authentication successful!
+                <template v-if="currentUser">
+                  Signed in as {{ currentUser.name }} ({{ currentUser.email }})
+                </template>
+              </span>
             </div>
 
             <!-- Blocked Domain State -->
@@ -275,7 +308,7 @@ const simulateLogin = () => {
             <button
               class="bg-burning-orange rounded-[10px] border-none w-full h-[52px] flex items-center justify-center gap-3 cursor-pointer mb-4 text-white font-geist font-medium text-base hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               :disabled="loginStatus === 'loading' || loginStatus === 'success'"
-              @click="simulateLogin"
+              @click="handleGoogleLogin"
             >
               <template v-if="loginStatus === 'loading'">
                 <svg

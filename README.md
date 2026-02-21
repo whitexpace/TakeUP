@@ -18,10 +18,11 @@ This repo is scaffolded for a student scrum team workflow:
 
 ## Key files
 
-- `server/trpc/context.ts`: per-request context (Prisma, Supabase, user/session)
+- `server/trpc/context.ts`: per-request context (Prisma, authenticated user/session)
 - `server/trpc/middleware/auth.ts`: auth guard for protected procedures
 - `server/trpc/routers/`: feature routers; combine in `server/trpc/routers/index.ts`
 - `shared/schemas/`: Zod schemas for validation and shared types
+- `docs/auth-google-contract.md`: `/api/auth/google` request/response/error contract
 
 ## Setup
 
@@ -36,6 +37,12 @@ pnpm install
 ```
 cp .env.example .env
 ```
+
+Required auth env vars:
+
+- `GOOGLE_CLIENT_ID`
+- `NUXT_PUBLIC_GOOGLE_CLIENT_ID` (can match `GOOGLE_CLIENT_ID`)
+- `JWT_SECRET`
 
 3. Initialize Prisma
 

@@ -2,13 +2,13 @@
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
   devtools: { enabled: true },
-  modules: ["@nuxtjs/supabase", "@nuxt/eslint", "@nuxtjs/tailwindcss"],
+  modules: ["@nuxt/eslint", "@nuxtjs/tailwindcss"],
   typescript: { strict: true },
-  supabase: {
-    redirectOptions: {
-      login: "/login",
-      callback: "/confirm",
-      exclude: ["/", "/about"],
+  runtimeConfig: {
+    googleClientId: process.env.GOOGLE_CLIENT_ID,
+    jwtSecret: process.env.JWT_SECRET,
+    public: {
+      googleClientId: process.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
     },
   },
   css: ["~/assets/css/main.css"],
