@@ -20,6 +20,7 @@ export default <Config>{
         "noble-black": "#202124",
         cream: "#f9f3ec",
         "cinnabar-red": "#eb4335",
+        "success-green": "#34A853",
       },
       fontFamily: {
         geist: ["Geist", "sans-serif"],

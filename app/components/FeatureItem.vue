@@ -11,7 +11,7 @@
         <circle cx="9" cy="9" r="9" class="fill-burning-orange" />
         <path
           d="M5 9L8 12L13 6"
-          class="stroke-pale-cashmere"
+          class="stroke-white"
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
