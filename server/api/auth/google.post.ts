@@ -32,6 +32,24 @@ type AuthUserRow = {
   name: string
 }
 
+//try split the name from google
+function splitDisplayName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { firstName: "UP", lastName: "User" }
+  const firstName = parts[0] ?? "UP"
+  if (parts.length === 1) return { firstName, lastName: "User" }
+  return { firstName, lastName: parts.slice(1).join(" ") }
+}
+
+function buildUsernameFromEmail(email: string): string {
+  const base =
+    email
+      .split("@")[0]
+      ?.toLowerCase()
+      .replace(/[^a-z0-9._-]/g, "") || "upuser"
+  return base.slice(0, 32) || "upuser"
+}
+
 async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promise<AuthUserRow> {
   const userDelegate = (db as unknown as { user?: UserDelegate }).user
 
