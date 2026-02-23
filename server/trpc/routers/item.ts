@@ -1,12 +1,12 @@
-import { router } from '../init'
-import { protectedProcedure, publicProcedure } from '../procedures'
-import { createItemSchema, itemIdSchema } from '../../../shared/schemas/item'
+import { router } from "../init"
+import { protectedProcedure, publicProcedure } from "../procedures"
+import { createItemSchema, itemIdSchema } from "../../../shared/schemas/item"
 
 export const itemRouter = router({
   list: publicProcedure.query(({ ctx }) => {
     return ctx.prisma.item.findMany({
       take: 50,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     })
   }),
 
