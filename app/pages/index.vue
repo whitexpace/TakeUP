@@ -196,7 +196,7 @@ const handleGoogleLogin = async () => {
             src="/images/logo.svg"
             alt="TakeUP Logo"
             class="cursor-pointer hover:cursor-pointer"
-          />
+          >
         </div>
       </div>
       <button
@@ -218,7 +218,7 @@ const handleGoogleLogin = async () => {
           src="/images/login-button.svg"
           alt="Sign in with Google"
           class="w-6 h-6 block cursor-pointer hover:cursor-pointer"
-        />
+        >
         <div
           class="text-noble-black text-base font-normal leading-none cursor-pointer hover:cursor-pointer"
         >
@@ -240,7 +240,7 @@ const handleGoogleLogin = async () => {
           <h2
             class="text-noble-black font-rewon m-0 mb-4 leading-[1.1] text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px] lg:mb-4"
           >
-            SHARE WHAT YOU <span class="text-burning-orange">HAVE</span>.<br />GET WHAT YOU
+            SHARE WHAT YOU <span class="text-burning-orange">HAVE</span>.<br >GET WHAT YOU
             <span class="text-blue-estate">NEED</span>.
           </h2>
           <p
@@ -372,7 +372,7 @@ const handleGoogleLogin = async () => {
                 <span>Signing in...</span>
               </template>
               <template v-else>
-                <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" />
+                <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" >
                 <span>Sign in using your UP mail</span>
               </template>
             </button>
@@ -398,7 +398,7 @@ const handleGoogleLogin = async () => {
               src="/images/landing-pic.jpg"
               alt=""
               class="w-full h-auto invisible opacity-0 pointer-events-none relative z-0"
-            />
+            >
 
             <!-- Slideshow Images -->
             <img
@@ -411,7 +411,7 @@ const handleGoogleLogin = async () => {
                 index === currentImageIndex ? 'opacity-100 z-10' : 'opacity-0 z-0',
                 img.position,
               ]"
-            />
+            >
           </div>
           <!-- Top-Right Badge -->
           <div
@@ -476,7 +476,7 @@ const handleGoogleLogin = async () => {
       </div>
 
       <!-- Section Four -->
-      <div class="py-20 lg:py-32" ref="categoriesRef">
+      <div ref="categoriesRef" class="py-20 lg:py-32">
         <div class="flex justify-between items-center mb-4 lg:mb-6">
           <h2
             class="font-rewon text-noble-black m-0 p-0 leading-none uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]"
@@ -511,7 +511,7 @@ const handleGoogleLogin = async () => {
       </div>
 
       <!-- Section Five -->
-      <div class="py-20 lg:py-32" ref="popularItemsRef">
+      <div ref="popularItemsRef" class="py-20 lg:py-32">
         <div class="flex justify-between items-center mb-4 lg:mb-6">
           <h2
             class="font-rewon text-noble-black m-0 p-0 leading-none uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]"

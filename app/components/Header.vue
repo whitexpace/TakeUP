@@ -1,5 +1,11 @@
+<script setup lang="ts">
+defineOptions({
+  name: "AppHeader",
+})
+</script>
+
 <template>
-  <header class="app-header"></header>
+  <header class="app-header"/>
 </template>
 
 <style scoped>
