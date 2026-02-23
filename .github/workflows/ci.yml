@@ -5,6 +5,22 @@ on:
     branches: [main, dev]
 
 jobs:
+  format:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm format
+      - run: git diff --exit-code
+
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -33,6 +49,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --no-frozen-lockfile
+      - run: npx prisma generate
       - run: pnpm typecheck
 
   test:

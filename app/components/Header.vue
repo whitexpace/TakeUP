@@ -1,14 +1,23 @@
+<script setup lang="ts">
+defineOptions({
+  name: "AppHeader",
+})
+</script>
+
 <template>
-  <header class="app-header"></header>
+  <header class="app-header" />
 </template>
 
 <style scoped>
 .app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 77px;
   box-sizing: border-box;
-  background-color: #fff;
-  border-bottom: 1px solid #dbbba7;
-  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
+  background-color: var(--color-white);
+  border-bottom: 1px solid var(--color-cinnamon-ice);
+  z-index: 1000;
 }
 </style>

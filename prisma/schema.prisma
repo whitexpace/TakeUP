@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Item {
@@ -14,4 +15,58 @@ model Item {
   ownerId     String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id         String  @id @default(uuid())
+  username   String
+  email      String  @unique
+  firstName  String
+  middleName String?
+  lastName   String
+  googleSub  String  @unique
+
+  accountType AccountType
+  status      UserStatus
+
+  points Int @default(0)
+
+  lender   Lender?
+  borrower Borrower?
+  admin    Admin?
+}
+
+model Admin {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role        String
+  accessLevel Int
+}
+
+model Lender {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lenderRating Int @default(0)
+}
+
+model Borrower {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  borrowStatus   String
+  borrowerRating Int    @default(0)
+}
+
+enum AccountType {
+  LENDER
+  BORROWER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
 }
