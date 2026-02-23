@@ -52,7 +52,7 @@
 
     <input
       v-model="query"
-      class="flex-1 min-w-0 border-none outline-none text-[#1f1f1f] font-geist text-[18px] leading-[1.2] placeholder-[#6b7280] bg-transparent"
+      class="flex-1 min-w-0 border-none outline-none text-noble-black opacity-70 font-geist text-[18px] leading-[1.2] placeholder-noble-black placeholder-opacity-70 bg-transparent"
       type="search"
       placeholder="Search for items, categories, or keywords"
       autocomplete="off"
