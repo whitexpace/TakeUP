@@ -29,16 +29,16 @@ describe("login – createSessionToken", () => {
 
   // 🌧️ Rainy 2: empty-string JWT secret is also rejected
   it("throws AUTH_PROVIDER_MISCONFIG when jwtSecret is an empty string", () => {
-    expect(() =>
-      createSessionToken({ id: "u", email: "x@up.edu.ph", name: "X" }, ""),
-    ).toThrow("JWT_SECRET is not configured")
+    expect(() => createSessionToken({ id: "u", email: "x@up.edu.ph", name: "X" }, "")).toThrow(
+      "JWT_SECRET is not configured",
+    )
   })
 
   // 🌧️ Rainy 3: whitespace-only JWT secret is rejected
   it("throws AUTH_PROVIDER_MISCONFIG when jwtSecret is only whitespace", () => {
-    expect(() =>
-      createSessionToken({ id: "u", email: "x@up.edu.ph", name: "X" }, "   "),
-    ).toThrow("JWT_SECRET is not configured")
+    expect(() => createSessionToken({ id: "u", email: "x@up.edu.ph", name: "X" }, "   ")).toThrow(
+      "JWT_SECRET is not configured",
+    )
   })
 })
 
