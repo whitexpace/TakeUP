@@ -5,7 +5,7 @@ defineOptions({
 </script>
 
 <template>
-  <header class="app-header"/>
+  <header class="app-header" />
 </template>
 
 <style scoped>
