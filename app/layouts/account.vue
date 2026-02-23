@@ -16,7 +16,6 @@ const links = [
 const selectLink = (link: string) => {
   currentLink.value = link
 }
-
 const supabase = useSupabaseClient()
 
 const openLogoutModal = () => {
@@ -29,11 +28,8 @@ const cancelLogout = () => {
 
 const confirmLogout = async () => {
   showLogoutModal.value = false
-  const { error } = await supabase.auth.signOut()
-  if (error) {
-    console.error("Error logging out:", error)
-    return
-  }
+  await supabase.auth.signOut()
+  await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
   await navigateTo("/")
 }
 </script>

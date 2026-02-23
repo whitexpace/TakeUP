@@ -10,8 +10,7 @@ const images = [
 
 const currentImageIndex = ref(0)
 let slideshowInterval: NodeJS.Timeout | null = null
-const runtimeConfig = useRuntimeConfig()
-const googleClientId = runtimeConfig.public.googleClientId
+const supabase = useSupabaseClient()
 
 const categories = [
   {
@@ -117,8 +116,35 @@ const scrollToPopularItems = () => {
 
 async function restoreSession() {
   try {
-    const response = await $fetch<{ user: { id: string; email: string; name: string } }>("/api/auth/me")
-    currentUser.value = response.user
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const user = session?.user
+    const email = user?.email?.toLowerCase() ?? ""
+
+    if (!user) {
+      currentUser.value = null
+      loginStatus.value = "idle"
+      return
+    }
+
+    if (!email.endsWith("@up.edu.ph")) {
+      await supabase.auth.signOut()
+      currentUser.value = null
+      loginStatus.value = "blocked_domain"
+      errorMessage.value = "Only up.edu.ph email addresses are allowed."
+      return
+    }
+
+    currentUser.value = {
+      id: user.id,
+      email: user.email ?? "",
+      name:
+        (user.user_metadata?.full_name as string | undefined) ||
+        (user.user_metadata?.name as string | undefined) ||
+        user.email ||
+        "UP User",
+    }
     loginStatus.value = "success"
   } catch {
     currentUser.value = null
@@ -126,32 +152,35 @@ async function restoreSession() {
   }
 }
 
-const handleGoogleLogin = () => {
-  errorMessage.value = ""
-
-  if (!googleClientId) {
-    loginStatus.value = "error"
-    errorMessage.value = "Google Sign-In is not configured."
-    return
+async function handleLogout() {
+  try {
+    await supabase.auth.signOut()
+    await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
+  } finally {
+    currentUser.value = null
+    loginStatus.value = "idle"
   }
+}
 
-  const redirectUri = `${window.location.origin}/auth/callback`
-  const state = crypto.randomUUID()
-  const nonce = crypto.randomUUID()
-  sessionStorage.setItem("oauth_state", state)
-  sessionStorage.setItem("oauth_nonce", nonce)
+const handleGoogleLogin = async () => {
+  errorMessage.value = ""
+  loginStatus.value = "loading"
 
-  const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth")
-  googleAuthUrl.searchParams.set("client_id", googleClientId)
-  googleAuthUrl.searchParams.set("redirect_uri", redirectUri)
-  googleAuthUrl.searchParams.set("response_type", "id_token")
-  googleAuthUrl.searchParams.set("scope", "openid email profile")
-  googleAuthUrl.searchParams.set("state", state)
-  googleAuthUrl.searchParams.set("nonce", nonce)
-  googleAuthUrl.searchParams.set("prompt", "select_account")
-  googleAuthUrl.searchParams.set("hd", "up.edu.ph")
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+      queryParams: {
+        hd: "up.edu.ph",
+        prompt: "select_account",
+      },
+    },
+  })
 
-  window.location.assign(googleAuthUrl.toString())
+  if (error) {
+    loginStatus.value = "error"
+    errorMessage.value = error.message || "Google Sign-In is not configured."
+  }
 }
 </script>
 
@@ -171,6 +200,15 @@ const handleGoogleLogin = () => {
         </div>
       </div>
       <button
+        v-if="currentUser"
+        type="button"
+        class="text-noble-black text-base font-normal leading-none bg-transparent border-none p-0 cursor-pointer hover:opacity-80 transition-opacity"
+        @click="handleLogout"
+      >
+        Log out
+      </button>
+      <button
+        v-else
         type="button"
         class="flex items-center gap-3 h-full bg-transparent border-none p-0 cursor-pointer"
         :disabled="loginStatus === 'loading'"
