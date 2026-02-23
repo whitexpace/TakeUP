@@ -18,7 +18,6 @@ model Item {
 }
 
 model User {
-<<<<<<< HEAD
   id         String  @id @default(uuid())
   username   String
   email      String  @unique
@@ -70,10 +69,4 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   PENDING
-=======
-  id        String @id @default(uuid())
-  googleSub String @unique
-  email     String @unique
-  name      String
->>>>>>> 19e17ff (rules: update formatting)
 }

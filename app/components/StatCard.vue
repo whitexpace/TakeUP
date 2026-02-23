@@ -31,7 +31,7 @@ defineProps<{
 
 .value {
   margin: 0;
-  font-family: 'Geist', sans-serif;
+  font-family: "Geist", sans-serif;
   font-size: 32px;
   font-weight: 700;
   line-height: 1;
@@ -40,7 +40,7 @@ defineProps<{
 
 .stat {
   margin: 9px 0 0;
-  font-family: 'Geist', sans-serif;
+  font-family: "Geist", sans-serif;
   font-size: 16px;
   font-weight: 500;
   line-height: 1;
