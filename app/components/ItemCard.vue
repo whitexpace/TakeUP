@@ -4,7 +4,7 @@
   >
     <!-- Image Section (~70% of card) -->
     <div class="relative h-[280px] w-full bg-gray-50">
-      <img :src="image" :alt="name" class="w-full h-full object-cover" />
+      <img :src="image" :alt="name" class="w-full h-full object-cover" >
 
       <!-- Type Tag -->
       <div

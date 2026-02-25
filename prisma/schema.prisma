@@ -34,23 +34,23 @@ enum ItemCategory {
 }
 
 model Item {
-  id          String   @id @default(uuid())
+  id          String        @id @default(uuid())
   name        String
   description String?
   condition   ItemCondition
   category    ItemCategory
 
-  rentalFee   Int
+  rentalFee         Int
   availabilityDates DateTime[]
-  freeToBorrow Boolean
+  freeToBorrow      Boolean
 
-  photos      String[]
+  photos String[]
 
-  lenderId    String
-  borrowerId  String?
+  lenderId   String
+  borrowerId String?
 
-  lender      Lender     @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
-  borrower    Borrower?  @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
+  lender   Lender    @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+  borrower Borrower? @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
 
   @@index([lenderId])
   @@index([borrowerId])
@@ -89,7 +89,7 @@ model Lender {
 
   lenderRating Int @default(0)
 
-  listedItem  Item[]
+  listedItem Item[]
 }
 
 model Borrower {
@@ -99,7 +99,7 @@ model Borrower {
   borrowStatus   String
   borrowerRating Int    @default(0)
 
-  borrowedItems   Item[]
+  borrowedItems Item[]
 }
 
 enum AccountType {
