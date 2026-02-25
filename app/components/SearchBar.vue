@@ -57,7 +57,7 @@
       placeholder="Search for items, categories, or keywords"
       autocomplete="off"
       @keydown.enter.prevent="onSubmit"
-    >
+    />
     <button
       class="h-[46px] border-none rounded-[12px] px-5 bg-burning-orange text-white font-geist text-base font-semibold cursor-pointer hover:opacity-90 transition-opacity"
       type="submit"
