@@ -38,13 +38,14 @@ model Item {
   name        String
   description String?
   condition   ItemCondition
-  category    ItemCategory
 
   rentalFee         Int
   availabilityDates DateTime[]
   freeToBorrow      Boolean
 
-  photos String[]
+  photos     String[]
+  categories ItemCategoryOnItem[]
+  tags       ItemTagOnItem[]
 
   lenderId   String
   borrowerId String?
@@ -54,6 +55,34 @@ model Item {
 
   @@index([lenderId])
   @@index([borrowerId])
+}
+
+model ItemCategoryOnItem {
+  itemId    String
+  category  ItemCategory
+  createdAt DateTime     @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, category])
+  @@index([category])
+}
+
+model Tag {
+  id    String          @id @default(uuid())
+  name  String          @unique
+  items ItemTagOnItem[]
+}
+
+model ItemTagOnItem {
+  itemId String
+  tagId  String
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@index([tagId])
 }
 
 model User {

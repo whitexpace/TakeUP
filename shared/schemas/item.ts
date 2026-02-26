@@ -23,11 +23,28 @@ export const itemCategorySchema = z.enum([
   "OTHER",
 ])
 
+const dedupe = <T>(items: T[]) => Array.from(new Set(items))
+
+export const itemTagsSchema = z
+  .array(
+    z
+      .string()
+      .min(1)
+      .max(50)
+      .transform((tag) => tag.trim().toLowerCase()),
+  )
+  .default([])
+  .transform((tags) => dedupe(tags.filter(Boolean)))
+
 export const createItemSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
   condition: itemConditionSchema,
-  category: itemCategorySchema,
+  categories: z
+    .array(itemCategorySchema)
+    .min(1)
+    .transform((categories) => dedupe(categories)),
+  tags: itemTagsSchema,
   rentalFee: z.number().int().min(0),
   availabilityDates: z.array(z.coerce.date()).default([]),
   freeToBorrow: z.boolean().default(false),
@@ -40,7 +57,12 @@ export const updateItemSchema = z
     name: z.string().min(1).max(120).optional(),
     description: z.string().max(2000).nullable().optional(),
     condition: itemConditionSchema.optional(),
-    category: itemCategorySchema.optional(),
+    categories: z
+      .array(itemCategorySchema)
+      .min(1)
+      .transform((categories) => dedupe(categories))
+      .optional(),
+    tags: itemTagsSchema.optional(),
     rentalFee: z.number().int().min(0).optional(),
     availabilityDates: z.array(z.coerce.date()).optional(),
     freeToBorrow: z.boolean().optional(),
@@ -51,7 +73,8 @@ export const updateItemSchema = z
       payload.name !== undefined ||
       payload.description !== undefined ||
       payload.condition !== undefined ||
-      payload.category !== undefined ||
+      payload.categories !== undefined ||
+      payload.tags !== undefined ||
       payload.rentalFee !== undefined ||
       payload.availabilityDates !== undefined ||
       payload.freeToBorrow !== undefined ||
@@ -60,3 +83,15 @@ export const updateItemSchema = z
   )
 
 export const deleteItemSchema = itemIdSchema
+
+export const listItemsSchema = z
+  .object({
+    search: z.string().trim().min(1).max(100).optional(),
+    categories: z
+      .array(itemCategorySchema)
+      .min(1)
+      .transform((categories) => dedupe(categories))
+      .optional(),
+    tags: itemTagsSchema.optional(),
+  })
+  .optional()
