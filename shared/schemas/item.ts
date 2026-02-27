@@ -23,6 +23,10 @@ export const itemCategorySchema = z.enum([
   "OTHER",
 ])
 
+export const itemAvailabilityStatusSchema = z.enum(["AVAILABLE", "RENTED"])
+export const itemStatusSchema = z.enum(["AVAILABLE", "RENTED", "DEACTIVATED", "DELETED"])
+export const rateOptionSchema = z.enum(["PER_HOUR", "PER_DAY"])
+
 const dedupe = <T>(items: T[]) => Array.from(new Set(items))
 
 export const itemTagsSchema = z
@@ -36,18 +40,63 @@ export const itemTagsSchema = z
   .default([])
   .transform((tags) => dedupe(tags.filter(Boolean)))
 
+export const itemAvailabilityRangeSchema = z
+  .object({
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+    status: itemAvailabilityStatusSchema,
+  })
+  .refine((range) => range.endDate > range.startDate, {
+    message: "endDate must be later than startDate.",
+    path: ["endDate"],
+  })
+
+const hasOverlappingAvailabilityRanges = (ranges: Array<{ startDate: Date; endDate: Date }>) => {
+  const sorted = [...ranges].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+  for (let i = 1; i < sorted.length; i += 1) {
+    if (sorted[i - 1].endDate > sorted[i].startDate) {
+      return true
+    }
+  }
+  return false
+}
+
+export const itemAvailabilitySchema = z
+  .array(itemAvailabilityRangeSchema)
+  .default([])
+  .superRefine((ranges, ctx) => {
+    if (hasOverlappingAvailabilityRanges(ranges)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Availability ranges must not overlap.",
+      })
+    }
+  })
+
 export const createItemSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
   condition: itemConditionSchema,
+  status: itemStatusSchema.default("AVAILABLE"),
+  rateOption: rateOptionSchema.default("PER_DAY"),
   categories: z
     .array(itemCategorySchema)
     .min(1)
     .transform((categories) => dedupe(categories)),
   tags: itemTagsSchema,
   rentalFee: z.number().int().min(0),
-  availabilityDates: z.array(z.coerce.date()).default([]),
+  replacementCost: z.number().int().min(0).optional(),
+  availability: itemAvailabilitySchema,
   freeToBorrow: z.boolean().default(false),
+  whatItemOffers: z.string().max(2000).optional(),
+  whatIsIncluded: z.string().max(2000).optional(),
+  knownIssues: z.string().max(2000).optional(),
+  usageLimitations: z.string().max(2000).optional(),
+  thumbnailImage: z.string().url().optional(),
+  isTrending: z.boolean().optional(),
+  viewCount: z.number().int().min(0).optional(),
+  bookingCount: z.number().int().min(0).optional(),
+  likeCount: z.number().int().min(0).optional(),
   photos: z.array(z.string().url()).default([]),
 })
 
@@ -57,6 +106,8 @@ export const updateItemSchema = z
     name: z.string().min(1).max(120).optional(),
     description: z.string().max(2000).nullable().optional(),
     condition: itemConditionSchema.optional(),
+    status: itemStatusSchema.optional(),
+    rateOption: rateOptionSchema.optional(),
     categories: z
       .array(itemCategorySchema)
       .min(1)
@@ -64,8 +115,18 @@ export const updateItemSchema = z
       .optional(),
     tags: itemTagsSchema.optional(),
     rentalFee: z.number().int().min(0).optional(),
-    availabilityDates: z.array(z.coerce.date()).optional(),
+    replacementCost: z.number().int().min(0).nullable().optional(),
+    availability: itemAvailabilitySchema.optional(),
     freeToBorrow: z.boolean().optional(),
+    whatItemOffers: z.string().max(2000).nullable().optional(),
+    whatIsIncluded: z.string().max(2000).nullable().optional(),
+    knownIssues: z.string().max(2000).nullable().optional(),
+    usageLimitations: z.string().max(2000).nullable().optional(),
+    thumbnailImage: z.string().url().nullable().optional(),
+    isTrending: z.boolean().optional(),
+    viewCount: z.number().int().min(0).optional(),
+    bookingCount: z.number().int().min(0).optional(),
+    likeCount: z.number().int().min(0).optional(),
     photos: z.array(z.string().url()).optional(),
   })
   .refine(
@@ -73,11 +134,23 @@ export const updateItemSchema = z
       payload.name !== undefined ||
       payload.description !== undefined ||
       payload.condition !== undefined ||
+      payload.status !== undefined ||
+      payload.rateOption !== undefined ||
       payload.categories !== undefined ||
       payload.tags !== undefined ||
       payload.rentalFee !== undefined ||
-      payload.availabilityDates !== undefined ||
+      payload.replacementCost !== undefined ||
+      payload.availability !== undefined ||
       payload.freeToBorrow !== undefined ||
+      payload.whatItemOffers !== undefined ||
+      payload.whatIsIncluded !== undefined ||
+      payload.knownIssues !== undefined ||
+      payload.usageLimitations !== undefined ||
+      payload.thumbnailImage !== undefined ||
+      payload.isTrending !== undefined ||
+      payload.viewCount !== undefined ||
+      payload.bookingCount !== undefined ||
+      payload.likeCount !== undefined ||
       payload.photos !== undefined,
     { message: "At least one field is required for update." },
   )
@@ -87,6 +160,8 @@ export const deleteItemSchema = itemIdSchema
 export const listItemsSchema = z
   .object({
     search: z.string().trim().min(1).max(100).optional(),
+    status: itemStatusSchema.optional(),
+    statuses: z.array(itemStatusSchema).min(1).optional(),
     categories: z
       .array(itemCategorySchema)
       .min(1)

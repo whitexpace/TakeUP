@@ -7,7 +7,7 @@
         :src="imageSrc"
         :alt="imageAlt"
         class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300"
-      />
+      >
     </div>
     <div class="text-right flex flex-col items-end">
       <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">

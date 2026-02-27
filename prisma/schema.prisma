@@ -33,19 +33,51 @@ enum ItemCategory {
   OTHER
 }
 
+enum ItemAvailabilityStatus {
+  AVAILABLE
+  RENTED
+}
+
+enum ItemStatus {
+  AVAILABLE
+  RENTED
+  DEACTIVATED
+  DELETED
+}
+
+enum RateOption {
+  PER_HOUR
+  PER_DAY
+}
+
 model Item {
   id          String        @id @default(uuid())
   name        String
   description String?
   condition   ItemCondition
+  status      ItemStatus    @default(AVAILABLE)
+  rateOption  RateOption    @default(PER_DAY)
+  createdAt   DateTime      @default(now())
 
-  rentalFee         Int
-  availabilityDates DateTime[]
-  freeToBorrow      Boolean
+  rentalFee       Int
+  replacementCost Int?
+  freeToBorrow    Boolean
+  availability    ItemAvailability[]
 
-  photos     String[]
-  categories ItemCategoryOnItem[]
-  tags       ItemTagOnItem[]
+  whatItemOffers   String?
+  whatIsIncluded   String?
+  knownIssues      String?
+  usageLimitations String?
+
+  thumbnailImage String?
+  photos         String[]
+  categories     ItemCategoryOnItem[]
+  tags           ItemTagOnItem[]
+
+  isTrending   Boolean @default(false)
+  viewCount    Int     @default(0)
+  bookingCount Int     @default(0)
+  likeCount    Int     @default(0)
 
   lenderId   String
   borrowerId String?
@@ -55,6 +87,19 @@ model Item {
 
   @@index([lenderId])
   @@index([borrowerId])
+}
+
+model ItemAvailability {
+  itemId    String
+  startDate DateTime
+  endDate   DateTime
+  status    ItemAvailabilityStatus
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, startDate, endDate])
+  @@index([itemId, status])
+  @@index([startDate, endDate])
 }
 
 model ItemCategoryOnItem {

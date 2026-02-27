@@ -7,10 +7,19 @@ import {
   deleteItemSchema,
   itemIdSchema,
   listItemsSchema,
+  itemStatusSchema,
   updateItemSchema,
 } from "../../../shared/schemas/item"
 
 const itemWithTaxonomy = {
+  availability: {
+    select: {
+      startDate: true,
+      endDate: true,
+      status: true,
+    },
+    orderBy: { startDate: "asc" },
+  },
   categories: {
     select: { category: true },
   },
@@ -25,15 +34,21 @@ const itemWithTaxonomy = {
 
 const mapItemTaxonomy = <
   T extends {
+    availability: Array<{ startDate: Date; endDate: Date; status: string }>
     categories: Array<{ category: string }>
     tags: Array<{ tag: { name: string } }>
   },
 >(
   item: T,
 ) => {
-  const { categories, tags, ...rest } = item
+  const { availability, categories, tags, ...rest } = item
   return {
     ...rest,
+    availability: availability.map((entry) => ({
+      startDate: entry.startDate,
+      endDate: entry.endDate,
+      status: entry.status,
+    })),
     categories: categories.map((entry) => entry.category),
     tags: tags.map((entry) => entry.tag.name),
   }
@@ -42,6 +57,8 @@ const mapItemTaxonomy = <
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(({ ctx, input }) => {
     const search = input?.search?.trim()
+    const status = input?.status
+    const statuses = input?.statuses
     const categories = input?.categories
     const tags = input?.tags
 
@@ -51,6 +68,13 @@ export const itemRouter = router({
         orderBy: { id: "desc" },
         include: itemWithTaxonomy,
         where: {
+          ...(status || statuses?.length
+            ? {
+                status: status ?? { in: statuses },
+              }
+            : {
+                status: { not: "DELETED" },
+              }),
           ...(search
             ? {
                 OR: [
@@ -100,9 +124,27 @@ export const itemRouter = router({
           name: input.name,
           description: input.description ?? null,
           condition: input.condition,
+          status: input.status,
+          rateOption: input.rateOption,
           rentalFee: input.rentalFee,
-          availabilityDates: input.availabilityDates,
+          replacementCost: input.replacementCost ?? null,
+          availability: {
+            create: input.availability.map((range) => ({
+              startDate: range.startDate,
+              endDate: range.endDate,
+              status: range.status,
+            })),
+          },
           freeToBorrow: input.freeToBorrow,
+          whatItemOffers: input.whatItemOffers ?? null,
+          whatIsIncluded: input.whatIsIncluded ?? null,
+          knownIssues: input.knownIssues ?? null,
+          usageLimitations: input.usageLimitations ?? null,
+          thumbnailImage: input.thumbnailImage ?? null,
+          isTrending: input.isTrending ?? false,
+          viewCount: input.viewCount ?? 0,
+          bookingCount: input.bookingCount ?? 0,
+          likeCount: input.likeCount ?? 0,
           photos: input.photos,
           lenderId: ctx.user.id,
           categories: {
@@ -147,13 +189,25 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
     }
 
-    const { id, categories, tags, ...data } = input
+    const { id, availability, categories, tags, ...data } = input
 
     return ctx.prisma.item
       .update({
         where: { id },
         data: {
           ...data,
+          ...(availability
+            ? {
+                availability: {
+                  deleteMany: {},
+                  create: availability.map((range) => ({
+                    startDate: range.startDate,
+                    endDate: range.endDate,
+                    status: range.status,
+                  })),
+                },
+              }
+            : {}),
           ...(categories
             ? {
                 categories: {
@@ -197,6 +251,12 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to delete this item." })
     }
 
-    return ctx.prisma.item.delete({ where: { id: input.id } })
+    return ctx.prisma.item
+      .update({
+        where: { id: input.id },
+        data: { status: itemStatusSchema.enum.DELETED },
+        include: itemWithTaxonomy,
+      })
+      .then(mapItemTaxonomy)
   }),
 })
