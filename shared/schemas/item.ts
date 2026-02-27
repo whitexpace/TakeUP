@@ -53,10 +53,12 @@ export const itemAvailabilityRangeSchema = z
 
 const hasOverlappingAvailabilityRanges = (ranges: Array<{ startDate: Date; endDate: Date }>) => {
   const sorted = [...ranges].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-  for (let i = 1; i < sorted.length; i += 1) {
-    if (sorted[i - 1].endDate > sorted[i].startDate) {
+  let previousRange: { startDate: Date; endDate: Date } | undefined
+  for (const currentRange of sorted) {
+    if (previousRange && previousRange.endDate > currentRange.startDate) {
       return true
     }
+    previousRange = currentRange
   }
   return false
 }
