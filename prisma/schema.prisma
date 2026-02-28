@@ -8,13 +8,126 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum ItemCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+  POOR
+}
+
+enum ItemCategory {
+  ELECTRONICS
+  BOOKS
+  CLOTHING
+  TOOLS
+  HOME_APPLIANCES
+  SPORTS_OUTDOORS
+  MUSIC_AUDIO
+  TOYS_GAMES
+  FURNITURE
+  VEHICLES_ACCESSORIES
+  HEALTH_BEAUTY
+  SCHOOL_SUPPLIES
+  PET_SUPPLIES
+  OTHER
+}
+
+enum ItemAvailabilityStatus {
+  AVAILABLE
+  RENTED
+}
+
+enum ItemStatus {
+  AVAILABLE
+  RENTED
+  DEACTIVATED
+  DELETED
+}
+
+enum RateOption {
+  PER_HOUR
+  PER_DAY
+}
+
 model Item {
-  id          String   @id @default(uuid())
-  title       String
+  id          String        @id @default(uuid())
+  name        String
   description String?
-  ownerId     String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  condition   ItemCondition
+  status      ItemStatus    @default(AVAILABLE)
+  rateOption  RateOption    @default(PER_DAY)
+  createdAt   DateTime      @default(now())
+
+  rentalFee       Int
+  replacementCost Int?
+  freeToBorrow    Boolean
+  availability    ItemAvailability[]
+
+  whatItemOffers   String?
+  whatIsIncluded   String?
+  knownIssues      String?
+  usageLimitations String?
+
+  thumbnailImage String?
+  photos         String[]
+  categories     ItemCategoryOnItem[]
+  tags           ItemTagOnItem[]
+
+  isTrending   Boolean @default(false)
+  viewCount    Int     @default(0)
+  bookingCount Int     @default(0)
+  likeCount    Int     @default(0)
+
+  lenderId   String
+  borrowerId String?
+
+  lender   Lender    @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+  borrower Borrower? @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
+
+  @@index([lenderId])
+  @@index([borrowerId])
+}
+
+model ItemAvailability {
+  itemId    String
+  startDate DateTime
+  endDate   DateTime
+  status    ItemAvailabilityStatus
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, startDate, endDate])
+  @@index([itemId, status])
+  @@index([startDate, endDate])
+}
+
+model ItemCategoryOnItem {
+  itemId    String
+  category  ItemCategory
+  createdAt DateTime     @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, category])
+  @@index([category])
+}
+
+model Tag {
+  id    String          @id @default(uuid())
+  name  String          @unique
+  items ItemTagOnItem[]
+}
+
+model ItemTagOnItem {
+  itemId String
+  tagId  String
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@index([tagId])
 }
 
 model User {
@@ -49,6 +162,8 @@ model Lender {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   lenderRating Int @default(0)
+
+  listedItem Item[]
 }
 
 model Borrower {
@@ -57,6 +172,8 @@ model Borrower {
 
   borrowStatus   String
   borrowerRating Int    @default(0)
+
+  borrowedItems Item[]
 }
 
 enum AccountType {
