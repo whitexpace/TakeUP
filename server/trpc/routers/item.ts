@@ -53,6 +53,12 @@ const mapItemTaxonomy = <
   }
 }
 
+type ItemWithTaxonomy = {
+  availability: Array<{ startDate: Date; endDate: Date; status: string }>
+  categories: Array<{ category: string }>
+  tags: Array<{ tag: { name: string } }>
+} & Record<string, unknown>
+
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(({ ctx, input }) => {
     const search = input?.search?.trim()
@@ -113,7 +119,7 @@ export const itemRouter = router({
             : {}),
         },
       })
-      .then((items: any[]) => items.map(mapItemTaxonomy))
+      .then((items: ItemWithTaxonomy[]) => items.map(mapItemTaxonomy))
   }),
 
   create: protectedProcedure.input(createItemSchema).mutation(({ ctx, input }) => {
@@ -171,7 +177,7 @@ export const itemRouter = router({
         where: { id: input.id },
         include: itemWithTaxonomy,
       })
-      .then((item: any) => (item ? mapItemTaxonomy(item) : null))
+      .then((item: ItemWithTaxonomy | null) => (item ? mapItemTaxonomy(item) : null))
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
