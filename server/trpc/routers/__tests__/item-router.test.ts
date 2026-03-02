@@ -5,15 +5,21 @@ import { itemRouter } from "../item"
 const VALID_UUID = "11111111-1111-1111-1111-111111111111"
 
 describe("itemRouter", () => {
-  it("list queries by title/description search and returns prisma items", async () => {
+  it("list maps taxonomy relations into plain arrays", async () => {
     const findMany = vi.fn().mockResolvedValue([
       {
         id: VALID_UUID,
-        title: "Camera",
-        description: "Mirrorless",
-        ownerId: "owner-1",
-        createdAt: new Date("2026-03-10T00:00:00.000Z"),
-        updatedAt: new Date("2026-03-10T00:00:00.000Z"),
+        name: "Camera",
+        status: "AVAILABLE",
+        availability: [
+          {
+            startDate: new Date("2026-03-10T00:00:00.000Z"),
+            endDate: new Date("2026-03-12T00:00:00.000Z"),
+            status: "AVAILABLE",
+          },
+        ],
+        categories: [{ category: "ELECTRONICS" }],
+        tags: [{ tag: { name: "photo" } }],
       },
     ])
 
@@ -23,16 +29,18 @@ describe("itemRouter", () => {
       user: null,
     })
 
-    const result = await caller.list({ search: "camera" })
+    const result = await caller.list()
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: expect.any(Array),
+          status: { not: "DELETED" },
         }),
       }),
     )
-    expect(result[0]?.title).toBe("Camera")
+    expect(result[0]?.categories).toEqual(["ELECTRONICS"])
+    expect(result[0]?.tags).toEqual(["photo"])
+    expect(result[0]?.availability).toHaveLength(1)
   })
 
   it("update throws NOT_FOUND when item does not exist", async () => {
@@ -45,19 +53,14 @@ describe("itemRouter", () => {
       user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
     })
 
-    await expect(
-      caller.update({
-        id: VALID_UUID,
-        name: "Updated name",
-      }),
-    ).rejects.toMatchObject({
+    await expect(caller.update({ id: VALID_UUID, name: "Updated name" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     })
     expect(update).not.toHaveBeenCalled()
   })
 
   it("update throws FORBIDDEN when user does not own the item", async () => {
-    const findUnique = vi.fn().mockResolvedValue({ ownerId: "owner-2" })
+    const findUnique = vi.fn().mockResolvedValue({ lenderId: "owner-2" })
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
@@ -66,10 +69,7 @@ describe("itemRouter", () => {
     })
 
     try {
-      await caller.update({
-        id: VALID_UUID,
-        name: "Updated name",
-      })
+      await caller.update({ id: VALID_UUID, name: "Updated name" })
       throw new Error("Expected update to throw")
     } catch (error) {
       expect(error).toBeInstanceOf(TRPCError)
@@ -77,30 +77,33 @@ describe("itemRouter", () => {
     }
   })
 
-  it("delete removes the item for its owner", async () => {
-    const findUnique = vi.fn().mockResolvedValue({ ownerId: "owner-1" })
-    const deleteFn = vi.fn().mockResolvedValue({
+  it("delete performs a soft delete by setting status to DELETED", async () => {
+    const findUnique = vi.fn().mockResolvedValue({ lenderId: "owner-1" })
+    const update = vi.fn().mockResolvedValue({
       id: VALID_UUID,
-      title: "Camera",
-      description: "Mirrorless",
-      ownerId: "owner-1",
-      createdAt: new Date("2026-03-10T00:00:00.000Z"),
-      updatedAt: new Date("2026-03-10T00:00:00.000Z"),
+      name: "Camera",
+      status: "DELETED",
+      availability: [],
+      categories: [{ category: "ELECTRONICS" }],
+      tags: [{ tag: { name: "photo" } }],
     })
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique, delete: deleteFn } } as never,
+      prisma: { item: { findUnique, update } } as never,
       user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
     })
 
     const result = await caller.delete({ id: VALID_UUID })
 
-    expect(deleteFn).toHaveBeenCalledWith(
+    expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: VALID_UUID },
+        data: { status: "DELETED" },
       }),
     )
-    expect(result.title).toBe("Camera")
+    expect(result.status).toBe("DELETED")
+    expect(result.categories).toEqual(["ELECTRONICS"])
+    expect(result.tags).toEqual(["photo"])
   })
 })
