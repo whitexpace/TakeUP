@@ -250,9 +250,9 @@ const handleGoogleLogin = async () => {
             network.
           </p>
           <div class="flex flex-row flex-wrap justify-center gap-4 xl:justify-start">
-            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="1,500+" label="Items" />
-            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="500+" label="Iskos" />
-            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="4.9" label="Average Rating" />
+            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="1,500+" label="Items"></StatCard1>
+            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="500+" label="Iskos"></StatCard1>
+            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="4.9" label="Average Rating"></StatCard1>
           </div>
         </div>
 
@@ -362,12 +362,12 @@ const handleGoogleLogin = async () => {
                     r="10"
                     stroke="currentColor"
                     stroke-width="4"
-                  />
+                  ></circle>
                   <path
                     class="opacity-75"
                     fill="currentColor"
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
+                  ></path>
                 </svg>
                 <span>Signing in...</span>
               </template>
@@ -381,9 +381,9 @@ const handleGoogleLogin = async () => {
             </p>
           </div>
           <div class="mt-6 flex flex-wrap justify-center w-full max-w-[600px] gap-6">
-            <FeatureItem text="Verified UP Students only" />
-            <FeatureItem text="Secure transactions" />
-            <FeatureItem text="Campus-based meetups" />
+            <FeatureItem text="Verified UP Students only"></FeatureItem>
+            <FeatureItem text="Secure transactions"></FeatureItem>
+            <FeatureItem text="Campus-based meetups"></FeatureItem>
           </div>
         </div>
       </div>
@@ -450,8 +450,8 @@ const handleGoogleLogin = async () => {
             UP students who have what you need or want what you have.
           </p>
           <div class="flex flex-col sm:flex-row gap-4">
-            <BorrowNowButton />
-            <LendItemButton />
+            <BorrowNowButton></BorrowNowButton>
+            <LendItemButton></LendItemButton>
           </div>
         </div>
       </div>
@@ -465,12 +465,12 @@ const handleGoogleLogin = async () => {
             What are you looking for?
           </h2>
           <div class="w-full flex justify-center mb-6">
-            <SearchBar />
+            <SearchBar></SearchBar>
           </div>
           <div class="w-full max-w-[760px] grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-            <StatCard2 value="6" label="Borrowed Today" />
-            <StatCard2 value="4.9" label="Average Rating" />
-            <StatCard2 value="67" label="Active Items" />
+            <StatCard2 value="6" label="Borrowed Today"></StatCard2>
+            <StatCard2 value="4.9" label="Average Rating"></StatCard2>
+            <StatCard2 value="67" label="Active Items"></StatCard2>
           </div>
         </div>
       </div>
@@ -506,7 +506,7 @@ const handleGoogleLogin = async () => {
             :subtitle="category.subtitle"
             :image-src="category.imageSrc"
             :image-alt="category.imageAlt"
-          />
+          ></CategoryCard>
         </div>
       </div>
 
@@ -541,7 +541,7 @@ const handleGoogleLogin = async () => {
             reviews="67"
             price="300"
             owner="Paolo F."
-          />
+          ></ItemCard>
           <ItemCard
             type="Borrow"
             image="/images/popular/scical.jpg"
@@ -550,7 +550,7 @@ const handleGoogleLogin = async () => {
             rating="4.8"
             reviews="8"
             owner="Dave S."
-          />
+          ></ItemCard>
           <ItemCard
             type="Rent"
             image="/images/popular/camera.jpg"
@@ -560,7 +560,7 @@ const handleGoogleLogin = async () => {
             reviews="35"
             price="500"
             owner="Issa S."
-          />
+          ></ItemCard>
           <ItemCard
             type="Rent"
             image="/images/popular/dress.jpg"
@@ -570,7 +570,7 @@ const handleGoogleLogin = async () => {
             reviews="27"
             price="100"
             owner="Issa S."
-          />
+          ></ItemCard>
         </div>
       </div>
 
@@ -590,8 +590,8 @@ const handleGoogleLogin = async () => {
             Join hundreds of UP Cebu students already borrowing and lending on campus.
           </p>
           <div class="flex flex-col sm:flex-row gap-6">
-            <BorrowNowButton />
-            <LendItemButton />
+            <BorrowNowButton></BorrowNowButton>
+            <LendItemButton></LendItemButton>
           </div>
         </div>
       </div>
@@ -614,7 +614,7 @@ const handleGoogleLogin = async () => {
         >
           <path
             d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-          />
+          ></path>
         </svg>
         for the UP Cebu Community.
       </div>

@@ -16,9 +16,9 @@
           <!-- Clear Button (X) or Search Icon -->
           <button
             v-if="searchQuery"
-            @click="clearSearch"
             class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 focus:outline-none"
             title="Clear search"
+            @click="clearSearch"
           >
             <svg
               width="20"
@@ -65,7 +65,7 @@
 
         <!-- Search Button -->
         <button
-          class="h-[48px] sm:h-[60px] px-6 sm:px-10 bg-burning-orange text-white rounded-[12px] sm:rounded-[15px] font-geist font-medium text-base sm:text-[20px] hover:bg-blue-estate transition-colors shrink-0 flex items-center justify-center"
+          class="h-[48px] sm:h-[60px] px-6 sm:px-10 bg-burning-orange text-white rounded-[129px] sm:rounded-[15px] font-geist font-medium text-base sm:text-[20px] hover:bg-blue-estate transition-colors shrink-0 flex items-center justify-center"
         >
           Search
         </button>
@@ -129,8 +129,8 @@
       </p>
       <button
         v-if="searchQuery"
-        @click="clearSearch"
         class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
+        @click="clearSearch"
       >
         Clear Search
       </button>

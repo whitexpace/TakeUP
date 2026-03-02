@@ -83,7 +83,7 @@
     </div>
 
     <!-- Divider -->
-    <div class="h-[1px] bg-cinnamon-ice w-full" />
+    <div class="h-[1px] bg-cinnamon-ice w-full"></div>
 
     <!-- Owner Section -->
     <div class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white">
