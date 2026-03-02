@@ -5,16 +5,22 @@
     <!-- Image Section -->
     <div class="relative aspect-square w-full bg-gray-200">
       <!-- Type Tag Skeleton -->
-      <div class="absolute top-2 sm:top-4 left-2 sm:left-4 w-[50px] sm:w-[80px] h-[24px] sm:h-[32px] rounded-full bg-gray-300"></div>
+      <div
+        class="absolute top-2 sm:top-4 left-2 sm:left-4 w-[50px] sm:w-[80px] h-[24px] sm:h-[32px] rounded-full bg-gray-300"
+      ></div>
 
       <!-- Like Button Skeleton -->
-      <div class="absolute top-2 sm:top-4 right-2 sm:right-4 w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-gray-300"></div>
+      <div
+        class="absolute top-2 sm:top-4 right-2 sm:right-4 w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-gray-300"
+      ></div>
     </div>
 
     <!-- Details Section -->
     <div class="p-3 sm:p-5 flex-1 flex flex-col bg-white">
       <!-- Category Skeleton -->
-      <div class="h-[11px] sm:h-[13px] w-20 sm:w-24 bg-gray-200 rounded mb-1 sm:mb-1.5 mt-0.5"></div>
+      <div
+        class="h-[11px] sm:h-[13px] w-20 sm:w-24 bg-gray-200 rounded mb-1 sm:mb-1.5 mt-0.5"
+      ></div>
 
       <!-- Title & Rating Skeleton -->
       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-2">

@@ -59,9 +59,10 @@
               d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
             />
           </svg>
-          <span class="font-geist font-medium text-[11px] sm:text-[13px] text-noble-black opacity-80">{{
-            rating
-          }}</span>
+          <span
+            class="font-geist font-medium text-[11px] sm:text-[13px] text-noble-black opacity-80"
+            >{{ rating }}</span
+          >
           <span class="font-geist font-light text-[11px] sm:text-[13px] text-noble-black opacity-60"
             >({{ reviews }})</span
           >
@@ -70,8 +71,13 @@
 
       <div class="mt-auto">
         <div v-if="price" class="flex items-baseline gap-1">
-          <span class="font-geist font-bold text-[15px] sm:text-[19px] text-burning-orange">₱{{ price }}</span>
-          <span class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-70">/day</span>
+          <span class="font-geist font-bold text-[15px] sm:text-[19px] text-burning-orange"
+            >₱{{ price }}</span
+          >
+          <span
+            class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-70"
+            >/day</span
+          >
         </div>
       </div>
     </div>
@@ -81,7 +87,8 @@
 
     <!-- Owner Section -->
     <div class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white">
-      <span class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate pr-2"
+      <span
+        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate pr-2"
         >by {{ owner }}</span
       >
       <button
