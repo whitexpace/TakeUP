@@ -14,25 +14,48 @@
         <!-- Input Container -->
         <div class="relative flex-1">
           <!-- Clear Button (X) or Search Icon -->
-          <button 
-            v-if="searchQuery" 
+          <button
+            v-if="searchQuery"
             @click="clearSearch"
             class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 focus:outline-none"
             title="Clear search"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="sm:w-6 sm:h-6 stroke-noble-black/70" stroke-width="1">
-              <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="sm:w-6 sm:h-6 stroke-noble-black/70"
+              stroke-width="1"
+            >
+              <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-          <div v-else class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 pointer-events-none">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="sm:w-6 sm:h-6 stroke-noble-black/70" stroke-width="1">
-              <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M21 21L16.65 16.65" stroke-linecap="round" stroke-linejoin="round"/>
+          <div
+            v-else
+            class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 pointer-events-none"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="sm:w-6 sm:h-6 stroke-noble-black/70"
+              stroke-width="1"
+            >
+              <path
+                d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path d="M21 21L16.65 16.65" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </div>
 
           <!-- Search Input -->
-          <input 
+          <input
             v-model="searchQuery"
             type="text"
             placeholder="Search for items to rent or buy"
@@ -41,14 +64,19 @@
         </div>
 
         <!-- Search Button -->
-        <button class="h-[48px] sm:h-[60px] px-6 sm:px-10 bg-burning-orange text-white rounded-[12px] sm:rounded-[15px] font-geist font-medium text-base sm:text-[20px] hover:bg-blue-estate transition-colors shrink-0 flex items-center justify-center">
+        <button
+          class="h-[48px] sm:h-[60px] px-6 sm:px-10 bg-burning-orange text-white rounded-[12px] sm:rounded-[15px] font-geist font-medium text-base sm:text-[20px] hover:bg-blue-estate transition-colors shrink-0 flex items-center justify-center"
+        >
           Search
         </button>
       </div>
     </div>
 
     <!-- Items Grid & Empty State -->
-    <div v-if="items.length > 0 || isLoading" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+    <div
+      v-if="items.length > 0 || isLoading"
+      class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6"
+    >
       <ItemCard
         v-for="item in items"
         :key="item.id"
@@ -68,19 +96,39 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else class="w-full flex flex-col items-center justify-center py-24 px-4 text-center bg-cream rounded-[20px] border border-cinnamon-ice/50 shadow-sm mt-4">
+    <div
+      v-else
+      class="w-full flex flex-col items-center justify-center py-24 px-4 text-center bg-cream rounded-[20px] border border-cinnamon-ice/50 shadow-sm mt-4"
+    >
       <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="stroke-cinnamon-ice" stroke-width="1.5">
-          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M8 11h4m-4 0v-4" stroke-linecap="round" stroke-linejoin="round"/>
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          class="stroke-cinnamon-ice"
+          stroke-width="1.5"
+        >
+          <path
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path d="M8 11h4m-4 0v-4" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </div>
-      <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">No items found</h3>
-      <p class="font-geist font-normal text-[16px] sm:text-[18px] text-noble-black/70 max-w-md mx-auto">
-        We couldn't find any items matching your search or filters. Try adjusting them to see more results!
+      <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">
+        No items found
+      </h3>
+      <p
+        class="font-geist font-normal text-[16px] sm:text-[18px] text-noble-black/70 max-w-md mx-auto"
+      >
+        We couldn't find any items matching your search or filters. Try adjusting them to see more
+        results!
       </p>
-      <button 
-        v-if="searchQuery" 
+      <button
+        v-if="searchQuery"
         @click="clearSearch"
         class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
       >
@@ -89,16 +137,15 @@
     </div>
 
     <!-- Intersection Trigger -->
-    <div ref="loadMoreTrigger" class="h-10 w-full mt-4 flex items-center justify-center">
-    </div>
+    <div ref="loadMoreTrigger" class="h-10 w-full mt-4 flex items-center justify-center"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from "vue"
 
 definePageMeta({
-  layout: 'dashboard'
+  layout: "dashboard",
 })
 
 interface Item {
@@ -116,22 +163,22 @@ interface Item {
 // User & Greeting State
 const user = useSupabaseUser()
 const firstName = computed(() => {
-  if (!user.value) return 'User'
-  const fullName = user.value.user_metadata?.full_name || user.value.user_metadata?.name || 'User'
-  return fullName.split(' ')[0]
+  if (!user.value) return "User"
+  const fullName = user.value.user_metadata?.full_name || user.value.user_metadata?.name || "User"
+  return fullName.split(" ")[0]
 })
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
-  if (hour < 12) return 'morning'
-  if (hour < 18) return 'afternoon'
-  return 'evening'
+  if (hour < 12) return "morning"
+  if (hour < 18) return "afternoon"
+  return "evening"
 })
 
 // Search State
-const searchQuery = ref('')
+const searchQuery = ref("")
 const clearSearch = () => {
-  searchQuery.value = ''
+  searchQuery.value = ""
 }
 
 // Items State
@@ -148,7 +195,7 @@ let observer: IntersectionObserver | null = null
 const fetchMockItems = async (pageNumber: number): Promise<Item[]> => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      const popularItems = [
+      const popularItems: Array<Omit<Item, "id">> = [
         {
           type: "Rent" as const,
           image: "/images/popular/macbook.jpg",
@@ -187,13 +234,18 @@ const fetchMockItems = async (pageNumber: number): Promise<Item[]> => {
           reviews: 27,
           price: 100,
           owner: "Issa S.",
-        }
+        },
       ]
+
+      if (popularItems.length === 0) {
+        resolve([])
+        return
+      }
 
       const newItems: Item[] = Array.from({ length: 12 }).map((_, i) => {
         const id = `item-${pageNumber}-${i}`
-        const baseItem = popularItems[i % popularItems.length]
-        
+        const baseItem = popularItems[i % popularItems.length]!
+
         return {
           ...baseItem,
           id,
@@ -230,9 +282,9 @@ onMounted(() => {
       }
     },
     {
-      rootMargin: '100px', // Trigger load slightly before scrolling to the very bottom
-      threshold: 0.1
-    }
+      rootMargin: "100px", // Trigger load slightly before scrolling to the very bottom
+      threshold: 0.1,
+    },
   )
 
   if (loadMoreTrigger.value) {
