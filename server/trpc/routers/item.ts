@@ -1,5 +1,4 @@
 import { TRPCError } from "@trpc/server"
-import type { Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -30,7 +29,7 @@ const itemWithTaxonomy = {
       },
     },
   },
-} satisfies Prisma.ItemInclude
+} as const
 
 const mapItemTaxonomy = <
   T extends {
@@ -53,6 +52,12 @@ const mapItemTaxonomy = <
     tags: tags.map((entry) => entry.tag.name),
   }
 }
+
+type ItemWithTaxonomy = {
+  availability: Array<{ startDate: Date; endDate: Date; status: string }>
+  categories: Array<{ category: string }>
+  tags: Array<{ tag: { name: string } }>
+} & Record<string, unknown>
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(({ ctx, input }) => {
@@ -114,7 +119,7 @@ export const itemRouter = router({
             : {}),
         },
       })
-      .then((items) => items.map(mapItemTaxonomy))
+      .then((items: ItemWithTaxonomy[]) => items.map(mapItemTaxonomy))
   }),
 
   create: protectedProcedure.input(createItemSchema).mutation(({ ctx, input }) => {
@@ -172,7 +177,7 @@ export const itemRouter = router({
         where: { id: input.id },
         include: itemWithTaxonomy,
       })
-      .then((item) => (item ? mapItemTaxonomy(item) : null))
+      .then((item: ItemWithTaxonomy | null) => (item ? mapItemTaxonomy(item) : null))
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
