@@ -29,7 +29,7 @@ const itemWithTaxonomy = {
       },
     },
   },
-}
+} as const
 
 const mapItemTaxonomy = <
   T extends {
