@@ -16,9 +16,9 @@
           <!-- Clear Button (X) or Search Icon -->
           <button
             v-if="searchQuery"
-            @click="clearSearch"
             class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 focus:outline-none"
             title="Clear search"
+            @click="clearSearch"
           >
             <svg
               width="20"
@@ -129,15 +129,15 @@
       </p>
       <button
         v-if="searchQuery"
-        @click="clearSearch"
         class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
+        @click="clearSearch"
       >
         Clear Search
       </button>
     </div>
 
     <!-- Intersection Trigger -->
-    <div ref="loadMoreTrigger" class="h-10 w-full mt-4 flex items-center justify-center"></div>
+    <div ref="loadMoreTrigger" class="h-10 w-full mt-4 flex items-center justify-center" />
   </div>
 </template>
 
