@@ -37,14 +37,10 @@ const confirmLogout = async () => {
 <template>
   <div class="flex flex-col min-h-screen font-geist bg-white relative">
     <!-- Top Navbar -->
-    <nav
-      class="h-[77px] w-full bg-white border-b border-cinnamon-ice shrink-0 flex items-center px-8"
-    >
-      <!-- Empty content for now -->
-    </nav>
+    <Header />
 
     <!-- Main Content Container -->
-    <div class="flex flex-1 overflow-hidden h-[calc(100vh-77px)]">
+    <div class="flex flex-1 overflow-hidden h-[calc(100vh-56px)]">
       <!-- Left Sidebar -->
       <aside class="w-[360px] bg-cream flex flex-col shrink-0">
         <!-- Sidebar Title -->

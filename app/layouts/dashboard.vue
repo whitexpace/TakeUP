@@ -30,40 +30,9 @@ onUnmounted(() => {
 <template>
   <div class="flex flex-col min-h-screen font-geist bg-white relative">
     <!-- Top Header -->
-    <header
-      class="h-16 w-full bg-white border-b border-cinnamon-ice shrink-0 flex items-center px-4 sm:px-8 z-30"
-    >
-      <div class="flex items-center gap-4 w-full">
-        <!-- Toggle Button for Mobile/Tablet -->
-        <button
-          @click="toggleSidebar"
-          class="p-2 hover:bg-cream rounded-lg transition-colors lg:hidden"
-          aria-label="Toggle Sidebar"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="text-noble-black"
-          >
-            <path
-              d="M4 6H20M4 12H20M4 18H20"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
+    <Header />
 
-        <!-- Header Content Slot for future implementation -->
-        <div class="flex-1"></div>
-      </div>
-    </header>
-
-    <div class="flex flex-1 overflow-hidden h-[calc(100vh-64px)] relative">
+    <div class="flex flex-1 overflow-hidden h-[calc(100vh-56px)] relative">
       <!-- Sidebar Overlay for Mobile -->
       <div
         v-if="isSidebarOpen && isMobile"
@@ -99,7 +68,7 @@ onUnmounted(() => {
               <path
                 d="M15 18L9 12L15 6"
                 stroke="currentColor"
-                stroke-width="2"
+                stroke-width="1.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               />
@@ -115,25 +84,25 @@ onUnmounted(() => {
       <main
         class="flex-1 bg-white overflow-y-auto transition-all duration-300 ease-in-out relative"
       >
-        <!-- Desktop Toggle Button (when sidebar is hidden) -->
+        <!-- Floating Toggle Button (visible when sidebar is hidden) -->
         <button
-          v-if="!isSidebarOpen && !isMobile"
+          v-if="!isSidebarOpen"
           @click="toggleSidebar"
-          class="fixed left-4 top-20 z-20 p-2 bg-white border border-cinnamon-ice rounded-full shadow-md hover:bg-cream transition-all hover:scale-110"
+          class="fixed left-4 top-[72px] z-20 p-2.5 bg-white border border-cinnamon-ice rounded-full shadow-md hover:bg-cream transition-all hover:scale-110 flex items-center justify-center"
           title="Show Sidebar"
         >
           <svg
-            width="20"
-            height="20"
+            width="22"
+            height="22"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             class="text-noble-black"
           >
             <path
-              d="M9 18L15 12L9 6"
+              d="M4 6H20M4 12H20M4 18H20"
               stroke="currentColor"
-              stroke-width="2"
+              stroke-width="1.5"
               stroke-linecap="round"
               stroke-linejoin="round"
             />
