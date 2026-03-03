@@ -576,7 +576,7 @@ const handleGoogleLogin = async () => {
 
       <!-- Section Six -->
       <div
-        class="w-full bg-[linear-gradient(90deg,#202124_0%,#272d4e_51%,#3b4883_95%)] py-20 lg:py-32 flex flex-col items-center text-center px-4 mt-20 lg:mt-32 rounded-[30px] overflow-hidden"
+        class="w-full bg-[linear-gradient(90deg,theme(colors.noble-black)_0%,theme(colors.wahoo)_51%,theme(colors.blue-estate)_95%)] py-20 lg:py-32 flex flex-col items-center text-center px-4 mt-20 lg:mt-32 rounded-[30px] overflow-hidden"
       >
         <div class="max-w-[1200px] flex flex-col items-center">
           <h2
@@ -608,9 +608,9 @@ const handleGoogleLogin = async () => {
           width="12"
           height="12"
           viewBox="0 0 24 24"
-          fill="#eb4335"
+          fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          class="inline-block mx-0.5"
+          class="inline-block mx-0.5 fill-cinnabar-red"
         >
           <path
             d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"

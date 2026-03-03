@@ -556,16 +556,16 @@ const clearAll = () => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #dbbba780;
+  background: theme("colors.cinnamon-ice / 50%");
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #ff7124;
+  background: theme("colors.burning-orange");
 }
 
 /* For browsers that support scrollbar-color (Firefox) */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #dbbba780 transparent;
+  scrollbar-color: theme("colors.cinnamon-ice / 50%") transparent;
 }
 </style>
