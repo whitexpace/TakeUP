@@ -80,6 +80,7 @@
       <ItemCard
         v-for="item in items"
         :key="item.id"
+        :id="item.id"
         :type="item.type"
         :image="item.image"
         :category="item.category"

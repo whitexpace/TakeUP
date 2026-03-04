@@ -1,5 +1,6 @@
 <template>
-  <div
+  <NuxtLink
+    :to="`/items/${id}`"
     class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto cursor-pointer"
   >
     <!-- Image Section (~70% of card) -->
@@ -14,8 +15,9 @@
         {{ type }}
       </div>
 
-      <!-- Like Button -->
+      <!-- Like Button (preventing navigation on click) -->
       <button
+        @click.stop.prevent
         class="absolute top-2 sm:top-4 right-2 sm:right-4 w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group"
       >
         <svg
@@ -50,9 +52,8 @@
         </h3>
         <div class="flex items-center gap-1 shrink-0 sm:pt-0.5">
           <svg
-            class="w-3 h-3 sm:w-3.5 sm:h-3.5"
+            class="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-burning-orange"
             viewBox="0 0 24 24"
-            fill="#ff7124"
             xmlns="http://www.w3.org/2000/svg"
           >
             <path
@@ -92,6 +93,7 @@
         >by {{ owner }}</span
       >
       <button
+        @click.stop.prevent
         class="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
       >
         <svg
@@ -110,11 +112,12 @@
         </svg>
       </button>
     </div>
-  </div>
+  </NuxtLink>
 </template>
 
 <script setup lang="ts">
 defineProps<{
+  id: string | number
   type: "Rent" | "Borrow"
   image: string
   category: string
