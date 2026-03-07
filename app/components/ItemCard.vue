@@ -50,9 +50,9 @@
         </h3>
         <div class="flex items-center gap-1 shrink-0 sm:pt-0.5">
           <svg
-            class="w-3 h-3 sm:w-3.5 sm:h-3.5"
+            class="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-burning-orange"
             viewBox="0 0 24 24"
-            fill="#ff7124"
+            fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >
             <path
@@ -83,7 +83,7 @@
     </div>
 
     <!-- Divider -->
-    <div class="h-[1px] bg-cinnamon-ice w-full" />
+    <div class="h-[1px] bg-cinnamon-ice w-full"></div>
 
     <!-- Owner Section -->
     <div class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white">
