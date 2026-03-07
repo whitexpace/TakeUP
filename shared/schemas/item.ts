@@ -172,3 +172,25 @@ export const listItemsSchema = z
     tags: itemTagsSchema.optional(),
   })
   .optional()
+
+export const itemPaginationCursorSchema = z.object({
+  id: z.string().uuid(),
+  bookingCount: z.number().int().min(0),
+  createdAt: z.coerce.date(),
+})
+
+export const paginatedItemsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(48).default(12),
+    cursor: itemPaginationCursorSchema.optional(),
+    search: z.string().trim().min(1).max(100).optional(),
+    status: itemStatusSchema.optional(),
+    statuses: z.array(itemStatusSchema).min(1).optional(),
+    categories: z
+      .array(itemCategorySchema)
+      .min(1)
+      .transform((categories) => dedupe(categories))
+      .optional(),
+    tags: itemTagsSchema.optional(),
+  })
+  .default({})

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server"
+import type { ItemCategory, ItemStatus, Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -6,9 +7,11 @@ import {
   deleteItemSchema,
   itemIdSchema,
   listItemsSchema,
+  paginatedItemsSchema,
   itemStatusSchema,
   updateItemSchema,
 } from "../../../shared/schemas/item"
+import { getDefaultItemOrderBy } from "./item-sorting"
 
 const itemWithTaxonomy = {
   availability: {
@@ -31,15 +34,11 @@ const itemWithTaxonomy = {
   },
 } as const
 
-const mapItemTaxonomy = <
-  T extends {
-    availability: Array<{ startDate: Date; endDate: Date; status: string }>
-    categories: Array<{ category: string }>
-    tags: Array<{ tag: { name: string } }>
-  },
->(
-  item: T,
-) => {
+type ItemWithTaxonomy = Prisma.ItemGetPayload<{
+  include: typeof itemWithTaxonomy
+}>
+
+const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
   const { availability, categories, tags, ...rest } = item
   return {
     ...rest,
@@ -53,73 +52,132 @@ const mapItemTaxonomy = <
   }
 }
 
-type ItemWithTaxonomy = {
-  availability: Array<{ startDate: Date; endDate: Date; status: string }>
-  categories: Array<{ category: string }>
-  tags: Array<{ tag: { name: string } }>
-} & Record<string, unknown>
+type ListWhereFilters = {
+  search?: string
+  status?: ItemStatus
+  statuses?: ItemStatus[]
+  categories?: ItemCategory[]
+  tags?: string[]
+}
+
+const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
+  const search = input?.search?.trim()
+  const status = input?.status
+  const statuses = input?.statuses
+  const categories = input?.categories
+  const tags = input?.tags
+
+  const statusFilter: Prisma.ItemWhereInput["status"] = status
+    ? status
+    : statuses?.length
+      ? { in: statuses }
+      : { not: "DELETED" }
+
+  return {
+    status: statusFilter,
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { description: { contains: search, mode: "insensitive" as const } },
+            {
+              tags: {
+                some: {
+                  tag: {
+                    name: { contains: search, mode: "insensitive" as const },
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {}),
+    ...(categories?.length
+      ? {
+          categories: {
+            some: {
+              category: { in: categories },
+            },
+          },
+        }
+      : {}),
+    ...(tags?.length
+      ? {
+          tags: {
+            some: {
+              tag: {
+                name: { in: tags },
+              },
+            },
+          },
+        }
+      : {}),
+  }
+}
+
+const buildPaginationWhereFromCursor = (cursor: {
+  bookingCount: number
+  createdAt: Date
+  id: string
+}): Prisma.ItemWhereInput => ({
+  OR: [
+    { bookingCount: { lt: cursor.bookingCount } },
+    {
+      bookingCount: cursor.bookingCount,
+      createdAt: { lt: cursor.createdAt },
+    },
+    {
+      bookingCount: cursor.bookingCount,
+      createdAt: cursor.createdAt,
+      id: { lt: cursor.id },
+    },
+  ],
+})
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(({ ctx, input }) => {
-    const search = input?.search?.trim()
-    const status = input?.status
-    const statuses = input?.statuses
-    const categories = input?.categories
-    const tags = input?.tags
-
     return ctx.prisma.item
       .findMany({
         take: 50,
-        orderBy: { id: "desc" },
+        orderBy: getDefaultItemOrderBy(),
         include: itemWithTaxonomy,
-        where: {
-          ...(status || statuses?.length
-            ? {
-                status: status ?? { in: statuses },
-              }
-            : {
-                status: { not: "DELETED" },
-              }),
-          ...(search
-            ? {
-                OR: [
-                  { name: { contains: search, mode: "insensitive" } },
-                  { description: { contains: search, mode: "insensitive" } },
-                  {
-                    tags: {
-                      some: {
-                        tag: {
-                          name: { contains: search, mode: "insensitive" },
-                        },
-                      },
-                    },
-                  },
-                ],
-              }
-            : {}),
-          ...(categories?.length
-            ? {
-                categories: {
-                  some: {
-                    category: { in: categories },
-                  },
-                },
-              }
-            : {}),
-          ...(tags?.length
-            ? {
-                tags: {
-                  some: {
-                    tag: {
-                      name: { in: tags },
-                    },
-                  },
-                },
-              }
-            : {}),
-        },
+        where: buildListWhere(input),
       })
-      .then((items: ItemWithTaxonomy[]) => items.map(mapItemTaxonomy))
+      .then((items) => items.map(mapItemTaxonomy))
+  }),
+
+  paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
+    const baseWhere = buildListWhere(input)
+    const paginationWhere = input.cursor
+      ? buildPaginationWhereFromCursor({
+          bookingCount: input.cursor.bookingCount,
+          createdAt: input.cursor.createdAt,
+          id: input.cursor.id,
+        })
+      : null
+
+    const records = await ctx.prisma.item.findMany({
+      take: input.limit + 1,
+      orderBy: getDefaultItemOrderBy(),
+      include: itemWithTaxonomy,
+      where: paginationWhere ? { AND: [baseWhere, paginationWhere] } : baseWhere,
+    })
+
+    const hasMore = records.length > input.limit
+    const pageRecords = hasMore ? records.slice(0, input.limit) : records
+    const lastRecord = pageRecords.at(-1)
+
+    return {
+      items: pageRecords.map(mapItemTaxonomy),
+      nextCursor:
+        hasMore && lastRecord
+          ? {
+              id: lastRecord.id,
+              bookingCount: lastRecord.bookingCount,
+              createdAt: lastRecord.createdAt,
+            }
+          : null,
+    }
   }),
 
   create: protectedProcedure.input(createItemSchema).mutation(({ ctx, input }) => {
