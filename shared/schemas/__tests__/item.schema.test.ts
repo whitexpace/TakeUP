@@ -3,6 +3,7 @@ import {
   createItemSchema,
   itemAvailabilityRangeSchema,
   listItemsSchema,
+  paginatedItemsSchema,
   updateItemSchema,
 } from "../item"
 
@@ -103,5 +104,16 @@ describe("item schema validations", () => {
     expect(parsed?.search).toBe("camera")
     expect(parsed?.categories).toEqual(["ELECTRONICS"])
     expect(parsed?.tags).toEqual(["lens"])
+  })
+
+  it("parses paginated items schema with defaults", () => {
+    const parsed = paginatedItemsSchema.parse({
+      search: "   camera   ",
+      categories: ["ELECTRONICS", "ELECTRONICS"],
+    })
+
+    expect(parsed.search).toBe("camera")
+    expect(parsed.limit).toBe(12)
+    expect(parsed.categories).toEqual(["ELECTRONICS"])
   })
 })
