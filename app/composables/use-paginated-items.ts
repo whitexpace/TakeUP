@@ -29,11 +29,13 @@ export const usePaginatedItems = ({
     items.value = []
     cursor.value = null
     hasMore.value = true
+    isLoading.value = false
     errorMessage.value = null
     loadedIds.clear()
   }
 
   const fetchNextPage = async (version = requestVersion.value) => {
+    if (version !== requestVersion.value) return
     if (isLoading.value || !hasMore.value) return
 
     isLoading.value = true
@@ -81,8 +83,6 @@ export const usePaginatedItems = ({
     requestVersion.value++
     const currentVersion = requestVersion.value
     resetState()
-    // Allow a new fetch to proceed even if a stale request is still in flight.
-    isLoading.value = false
     await fetchNextPage(currentVersion)
   }
 

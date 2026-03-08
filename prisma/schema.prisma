@@ -89,14 +89,17 @@ model Item {
 }
 
 model ItemAvailability {
+  id        String                 @id @default(uuid())
   itemId    String
   startDate DateTime
   endDate   DateTime
   status    ItemAvailabilityStatus
+  createdAt DateTime               @default(now())
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  @@id([itemId, startDate, endDate])
+  @@unique([itemId, startDate, endDate])
+  @@index([itemId])
   @@index([itemId, status])
   @@index([startDate, endDate])
 }
