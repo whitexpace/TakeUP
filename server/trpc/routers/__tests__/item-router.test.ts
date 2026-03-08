@@ -33,11 +33,22 @@ describe("itemRouter", () => {
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        include: expect.objectContaining({
+          availability: expect.objectContaining({
+            select: {
+              startDate: true,
+              endDate: true,
+              status: true,
+            },
+          }),
+        }),
         where: expect.objectContaining({
           status: { not: "DELETED" },
         }),
       }),
     )
+    const findManyArgs = findMany.mock.calls[0]?.[0]
+    expect(findManyArgs?.include?.availability?.select).not.toHaveProperty("id")
     expect(result[0]?.categories).toEqual(["ELECTRONICS"])
     expect(result[0]?.tags).toEqual(["photo"])
     expect(result[0]?.availability).toHaveLength(1)
