@@ -1,3 +1,10 @@
+export interface ItemAvailabilityRange {
+  id: string
+  startDate: string | Date
+  endDate: string | Date
+  status: string
+}
+
 export interface ItemPaginationCursor {
   id: string
   bookingCount: number
@@ -15,6 +22,7 @@ export interface ListedItem {
   rentalFee: number
   replacementCost: number | null
   freeToBorrow: boolean
+  availability: ItemAvailabilityRange[]
   whatItemOffers: string | null
   whatIsIncluded: string | null
   knownIssues: string | null
