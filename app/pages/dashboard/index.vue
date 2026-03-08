@@ -74,19 +74,9 @@
       </div>
 
       <!-- Results Count -->
-      <div
-        v-if="isLoading || isCountLoading || totalResultsCount !== null"
-        class="mt-3 min-h-[20px] flex items-center"
-      >
-        <div
-          v-if="isLoading || isCountLoading"
-          class="h-4 w-24 rounded bg-cinnamon-ice/50 animate-pulse"
-          aria-label="Loading result count"
-        />
-        <p v-else class="font-geist text-[14px] text-noble-black/50">
-          {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
-        </p>
-      </div>
+      <p v-if="totalResultsCount !== null" class="mt-3 font-geist text-[14px] text-noble-black/50">
+        {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
+      </p>
     </div>
 
     <!-- Items Grid -->
@@ -218,16 +208,12 @@ const greeting = computed(() => {
 // Search State
 const searchInput = ref("")
 const appliedSearch = ref("")
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const clearSearch = () => {
   searchInput.value = ""
 }
 
 const applySearch = () => {
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-  }
   appliedSearch.value = searchInput.value.trim()
 }
 
@@ -315,19 +301,6 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
   }
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-  }
-})
-
-watch(searchInput, (value) => {
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-  }
-
-  searchDebounceTimer = setTimeout(() => {
-    appliedSearch.value = value.trim()
-  }, 300)
 })
 
 watch(appliedSearch, () => {
