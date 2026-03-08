@@ -36,9 +36,9 @@ onUnmounted(() => {
       <div class="flex items-center gap-4 w-full">
         <!-- Toggle Button for Mobile/Tablet -->
         <button
-          @click="toggleSidebar"
           class="p-2 hover:bg-cream rounded-lg transition-colors lg:hidden"
           aria-label="Toggle Sidebar"
+          @click="toggleSidebar"
         >
           <svg
             width="24"
@@ -59,7 +59,7 @@ onUnmounted(() => {
         </button>
 
         <!-- Header Content Slot for future implementation -->
-        <div class="flex-1"></div>
+        <div class="flex-1" />
       </div>
     </header>
 
@@ -69,7 +69,7 @@ onUnmounted(() => {
         v-if="isSidebarOpen && isMobile"
         class="fixed inset-0 bg-noble-black/50 z-40 lg:hidden transition-opacity duration-300"
         @click="isSidebarOpen = false"
-      ></div>
+      />
 
       <!-- Left Sidebar -->
       <aside
@@ -82,11 +82,11 @@ onUnmounted(() => {
       >
         <!-- Sidebar Header with Toggle -->
         <div class="p-6 flex items-center justify-between">
-          <div class="font-bold text-xl text-blue-estate"></div>
+          <div class="font-bold text-xl text-blue-estate" />
           <button
-            @click="toggleSidebar"
             class="p-1 hover:bg-pale-cashmere rounded-full transition-colors"
             title="Hide Sidebar"
+            @click="toggleSidebar"
           >
             <svg
               width="24"
@@ -108,7 +108,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Sidebar Content Placeholder for future implementation -->
-        <div class="px-6 space-y-4"></div>
+        <div class="px-6 space-y-4" />
       </aside>
 
       <!-- Main Content Area -->
@@ -118,9 +118,9 @@ onUnmounted(() => {
         <!-- Desktop Toggle Button (when sidebar is hidden) -->
         <button
           v-if="!isSidebarOpen && !isMobile"
-          @click="toggleSidebar"
           class="fixed left-4 top-20 z-20 p-2 bg-white border border-cinnamon-ice rounded-full shadow-md hover:bg-cream transition-all hover:scale-110"
           title="Show Sidebar"
+          @click="toggleSidebar"
         >
           <svg
             width="20"

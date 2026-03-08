@@ -100,6 +100,288 @@ const mockReviews = ref<Review[]>([
     helpfulCount: 4,
     isLiked: false,
   },
+  {
+    id: 8,
+    userName: "Alex G.",
+    userColor: avatarColors[3],
+    rating: 5,
+    date: "3 months ago",
+    description: "Excellent quality, would recommend!",
+    helpfulCount: 2,
+    isLiked: false,
+  },
+  {
+    id: 9,
+    userName: "Sam P.",
+    userColor: avatarColors[0],
+    rating: 5,
+    date: "4 months ago",
+    description: "The owner was super friendly and helpful.",
+    helpfulCount: 1,
+    isLiked: false,
+  },
+  {
+    id: 10,
+    userName: "Chris J.",
+    userColor: avatarColors[1],
+    rating: 5,
+    date: "4 months ago",
+    description: "Exactly as described. Fast response from the lender.",
+    helpfulCount: 0,
+    isLiked: false,
+  },
+  {
+    id: 11,
+    userName: "Taylor S.",
+    userColor: avatarColors[2],
+    rating: 5,
+    date: "5 months ago",
+    description: "The gear was in pristine condition. Used it for a weekend project.",
+    visuals: ["/images/popular/dress.jpg"],
+    helpfulCount: 3,
+    isLiked: false,
+  },
+  {
+    id: 12,
+    userName: "Jordan K.",
+    userColor: avatarColors[3],
+    rating: 5,
+    date: "5 months ago",
+    description: "Five stars! Everything went smoothly.",
+    helpfulCount: 1,
+    isLiked: false,
+  },
+  {
+    id: 13,
+    userName: "Casey L.",
+    userColor: avatarColors[0],
+    rating: 5,
+    date: "6 months ago",
+    description: "Very convenient and affordable. Will definitely use again.",
+    helpfulCount: 2,
+    isLiked: false,
+  },
+  {
+    id: 14,
+    userName: "Morgan F.",
+    userColor: avatarColors[1],
+    rating: 5,
+    date: "6 months ago",
+    description: "High quality images from this camera. The lenses were clean.",
+    helpfulCount: 5,
+    isLiked: false,
+  },
+  {
+    id: 15,
+    userName: "Riley D.",
+    userColor: avatarColors[2],
+    rating: 5,
+    date: "7 months ago",
+    description: "A bit intimidating to use at first, but Issa was patient with me.",
+    helpfulCount: 0,
+    isLiked: false,
+  },
+  {
+    id: 16,
+    userName: "Jamie B.",
+    userColor: avatarColors[3],
+    rating: 5,
+    date: "7 months ago",
+    description: "Perfect for what I needed. Saved me from buying a new one.",
+    helpfulCount: 4,
+    isLiked: false,
+  },
+  {
+    id: 17,
+    userName: "Skyler R.",
+    userColor: avatarColors[0],
+    rating: 5,
+    date: "8 months ago",
+    description: "Great value for money. The setup was easy.",
+    helpfulCount: 1,
+    isLiked: false,
+  },
+  {
+    id: 18,
+    userName: "Peyton W.",
+    userColor: avatarColors[1],
+    rating: 5,
+    date: "8 months ago",
+    description: "Fast communication and easy pickup/drop-off.",
+    helpfulCount: 2,
+    isLiked: false,
+  },
+  {
+    id: 19,
+    userName: "Quinn H.",
+    userColor: avatarColors[2],
+    rating: 5,
+    date: "9 months ago",
+    description: "I'm impressed with how well-maintained the equipment is.",
+    helpfulCount: 3,
+    isLiked: false,
+  },
+  {
+    id: 20,
+    userName: "Avery M.",
+    userColor: avatarColors[3],
+    rating: 5,
+    date: "9 months ago",
+    description: "Smooth transaction. Highly recommended!",
+    helpfulCount: 0,
+    isLiked: false,
+  },
+  {
+    id: 21,
+    userName: "Sage T.",
+    userColor: avatarColors[0],
+    rating: 5,
+    date: "10 months ago",
+    description: "Fantastic service. The camera worked perfectly.",
+    helpfulCount: 1,
+    isLiked: false,
+  },
+  {
+    id: 22,
+    userName: "Logan C.",
+    userColor: avatarColors[1],
+    rating: 5,
+    date: "10 months ago",
+    description: "Reliable and professional. 10/10.",
+    helpfulCount: 6,
+    isLiked: false,
+  },
+  {
+    id: 23,
+    userName: "Parker N.",
+    userColor: avatarColors[2],
+    rating: 5,
+    date: "11 months ago",
+    description: "Loved using this camera for my sister's graduation.",
+    visuals: ["/images/popular/camera.jpg"],
+    helpfulCount: 12,
+    isLiked: false,
+  },
+  {
+    id: 24,
+    userName: "Blake E.",
+    userColor: avatarColors[3],
+    rating: 5,
+    date: "11 months ago",
+    description: "Great choice for amateur photographers looking to try pro gear.",
+    helpfulCount: 2,
+    isLiked: false,
+  },
+  {
+    id: 25,
+    userName: "Hayden V.",
+    userColor: avatarColors[0],
+    rating: 5,
+    date: "1 year ago",
+    description: "The battery life was surprisingly good.",
+    helpfulCount: 1,
+    isLiked: false,
+  },
+  {
+    id: 26,
+    userName: "Reese D.",
+    userColor: avatarColors[1],
+    rating: 5,
+    date: "1 year ago",
+    description: "Helpful and accommodating lender. Thank you!",
+    helpfulCount: 0,
+    isLiked: false,
+  },
+  {
+    id: 27,
+    userName: "Emerson Z.",
+    userColor: avatarColors[2],
+    rating: 5,
+    date: "1 year ago",
+    description: "Will definitely rent this again for my next shoot.",
+    helpfulCount: 4,
+    isLiked: false,
+  },
+  {
+    id: 28,
+    userName: "Dakota J.",
+    userColor: avatarColors[3],
+    rating: 5,
+    date: "1 year ago",
+    description: "Everything was clean and organized. Very professional.",
+    helpfulCount: 1,
+    isLiked: false,
+  },
+  {
+    id: 29,
+    userName: "Phoenix B.",
+    userColor: avatarColors[0],
+    rating: 5,
+    date: "1 year ago",
+    description: "Quick responses and clear instructions.",
+    helpfulCount: 2,
+    isLiked: false,
+  },
+  {
+    id: 30,
+    userName: "River S.",
+    userColor: avatarColors[1],
+    rating: 5,
+    date: "1 year ago",
+    description: "The best rental experience I've had so far.",
+    helpfulCount: 7,
+    isLiked: false,
+  },
+  {
+    id: 31,
+    userName: "Skylar K.",
+    userColor: avatarColors[2],
+    rating: 5,
+    date: "2 years ago",
+    description: "Exceptional quality. The A7 IV really delivers.",
+    helpfulCount: 3,
+    isLiked: false,
+  },
+  {
+    id: 32,
+    userName: "Justice L.",
+    userColor: avatarColors[3],
+    rating: 5,
+    date: "2 years ago",
+    description: "So glad I found this for my event.",
+    helpfulCount: 1,
+    isLiked: false,
+  },
+  {
+    id: 33,
+    userName: "Charlie F.",
+    userColor: avatarColors[0],
+    rating: 5,
+    date: "2 years ago",
+    description: "Easy to use and great results.",
+    helpfulCount: 2,
+    isLiked: false,
+  },
+  {
+    id: 34,
+    userName: "Finley R.",
+    userColor: avatarColors[1],
+    rating: 5,
+    date: "2 years ago",
+    description: "Professional grade equipment at a fair price.",
+    helpfulCount: 0,
+    isLiked: false,
+  },
+  {
+    id: 35,
+    userName: "Oakley M.",
+    userColor: avatarColors[2],
+    rating: 5,
+    date: "2 years ago",
+    description: "Top tier experience. Highly recommended!",
+    helpfulCount: 4,
+    isLiked: false,
+  },
 ])
 
 const ratingsDistribution = [
@@ -223,7 +505,7 @@ const markHelpful = (reviewId: number) => {
     <!-- Summary Row -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-12 pb-12 mb-8 border-b border-cinnamon-ice">
       <!-- Part 1: Rating Overview -->
-      <div class="flex flex-col items-center md:items-start justify-center">
+      <div class="flex flex-col items-center justify-center text-center">
         <div class="text-6xl font-bold text-noble-black mb-2">
           {{ rating.toFixed(1) }}
         </div>
@@ -280,50 +562,61 @@ const markHelpful = (reviewId: number) => {
 
     <!-- Filters and Sort -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
-      <div class="flex flex-wrap gap-2.5">
-        <button
-          v-for="filter in filters"
-          :key="filter.value"
-          class="px-5 py-2.5 rounded-full text-sm font-medium transition-all border shadow-sm"
-          :class="[
-            selectedFilter === filter.value
-              ? 'bg-burning-orange border-burning-orange text-white shadow-burning-orange/20'
-              : 'bg-white border-cinnamon-ice text-noble-black hover:border-burning-orange hover:text-burning-orange',
-          ]"
-          @click="selectedFilter = filter.value"
+      <div class="relative w-full lg:w-auto overflow-hidden lg:overflow-visible">
+        <div
+          class="flex overflow-x-auto lg:overflow-visible lg:flex-wrap gap-2.5 pb-2 lg:pb-0 minimal-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0"
         >
-          <span class="flex items-center gap-1.5">
-            <svg
-              v-if="filter.value === 'visuals'"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path
-                d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
-              />
-              <circle cx="12" cy="13" r="3" />
-            </svg>
-            {{ filter.label }}
-            <svg
-              v-if="filter.isStar"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              :class="selectedFilter === filter.value ? 'text-white' : 'text-burning-orange'"
-            >
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              />
-            </svg>
-          </span>
-        </button>
+          <button
+            v-for="filter in filters"
+            :key="filter.value"
+            class="px-5 py-2.5 rounded-full text-sm font-medium transition-all border shadow-sm shrink-0 whitespace-nowrap"
+            :class="[
+              selectedFilter === filter.value
+                ? 'bg-burning-orange border-burning-orange text-white shadow-burning-orange/20'
+                : 'bg-white border-cinnamon-ice text-noble-black hover:border-burning-orange hover:text-burning-orange',
+            ]"
+            @click="selectedFilter = filter.value"
+          >
+            <span class="flex items-center gap-1.5">
+              <svg
+                v-if="filter.value === 'visuals'"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
+                />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+              {{ filter.label }}
+              <svg
+                v-if="filter.isStar"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                :class="selectedFilter === filter.value ? 'text-white' : 'text-burning-orange'"
+              >
+                <polygon
+                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                />
+              </svg>
+            </span>
+          </button>
+        </div>
+        <!-- Blur indicators for scroll (Visible on Mobile, Small, and Medium) -->
+        <div
+          class="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent pointer-events-none lg:hidden"
+        />
+        <div
+          class="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none lg:hidden"
+        />
       </div>
 
       <div class="relative shrink-0 w-full sm:w-auto">
@@ -485,8 +778,9 @@ const markHelpful = (reviewId: number) => {
     </div>
 
     <!-- View More -->
-    <div v-if="hasMore" class="mt-12 flex justify-center pb-12">
+    <div class="mt-12 flex justify-center pb-12">
       <button
+        v-if="hasMore"
         class="px-10 py-4 text-sm font-bold text-noble-black hover:text-burning-orange transition-colors flex items-center gap-2 active:scale-95"
         @click="loadMore"
       >
@@ -504,6 +798,7 @@ const markHelpful = (reviewId: number) => {
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
+      <div v-else class="text-sm font-bold text-noble-black/40 py-4">No more reviews found</div>
     </div>
 
     <Teleport to="body">
@@ -595,3 +890,29 @@ const markHelpful = (reviewId: number) => {
     </Teleport>
   </section>
 </template>
+
+<style scoped>
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.minimal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: theme("colors.cinnamon-ice") transparent;
+}
+
+.minimal-scrollbar::-webkit-scrollbar {
+  height: 3px !important;
+}
+.minimal-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.minimal-scrollbar::-webkit-scrollbar-thumb {
+  background-color: theme("colors.cinnamon-ice") !important;
+  border-radius: 20px !important;
+}
+</style>

@@ -17,8 +17,8 @@
 
       <!-- Like Button (preventing navigation on click) -->
       <button
-        @click.stop.prevent
         class="absolute top-2 sm:top-4 right-2 sm:right-4 w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group"
+        @click.stop.prevent
       >
         <svg
           class="w-4 h-4 sm:w-5 sm:h-5 stroke-noble-black group-hover:fill-noble-black/10 transition-colors"
@@ -93,8 +93,8 @@
         >by {{ owner }}</span
       >
       <button
-        @click.stop.prevent
         class="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
+        @click.stop.prevent
       >
         <svg
           class="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5"
