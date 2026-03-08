@@ -594,6 +594,8 @@ const ratings = [
   { value: 5, stars: 5, count: 0 },
   { value: 4, stars: 4, count: 0 },
   { value: 3, stars: 3, count: 0 },
+  { value: 2, stars: 2, count: 0 },
+  { value: 1, stars: 1, count: 0 },
 ]
 
 // ── Conditions with live counts ───────────────────────────────────────────────

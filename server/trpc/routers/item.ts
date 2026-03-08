@@ -69,6 +69,7 @@ type ListWhereFilters = {
   freeToBorrow?: boolean
   availableFrom?: Date
   availableTo?: Date
+  minRating?: number
 }
 
 const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
@@ -83,6 +84,7 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
   const freeToBorrow = input?.freeToBorrow
   const availableFrom = input?.availableFrom
   const availableTo = input?.availableTo
+  const minRating = input?.minRating
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? status
@@ -160,6 +162,7 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
         }
       : {}),
     ...(freeToBorrow !== undefined ? { freeToBorrow } : {}),
+    ...(minRating !== undefined ? { rating: { gte: minRating } } : {}),
     ...(availableFrom || availableTo
       ? {
           availability: {

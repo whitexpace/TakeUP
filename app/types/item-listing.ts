@@ -33,6 +33,7 @@ export interface ListedItem {
   viewCount: number
   bookingCount: number
   likeCount: number
+  rating: number
   lenderId: string
   borrowerId: string | null
   categories: string[]

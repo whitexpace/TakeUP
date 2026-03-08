@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
       query.freeToBorrow === "true" ? true : query.freeToBorrow === "false" ? false : undefined,
     availableFrom: typeof query.availableFrom === "string" ? query.availableFrom : undefined,
     availableTo: typeof query.availableTo === "string" ? query.availableTo : undefined,
+    minRating: typeof query.minRating === "string" ? Number(query.minRating) : undefined,
   })
 
   const caller = appRouter.createCaller(await createContext(event))

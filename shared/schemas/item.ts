@@ -204,6 +204,7 @@ export const itemFilterSchema = z.object({
   freeToBorrow: z.boolean().optional(),
   availableFrom: z.coerce.date().optional(),
   availableTo: z.coerce.date().optional(),
+  minRating: z.number().min(1).max(5).optional(),
 })
 
 export const listItemsSchema = itemFilterSchema.optional()

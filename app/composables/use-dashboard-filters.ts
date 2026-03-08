@@ -139,6 +139,11 @@ export const useDashboardFilters = () => {
     if (combinedFrom) params.availableFrom = combinedFrom
     if (combinedTo) params.availableTo = combinedTo
 
+    // Rating: pass the minimum star value as minRating
+    if (selectedRating.value !== null) {
+      params.minRating = String(selectedRating.value)
+    }
+
     return params
   })
 

@@ -21,12 +21,6 @@ const formatCategory = (category: string | undefined) => {
     .join(" ")
 }
 
-const computeRating = (item: Pick<ListedItem, "bookingCount" | "likeCount" | "viewCount">) => {
-  const views = Math.max(item.viewCount, 1)
-  const value = Math.min(5, ((item.likeCount + item.bookingCount) / views) * 5)
-  return value.toFixed(1)
-}
-
 export const mapListedItemToCard = (
   item: ListedItem,
   index: number,
@@ -43,7 +37,7 @@ export const mapListedItemToCard = (
     image,
     category: formatCategory(item.categories[0]),
     name: item.name,
-    rating: computeRating(item),
+    rating: item.rating.toFixed(1),
     reviews: item.bookingCount,
     price: item.freeToBorrow ? undefined : item.rentalFee,
     owner: item.lenderId,
