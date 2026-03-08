@@ -57,10 +57,13 @@
             :key="option.value"
             class="w-full text-left px-4 py-2 text-[13px] transition-all duration-200"
             :class="[
-              modelValue === option.value
-                ? 'bg-burning-orange text-white font-bold'
-                : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange',
+              isTimeDisabled(option.value)
+                ? 'opacity-30 cursor-not-allowed'
+                : modelValue === option.value
+                  ? 'bg-burning-orange text-white font-bold'
+                  : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange',
             ]"
+            :disabled="isTimeDisabled(option.value)"
             @click.stop="selectTime(option)"
           >
             {{ option.label }}
@@ -77,6 +80,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue"
 const props = defineProps<{
   modelValue: string
   placeholder?: string
+  minTime?: string // HH:mm
 }>()
 
 const emit = defineEmits(["update:modelValue"])
@@ -107,6 +111,11 @@ const timeOptions = (() => {
   return options
 })()
 
+const isTimeDisabled = (timeValue: string) => {
+  if (!props.minTime) return false
+  return timeValue < props.minTime
+}
+
 const selectedLabel = computed(() => {
   const option = timeOptions.find((o) => o.value === props.modelValue)
   return option ? option.label : ""
@@ -117,6 +126,7 @@ const toggleDropdown = () => {
 }
 
 const selectTime = (option: { value: string; label: string }) => {
+  if (isTimeDisabled(option.value)) return
   emit("update:modelValue", option.value)
   isOpen.value = false
 }
