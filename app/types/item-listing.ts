@@ -56,3 +56,10 @@ export interface ItemCardViewModel {
   price?: string | number
   owner: string
 }
+
+export interface FilterMetadata {
+  categories: Record<string, number>
+  prices: Record<string, number>
+  conditions: Record<string, number>
+  freeToborrowCount: number
+}

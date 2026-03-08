@@ -4,10 +4,15 @@ import { sortItemsByRanking } from "../utils/item-ranking"
 
 type UsePaginatedItemsOptions = {
   searchQuery: Ref<string>
+  filterParams?: Ref<Record<string, string | undefined>>
   pageSize?: number
 }
 
-export const usePaginatedItems = ({ searchQuery, pageSize = 12 }: UsePaginatedItemsOptions) => {
+export const usePaginatedItems = ({
+  searchQuery,
+  filterParams,
+  pageSize = 12,
+}: UsePaginatedItemsOptions) => {
   const items = ref<ListedItem[]>([])
   const cursor = ref<ItemPaginationCursor | null>(null)
   const isLoading = ref(false)
@@ -31,11 +36,19 @@ export const usePaginatedItems = ({ searchQuery, pageSize = 12 }: UsePaginatedIt
     errorMessage.value = null
 
     try {
+      const extraParams: Record<string, string | undefined> = {}
+      if (filterParams?.value) {
+        for (const [k, v] of Object.entries(filterParams.value)) {
+          if (v !== undefined) extraParams[k] = v
+        }
+      }
+
       const response = await $fetch<PaginatedItemsResponse>("/api/items", {
         query: {
           limit: pageSize,
           search: searchQuery.value || undefined,
           cursor: cursor.value ? JSON.stringify(cursor.value) : undefined,
+          ...extraParams,
         },
       })
 

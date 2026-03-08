@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server"
-import type { ItemCategory, ItemStatus, Prisma } from "@prisma/client"
+import type { ItemCategory, ItemCondition, ItemStatus, Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -60,6 +60,12 @@ type ListWhereFilters = {
   statuses?: ItemStatus[]
   categories?: ItemCategory[]
   tags?: string[]
+  conditions?: ItemCondition[]
+  minPrice?: number
+  maxPrice?: number
+  freeToBorrow?: boolean
+  availableFrom?: Date
+  availableTo?: Date
 }
 
 const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
@@ -68,6 +74,12 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
   const statuses = input?.statuses
   const categories = input?.categories
   const tags = input?.tags
+  const conditions = input?.conditions
+  const minPrice = input?.minPrice
+  const maxPrice = input?.maxPrice
+  const freeToBorrow = input?.freeToBorrow
+  const availableFrom = input?.availableFrom
+  const availableTo = input?.availableTo
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? status
@@ -110,6 +122,30 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
               tag: {
                 name: { in: tags },
               },
+            },
+          },
+        }
+      : {}),
+    ...(conditions?.length
+      ? { condition: { in: conditions } }
+      : {}),
+    ...(minPrice !== undefined || maxPrice !== undefined
+      ? {
+          freeToBorrow: false,
+          rentalFee: {
+            ...(minPrice !== undefined ? { gte: minPrice } : {}),
+            ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
+          },
+        }
+      : {}),
+    ...(freeToBorrow !== undefined ? { freeToBorrow } : {}),
+    ...(availableFrom || availableTo
+      ? {
+          availability: {
+            some: {
+              status: "AVAILABLE",
+              ...(availableFrom ? { startDate: { lte: availableFrom } } : {}),
+              ...(availableTo ? { endDate: { gte: availableTo } } : {}),
             },
           },
         }
@@ -179,6 +215,66 @@ export const itemRouter = router({
               createdAt: lastRecord.createdAt,
             }
           : null,
+    }
+  }),
+
+  countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
+    const where = buildListWhere(input)
+    const count = await ctx.prisma.item.count({ where })
+    return { count }
+  }),
+
+  filterMetadata: publicProcedure.query(async ({ ctx }) => {
+    const baseWhere: Prisma.ItemWhereInput = { status: { not: "DELETED" } }
+
+    const [categoryGroups, priceGroups, conditionGroups, freeToborrowCount] = await Promise.all([
+      // Count per category
+      ctx.prisma.itemCategoryOnItem.groupBy({
+        by: ["category"],
+        where: { item: baseWhere },
+        _count: { category: true },
+      }),
+      // Count per price bucket for paid items (raw)
+      ctx.prisma.$queryRaw<Array<{ bucket: string; count: bigint }>>`
+        SELECT
+          CASE
+            WHEN "rentalFee" < 100 THEN 'under100'
+            WHEN "rentalFee" <= 500 THEN '100to500'
+            ELSE 'over500'
+          END AS bucket,
+          COUNT(*) AS count
+        FROM "Item"
+        WHERE status != 'DELETED'
+          AND "freeToBorrow" = false
+        GROUP BY bucket
+      `,
+      // Count per condition
+      ctx.prisma.item.groupBy({
+        by: ["condition"],
+        where: baseWhere,
+        _count: { condition: true },
+      }),
+      // Count free-to-borrow
+      ctx.prisma.item.count({ where: { ...baseWhere, freeToBorrow: true } }),
+    ])
+
+    const categoryCountMap = Object.fromEntries(
+      categoryGroups.map((g) => [g.category, g._count.category]),
+    )
+
+    const priceCountMap = Object.fromEntries(
+      priceGroups.map((g) => [g.bucket, Number(g.count)]),
+    )
+
+    const conditionCountMap = Object.fromEntries(
+      conditionGroups.map((g) => [g.condition, g._count.condition]),
+    )
+
+    return {
+      categories: categoryCountMap,
+      prices: priceCountMap,
+      conditions: conditionCountMap,
+      freeToborrowCount,
     }
   }),
 

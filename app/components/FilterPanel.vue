@@ -382,30 +382,37 @@
         <div v-if="!collapsedSections.condition" class="space-y-2.5 pb-5 pt-1">
           <label
             v-for="cond in conditions"
-            :key="cond"
-            class="flex items-center group cursor-pointer"
+            :key="cond.name"
+            class="flex items-center justify-between group cursor-pointer"
           >
-            <div class="relative flex items-center justify-center">
-              <input
-                v-model="selectedConditions"
-                type="checkbox"
-                :value="cond"
-                class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/60 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
-              />
-              <svg
-                class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="3"
+            <div class="flex items-center">
+              <div class="relative flex items-center justify-center">
+                <input
+                  v-model="selectedConditions"
+                  type="checkbox"
+                  :value="cond.name"
+                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/60 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
+                />
+                <svg
+                  class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="3"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <span
+                class="ml-3 font-geist text-[14px] text-noble-black/80 group-hover:text-noble-black transition-colors duration-300"
               >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+                {{ cond.name }}
+              </span>
             </div>
             <span
-              class="ml-3 font-geist text-[14px] text-noble-black/80 group-hover:text-noble-black transition-colors duration-300"
+              class="font-geist text-[12px] text-noble-black/30 group-hover:text-noble-black/60 transition-colors duration-300"
             >
-              {{ cond }}
+              ({{ cond.count }})
             </span>
           </label>
         </div>
@@ -478,48 +485,129 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from "vue"
+import { ref, reactive, computed } from "vue"
+import type { FilterMetadata } from "../types/item-listing"
+import { PRICE_RANGES, CATEGORY_MAP, CONDITION_MAP } from "../composables/use-dashboard-filters"
 
-defineEmits(["toggle-sidebar"])
+const props = defineProps<{
+  filterMetadata?: FilterMetadata | null
+  selectedListingTypes?: string[]
+  selectedCategories?: string[]
+  selectedPriceRange?: string
+  selectedRating?: number | null
+  selectedConditions?: string[]
+  dateFrom?: string
+  timeFrom?: string
+  dateTo?: string
+  timeTo?: string
+}>()
+
+const emit = defineEmits<{
+  "toggle-sidebar": []
+  "update:selectedListingTypes": [v: string[]]
+  "update:selectedCategories": [v: string[]]
+  "update:selectedPriceRange": [v: string]
+  "update:selectedRating": [v: number | null]
+  "update:selectedConditions": [v: string[]]
+  "update:dateFrom": [v: string]
+  "update:timeFrom": [v: string]
+  "update:dateTo": [v: string]
+  "update:timeTo": [v: string]
+}>()
+
+// ── Local reactive state synced with props ────────────────────────────────────
+const selectedListingTypes = ref<string[]>(props.selectedListingTypes ?? [])
+const selectedCategories = ref<string[]>(props.selectedCategories ?? [])
+const selectedPriceRange = ref<string>(props.selectedPriceRange ?? "")
+const selectedRating = ref<number | null>(props.selectedRating ?? null)
+const selectedConditions = ref<string[]>(props.selectedConditions ?? [])
+const dateFrom = ref<string>(props.dateFrom ?? "")
+const timeFrom = ref<string>(props.timeFrom ?? "")
+const dateTo = ref<string>(props.dateTo ?? "")
+const timeTo = ref<string>(props.timeTo ?? "")
+
+// Sync inbound prop changes (e.g. clearAll from parent)
+watchEffect(() => {
+  selectedListingTypes.value = props.selectedListingTypes ?? []
+  selectedCategories.value = props.selectedCategories ?? []
+  selectedPriceRange.value = props.selectedPriceRange ?? ""
+  selectedRating.value = props.selectedRating ?? null
+  selectedConditions.value = props.selectedConditions ?? []
+  dateFrom.value = props.dateFrom ?? ""
+  timeFrom.value = props.timeFrom ?? ""
+  dateTo.value = props.dateTo ?? ""
+  timeTo.value = props.timeTo ?? ""
+})
+
+// Emit changes upward
+watch(selectedListingTypes, (v) => emit("update:selectedListingTypes", v))
+watch(selectedCategories, (v) => emit("update:selectedCategories", v))
+watch(selectedPriceRange, (v) => emit("update:selectedPriceRange", v))
+watch(selectedRating, (v) => emit("update:selectedRating", v))
+watch(selectedConditions, (v) => emit("update:selectedConditions", v))
+watch(dateFrom, (v) => emit("update:dateFrom", v))
+watch(timeFrom, (v) => emit("update:timeFrom", v))
+watch(dateTo, (v) => emit("update:dateTo", v))
+watch(timeTo, (v) => emit("update:timeTo", v))
 
 const listingTypes = ["For Rent", "For Borrow"]
-const categories = [
-  { name: "Books & Academics", count: 124 },
-  { name: "Electronics", count: 85 },
-  { name: "Arts & Craft Supplies", count: 42 },
-  { name: "Event & Party", count: 67 },
-  { name: "Sports Equipment", count: 38 },
-  { name: "Dorm Essentials", count: 91 },
-  { name: "Photography", count: 24 },
-  { name: "Music & Audio", count: 31 },
-  { name: "Tools", count: 19 },
-  { name: "Attire", count: 56 },
+
+// ── Categories with live counts ───────────────────────────────────────────────
+const PANEL_CATEGORIES = [
+  "Books & Academics",
+  "Electronics",
+  "Arts & Craft Supplies",
+  "Event & Party",
+  "Sports Equipment",
+  "Dorm Essentials",
+  "Photography",
+  "Music & Audio",
+  "Tools",
+  "Attire",
 ]
 
-const priceRanges = [
-  { label: "Under ₱100", count: 45 },
-  { label: "₱100 - ₱500", count: 128 },
-  { label: "₱500+", count: 32 },
-]
+const categories = computed(() =>
+  PANEL_CATEGORIES.map((name) => {
+    const dbKey = CATEGORY_MAP[name]
+    const count = dbKey ? (props.filterMetadata?.categories[dbKey] ?? 0) : 0
+    return { name, count }
+  }),
+)
 
+// ── Price ranges with live counts ─────────────────────────────────────────────
+const priceRanges = computed(() =>
+  PRICE_RANGES.map((p) => {
+    let count = 0
+    if (props.filterMetadata) {
+      if (p.bucket === "all") {
+        count = Object.values(props.filterMetadata.prices).reduce((a, b) => a + b, 0)
+      } else if (p.bucket === "free") {
+        count = props.filterMetadata.freeToborrowCount
+      } else {
+        count = props.filterMetadata.prices[p.bucket] ?? 0
+      }
+    }
+    return { label: p.label, count }
+  }),
+)
+
+// ── Ratings (no DB-backed count yet; keep display as-is) ─────────────────────
 const ratings = [
-  { value: 5, stars: 5, count: 89 },
-  { value: 4, stars: 4, count: 156 },
-  { value: 3, stars: 3, count: 42 },
+  { value: 5, stars: 5, count: 0 },
+  { value: 4, stars: 4, count: 0 },
+  { value: 3, stars: 3, count: 0 },
 ]
 
-const conditions = ["New", "Like New", "Good", "Fair"]
+// ── Conditions with live counts ───────────────────────────────────────────────
+const PANEL_CONDITIONS = ["New", "Like New", "Good", "Fair"]
 
-// Selection State
-const selectedListingTypes = ref([])
-const selectedCategories = ref([])
-const selectedPriceRange = ref("")
-const selectedRating = ref<number | null>(null)
-const selectedConditions = ref([])
-const dateFrom = ref("")
-const timeFrom = ref("")
-const dateTo = ref("")
-const timeTo = ref("")
+const conditions = computed(() =>
+  PANEL_CONDITIONS.map((name) => {
+    const dbKey = CONDITION_MAP[name]
+    const count = dbKey ? (props.filterMetadata?.conditions[dbKey] ?? 0) : 0
+    return { name, count }
+  }),
+)
 
 // Collapse State
 const collapsedSections = reactive({

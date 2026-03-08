@@ -31,7 +31,26 @@
         <div class="px-6 space-y-0 pb-12">
           <FilterPanel
             v-if="$route.path.startsWith('/dashboard')"
+            :filter-metadata="filterMetadata"
+            :selected-listing-types="filters.selectedListingTypes.value"
+            :selected-categories="filters.selectedCategories.value"
+            :selected-price-range="filters.selectedPriceRange.value"
+            :selected-rating="filters.selectedRating.value"
+            :selected-conditions="filters.selectedConditions.value"
+            :date-from="filters.dateFrom.value"
+            :time-from="filters.timeFrom.value"
+            :date-to="filters.dateTo.value"
+            :time-to="filters.timeTo.value"
             @toggle-sidebar="toggleSidebar"
+            @update:selected-listing-types="(v) => (filters.selectedListingTypes.value = v)"
+            @update:selected-categories="(v) => (filters.selectedCategories.value = v)"
+            @update:selected-price-range="(v) => (filters.selectedPriceRange.value = v)"
+            @update:selected-rating="(v) => (filters.selectedRating.value = v)"
+            @update:selected-conditions="(v) => (filters.selectedConditions.value = v)"
+            @update:date-from="(v) => (filters.dateFrom.value = v)"
+            @update:time-from="(v) => (filters.timeFrom.value = v)"
+            @update:date-to="(v) => (filters.dateTo.value = v)"
+            @update:time-to="(v) => (filters.timeTo.value = v)"
           />
           <slot name="sidebar" />
         </div>
@@ -74,6 +93,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue"
+import type { FilterMetadata } from "../types/item-listing"
+import { useDashboardFilters } from "../composables/use-dashboard-filters"
 
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
@@ -91,9 +112,26 @@ const checkMobile = () => {
   }
 }
 
-onMounted(() => {
+// ── Filter state (shared via provide/inject) ──────────────────────────────────
+const filters = useDashboardFilters()
+
+// ── Filter metadata (static counts – fetched once) ───────────────────────────
+const filterMetadata = ref<FilterMetadata | null>(null)
+const fetchFilterMetadata = async () => {
+  try {
+    filterMetadata.value = await $fetch<FilterMetadata>("/api/items/filter-metadata")
+  } catch {
+    // Non-critical – counts will show 0
+  }
+}
+
+// Provide to child pages
+provide("dashboardFilters", filters)
+
+onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
+  await fetchFilterMetadata()
 })
 
 onUnmounted(() => {

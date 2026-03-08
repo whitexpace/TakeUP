@@ -72,6 +72,14 @@
           Search
         </button>
       </div>
+
+      <!-- Results Count -->
+      <p
+        v-if="totalResultsCount !== null"
+        class="mt-3 font-geist text-[14px] text-noble-black/50"
+      >
+        {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
+      </p>
     </div>
 
     <!-- Items Grid -->
@@ -152,11 +160,11 @@
         results!
       </p>
       <button
-        v-if="searchInput"
+        v-if="searchInput || filters.hasActiveFilters.value"
         class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
-        @click="clearSearch"
+        @click="() => { clearSearch(); filters.clearAll() }"
       >
-        Clear Search
+        Clear Search & Filters
       </button>
     </div>
 
@@ -166,15 +174,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue"
+import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue"
 import type { ItemCardViewModel } from "../../types/item-listing"
 import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
+import type { useDashboardFilters } from "../../composables/use-dashboard-filters"
 
 definePageMeta({
   layout: "dashboard",
 })
+
+// ── Injected filter state from layout ────────────────────────────────────────
+const filters = inject<ReturnType<typeof useDashboardFilters>>("dashboardFilters")!
 
 // User & Greeting State
 const user = useSupabaseUser()
@@ -216,6 +228,7 @@ const {
   refresh,
 } = usePaginatedItems({
   searchQuery: appliedSearch,
+  filterParams: filters.filterQueryParams,
   pageSize: 12,
 })
 
@@ -229,8 +242,33 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
   }),
 )
 
+// ── Results count ─────────────────────────────────────────────────────────────
+const totalResultsCount = ref<number | null>(null)
+let countDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const fetchResultsCount = async () => {
+  try {
+    const params: Record<string, string | undefined> = {
+      search: appliedSearch.value || undefined,
+      ...filters.filterQueryParams.value,
+    }
+    const result = await $fetch<{ count: number }>("/api/items/count", { query: params })
+    totalResultsCount.value = result.count
+  } catch {
+    totalResultsCount.value = null
+  }
+}
+
+const debouncedFetchCount = () => {
+  if (countDebounceTimer) clearTimeout(countDebounceTimer)
+  countDebounceTimer = setTimeout(() => {
+    void fetchResultsCount()
+  }, 150)
+}
+
 const reload = async () => {
   await refresh()
+  debouncedFetchCount()
 }
 
 // Infinite Scroll State
@@ -264,6 +302,9 @@ onUnmounted(() => {
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
   }
+  if (countDebounceTimer) {
+    clearTimeout(countDebounceTimer)
+  }
 })
 
 watch(searchInput, (value) => {
@@ -279,4 +320,9 @@ watch(searchInput, (value) => {
 watch(appliedSearch, () => {
   void reload()
 })
+
+// Re-fetch when filters change
+watch(filters.filterQueryParams, () => {
+  void reload()
+}, { deep: true })
 </script>

@@ -159,19 +159,29 @@ export const updateItemSchema = z
 
 export const deleteItemSchema = itemIdSchema
 
-export const listItemsSchema = z
-  .object({
-    search: z.string().trim().min(1).max(100).optional(),
-    status: itemStatusSchema.optional(),
-    statuses: z.array(itemStatusSchema).min(1).optional(),
-    categories: z
-      .array(itemCategorySchema)
-      .min(1)
-      .transform((categories) => dedupe(categories))
-      .optional(),
-    tags: itemTagsSchema.optional(),
-  })
-  .optional()
+export const itemFilterSchema = z.object({
+  search: z.string().trim().min(1).max(100).optional(),
+  status: itemStatusSchema.optional(),
+  statuses: z.array(itemStatusSchema).min(1).optional(),
+  categories: z
+    .array(itemCategorySchema)
+    .min(1)
+    .transform((categories) => dedupe(categories))
+    .optional(),
+  tags: itemTagsSchema.optional(),
+  conditions: z
+    .array(itemConditionSchema)
+    .min(1)
+    .transform((conditions) => dedupe(conditions))
+    .optional(),
+  minPrice: z.number().int().min(0).optional(),
+  maxPrice: z.number().int().min(0).optional(),
+  freeToBorrow: z.boolean().optional(),
+  availableFrom: z.coerce.date().optional(),
+  availableTo: z.coerce.date().optional(),
+})
+
+export const listItemsSchema = itemFilterSchema.optional()
 
 export const itemPaginationCursorSchema = z.object({
   id: z.string().uuid(),
@@ -179,18 +189,9 @@ export const itemPaginationCursorSchema = z.object({
   createdAt: z.coerce.date(),
 })
 
-export const paginatedItemsSchema = z
-  .object({
+export const paginatedItemsSchema = itemFilterSchema
+  .extend({
     limit: z.number().int().min(1).max(48).default(12),
     cursor: itemPaginationCursorSchema.optional(),
-    search: z.string().trim().min(1).max(100).optional(),
-    status: itemStatusSchema.optional(),
-    statuses: z.array(itemStatusSchema).min(1).optional(),
-    categories: z
-      .array(itemCategorySchema)
-      .min(1)
-      .transform((categories) => dedupe(categories))
-      .optional(),
-    tags: itemTagsSchema.optional(),
   })
   .default({})

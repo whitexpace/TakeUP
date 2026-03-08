@@ -1,23 +1,10 @@
-import { createError, getQuery } from "h3"
-import { paginatedItemsSchema } from "../../shared/schemas/item"
-import { appRouter } from "../trpc/routers"
-import { createContext } from "../trpc/context"
+import { getQuery } from "h3"
+import { listItemsSchema } from "../../../shared/schemas/item"
+import { appRouter } from "../../trpc/routers"
+import { createContext } from "../../trpc/context"
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-
-  const cursorRaw = typeof query.cursor === "string" ? query.cursor : undefined
-  let parsedCursor: unknown
-  if (cursorRaw) {
-    try {
-      parsedCursor = JSON.parse(cursorRaw)
-    } catch {
-      throw createError({
-        statusCode: 400,
-        statusMessage: "Invalid cursor format.",
-      })
-    }
-  }
 
   const categoriesRaw =
     typeof query.categories === "string" ? query.categories.split(",").filter(Boolean) : undefined
@@ -26,10 +13,8 @@ export default defineEventHandler(async (event) => {
   const tagsRaw =
     typeof query.tags === "string" ? query.tags.split(",").filter(Boolean) : undefined
 
-  const input = paginatedItemsSchema.parse({
-    limit: typeof query.limit === "string" ? Number(query.limit) : undefined,
+  const input = listItemsSchema.parse({
     search: typeof query.search === "string" ? query.search : undefined,
-    cursor: parsedCursor,
     categories: categoriesRaw,
     conditions: conditionsRaw,
     tags: tagsRaw,
@@ -41,5 +26,5 @@ export default defineEventHandler(async (event) => {
   })
 
   const caller = appRouter.createCaller(await createContext(event))
-  return caller.item.paginatedList(input)
+  return caller.item.countFiltered(input)
 })
