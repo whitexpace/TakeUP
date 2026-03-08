@@ -74,15 +74,19 @@
       </div>
 
       <!-- Results Count -->
-      <p
-        v-if="isCountLoading || totalResultsCount !== null"
-        class="mt-3 font-geist text-[14px] text-noble-black/50"
+      <div
+        v-if="isLoading || isCountLoading || totalResultsCount !== null"
+        class="mt-3 min-h-[20px] flex items-center"
       >
-        <template v-if="isCountLoading && totalResultsCount === null">Updating results...</template>
-        <template v-else>
+        <div
+          v-if="isLoading || isCountLoading"
+          class="h-4 w-24 rounded bg-cinnamon-ice/50 animate-pulse"
+          aria-label="Loading result count"
+        />
+        <p v-else class="font-geist text-[14px] text-noble-black/50">
           {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
-        </template>
-      </p>
+        </p>
+      </div>
     </div>
 
     <!-- Items Grid -->
@@ -254,7 +258,6 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
 const totalResultsCount = ref<number | null>(null)
 const isCountLoading = ref(false)
 const countRequestVersion = ref(0)
-let countDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const fetchResultsCount = async (version = countRequestVersion.value) => {
   isCountLoading.value = true
@@ -278,18 +281,10 @@ const fetchResultsCount = async (version = countRequestVersion.value) => {
   }
 }
 
-const debouncedFetchCount = () => {
-  if (countDebounceTimer) clearTimeout(countDebounceTimer)
+const reload = async () => {
   countRequestVersion.value++
   const currentVersion = countRequestVersion.value
-  countDebounceTimer = setTimeout(() => {
-    void fetchResultsCount(currentVersion)
-  }, 150)
-}
-
-const reload = async () => {
-  await refresh()
-  debouncedFetchCount()
+  await Promise.all([refresh(), fetchResultsCount(currentVersion)])
 }
 
 // Infinite Scroll State
@@ -322,9 +317,6 @@ onUnmounted(() => {
   }
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
-  }
-  if (countDebounceTimer) {
-    clearTimeout(countDebounceTimer)
   }
 })
 
