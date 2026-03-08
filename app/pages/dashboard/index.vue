@@ -74,8 +74,14 @@
       </div>
 
       <!-- Results Count -->
-      <p v-if="totalResultsCount !== null" class="mt-3 font-geist text-[14px] text-noble-black/50">
-        {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
+      <p
+        v-if="isCountLoading || totalResultsCount !== null"
+        class="mt-3 font-geist text-[14px] text-noble-black/50"
+      >
+        <template v-if="isCountLoading && totalResultsCount === null">Updating results...</template>
+        <template v-else>
+          {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
+        </template>
       </p>
     </div>
 
@@ -246,25 +252,38 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
 
 // ── Results count ─────────────────────────────────────────────────────────────
 const totalResultsCount = ref<number | null>(null)
+const isCountLoading = ref(false)
+const countRequestVersion = ref(0)
 let countDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
-const fetchResultsCount = async () => {
+const fetchResultsCount = async (version = countRequestVersion.value) => {
+  isCountLoading.value = true
   try {
     const params: Record<string, string | undefined> = {
       search: appliedSearch.value || undefined,
       ...filters.filterQueryParams.value,
     }
     const result = await $fetch<{ count: number }>("/api/items/count", { query: params })
-    totalResultsCount.value = result.count
+    if (version === countRequestVersion.value) {
+      totalResultsCount.value = result.count
+    }
   } catch {
-    totalResultsCount.value = null
+    if (version === countRequestVersion.value) {
+      totalResultsCount.value = null
+    }
+  } finally {
+    if (version === countRequestVersion.value) {
+      isCountLoading.value = false
+    }
   }
 }
 
 const debouncedFetchCount = () => {
   if (countDebounceTimer) clearTimeout(countDebounceTimer)
+  countRequestVersion.value++
+  const currentVersion = countRequestVersion.value
   countDebounceTimer = setTimeout(() => {
-    void fetchResultsCount()
+    void fetchResultsCount(currentVersion)
   }, 150)
 }
 
