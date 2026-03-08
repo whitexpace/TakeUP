@@ -208,16 +208,12 @@ const greeting = computed(() => {
 // Search State
 const searchInput = ref("")
 const appliedSearch = ref("")
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const clearSearch = () => {
   searchInput.value = ""
 }
 
 const applySearch = () => {
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-  }
   appliedSearch.value = searchInput.value.trim()
 }
 
@@ -246,31 +242,35 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
 
 // ── Results count ─────────────────────────────────────────────────────────────
 const totalResultsCount = ref<number | null>(null)
-let countDebounceTimer: ReturnType<typeof setTimeout> | null = null
+const isCountLoading = ref(false)
+const countRequestVersion = ref(0)
 
-const fetchResultsCount = async () => {
+const fetchResultsCount = async (version = countRequestVersion.value) => {
+  isCountLoading.value = true
   try {
     const params: Record<string, string | undefined> = {
       search: appliedSearch.value || undefined,
       ...filters.filterQueryParams.value,
     }
     const result = await $fetch<{ count: number }>("/api/items/count", { query: params })
-    totalResultsCount.value = result.count
+    if (version === countRequestVersion.value) {
+      totalResultsCount.value = result.count
+    }
   } catch {
-    totalResultsCount.value = null
+    if (version === countRequestVersion.value) {
+      totalResultsCount.value = null
+    }
+  } finally {
+    if (version === countRequestVersion.value) {
+      isCountLoading.value = false
+    }
   }
 }
 
-const debouncedFetchCount = () => {
-  if (countDebounceTimer) clearTimeout(countDebounceTimer)
-  countDebounceTimer = setTimeout(() => {
-    void fetchResultsCount()
-  }, 150)
-}
-
 const reload = async () => {
-  await refresh()
-  debouncedFetchCount()
+  countRequestVersion.value++
+  const currentVersion = countRequestVersion.value
+  await Promise.all([refresh(), fetchResultsCount(currentVersion)])
 }
 
 // Infinite Scroll State
@@ -301,22 +301,6 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
   }
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-  }
-  if (countDebounceTimer) {
-    clearTimeout(countDebounceTimer)
-  }
-})
-
-watch(searchInput, (value) => {
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-  }
-
-  searchDebounceTimer = setTimeout(() => {
-    appliedSearch.value = value.trim()
-  }, 300)
 })
 
 watch(appliedSearch, () => {
