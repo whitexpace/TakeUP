@@ -487,7 +487,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
-import { PRICE_RANGES, CATEGORY_MAP, CONDITION_MAP } from "../composables/use-dashboard-filters"
+import {
+  PRICE_RANGES,
+  CATEGORY_MAP,
+  CONDITION_MAP,
+  SIDEBAR_CATEGORIES,
+} from "../composables/use-dashboard-filters"
 
 const props = defineProps<{
   filterMetadata?: FilterMetadata | null
@@ -553,23 +558,16 @@ watch(timeTo, (v) => emit("update:timeTo", v))
 const listingTypes = ["For Rent", "For Borrow"]
 
 // ── Categories with live counts ───────────────────────────────────────────────
-const PANEL_CATEGORIES = [
-  "Books & Academics",
-  "Electronics",
-  "Arts & Craft Supplies",
-  "Event & Party",
-  "Sports Equipment",
-  "Dorm Essentials",
-  "Photography",
-  "Music & Audio",
-  "Tools",
-  "Attire",
-]
-
 const categories = computed(() =>
-  PANEL_CATEGORIES.map((name) => {
+  SIDEBAR_CATEGORIES.map((name) => {
     const dbKey = CATEGORY_MAP[name]
-    const count = dbKey ? (props.filterMetadata?.categories[dbKey] ?? 0) : 0
+    // "Others" is stored under the "OTHERS" key in filterMetadata.categories
+    const count =
+      dbKey === "OTHERS"
+        ? (props.filterMetadata?.categories["OTHERS"] ?? 0)
+        : dbKey
+          ? (props.filterMetadata?.categories[dbKey] ?? 0)
+          : 0
     return { name, count }
   }),
 )

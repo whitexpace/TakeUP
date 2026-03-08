@@ -10,6 +10,8 @@ import {
   paginatedItemsSchema,
   itemStatusSchema,
   updateItemSchema,
+  KNOWN_SIDEBAR_DB_CATEGORIES,
+  UI_OTHERS_SENTINEL,
 } from "../../../shared/schemas/item"
 import { getDefaultItemOrderBy } from "./item-sorting"
 
@@ -58,7 +60,8 @@ type ListWhereFilters = {
   search?: string
   status?: ItemStatus
   statuses?: ItemStatus[]
-  categories?: ItemCategory[]
+  // May contain real DB categories or the UI-only "OTHERS" sentinel
+  categories?: Array<ItemCategory | typeof UI_OTHERS_SENTINEL>
   tags?: string[]
   conditions?: ItemCondition[]
   minPrice?: number
@@ -72,7 +75,7 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
   const search = input?.search?.trim()
   const status = input?.status
   const statuses = input?.statuses
-  const categories = input?.categories
+  const rawCategories = input?.categories
   const tags = input?.tags
   const conditions = input?.conditions
   const minPrice = input?.minPrice
@@ -87,8 +90,37 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
       ? { in: statuses }
       : { not: "DELETED" }
 
+  // Split out the OTHERS sentinel from real DB category values
+  const wantsOthers = rawCategories?.includes(UI_OTHERS_SENTINEL) ?? false
+  const realCategories = rawCategories?.filter((c): c is ItemCategory => c !== UI_OTHERS_SENTINEL)
+
+  // Build category filter:
+  //  • Only "Others" selected  → items where NONE of their categories is in the known sidebar list
+  //  • Only known cats selected → items that have at least one of those categories
+  //  • Both selected           → union of the two (match either condition)
+  //  • Nothing selected        → no category filter
+  let categoryFilter: Prisma.ItemWhereInput = {}
+  if (rawCategories?.length) {
+    const othersClause: Prisma.ItemWhereInput = {
+      categories: { none: { category: { in: [...KNOWN_SIDEBAR_DB_CATEGORIES] } } },
+    }
+    const knownClause: Prisma.ItemWhereInput = realCategories?.length
+      ? { categories: { some: { category: { in: realCategories } } } }
+      : {}
+
+    if (wantsOthers && realCategories?.length) {
+      // Union: show items matching known cats OR items with no known-sidebar category
+      categoryFilter = { OR: [knownClause, othersClause] }
+    } else if (wantsOthers) {
+      categoryFilter = othersClause
+    } else if (realCategories?.length) {
+      categoryFilter = knownClause
+    }
+  }
+
   return {
     status: statusFilter,
+    ...categoryFilter,
     ...(search
       ? {
           OR: [
@@ -106,15 +138,6 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
           ],
         }
       : {}),
-    ...(categories?.length
-      ? {
-          categories: {
-            some: {
-              category: { in: categories },
-            },
-          },
-        }
-      : {}),
     ...(tags?.length
       ? {
           tags: {
@@ -126,9 +149,7 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
           },
         }
       : {}),
-    ...(conditions?.length
-      ? { condition: { in: conditions } }
-      : {}),
+    ...(conditions?.length ? { condition: { in: conditions } } : {}),
     ...(minPrice !== undefined || maxPrice !== undefined
       ? {
           freeToBorrow: false,
@@ -227,51 +248,59 @@ export const itemRouter = router({
   filterMetadata: publicProcedure.query(async ({ ctx }) => {
     const baseWhere: Prisma.ItemWhereInput = { status: { not: "DELETED" } }
 
-    const [categoryGroups, priceGroups, conditionGroups, freeToborrowCount] = await Promise.all([
-      // Count per category
-      ctx.prisma.itemCategoryOnItem.groupBy({
-        by: ["category"],
-        where: { item: baseWhere },
-        _count: { category: true },
-      }),
-      // Count per price bucket for paid items (raw)
-      ctx.prisma.$queryRaw<Array<{ bucket: string; count: bigint }>>`
-        SELECT
-          CASE
-            WHEN "rentalFee" < 100 THEN 'under100'
-            WHEN "rentalFee" <= 500 THEN '100to500'
-            ELSE 'over500'
-          END AS bucket,
-          COUNT(*) AS count
-        FROM "Item"
-        WHERE status != 'DELETED'
-          AND "freeToBorrow" = false
-        GROUP BY bucket
-      `,
-      // Count per condition
-      ctx.prisma.item.groupBy({
-        by: ["condition"],
-        where: baseWhere,
-        _count: { condition: true },
-      }),
-      // Count free-to-borrow
-      ctx.prisma.item.count({ where: { ...baseWhere, freeToBorrow: true } }),
-    ])
+    const [categoryGroups, priceGroups, conditionGroups, freeToborrowCount, othersCount] =
+      await Promise.all([
+        // Count per category
+        ctx.prisma.itemCategoryOnItem.groupBy({
+          by: ["category"],
+          where: { item: baseWhere },
+          _count: { category: true },
+        }),
+        // Count per price bucket for paid items (raw)
+        ctx.prisma.$queryRaw<Array<{ bucket: string; count: bigint }>>`
+          SELECT
+            CASE
+              WHEN "rentalFee" < 100 THEN 'under100'
+              WHEN "rentalFee" <= 500 THEN '100to500'
+              ELSE 'over500'
+            END AS bucket,
+            COUNT(*) AS count
+          FROM "Item"
+          WHERE status != 'DELETED'
+            AND "freeToBorrow" = false
+          GROUP BY bucket
+        `,
+        // Count per condition
+        ctx.prisma.item.groupBy({
+          by: ["condition"],
+          where: baseWhere,
+          _count: { condition: true },
+        }),
+        // Count free-to-borrow
+        ctx.prisma.item.count({ where: { ...baseWhere, freeToBorrow: true } }),
+        // Count "Others": items where NO category belongs to the known sidebar list
+        ctx.prisma.item.count({
+          where: {
+            ...baseWhere,
+            categories: {
+              none: { category: { in: [...KNOWN_SIDEBAR_DB_CATEGORIES] } },
+            },
+          },
+        }),
+      ])
 
     const categoryCountMap = Object.fromEntries(
       categoryGroups.map((g) => [g.category, g._count.category]),
     )
 
-    const priceCountMap = Object.fromEntries(
-      priceGroups.map((g) => [g.bucket, Number(g.count)]),
-    )
+    const priceCountMap = Object.fromEntries(priceGroups.map((g) => [g.bucket, Number(g.count)]))
 
     const conditionCountMap = Object.fromEntries(
       conditionGroups.map((g) => [g.condition, g._count.condition]),
     )
 
     return {
-      categories: categoryCountMap,
+      categories: { ...categoryCountMap, OTHERS: othersCount },
       prices: priceCountMap,
       conditions: conditionCountMap,
       freeToborrowCount,

@@ -61,7 +61,7 @@
             placeholder="Search for items to rent or buy"
             class="w-full h-[48px] sm:h-[60px] bg-cream rounded-[12px] sm:rounded-[15px] pl-11 sm:pl-14 pr-4 sm:pr-6 font-geist font-normal text-base sm:text-[20px] text-noble-black placeholder:text-noble-black/70 focus:outline-none border border-transparent focus:border-cinnamon-ice transition-colors"
             @keyup.enter="applySearch"
-          >
+          />
         </div>
 
         <!-- Search Button -->
@@ -74,10 +74,7 @@
       </div>
 
       <!-- Results Count -->
-      <p
-        v-if="totalResultsCount !== null"
-        class="mt-3 font-geist text-[14px] text-noble-black/50"
-      >
+      <p v-if="totalResultsCount !== null" class="mt-3 font-geist text-[14px] text-noble-black/50">
         {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
       </p>
     </div>
@@ -162,7 +159,12 @@
       <button
         v-if="searchInput || filters.hasActiveFilters.value"
         class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
-        @click="() => { clearSearch(); filters.clearAll() }"
+        @click="
+          () => {
+            clearSearch()
+            filters.clearAll()
+          }
+        "
       >
         Clear Search & Filters
       </button>
@@ -322,7 +324,11 @@ watch(appliedSearch, () => {
 })
 
 // Re-fetch when filters change
-watch(filters.filterQueryParams, () => {
-  void reload()
-}, { deep: true })
+watch(
+  filters.filterQueryParams,
+  () => {
+    void reload()
+  },
+  { deep: true },
+)
 </script>

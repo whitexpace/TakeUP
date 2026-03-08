@@ -1,4 +1,5 @@
 import { ref, computed } from "vue"
+import { UI_OTHERS_SENTINEL, KNOWN_SIDEBAR_DB_CATEGORIES } from "../../shared/schemas/item"
 
 // ── Price bucket definitions ─────────────────────────────────────────────────
 export type PriceBucket = "all" | "free" | "under100" | "100to500" | "over500"
@@ -20,18 +21,40 @@ export const PRICE_RANGES: PriceRange[] = [
 ]
 
 // ── Category → DB enum mapping ───────────────────────────────────────────────
+// Each sidebar label maps to exactly ONE unique DB category value.
+// "Others" uses the UI_OTHERS_SENTINEL which triggers the "none of known list" query.
 export const CATEGORY_MAP: Record<string, string> = {
   "Books & Academics": "BOOKS",
   Electronics: "ELECTRONICS",
-  "Arts & Craft Supplies": "OTHER",
-  "Event & Party": "OTHER",
   "Sports Equipment": "SPORTS_OUTDOORS",
   "Dorm Essentials": "SCHOOL_SUPPLIES",
-  Photography: "ELECTRONICS",
   "Music & Audio": "MUSIC_AUDIO",
   Tools: "TOOLS",
   Attire: "CLOTHING",
+  "Home & Appliances": "HOME_APPLIANCES",
+  "Toys & Games": "TOYS_GAMES",
+  "Pet Supplies": "PET_SUPPLIES",
+  // Sentinel — not a DB value; triggers the "items with no known category" query
+  Others: UI_OTHERS_SENTINEL,
 }
+
+// Ordered list of sidebar panel labels (drives FilterPanel display order)
+export const SIDEBAR_CATEGORIES = [
+  "Books & Academics",
+  "Electronics",
+  "Sports Equipment",
+  "Dorm Essentials",
+  "Music & Audio",
+  "Tools",
+  "Attire",
+  "Home & Appliances",
+  "Toys & Games",
+  "Pet Supplies",
+  "Others",
+] as const
+
+// Re-export so FilterPanel and other consumers can reference the known DB set
+export { KNOWN_SIDEBAR_DB_CATEGORIES }
 
 // ── Condition → DB enum mapping ──────────────────────────────────────────────
 export const CONDITION_MAP: Record<string, string> = {
@@ -70,7 +93,7 @@ export const useDashboardFilters = () => {
   const filterQueryParams = computed(() => {
     const params: Record<string, string | undefined> = {}
 
-    // Categories → DB enums (comma-separated)
+    // Categories → DB enums or OTHERS sentinel (comma-separated)
     const dbCategories = selectedCategories.value
       .map((c) => CATEGORY_MAP[c])
       .filter((v): v is string => Boolean(v))

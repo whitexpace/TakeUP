@@ -1,5 +1,9 @@
 import { ref, type Ref } from "vue"
-import type { ItemPaginationCursor, ListedItem, PaginatedItemsResponse } from "../types/item-listing"
+import type {
+  ItemPaginationCursor,
+  ListedItem,
+  PaginatedItemsResponse,
+} from "../types/item-listing"
 import { sortItemsByRanking } from "../utils/item-ranking"
 
 type UsePaginatedItemsOptions = {
