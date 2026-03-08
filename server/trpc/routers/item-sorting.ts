@@ -2,13 +2,7 @@ import type { Prisma } from "@prisma/client"
 
 type SortDirection = "asc" | "desc"
 
-type ItemSortField =
-  | "bookingCount"
-  | "createdAt"
-  | "id"
-  | "viewCount"
-  | "likeCount"
-  | "isTrending"
+type ItemSortField = "bookingCount" | "createdAt" | "id" | "viewCount" | "likeCount" | "isTrending"
 
 type SortCriterion = {
   field: ItemSortField

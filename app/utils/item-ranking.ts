@@ -1,6 +1,11 @@
 import type { ListedItem } from "../types/item-listing"
 
-export type TrendingMetric = "bookingCount" | "viewCount" | "likeCount" | "recencyBoost" | "manualBoost"
+export type TrendingMetric =
+  | "bookingCount"
+  | "viewCount"
+  | "likeCount"
+  | "recencyBoost"
+  | "manualBoost"
 export type TrendingScoreWeights = Readonly<Record<TrendingMetric, number>>
 
 // Extend this config when new ranking signals are introduced.

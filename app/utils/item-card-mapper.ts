@@ -27,7 +27,8 @@ export const mapListedItemToCard = (
   options: ItemCardMapOptions = {},
 ): ItemCardViewModel => {
   const fallbackImages = options.fallbackImages ?? FALLBACK_ITEM_IMAGES
-  const image = item.thumbnailImage ?? item.photos[0] ?? fallbackImages[index % fallbackImages.length]!
+  const image =
+    item.thumbnailImage ?? item.photos[0] ?? fallbackImages[index % fallbackImages.length]!
   const isTrending = options.trendingItemIds?.has(item.id) ?? false
 
   return {
@@ -44,9 +45,6 @@ export const mapListedItemToCard = (
   }
 }
 
-export const mapListedItemsToCards = (
-  items: ListedItem[],
-  options: ItemCardMapOptions = {},
-) => {
+export const mapListedItemsToCards = (items: ListedItem[], options: ItemCardMapOptions = {}) => {
   return items.map((item, index) => mapListedItemToCard(item, index, options))
 }
