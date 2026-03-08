@@ -16,6 +16,7 @@ import { getDefaultItemOrderBy } from "./item-sorting"
 const itemWithTaxonomy = {
   availability: {
     select: {
+      id: true,
       startDate: true,
       endDate: true,
       status: true,
@@ -43,6 +44,7 @@ const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
   return {
     ...rest,
     availability: availability.map((entry) => ({
+      id: entry.id,
       startDate: entry.startDate,
       endDate: entry.endDate,
       status: entry.status,

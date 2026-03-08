@@ -1,4 +1,5 @@
 export interface ItemAvailabilityRange {
+  id: string
   startDate: string | Date
   endDate: string | Date
   status: string
