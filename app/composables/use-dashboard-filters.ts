@@ -1,5 +1,24 @@
 import { ref, computed } from "vue"
-import { UI_OTHERS_SENTINEL, KNOWN_SIDEBAR_DB_CATEGORIES } from "../../shared/schemas/item"
+
+// Keep client-side filter constants local so Vitest and Nuxt build do not depend on
+// resolving cross-root imports from app code.
+export const UI_OTHERS_SENTINEL = "OTHERS" as const
+
+export const KNOWN_SIDEBAR_DB_CATEGORIES = [
+  "BOOKS",
+  "ELECTRONICS",
+  "SPORTS_OUTDOORS",
+  "SCHOOL_SUPPLIES",
+  "MUSIC_AUDIO",
+  "TOOLS",
+  "CLOTHING",
+  "HOME_APPLIANCES",
+  "TOYS_GAMES",
+  "FURNITURE",
+  "VEHICLES_ACCESSORIES",
+  "HEALTH_BEAUTY",
+  "PET_SUPPLIES",
+] as const
 
 // ── Price bucket definitions ─────────────────────────────────────────────────
 export type PriceBucket = "all" | "free" | "under100" | "100to500" | "over500"
@@ -52,9 +71,6 @@ export const SIDEBAR_CATEGORIES = [
   "Pet Supplies",
   "Others",
 ] as const
-
-// Re-export so FilterPanel and other consumers can reference the known DB set
-export { KNOWN_SIDEBAR_DB_CATEGORIES }
 
 // ── Condition → DB enum mapping ──────────────────────────────────────────────
 export const CONDITION_MAP: Record<string, string> = {
@@ -116,16 +132,19 @@ export const useDashboardFilters = () => {
       }
     }
 
-    // Listing type: "For Borrow" → freeToBorrow=true; "For Rent" → freeToBorrow=false
-    if (
+    const isBorrowOnly =
       selectedListingTypes.value.includes("For Borrow") &&
       !selectedListingTypes.value.includes("For Rent")
-    ) {
-      params.freeToBorrow = "true"
-    } else if (
+    const isRentOnly =
       selectedListingTypes.value.includes("For Rent") &&
       !selectedListingTypes.value.includes("For Borrow")
-    ) {
+
+    // Listing type takes precedence over conflicting price selections.
+    if (isBorrowOnly) {
+      delete params.minPrice
+      delete params.maxPrice
+      params.freeToBorrow = "true"
+    } else if (isRentOnly) {
       params.freeToBorrow = "false"
     }
 
@@ -147,17 +166,7 @@ export const useDashboardFilters = () => {
     return params
   })
 
-  const hasActiveFilters = computed(() => {
-    return (
-      selectedListingTypes.value.length > 0 ||
-      selectedCategories.value.length > 0 ||
-      Boolean(selectedPriceRange.value) ||
-      selectedRating.value !== null ||
-      selectedConditions.value.length > 0 ||
-      Boolean(dateFrom.value) ||
-      Boolean(dateTo.value)
-    )
-  })
+  const hasActiveFilters = computed(() => Object.keys(filterQueryParams.value).length > 0)
 
   return {
     // State (passed to FilterPanel as v-model or props)
