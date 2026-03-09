@@ -14,7 +14,7 @@
       xmlns="http://www.w3.org/2000/svg"
       class="text-noble-black opacity-70 flex-shrink-0"
     >
-      <circle cx="7" cy="7" r="6.25" stroke="currentColor" stroke-width="1" />
+      <circle cx="7" cy="7" r="6.25" stroke="currentColor" stroke-width="1"></circle>
       <line
         x1="13.0401"
         y1="10.792"
@@ -23,7 +23,7 @@
         stroke="currentColor"
         stroke-width="1"
         stroke-linecap="round"
-      />
+      ></line>
     </svg>
 
     <!-- Clear Icon (Visible when query has text) -->

@@ -77,6 +77,7 @@ model Item {
   viewCount    Int     @default(0)
   bookingCount Int     @default(0)
   likeCount    Int     @default(0)
+  rating       Float   @default(0)
 
   lenderId   String
   borrowerId String?
@@ -89,14 +90,17 @@ model Item {
 }
 
 model ItemAvailability {
+  id        String                 @id @default(uuid())
   itemId    String
   startDate DateTime
   endDate   DateTime
   status    ItemAvailabilityStatus
+  createdAt DateTime               @default(now())
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  @@id([itemId, startDate, endDate])
+  @@unique([itemId, startDate, endDate])
+  @@index([itemId])
   @@index([itemId, status])
   @@index([startDate, endDate])
 }

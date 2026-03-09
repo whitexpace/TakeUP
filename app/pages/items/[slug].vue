@@ -15,7 +15,7 @@ type ItemDetail = RouterOutputs["item"]["byId"]
 
 const slugParam = computed(() => {
   const slug = route.params.slug
-  return Array.isArray(slug) ? slug[0] ?? "" : slug ?? ""
+  return Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "")
 })
 
 const itemId = computed(() => extractItemIdFromSlug(slugParam.value))
@@ -98,14 +98,15 @@ const formattedCondition = computed(() => {
   return item.value.condition.toLowerCase().replace(/_/g, " ")
 })
 
-const formattedCategories = computed(() =>
-  item.value?.categories.map((category: string) =>
-    category
-      .toLowerCase()
-      .split("_")
-      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" "),
-  ) ?? [],
+const formattedCategories = computed(
+  () =>
+    item.value?.categories.map((category: string) =>
+      category
+        .toLowerCase()
+        .split("_")
+        .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" "),
+    ) ?? [],
 )
 
 const canonicalPath = computed(() => {
@@ -146,7 +147,9 @@ watch(
 
       <div v-else-if="item" class="mt-8 grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
         <section class="space-y-5">
-          <div class="relative overflow-hidden rounded-[28px] bg-white shadow-[0_20px_60px_rgba(77,61,44,0.08)]">
+          <div
+            class="relative overflow-hidden rounded-[28px] bg-white shadow-[0_20px_60px_rgba(77,61,44,0.08)]"
+          >
             <div class="aspect-[4/3] bg-[#ece5d9]">
               <img
                 v-if="selectedImage"
@@ -186,7 +189,11 @@ watch(
               :class="index === selectedImageIndex ? 'border-burning-orange' : 'border-transparent'"
               @click="selectedImageIndex = index"
             >
-              <img :src="image" :alt="`${item.name} preview ${index + 1}`" class="aspect-square w-full object-cover" />
+              <img
+                :src="image"
+                :alt="`${item.name} preview ${index + 1}`"
+                class="aspect-square w-full object-cover"
+              />
             </button>
           </div>
 
@@ -221,25 +228,33 @@ watch(
 
             <div class="mt-8 grid gap-4 sm:grid-cols-2">
               <div class="rounded-[22px] bg-cream p-5">
-                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">What this item offers</p>
+                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">
+                  What this item offers
+                </p>
                 <p class="mt-2 font-geist text-sm leading-6 text-noble-black/75">
                   {{ item.whatItemOffers || "No details provided." }}
                 </p>
               </div>
               <div class="rounded-[22px] bg-cream p-5">
-                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">What's included</p>
+                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">
+                  What's included
+                </p>
                 <p class="mt-2 font-geist text-sm leading-6 text-noble-black/75">
                   {{ item.whatIsIncluded || "No details provided." }}
                 </p>
               </div>
               <div class="rounded-[22px] bg-cream p-5">
-                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">Known issues</p>
+                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">
+                  Known issues
+                </p>
                 <p class="mt-2 font-geist text-sm leading-6 text-noble-black/75">
                   {{ item.knownIssues || "No known issues listed." }}
                 </p>
               </div>
               <div class="rounded-[22px] bg-cream p-5">
-                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">Usage limitations</p>
+                <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">
+                  Usage limitations
+                </p>
                 <p class="mt-2 font-geist text-sm leading-6 text-noble-black/75">
                   {{ item.usageLimitations || "No usage limitations listed." }}
                 </p>
@@ -263,21 +278,37 @@ watch(
             </div>
 
             <dl class="mt-6 space-y-4">
-              <div class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4">
+              <div
+                class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4"
+              >
                 <dt class="font-geist text-sm text-noble-black/55">Status</dt>
-                <dd class="font-geist text-sm font-medium capitalize text-noble-black">{{ statusLabel }}</dd>
+                <dd class="font-geist text-sm font-medium capitalize text-noble-black">
+                  {{ statusLabel }}
+                </dd>
               </div>
-              <div class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4">
+              <div
+                class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4"
+              >
                 <dt class="font-geist text-sm text-noble-black/55">Condition</dt>
-                <dd class="font-geist text-sm font-medium capitalize text-noble-black">{{ formattedCondition }}</dd>
+                <dd class="font-geist text-sm font-medium capitalize text-noble-black">
+                  {{ formattedCondition }}
+                </dd>
               </div>
-              <div class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4">
+              <div
+                class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4"
+              >
                 <dt class="font-geist text-sm text-noble-black/55">Rating</dt>
-                <dd class="font-geist text-sm font-medium text-noble-black">{{ item.rating.toFixed(1) }}</dd>
+                <dd class="font-geist text-sm font-medium text-noble-black">
+                  {{ item.rating.toFixed(1) }}
+                </dd>
               </div>
-              <div class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4">
+              <div
+                class="flex items-center justify-between gap-4 border-b border-cinnamon-ice/60 pb-4"
+              >
                 <dt class="font-geist text-sm text-noble-black/55">Bookings</dt>
-                <dd class="font-geist text-sm font-medium text-noble-black">{{ item.bookingCount }}</dd>
+                <dd class="font-geist text-sm font-medium text-noble-black">
+                  {{ item.bookingCount }}
+                </dd>
               </div>
               <div class="flex items-center justify-between gap-4">
                 <dt class="font-geist text-sm text-noble-black/55">Replacement cost</dt>
@@ -289,7 +320,9 @@ watch(
           </div>
 
           <div class="rounded-[28px] bg-white p-8 shadow-[0_20px_60px_rgba(77,61,44,0.08)]">
-            <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">Availability</p>
+            <p class="font-geist text-xs uppercase tracking-[0.2em] text-noble-black/45">
+              Availability
+            </p>
 
             <ul v-if="item.availability.length" class="mt-4 space-y-3">
               <li
@@ -298,7 +331,8 @@ watch(
                 class="rounded-[18px] bg-cream px-4 py-3"
               >
                 <p class="font-geist text-sm font-medium text-noble-black">
-                  {{ new Date(slot.startDate).toLocaleDateString() }} - {{ new Date(slot.endDate).toLocaleDateString() }}
+                  {{ new Date(slot.startDate).toLocaleDateString() }} -
+                  {{ new Date(slot.endDate).toLocaleDateString() }}
                 </p>
                 <p class="mt-1 font-geist text-xs uppercase tracking-[0.18em] text-noble-black/45">
                   {{ slot.status }}

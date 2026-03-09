@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { buildItemDetailPath, buildItemDetailSlug, extractItemIdFromSlug, slugifyItemName } from "./item-detail-route"
+import {
+  buildItemDetailPath,
+  buildItemDetailSlug,
+  extractItemIdFromSlug,
+  slugifyItemName,
+} from "./item-detail-route"
 
 describe("item-detail-route", () => {
   it("slugifies item names into stable URL segments", () => {

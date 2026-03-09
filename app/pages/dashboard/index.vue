@@ -1,5 +1,5 @@
 <template>
-  <div class="container mx-auto px-4 py-8 max-w-7xl">
+  <div class="container mx-auto px-4 py-8 pt-16 max-w-7xl">
     <!-- Header Section -->
     <div class="mb-10">
       <h1 class="font-rewon text-[40px] text-noble-black leading-tight mb-2">
@@ -15,7 +15,7 @@
         <div class="relative flex-1">
           <!-- Clear Button (X) or Search Icon -->
           <button
-            v-if="searchQuery"
+            v-if="searchInput"
             class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 focus:outline-none"
             title="Clear search"
             @click="clearSearch"
@@ -56,32 +56,40 @@
 
           <!-- Search Input -->
           <input
-            v-model="searchQuery"
+            v-model="searchInput"
             type="text"
             placeholder="Search for items to rent or buy"
             class="w-full h-[48px] sm:h-[60px] bg-cream rounded-[12px] sm:rounded-[15px] pl-11 sm:pl-14 pr-4 sm:pr-6 font-geist font-normal text-base sm:text-[20px] text-noble-black placeholder:text-noble-black/70 focus:outline-none border border-transparent focus:border-cinnamon-ice transition-colors"
+            @keyup.enter="applySearch"
           />
         </div>
 
         <!-- Search Button -->
         <button
           class="h-[48px] sm:h-[60px] px-6 sm:px-10 bg-burning-orange text-white rounded-[12px] sm:rounded-[15px] font-geist font-medium text-base sm:text-[20px] hover:bg-blue-estate transition-colors shrink-0 flex items-center justify-center"
+          @click="applySearch"
         >
           Search
         </button>
       </div>
+
+      <!-- Results Count -->
+      <p v-if="totalResultsCount !== null" class="mt-3 font-geist text-[14px] text-noble-black/50">
+        {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
+      </p>
     </div>
 
-    <!-- Items Grid & Empty State -->
+    <!-- Items Grid -->
     <div
-      v-if="items.length > 0 || isLoading"
+      v-if="cardItems.length > 0 || isLoading"
       class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6"
     >
       <ItemCard
-        v-for="item in items"
-        :id="item.id"
+        v-for="item in cardItems"
         :key="item.id"
+        :id="item.id"
         :type="item.type"
+        :is-trending="item.isTrending"
         :image="item.image"
         :category="item.category"
         :name="item.name"
@@ -94,6 +102,27 @@
       <template v-if="isLoading">
         <ItemCardSkeleton v-for="i in 4" :key="`skeleton-${i}`" />
       </template>
+    </div>
+
+    <!-- Error State -->
+    <div
+      v-else-if="errorMessage"
+      class="w-full flex flex-col items-center justify-center py-24 px-4 text-center bg-cream rounded-[20px] border border-cinnamon-ice/50 shadow-sm mt-4"
+    >
+      <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">
+        Unable to load items
+      </h3>
+      <p
+        class="font-geist font-normal text-[16px] sm:text-[18px] text-noble-black/70 max-w-md mx-auto"
+      >
+        {{ errorMessage }}
+      </p>
+      <button
+        class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
+        @click="reload"
+      >
+        Retry
+      </button>
     </div>
 
     <!-- Empty State -->
@@ -129,11 +158,16 @@
         results!
       </p>
       <button
-        v-if="searchQuery"
+        v-if="searchInput || filters.hasActiveFilters.value"
         class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
-        @click="clearSearch"
+        @click="
+          () => {
+            clearSearch()
+            filters.clearAll()
+          }
+        "
       >
-        Clear Search
+        Clear Search & Filters
       </button>
     </div>
 
@@ -143,23 +177,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue"
+import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue"
+import type { ItemCardViewModel } from "../../types/item-listing"
+import { mapListedItemsToCards } from "../../utils/item-card-mapper"
+import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
+import { usePaginatedItems } from "../../composables/use-paginated-items"
+import { useFilteredResultsCount } from "../../composables/use-filtered-results-count"
+import type { useDashboardFilters } from "../../composables/use-dashboard-filters"
 
 definePageMeta({
   layout: "dashboard",
 })
 
-interface Item {
-  id: string
-  type: "Rent" | "Borrow"
-  image: string
-  category: string
-  name: string
-  rating: number | string
-  reviews: number | string
-  price?: string | number
-  owner: string
-}
+// ── Injected filter state from layout ────────────────────────────────────────
+const filters = inject<ReturnType<typeof useDashboardFilters>>("dashboardFilters")!
 
 // User & Greeting State
 const user = useSupabaseUser()
@@ -177,116 +208,77 @@ const greeting = computed(() => {
 })
 
 // Search State
-const searchQuery = ref("")
+const searchInput = ref("")
+const appliedSearch = ref("")
+
 const clearSearch = () => {
-  searchQuery.value = ""
+  searchInput.value = ""
 }
 
-// Items State
-const items = ref<Item[]>([])
-const page = ref(1)
-const isLoading = ref(false)
-const hasMore = ref(true)
+const applySearch = () => {
+  appliedSearch.value = searchInput.value.trim()
+}
 
-// Template Ref
+const {
+  items: listedItems,
+  isLoading,
+  hasMore,
+  errorMessage,
+  fetchNextPage,
+  refresh,
+} = usePaginatedItems({
+  searchQuery: appliedSearch,
+  filterParams: filters.filterQueryParams,
+  pageSize: 12,
+})
+
+const trendingItemIds = computed(() =>
+  getTrendingItemIds(listedItems.value, DEFAULT_TRENDING_BADGE_STRATEGY),
+)
+
+const cardItems = computed<ItemCardViewModel[]>(() =>
+  mapListedItemsToCards(listedItems.value, {
+    trendingItemIds: trendingItemIds.value,
+  }),
+)
+
+const {
+  totalResultsCount,
+  refreshResultsCount,
+  scheduleResultsCountRefresh,
+  cancelPendingResultsCountRefresh,
+} = useFilteredResultsCount({
+  searchQuery: appliedSearch,
+  filterParams: filters.filterQueryParams,
+})
+
+const reload = async () => {
+  await Promise.all([refresh(), refreshResultsCount()])
+}
+
+const scheduleReload = () => {
+  void refresh()
+  scheduleResultsCountRefresh()
+}
+
+// Infinite Scroll State
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
-// Mock fetch function
-const fetchMockItems = async (pageNumber: number): Promise<Item[]> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const popularItems: Array<Omit<Item, "id">> = [
-        {
-          type: "Rent" as const,
-          image: "/images/popular/macbook.jpg",
-          category: "Electronics",
-          name: 'Macbook Air 13" M1',
-          rating: "4.9",
-          reviews: 67,
-          price: 300,
-          owner: "Paolo F.",
-        },
-        {
-          type: "Borrow" as const,
-          image: "/images/popular/scical.jpg",
-          category: "Electronics",
-          name: "Casio FX-991EX ClassWiz",
-          rating: "4.8",
-          reviews: 8,
-          owner: "Dave S.",
-        },
-        {
-          type: "Rent" as const,
-          image: "/images/popular/camera.jpg",
-          category: "Photography",
-          name: "Sony A7 IV Camera Kit",
-          rating: "5.0",
-          reviews: 35,
-          price: 500,
-          owner: "Issa S.",
-        },
-        {
-          type: "Rent" as const,
-          image: "/images/popular/dress.jpg",
-          category: "Attire",
-          name: "Long Green Dress",
-          rating: "4.8",
-          reviews: 27,
-          price: 100,
-          owner: "Issa S.",
-        },
-      ]
-
-      if (popularItems.length === 0) {
-        resolve([])
-        return
-      }
-
-      const newItems: Item[] = Array.from({ length: 12 }).map((_, i) => {
-        const id = `item-${pageNumber}-${i}`
-        const baseItem = popularItems[i % popularItems.length]!
-
-        return {
-          ...baseItem,
-          id,
-        }
-      })
-      resolve(newItems)
-    }, 1000)
-  })
-}
-
-// Load more logic
-const loadMore = async () => {
-  if (isLoading.value || !hasMore.value) return
-
-  isLoading.value = true
-  const newItems = await fetchMockItems(page.value)
-
-  if (newItems.length === 0) {
-    hasMore.value = false
-  } else {
-    items.value = [...items.value, ...newItems]
-    page.value++
-  }
-
-  isLoading.value = false
-}
-
-// Intersection Observer Setup
 onMounted(() => {
   observer = new IntersectionObserver(
     (entries) => {
-      if (entries[0]?.isIntersecting) {
-        loadMore()
+      if (entries[0]?.isIntersecting && hasMore.value && !isLoading.value) {
+        void fetchNextPage()
       }
     },
     {
-      rootMargin: "100px", // Trigger load slightly before scrolling to the very bottom
+      rootMargin: "100px",
       threshold: 0.1,
     },
   )
+
+  void reload()
 
   if (loadMoreTrigger.value) {
     observer.observe(loadMoreTrigger.value)
@@ -297,5 +289,19 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
   }
+  cancelPendingResultsCountRefresh()
 })
+
+watch(appliedSearch, () => {
+  scheduleReload()
+})
+
+// Re-fetch when filters change
+watch(
+  filters.filterQueryParams,
+  () => {
+    scheduleReload()
+  },
+  { deep: true },
+)
 </script>
