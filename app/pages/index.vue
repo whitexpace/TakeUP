@@ -533,6 +533,7 @@ const handleGoogleLogin = async () => {
         </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <ItemCard
+            id="1"
             type="Rent"
             image="/images/popular/macbook.jpg"
             category="Electronics"
@@ -543,6 +544,7 @@ const handleGoogleLogin = async () => {
             owner="Paolo F."
           ></ItemCard>
           <ItemCard
+            id="2"
             type="Borrow"
             image="/images/popular/scical.jpg"
             category="Electronics"
@@ -552,6 +554,7 @@ const handleGoogleLogin = async () => {
             owner="Dave S."
           ></ItemCard>
           <ItemCard
+            id="3"
             type="Rent"
             image="/images/popular/camera.jpg"
             category="Photography"
@@ -562,6 +565,7 @@ const handleGoogleLogin = async () => {
             owner="Issa S."
           ></ItemCard>
           <ItemCard
+            id="4"
             type="Rent"
             image="/images/popular/dress.jpg"
             category="Attire"

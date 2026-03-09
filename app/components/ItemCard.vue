@@ -1,5 +1,6 @@
 <template>
-  <div
+  <NuxtLink
+    :to="itemDetailPath"
     class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto cursor-pointer"
   >
     <!-- Image Section (~70% of card) -->
@@ -105,6 +106,7 @@
       >
       <button
         class="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
+        @click.stop.prevent
       >
         <svg
           class="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5"
@@ -122,11 +124,15 @@
         </svg>
       </button>
     </div>
-  </div>
+  </NuxtLink>
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from "vue"
+import { buildItemDetailPath } from "../utils/item-detail-route"
+
+const props = defineProps<{
+  id: string | number
   type: "Rent" | "Borrow"
   isTrending?: boolean
   image: string
@@ -137,4 +143,11 @@ defineProps<{
   price?: string | number
   owner: string
 }>()
+
+const itemDetailPath = computed(() =>
+  buildItemDetailPath({
+    id: String(props.id),
+    name: props.name,
+  }),
+)
 </script>
