@@ -1,4 +1,4 @@
-import { ref, computed } from "vue"
+import { computed, ref, watch } from "vue"
 
 // Keep client-side filter constants local so Vitest and Nuxt build do not depend on
 // resolving cross-root imports from app code.
@@ -81,17 +81,116 @@ export const CONDITION_MAP: Record<string, string> = {
   Poor: "POOR",
 }
 
+export const DASHBOARD_FILTERS_SESSION_STORAGE_KEY = "dashboard:last-used-filters"
+
+type DashboardFilterSessionState = {
+  selectedListingTypes: string[]
+  selectedCategories: string[]
+  selectedPriceRange: string
+  selectedRating: number | null
+  selectedConditions: string[]
+  dateFrom: string
+  timeFrom: string
+  dateTo: string
+  timeTo: string
+}
+
+const getFilterSessionStorage = (): Storage | null => {
+  if (typeof sessionStorage === "undefined") return null
+  return sessionStorage
+}
+
+const normalizeStringArray = (value: unknown) => {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : []
+}
+
+const normalizeString = (value: unknown) => (typeof value === "string" ? value : "")
+
+const normalizeRating = (value: unknown) => {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+const normalizeDashboardFilterSessionState = (value: unknown): DashboardFilterSessionState => {
+  const state = value && typeof value === "object" ? (value as Record<string, unknown>) : {}
+
+  return {
+    selectedListingTypes: normalizeStringArray(state.selectedListingTypes),
+    selectedCategories: normalizeStringArray(state.selectedCategories),
+    selectedPriceRange: normalizeString(state.selectedPriceRange),
+    selectedRating: normalizeRating(state.selectedRating),
+    selectedConditions: normalizeStringArray(state.selectedConditions),
+    dateFrom: normalizeString(state.dateFrom),
+    timeFrom: normalizeString(state.timeFrom),
+    dateTo: normalizeString(state.dateTo),
+    timeTo: normalizeString(state.timeTo),
+  }
+}
+
+const readStoredDashboardFilterState = (): DashboardFilterSessionState | null => {
+  const storage = getFilterSessionStorage()
+  if (!storage) return null
+
+  try {
+    const rawState = storage.getItem(DASHBOARD_FILTERS_SESSION_STORAGE_KEY)
+    if (!rawState) return null
+
+    return normalizeDashboardFilterSessionState(JSON.parse(rawState))
+  } catch {
+    storage.removeItem(DASHBOARD_FILTERS_SESSION_STORAGE_KEY)
+    return null
+  }
+}
+
 // ── Filter state ─────────────────────────────────────────────────────────────
 export const useDashboardFilters = () => {
-  const selectedListingTypes = ref<string[]>([])
-  const selectedCategories = ref<string[]>([])
-  const selectedPriceRange = ref<string>("")
-  const selectedRating = ref<number | null>(null)
-  const selectedConditions = ref<string[]>([])
-  const dateFrom = ref<string>("")
-  const timeFrom = ref<string>("")
-  const dateTo = ref<string>("")
-  const timeTo = ref<string>("")
+  const storedState = readStoredDashboardFilterState()
+
+  const selectedListingTypes = ref<string[]>(storedState?.selectedListingTypes ?? [])
+  const selectedCategories = ref<string[]>(storedState?.selectedCategories ?? [])
+  const selectedPriceRange = ref<string>(storedState?.selectedPriceRange ?? "")
+  const selectedRating = ref<number | null>(storedState?.selectedRating ?? null)
+  const selectedConditions = ref<string[]>(storedState?.selectedConditions ?? [])
+  const dateFrom = ref<string>(storedState?.dateFrom ?? "")
+  const timeFrom = ref<string>(storedState?.timeFrom ?? "")
+  const dateTo = ref<string>(storedState?.dateTo ?? "")
+  const timeTo = ref<string>(storedState?.timeTo ?? "")
+
+  const persistCurrentState = () => {
+    const storage = getFilterSessionStorage()
+    if (!storage) return
+
+    const state: DashboardFilterSessionState = {
+      selectedListingTypes: [...selectedListingTypes.value],
+      selectedCategories: [...selectedCategories.value],
+      selectedPriceRange: selectedPriceRange.value,
+      selectedRating: selectedRating.value,
+      selectedConditions: [...selectedConditions.value],
+      dateFrom: dateFrom.value,
+      timeFrom: timeFrom.value,
+      dateTo: dateTo.value,
+      timeTo: timeTo.value,
+    }
+
+    const isDefaultState =
+      state.selectedListingTypes.length === 0 &&
+      state.selectedCategories.length === 0 &&
+      state.selectedPriceRange === "" &&
+      state.selectedRating === null &&
+      state.selectedConditions.length === 0 &&
+      state.dateFrom === "" &&
+      state.timeFrom === "" &&
+      state.dateTo === "" &&
+      state.timeTo === ""
+
+    if (isDefaultState) {
+      storage.removeItem(DASHBOARD_FILTERS_SESSION_STORAGE_KEY)
+      return
+    }
+
+    storage.setItem(DASHBOARD_FILTERS_SESSION_STORAGE_KEY, JSON.stringify(state))
+  }
 
   const clearAll = () => {
     selectedListingTypes.value = []
@@ -103,6 +202,7 @@ export const useDashboardFilters = () => {
     timeFrom.value = ""
     dateTo.value = ""
     timeTo.value = ""
+    persistCurrentState()
   }
 
   // ── Derived query params (for API calls) ──────────────────────────────────
@@ -167,6 +267,24 @@ export const useDashboardFilters = () => {
   })
 
   const hasActiveFilters = computed(() => Object.keys(filterQueryParams.value).length > 0)
+
+  watch(
+    [
+      selectedListingTypes,
+      selectedCategories,
+      selectedPriceRange,
+      selectedRating,
+      selectedConditions,
+      dateFrom,
+      timeFrom,
+      dateTo,
+      timeTo,
+    ],
+    () => {
+      persistCurrentState()
+    },
+    { deep: true, flush: "sync" },
+  )
 
   return {
     // State (passed to FilterPanel as v-model or props)
