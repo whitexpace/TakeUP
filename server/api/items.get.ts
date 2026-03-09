@@ -2,6 +2,7 @@ import { createError, getQuery } from "h3"
 import { paginatedItemsSchema } from "../../shared/schemas/item"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
+import { parseItemFilterQuery } from "./items/parse-item-filter-query"
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -19,26 +20,10 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const categoriesRaw =
-    typeof query.categories === "string" ? query.categories.split(",").filter(Boolean) : undefined
-  const conditionsRaw =
-    typeof query.conditions === "string" ? query.conditions.split(",").filter(Boolean) : undefined
-  const tagsRaw = typeof query.tags === "string" ? query.tags.split(",").filter(Boolean) : undefined
-
   const input = paginatedItemsSchema.parse({
+    ...parseItemFilterQuery(query),
     limit: typeof query.limit === "string" ? Number(query.limit) : undefined,
-    search: typeof query.search === "string" ? query.search : undefined,
     cursor: parsedCursor,
-    categories: categoriesRaw,
-    conditions: conditionsRaw,
-    tags: tagsRaw,
-    minPrice: typeof query.minPrice === "string" ? Number(query.minPrice) : undefined,
-    maxPrice: typeof query.maxPrice === "string" ? Number(query.maxPrice) : undefined,
-    freeToBorrow:
-      query.freeToBorrow === "true" ? true : query.freeToBorrow === "false" ? false : undefined,
-    availableFrom: typeof query.availableFrom === "string" ? query.availableFrom : undefined,
-    availableTo: typeof query.availableTo === "string" ? query.availableTo : undefined,
-    minRating: typeof query.minRating === "string" ? Number(query.minRating) : undefined,
   })
 
   const caller = appRouter.createCaller(await createContext(event))

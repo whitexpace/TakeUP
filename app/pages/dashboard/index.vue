@@ -181,6 +181,7 @@ import type { ItemCardViewModel } from "../../types/item-listing"
 import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
+import { useFilteredResultsCount } from "../../composables/use-filtered-results-count"
 import type { useDashboardFilters } from "../../composables/use-dashboard-filters"
 
 definePageMeta({
@@ -240,37 +241,19 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
   }),
 )
 
-// ── Results count ─────────────────────────────────────────────────────────────
-const totalResultsCount = ref<number | null>(null)
-const isCountLoading = ref(false)
-const countRequestVersion = ref(0)
-
-const fetchResultsCount = async (version = countRequestVersion.value) => {
-  isCountLoading.value = true
-  try {
-    const params: Record<string, string | undefined> = {
-      search: appliedSearch.value || undefined,
-      ...filters.filterQueryParams.value,
-    }
-    const result = await $fetch<{ count: number }>("/api/items/count", { query: params })
-    if (version === countRequestVersion.value) {
-      totalResultsCount.value = result.count
-    }
-  } catch {
-    if (version === countRequestVersion.value) {
-      totalResultsCount.value = null
-    }
-  } finally {
-    if (version === countRequestVersion.value) {
-      isCountLoading.value = false
-    }
-  }
-}
+const { totalResultsCount, refreshResultsCount, scheduleResultsCountRefresh, cancelPendingResultsCountRefresh } =
+  useFilteredResultsCount({
+    searchQuery: appliedSearch,
+    filterParams: filters.filterQueryParams,
+  })
 
 const reload = async () => {
-  countRequestVersion.value++
-  const currentVersion = countRequestVersion.value
-  await Promise.all([refresh(), fetchResultsCount(currentVersion)])
+  await Promise.all([refresh(), refreshResultsCount()])
+}
+
+const scheduleReload = () => {
+  void refresh()
+  scheduleResultsCountRefresh()
 }
 
 // Infinite Scroll State
@@ -301,17 +284,18 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
   }
+  cancelPendingResultsCountRefresh()
 })
 
 watch(appliedSearch, () => {
-  void reload()
+  scheduleReload()
 })
 
 // Re-fetch when filters change
 watch(
   filters.filterQueryParams,
   () => {
-    void reload()
+    scheduleReload()
   },
   { deep: true },
 )
