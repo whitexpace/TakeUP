@@ -241,11 +241,15 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
   }),
 )
 
-const { totalResultsCount, refreshResultsCount, scheduleResultsCountRefresh, cancelPendingResultsCountRefresh } =
-  useFilteredResultsCount({
-    searchQuery: appliedSearch,
-    filterParams: filters.filterQueryParams,
-  })
+const {
+  totalResultsCount,
+  refreshResultsCount,
+  scheduleResultsCountRefresh,
+  cancelPendingResultsCountRefresh,
+} = useFilteredResultsCount({
+  searchQuery: appliedSearch,
+  filterParams: filters.filterQueryParams,
+})
 
 const reload = async () => {
   await Promise.all([refresh(), refreshResultsCount()])

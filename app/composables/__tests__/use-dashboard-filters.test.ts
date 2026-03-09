@@ -15,7 +15,9 @@ describe("useDashboardFilters", () => {
   it("makes borrow-only selection override paid price ranges", () => {
     const filters = useDashboardFilters()
 
-    filters.selectedPriceRange.value = PRICE_RANGES.find((range) => range.bucket === "100to500")!.label
+    filters.selectedPriceRange.value = PRICE_RANGES.find(
+      (range) => range.bucket === "100to500",
+    )!.label
     filters.selectedListingTypes.value = ["For Borrow"]
 
     expect(filters.filterQueryParams.value).toEqual({
@@ -42,7 +44,9 @@ describe("useDashboardFilters", () => {
 
     filters.selectedCategories.value = ["Electronics"]
     filters.selectedConditions.value = ["Good"]
-    filters.selectedPriceRange.value = PRICE_RANGES.find((range) => range.bucket === "under100")!.label
+    filters.selectedPriceRange.value = PRICE_RANGES.find(
+      (range) => range.bucket === "under100",
+    )!.label
     filters.dateFrom.value = "2026-03-10"
     filters.timeFrom.value = "09:00:00"
 
