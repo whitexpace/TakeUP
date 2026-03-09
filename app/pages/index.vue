@@ -11,6 +11,12 @@ const images = [
 const currentImageIndex = ref(0)
 let slideshowInterval: NodeJS.Timeout | null = null
 const supabase = useSupabaseClient()
+const route = useRoute()
+
+type LoginStatus = "idle" | "loading" | "success" | "error" | "blocked_domain"
+const loginStatus = ref<LoginStatus>("idle")
+const errorMessage = ref("")
+const currentUser = ref<{ id: string; email: string; name: string } | null>(null)
 
 const categories = [
   {
@@ -64,6 +70,12 @@ const categories = [
 ]
 
 onMounted(async () => {
+  if (route.query.error) {
+    errorMessage.value = route.query.error as string
+    loginStatus.value = (route.query.status as LoginStatus) || "error"
+    scrollToSignIn()
+  }
+
   slideshowInterval = setInterval(() => {
     currentImageIndex.value = (currentImageIndex.value + 1) % images.length
   }, 5000) // Change image every 5 seconds
@@ -74,10 +86,6 @@ onMounted(async () => {
 onUnmounted(() => {
   if (slideshowInterval) clearInterval(slideshowInterval)
 })
-
-const loginStatus = ref<"idle" | "loading" | "success" | "error" | "blocked_domain">("idle")
-const errorMessage = ref("")
-const currentUser = ref<{ id: string; email: string; name: string } | null>(null)
 
 const signInRef = ref<HTMLElement | null>(null)
 const categoriesRef = ref<HTMLElement | null>(null)
@@ -124,7 +132,9 @@ async function restoreSession() {
 
     if (!user) {
       currentUser.value = null
-      loginStatus.value = "idle"
+      if (loginStatus.value !== "error" && loginStatus.value !== "blocked_domain") {
+        loginStatus.value = "idle"
+      }
       return
     }
 
@@ -146,6 +156,7 @@ async function restoreSession() {
         "UP User",
     }
     loginStatus.value = "success"
+    await navigateTo("/dashboard")
   } catch {
     currentUser.value = null
     loginStatus.value = "idle"
