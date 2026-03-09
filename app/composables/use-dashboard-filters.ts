@@ -101,7 +101,9 @@ const getFilterSessionStorage = (): Storage | null => {
 }
 
 const normalizeStringArray = (value: unknown) => {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : []
 }
 
 const normalizeString = (value: unknown) => (typeof value === "string" ? value : "")
