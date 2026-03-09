@@ -23,6 +23,31 @@ export const itemCategorySchema = z.enum([
   "OTHER",
 ])
 
+// UI-only sentinel: items whose DB category is not covered by any sidebar panel entry.
+// Never stored in the database – used only as a filter value.
+export const UI_OTHERS_SENTINEL = "OTHERS" as const
+
+// All real DB categories that the sidebar explicitly covers.
+// Items whose every category falls outside this list are shown under "Others".
+export const KNOWN_SIDEBAR_DB_CATEGORIES = [
+  "BOOKS",
+  "ELECTRONICS",
+  "SPORTS_OUTDOORS",
+  "SCHOOL_SUPPLIES",
+  "MUSIC_AUDIO",
+  "TOOLS",
+  "CLOTHING",
+  "HOME_APPLIANCES",
+  "TOYS_GAMES",
+  "FURNITURE",
+  "VEHICLES_ACCESSORIES",
+  "HEALTH_BEAUTY",
+  "PET_SUPPLIES",
+] as const satisfies ReadonlyArray<z.infer<typeof itemCategorySchema>>
+
+// Zod schema accepted by filter endpoints – real categories + the UI sentinel
+export const uiCategoryFilterSchema = z.union([itemCategorySchema, z.literal(UI_OTHERS_SENTINEL)])
+
 export const itemAvailabilityStatusSchema = z.enum(["AVAILABLE", "RENTED"])
 export const itemStatusSchema = z.enum(["AVAILABLE", "RENTED", "DEACTIVATED", "DELETED"])
 export const rateOptionSchema = z.enum(["PER_HOUR", "PER_DAY"])
@@ -159,16 +184,40 @@ export const updateItemSchema = z
 
 export const deleteItemSchema = itemIdSchema
 
-export const listItemsSchema = z
-  .object({
-    search: z.string().trim().min(1).max(100).optional(),
-    status: itemStatusSchema.optional(),
-    statuses: z.array(itemStatusSchema).min(1).optional(),
-    categories: z
-      .array(itemCategorySchema)
-      .min(1)
-      .transform((categories) => dedupe(categories))
-      .optional(),
-    tags: itemTagsSchema.optional(),
+export const itemFilterSchema = z.object({
+  search: z.string().trim().min(1).max(100).optional(),
+  status: itemStatusSchema.optional(),
+  statuses: z.array(itemStatusSchema).min(1).optional(),
+  categories: z
+    .array(uiCategoryFilterSchema)
+    .min(1)
+    .transform((categories) => dedupe(categories))
+    .optional(),
+  tags: itemTagsSchema.optional(),
+  conditions: z
+    .array(itemConditionSchema)
+    .min(1)
+    .transform((conditions) => dedupe(conditions))
+    .optional(),
+  minPrice: z.number().int().min(0).optional(),
+  maxPrice: z.number().int().min(0).optional(),
+  freeToBorrow: z.boolean().optional(),
+  availableFrom: z.coerce.date().optional(),
+  availableTo: z.coerce.date().optional(),
+  minRating: z.number().min(1).max(5).optional(),
+})
+
+export const listItemsSchema = itemFilterSchema.optional()
+
+export const itemPaginationCursorSchema = z.object({
+  id: z.string().uuid(),
+  bookingCount: z.number().int().min(0),
+  createdAt: z.coerce.date(),
+})
+
+export const paginatedItemsSchema = itemFilterSchema
+  .extend({
+    limit: z.number().int().min(1).max(48).default(12),
+    cursor: itemPaginationCursorSchema.optional(),
   })
-  .optional()
+  .default({})

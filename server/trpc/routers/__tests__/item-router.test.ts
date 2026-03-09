@@ -13,6 +13,7 @@ describe("itemRouter", () => {
         status: "AVAILABLE",
         availability: [
           {
+            id: "22222222-2222-2222-2222-222222222222",
             startDate: new Date("2026-03-10T00:00:00.000Z"),
             endDate: new Date("2026-03-12T00:00:00.000Z"),
             status: "AVAILABLE",
@@ -33,6 +34,17 @@ describe("itemRouter", () => {
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        include: expect.objectContaining({
+          availability: expect.objectContaining({
+            select: expect.objectContaining({
+              id: true,
+              startDate: true,
+              endDate: true,
+              status: true,
+            }),
+            orderBy: { startDate: "asc" },
+          }),
+        }),
         where: expect.objectContaining({
           status: { not: "DELETED" },
         }),
@@ -40,7 +52,14 @@ describe("itemRouter", () => {
     )
     expect(result[0]?.categories).toEqual(["ELECTRONICS"])
     expect(result[0]?.tags).toEqual(["photo"])
-    expect(result[0]?.availability).toHaveLength(1)
+    expect(result[0]?.availability).toEqual([
+      {
+        id: "22222222-2222-2222-2222-222222222222",
+        startDate: new Date("2026-03-10T00:00:00.000Z"),
+        endDate: new Date("2026-03-12T00:00:00.000Z"),
+        status: "AVAILABLE",
+      },
+    ])
   })
 
   it("update throws NOT_FOUND when item does not exist", async () => {
