@@ -459,7 +459,7 @@
             <label class="block font-geist text-[12px] text-noble-black/50 ml-1">From:</label>
             <div class="flex gap-2">
               <div class="flex-1">
-                <CustomCalendar v-model="dateFrom" placeholder="Date" />
+                <CustomCalendar v-model="dateFrom" placeholder="Date" disable-past />
               </div>
               <div class="w-[115px]">
                 <CustomTimePicker v-model="timeFrom" placeholder="Time" />
@@ -470,10 +470,14 @@
             <label class="block font-geist text-[12px] text-noble-black/50 ml-1">To:</label>
             <div class="flex gap-2">
               <div class="flex-1">
-                <CustomCalendar v-model="dateTo" placeholder="Date" />
+                <CustomCalendar v-model="dateTo" placeholder="Date" disable-past :min-date="dateFrom" />
               </div>
               <div class="w-[115px]">
-                <CustomTimePicker v-model="timeTo" placeholder="Time" />
+                <CustomTimePicker
+                  v-model="timeTo"
+                  placeholder="Time"
+                  :min-time="dateFrom === dateTo ? timeFrom : ''"
+                />
               </div>
             </div>
           </div>
@@ -608,6 +612,20 @@ const conditions = computed(() =>
     return { name, count }
   }),
 )
+
+// Watch dateFrom to ensure dateTo remains valid
+watch(dateFrom, (newDateFrom) => {
+  if (newDateFrom && dateTo.value && newDateFrom > dateTo.value) {
+    dateTo.value = ""
+  }
+})
+
+// Watch timeFrom and dateTo to ensure timeTo remains valid on the same day
+watch([timeFrom, dateFrom, dateTo], ([newTimeFrom, newDateFrom, newDateTo]) => {
+  if (newDateFrom === newDateTo && newTimeFrom && timeTo.value && newTimeFrom > timeTo.value) {
+    timeTo.value = ""
+  }
+})
 
 // Collapse State
 const collapsedSections = reactive({

@@ -97,13 +97,16 @@
               v-if="day"
               class="w-9 h-9 flex items-center justify-center rounded-xl text-[13px] transition-all duration-300 relative group"
               :class="[
-                isSelected(day)
-                  ? 'bg-burning-orange text-white font-bold shadow-lg shadow-burning-orange/25'
-                  : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange',
+                isDateDisabled(day)
+                  ? 'text-noble-black/20 cursor-not-allowed'
+                  : isSelected(day)
+                    ? 'bg-burning-orange text-white font-bold shadow-lg shadow-burning-orange/25'
+                    : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange',
               ]"
+              :disabled="isDateDisabled(day)"
               @click.stop="selectDate(day)"
             >
-              {{ day }}
+              <span :class="{ 'opacity-50': isDateDisabled(day) }">{{ day }}</span>
               <!-- Today Indicator Dot -->
               <div
                 v-if="isToday(day)"
@@ -124,6 +127,8 @@ import { ref, computed, onMounted, onUnmounted } from "vue"
 const props = defineProps<{
   modelValue: string
   placeholder?: string
+  disablePast?: boolean
+  minDate?: string // YYYY-MM-DD
 }>()
 
 const emit = defineEmits(["update:modelValue"])
@@ -153,8 +158,9 @@ const monthNames = [
 
 const formattedDate = computed(() => {
   if (!props.modelValue) return ""
-  const date = new Date(props.modelValue)
-  return `${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getDate().toString().padStart(2, "0")}/${date.getFullYear()}`
+  // Split by '-' to avoid timezone shifts when parsing YYYY-MM-DD
+  const [year, month, day] = props.modelValue.split("-").map(Number)
+  return `${month.toString().padStart(2, "0")}/${day.toString().padStart(2, "0")}/${year}`
 })
 
 const calendarDays = computed(() => {
@@ -193,7 +199,28 @@ const nextMonth = () => {
   }
 }
 
+const isDateDisabled = (day: number) => {
+  const date = new Date(currentYear.value, currentMonth.value, day)
+  
+  if (props.disablePast) {
+    const todayAtZero = new Date()
+    todayAtZero.setHours(0, 0, 0, 0)
+    if (date < todayAtZero) return true
+  }
+
+  if (props.minDate) {
+    const [minYear, minMonth, minDay] = props.minDate.split("-").map(Number)
+    const minDateObj = new Date(minYear, minMonth - 1, minDay)
+    minDateObj.setHours(0, 0, 0, 0)
+    if (date < minDateObj) return true
+  }
+
+  return false
+}
+
 const selectDate = (day: number) => {
+  if (isDateDisabled(day)) return
+
   const date = new Date(currentYear.value, currentMonth.value, day)
   // Format as YYYY-MM-DD for consistency
   const formatted = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`
@@ -203,11 +230,9 @@ const selectDate = (day: number) => {
 
 const isSelected = (day: number) => {
   if (!props.modelValue) return false
-  const date = new Date(props.modelValue)
+  const [year, month, date] = props.modelValue.split("-").map(Number)
   return (
-    date.getDate() === day &&
-    date.getMonth() === currentMonth.value &&
-    date.getFullYear() === currentYear.value
+    date === day && month === currentMonth.value + 1 && year === currentYear.value
   )
 }
 
