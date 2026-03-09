@@ -60,8 +60,31 @@
             type="text"
             placeholder="Search for items to rent or buy"
             class="w-full h-[48px] sm:h-[60px] bg-cream rounded-[12px] sm:rounded-[15px] pl-11 sm:pl-14 pr-4 sm:pr-6 font-geist font-normal text-base sm:text-[20px] text-noble-black placeholder:text-noble-black/70 focus:outline-none border border-transparent focus:border-cinnamon-ice transition-colors"
-            @keyup.enter="applySearch"
+            @focus="onSearchFocus"
+            @blur="onSearchBlur"
+            @keydown.down.prevent="moveSuggestionHighlight(1)"
+            @keydown.up.prevent="moveSuggestionHighlight(-1)"
+            @keydown.enter.prevent="applySuggestionOrSearch"
           />
+
+          <div
+            v-if="showSuggestions"
+            class="absolute top-full left-0 right-0 mt-2 z-30 rounded-[12px] border border-cinnamon-ice/50 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.12)] overflow-hidden"
+          >
+            <button
+              v-for="(suggestion, index) in searchSuggestions"
+              :key="`${suggestion.type}-${suggestion.value}-${index}`"
+              type="button"
+              class="w-full px-4 py-3 text-left font-geist text-[14px] text-noble-black hover:bg-cream/80 transition-colors flex items-center justify-between"
+              :class="index === highlightedSuggestionIndex ? 'bg-cream' : ''"
+              @mousedown.prevent="selectSuggestion(suggestion.value)"
+            >
+              <span class="truncate">{{ suggestion.label }}</span>
+              <span class="ml-3 text-[11px] uppercase tracking-wide text-noble-black/45">{{
+                suggestion.type
+              }}</span>
+            </button>
+          </div>
         </div>
 
         <!-- Search Button -->
@@ -210,13 +233,141 @@ const greeting = computed(() => {
 // Search State
 const searchInput = ref("")
 const appliedSearch = ref("")
+let searchApplyTimeout: ReturnType<typeof setTimeout> | null = null
+let searchBlurTimeout: ReturnType<typeof setTimeout> | null = null
+const isSearchFocused = ref(false)
+const highlightedSuggestionIndex = ref(-1)
 
 const clearSearch = () => {
   searchInput.value = ""
+  appliedSearch.value = ""
 }
 
 const applySearch = () => {
+  if (searchApplyTimeout !== null) {
+    clearTimeout(searchApplyTimeout)
+    searchApplyTimeout = null
+  }
   appliedSearch.value = searchInput.value.trim()
+}
+
+const scheduleSearchApply = (delayMs = 250) => {
+  if (searchApplyTimeout !== null) {
+    clearTimeout(searchApplyTimeout)
+  }
+
+  searchApplyTimeout = setTimeout(() => {
+    appliedSearch.value = searchInput.value.trim()
+    searchApplyTimeout = null
+  }, delayMs)
+}
+
+type SearchSuggestion = {
+  label: string
+  value: string
+  type: "item" | "tag" | "category" | "lender" | "condition"
+}
+
+const searchSuggestions = computed<SearchSuggestion[]>(() => {
+  const query = searchInput.value.trim().toLowerCase()
+  if (!query) return []
+
+  const suggestions: SearchSuggestion[] = []
+  const seen = new Set<string>()
+
+  const pushSuggestion = (suggestion: SearchSuggestion) => {
+    const key = `${suggestion.type}:${suggestion.value.toLowerCase()}`
+    if (seen.has(key)) return
+    seen.add(key)
+    suggestions.push(suggestion)
+  }
+
+  for (const item of listedItems.value) {
+    if (item.name.toLowerCase().includes(query)) {
+      pushSuggestion({ label: item.name, value: item.name, type: "item" })
+    }
+
+    if (item.lenderId.toLowerCase().includes(query)) {
+      pushSuggestion({ label: item.lenderId, value: item.lenderId, type: "lender" })
+    }
+
+    if (item.condition.toLowerCase().includes(query)) {
+      pushSuggestion({ label: item.condition, value: item.condition, type: "condition" })
+    }
+
+    for (const category of item.categories) {
+      if (category.toLowerCase().includes(query)) {
+        pushSuggestion({ label: category, value: category, type: "category" })
+      }
+    }
+
+    for (const tag of item.tags) {
+      if (tag.toLowerCase().includes(query)) {
+        pushSuggestion({ label: tag, value: tag, type: "tag" })
+      }
+    }
+  }
+
+  return suggestions.slice(0, 8)
+})
+
+const showSuggestions = computed(
+  () =>
+    isSearchFocused.value &&
+    searchInput.value.trim().length > 0 &&
+    searchSuggestions.value.length > 0,
+)
+
+const resetSuggestionHighlight = () => {
+  highlightedSuggestionIndex.value = -1
+}
+
+const onSearchFocus = () => {
+  isSearchFocused.value = true
+  if (searchBlurTimeout !== null) {
+    clearTimeout(searchBlurTimeout)
+    searchBlurTimeout = null
+  }
+}
+
+const onSearchBlur = () => {
+  searchBlurTimeout = setTimeout(() => {
+    isSearchFocused.value = false
+    resetSuggestionHighlight()
+    searchBlurTimeout = null
+  }, 120)
+}
+
+const selectSuggestion = (value: string) => {
+  searchInput.value = value
+  applySearch()
+  isSearchFocused.value = false
+  resetSuggestionHighlight()
+}
+
+const moveSuggestionHighlight = (step: number) => {
+  if (!showSuggestions.value) return
+  const total = searchSuggestions.value.length
+  if (total === 0) return
+
+  if (highlightedSuggestionIndex.value < 0) {
+    highlightedSuggestionIndex.value = step > 0 ? 0 : total - 1
+    return
+  }
+
+  highlightedSuggestionIndex.value = (highlightedSuggestionIndex.value + step + total) % total
+}
+
+const applySuggestionOrSearch = () => {
+  if (
+    showSuggestions.value &&
+    highlightedSuggestionIndex.value >= 0 &&
+    highlightedSuggestionIndex.value < searchSuggestions.value.length
+  ) {
+    selectSuggestion(searchSuggestions.value[highlightedSuggestionIndex.value]!.value)
+    return
+  }
+  applySearch()
 }
 
 const {
@@ -289,11 +440,24 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
   }
+  if (searchApplyTimeout !== null) {
+    clearTimeout(searchApplyTimeout)
+    searchApplyTimeout = null
+  }
+  if (searchBlurTimeout !== null) {
+    clearTimeout(searchBlurTimeout)
+    searchBlurTimeout = null
+  }
   cancelPendingResultsCountRefresh()
 })
 
 watch(appliedSearch, () => {
   scheduleReload()
+})
+
+watch(searchInput, () => {
+  resetSuggestionHighlight()
+  scheduleSearchApply()
 })
 
 // Re-fetch when filters change

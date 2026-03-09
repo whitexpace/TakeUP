@@ -15,6 +15,9 @@ import {
 } from "../../../shared/schemas/item"
 import { getDefaultItemOrderBy } from "./item-sorting"
 
+const SEARCH_SCAN_LIMIT = 2000
+const SEARCH_COUNT_BATCH_SIZE = 250
+
 const itemWithTaxonomy = {
   availability: {
     select: {
@@ -35,14 +38,221 @@ const itemWithTaxonomy = {
       },
     },
   },
+  lender: {
+    select: {
+      user: {
+        select: {
+          username: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  },
 } as const
 
 type ItemWithTaxonomy = Prisma.ItemGetPayload<{
   include: typeof itemWithTaxonomy
 }>
 
+const itemSearchSelect = {
+  id: true,
+  createdAt: true,
+  bookingCount: true,
+  name: true,
+  description: true,
+  condition: true,
+  status: true,
+  rentalFee: true,
+  freeToBorrow: true,
+  lenderId: true,
+  whatItemOffers: true,
+  whatIsIncluded: true,
+  knownIssues: true,
+  usageLimitations: true,
+  categories: {
+    select: { category: true },
+  },
+  tags: {
+    select: {
+      tag: {
+        select: { name: true },
+      },
+    },
+  },
+  lender: {
+    select: {
+      user: {
+        select: {
+          username: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  },
+} as const satisfies Prisma.ItemSelect
+
+type SearchableItem = Prisma.ItemGetPayload<{
+  select: typeof itemSearchSelect
+}>
+
+const normalizeSearchText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+
+const tokenizeSearch = (value: string) => normalizeSearchText(value).split(/\s+/).filter(Boolean)
+
+const getEditDistanceThreshold = (tokenLength: number) => {
+  if (tokenLength <= 4) return 1
+  if (tokenLength <= 8) return 2
+  return 3
+}
+
+const levenshteinDistance = (source: string, target: string) => {
+  if (source === target) return 0
+  if (source.length === 0) return target.length
+  if (target.length === 0) return source.length
+
+  const sourceLength = source.length
+  const targetLength = target.length
+  const previousRow = Array.from({ length: targetLength + 1 }, (_, i) => i)
+  const currentRow = new Array<number>(targetLength + 1).fill(0)
+
+  for (let i = 1; i <= sourceLength; i++) {
+    currentRow[0] = i
+    for (let j = 1; j <= targetLength; j++) {
+      const substitutionCost = source[i - 1] === target[j - 1] ? 0 : 1
+      currentRow[j] = Math.min(
+        currentRow[j - 1]! + 1,
+        previousRow[j]! + 1,
+        previousRow[j - 1]! + substitutionCost,
+      )
+    }
+
+    for (let j = 0; j <= targetLength; j++) {
+      previousRow[j] = currentRow[j]!
+    }
+  }
+
+  return previousRow[targetLength]!
+}
+
+const buildSearchWords = (item: SearchableItem | ItemWithTaxonomy) => {
+  const lenderUser = item.lender?.user
+  const lenderName = [lenderUser?.firstName, lenderUser?.middleName, lenderUser?.lastName]
+    .filter(Boolean)
+    .join(" ")
+
+  const rawSearchText = [
+    item.name,
+    item.description ?? "",
+    item.condition,
+    item.status,
+    String(item.rentalFee),
+    item.freeToBorrow ? "borrow free" : "rent paid",
+    item.lenderId,
+    lenderUser?.username ?? "",
+    lenderUser?.email ?? "",
+    lenderName,
+    item.whatItemOffers ?? "",
+    item.whatIsIncluded ?? "",
+    item.knownIssues ?? "",
+    item.usageLimitations ?? "",
+    ...item.tags.map((entry) => entry.tag.name),
+    ...item.categories.map((entry) => entry.category),
+  ]
+    .join(" ")
+    .trim()
+
+  const normalizedText = normalizeSearchText(rawSearchText)
+  const words = normalizedText.split(/\s+/).filter(Boolean)
+
+  return { normalizedText, words }
+}
+
+const scoreSearchMatch = (
+  query: string,
+  searchWords: ReturnType<typeof buildSearchWords>,
+): number | null => {
+  const queryTokens = tokenizeSearch(query)
+  if (queryTokens.length === 0) return 0
+
+  let totalScore = 0
+
+  for (const token of queryTokens) {
+    let tokenScore = 0
+
+    for (const word of searchWords.words) {
+      if (word === token) {
+        tokenScore = Math.max(tokenScore, 6)
+        continue
+      }
+
+      if (word.includes(token) || (token.length >= 4 && token.includes(word))) {
+        tokenScore = Math.max(tokenScore, 4)
+        continue
+      }
+
+      if (Math.abs(word.length - token.length) > 3) {
+        continue
+      }
+
+      const distance = levenshteinDistance(word, token)
+      const maxDistance = getEditDistanceThreshold(token.length)
+
+      if (distance <= maxDistance) {
+        if (distance === 1) {
+          tokenScore = Math.max(tokenScore, 3)
+        } else if (distance === 2) {
+          tokenScore = Math.max(tokenScore, 2)
+        } else {
+          tokenScore = Math.max(tokenScore, 1)
+        }
+      }
+    }
+
+    if (tokenScore === 0) {
+      return null
+    }
+
+    totalScore += tokenScore
+  }
+
+  if (searchWords.normalizedText.includes(normalizeSearchText(query))) {
+    totalScore += 2
+  }
+
+  return totalScore
+}
+
+const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>(
+  items: T[],
+  search: string,
+  options: { sortByScore?: boolean } = {},
+): T[] => {
+  const ranked = items
+    .map((item) => ({
+      item,
+      score: scoreSearchMatch(search, buildSearchWords(item)),
+    }))
+    .filter((entry): entry is { item: T; score: number } => entry.score !== null)
+
+  if (options.sortByScore ?? true) {
+    ranked.sort((a, b) => b.score - a.score)
+  }
+
+  return ranked.map((entry) => entry.item)
+}
+
 const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
-  const { availability, categories, tags, ...rest } = item
+  const { availability, categories, tags, lender: _lender, ...rest } = item
   return {
     ...rest,
     availability: availability.map((entry) => ({
@@ -72,7 +282,10 @@ type ListWhereFilters = {
   minRating?: number
 }
 
-const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
+const buildListWhere = (
+  input?: ListWhereFilters,
+  options: { includeSearch?: boolean } = {},
+): Prisma.ItemWhereInput => {
   const search = input?.search?.trim()
   const status = input?.status
   const statuses = input?.statuses
@@ -85,6 +298,7 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
   const availableFrom = input?.availableFrom
   const availableTo = input?.availableTo
   const minRating = input?.minRating
+  const includeSearch = options.includeSearch ?? true
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? status
@@ -123,7 +337,7 @@ const buildListWhere = (input?: ListWhereFilters): Prisma.ItemWhereInput => {
   return {
     status: statusFilter,
     ...categoryFilter,
-    ...(search
+    ...(search && includeSearch
       ? {
           OR: [
             { name: { contains: search, mode: "insensitive" as const } },
@@ -197,19 +411,23 @@ const buildPaginationWhereFromCursor = (cursor: {
 })
 
 export const itemRouter = router({
-  list: publicProcedure.input(listItemsSchema).query(({ ctx, input }) => {
-    return ctx.prisma.item
-      .findMany({
-        take: 50,
-        orderBy: getDefaultItemOrderBy(),
-        include: itemWithTaxonomy,
-        where: buildListWhere(input),
-      })
-      .then((items) => items.map(mapItemTaxonomy))
+  list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
+    const search = input?.search?.trim()
+
+    const records = await ctx.prisma.item.findMany({
+      take: search ? SEARCH_SCAN_LIMIT : 50,
+      orderBy: getDefaultItemOrderBy(),
+      include: itemWithTaxonomy,
+      where: buildListWhere(input, { includeSearch: !search }),
+    })
+
+    const matchedItems = search ? filterAndRankSearchResults(records, search).slice(0, 50) : records
+    return matchedItems.map(mapItemTaxonomy)
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
-    const baseWhere = buildListWhere(input)
+    const search = input.search?.trim()
+    const baseWhere = buildListWhere(input, { includeSearch: !search })
     const paginationWhere = input.cursor
       ? buildPaginationWhereFromCursor({
           bookingCount: input.cursor.bookingCount,
@@ -219,14 +437,17 @@ export const itemRouter = router({
       : null
 
     const records = await ctx.prisma.item.findMany({
-      take: input.limit + 1,
+      take: search ? SEARCH_SCAN_LIMIT : input.limit + 1,
       orderBy: getDefaultItemOrderBy(),
       include: itemWithTaxonomy,
       where: paginationWhere ? { AND: [baseWhere, paginationWhere] } : baseWhere,
     })
 
-    const hasMore = records.length > input.limit
-    const pageRecords = hasMore ? records.slice(0, input.limit) : records
+    const filteredRecords = search
+      ? filterAndRankSearchResults(records, search, { sortByScore: false })
+      : records
+    const hasMore = filteredRecords.length > input.limit
+    const pageRecords = hasMore ? filteredRecords.slice(0, input.limit) : filteredRecords
     const lastRecord = pageRecords.at(-1)
 
     return {
@@ -243,8 +464,48 @@ export const itemRouter = router({
   }),
 
   countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
-    const where = buildListWhere(input)
-    const count = await ctx.prisma.item.count({ where })
+    const search = input?.search?.trim()
+
+    if (!search) {
+      const where = buildListWhere(input)
+      const count = await ctx.prisma.item.count({ where })
+      return { count }
+    }
+
+    const where = buildListWhere(input, { includeSearch: false })
+    let totalCount = 0
+    let cursor: { id: string; createdAt: Date; bookingCount: number } | null = null
+
+    while (true) {
+      const paginationWhere: Prisma.ItemWhereInput | null = cursor
+        ? buildPaginationWhereFromCursor(cursor)
+        : null
+      const batch: SearchableItem[] = await ctx.prisma.item.findMany({
+        take: SEARCH_COUNT_BATCH_SIZE,
+        orderBy: getDefaultItemOrderBy(),
+        select: itemSearchSelect,
+        where: paginationWhere ? { AND: [where, paginationWhere] } : where,
+      })
+
+      if (batch.length === 0) {
+        break
+      }
+
+      totalCount += filterAndRankSearchResults(batch, search, { sortByScore: false }).length
+
+      const last: SearchableItem | undefined = batch.at(-1)
+      if (!last || batch.length < SEARCH_COUNT_BATCH_SIZE) {
+        break
+      }
+
+      cursor = {
+        id: last.id,
+        bookingCount: last.bookingCount,
+        createdAt: last.createdAt,
+      }
+    }
+
+    const count = totalCount
     return { count }
   }),
 
