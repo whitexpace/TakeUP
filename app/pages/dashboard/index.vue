@@ -109,8 +109,8 @@
     >
       <ItemCard
         v-for="item in cardItems"
-        :key="item.id"
         :id="item.id"
+        :key="item.id"
         :type="item.type"
         :is-trending="item.isTrending"
         :image="item.image"

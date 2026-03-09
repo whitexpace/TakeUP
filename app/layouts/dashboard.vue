@@ -78,7 +78,6 @@
           </button>
         </div>
 
-  
         <!-- Sidebar Content Area -->
         <div class="px-6 space-y-0 pb-12">
           <FilterPanel
@@ -106,7 +105,6 @@
           />
           <slot name="sidebar" />
         </div>
-
       </aside>
 
       <!-- Main Content Area -->
