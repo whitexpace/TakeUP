@@ -6,6 +6,14 @@ type UseFilteredResultsCountOptions = {
   debounceMs?: number
 }
 
+type ResultsCountCacheEntry = {
+  count: number
+  expiresAt: number
+}
+
+const RESULTS_COUNT_CACHE_TTL_MS = 30_000
+const filteredResultsCountCache = new Map<string, ResultsCountCacheEntry>()
+
 const buildResultsCountQuery = (
   searchQuery: Ref<string>,
   filterParams?: Ref<Record<string, string | undefined>>,
@@ -27,6 +35,38 @@ const buildResultsCountQuery = (
   return params
 }
 
+const serializeResultsCountQuery = (query: Record<string, string | undefined>) =>
+  Object.entries(query)
+    .filter(([, value]) => value !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
+    .join("&")
+
+const getCachedResultsCount = (cacheKey: string) => {
+  const cachedEntry = filteredResultsCountCache.get(cacheKey)
+  if (!cachedEntry) {
+    return null
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    filteredResultsCountCache.delete(cacheKey)
+    return null
+  }
+
+  return cachedEntry.count
+}
+
+const setCachedResultsCount = (cacheKey: string, count: number) => {
+  filteredResultsCountCache.set(cacheKey, {
+    count,
+    expiresAt: Date.now() + RESULTS_COUNT_CACHE_TTL_MS,
+  })
+}
+
+export const resetFilteredResultsCountCache = () => {
+  filteredResultsCountCache.clear()
+}
+
 export const useFilteredResultsCount = ({
   searchQuery,
   filterParams,
@@ -45,14 +85,27 @@ export const useFilteredResultsCount = ({
   }
 
   const fetchResultsCount = async (version = requestVersion.value) => {
+    const query = buildResultsCountQuery(searchQuery, filterParams)
+    const cacheKey = serializeResultsCountQuery(query)
+    const cachedCount = getCachedResultsCount(cacheKey)
+
+    if (cachedCount !== null) {
+      if (version === requestVersion.value) {
+        totalResultsCount.value = cachedCount
+        isCountLoading.value = false
+      }
+      return
+    }
+
     isCountLoading.value = true
 
     try {
       const result = await $fetch<{ count: number }>("/api/items/count", {
-        query: buildResultsCountQuery(searchQuery, filterParams),
+        query,
       })
 
       if (version === requestVersion.value) {
+        setCachedResultsCount(cacheKey, result.count)
         totalResultsCount.value = result.count
       }
     } catch {
