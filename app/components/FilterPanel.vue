@@ -470,7 +470,12 @@
             <label class="block font-geist text-[12px] text-noble-black/50 ml-1">To:</label>
             <div class="flex gap-2">
               <div class="flex-1">
-                <CustomCalendar v-model="dateTo" placeholder="Date" disable-past :min-date="dateFrom" />
+                <CustomCalendar
+                  v-model="dateTo"
+                  placeholder="Date"
+                  disable-past
+                  :min-date="dateFrom"
+                />
               </div>
               <div class="w-[115px]">
                 <CustomTimePicker

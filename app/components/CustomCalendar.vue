@@ -217,7 +217,7 @@ const nextMonth = () => {
 
 const isDateDisabled = (day: number) => {
   const date = new Date(currentYear.value, currentMonth.value, day)
-  
+
   if (props.disablePast) {
     const todayAtZero = new Date()
     todayAtZero.setHours(0, 0, 0, 0)
@@ -227,11 +227,7 @@ const isDateDisabled = (day: number) => {
   if (props.minDate) {
     const parsedMinDate = parseYyyyMmDd(props.minDate)
     if (parsedMinDate) {
-      const minDateObj = new Date(
-        parsedMinDate.year,
-        parsedMinDate.month - 1,
-        parsedMinDate.day,
-      )
+      const minDateObj = new Date(parsedMinDate.year, parsedMinDate.month - 1, parsedMinDate.day)
       minDateObj.setHours(0, 0, 0, 0)
       if (date < minDateObj) return true
     }
@@ -256,9 +252,7 @@ const isSelected = (day: number) => {
   if (!parsedDate) return false
 
   const { year, month, day: date } = parsedDate
-  return (
-    date === day && month === currentMonth.value + 1 && year === currentYear.value
-  )
+  return date === day && month === currentMonth.value + 1 && year === currentYear.value
 }
 
 const isToday = (day: number) => {

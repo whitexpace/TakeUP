@@ -45,10 +45,7 @@ const getCachedPaginatedItemsResponse = (cacheKey: string) => {
   return clonePaginatedItemsResponse(cachedEntry.response)
 }
 
-const setCachedPaginatedItemsResponse = (
-  cacheKey: string,
-  response: PaginatedItemsResponse,
-) => {
+const setCachedPaginatedItemsResponse = (cacheKey: string, response: PaginatedItemsResponse) => {
   paginatedItemsCache.set(cacheKey, {
     expiresAt: Date.now() + PAGINATED_ITEMS_CACHE_TTL_MS,
     response: clonePaginatedItemsResponse(response),
@@ -111,10 +108,7 @@ export const usePaginatedItems = ({
     loadedIds.clear()
   }
 
-  const applyResponse = (
-    response: PaginatedItemsResponse,
-    version: number,
-  ) => {
+  const applyResponse = (response: PaginatedItemsResponse, version: number) => {
     if (version !== requestVersion.value) return
 
     const uniqueItems = response.items.filter((item) => !loadedIds.has(item.id))
