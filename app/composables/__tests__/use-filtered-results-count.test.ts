@@ -1,6 +1,9 @@
 import { ref } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { useFilteredResultsCount } from "../use-filtered-results-count"
+import {
+  resetFilteredResultsCountCache,
+  useFilteredResultsCount,
+} from "../use-filtered-results-count"
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -23,6 +26,7 @@ const flushPromises = async () => {
 
 describe("useFilteredResultsCount", () => {
   afterEach(() => {
+    resetFilteredResultsCountCache()
     vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -90,5 +94,25 @@ describe("useFilteredResultsCount", () => {
     expect(resultsCount.totalResultsCount.value).toBe(2)
 
     await firstRefresh
+  })
+
+  it("reuses cached counts for identical filter queries", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ count: 12 })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const firstResultsCount = useFilteredResultsCount({
+      searchQuery: ref("camera"),
+      filterParams: ref({ freeToBorrow: "true", minRating: "4" }),
+    })
+    await firstResultsCount.refreshResultsCount()
+
+    const secondResultsCount = useFilteredResultsCount({
+      searchQuery: ref("camera"),
+      filterParams: ref({ freeToBorrow: "true", minRating: "4" }),
+    })
+    await secondResultsCount.refreshResultsCount()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(secondResultsCount.totalResultsCount.value).toBe(12)
   })
 })

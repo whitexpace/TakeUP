@@ -1,6 +1,6 @@
 import { ref } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { usePaginatedItems } from "../use-paginated-items"
+import { resetPaginatedItemsCache, usePaginatedItems } from "../use-paginated-items"
 import type { ListedItem, PaginatedItemsResponse } from "../../types/item-listing"
 
 type Deferred<T> = {
@@ -54,6 +54,7 @@ const flushPromises = async () => {
 
 describe("usePaginatedItems", () => {
   afterEach(() => {
+    resetPaginatedItemsCache()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -149,5 +150,30 @@ describe("usePaginatedItems", () => {
     ])
 
     await firstRefresh
+  })
+
+  it("reuses cached responses for identical dashboard item queries", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      items: [makeItem("33333333-3333-3333-3333-333333333333")],
+      nextCursor: null,
+    } satisfies PaginatedItemsResponse)
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const firstPaginatedItems = usePaginatedItems({
+      searchQuery: ref("camera"),
+      filterParams: ref({ minRating: "4" }),
+    })
+    await firstPaginatedItems.refresh()
+
+    const secondPaginatedItems = usePaginatedItems({
+      searchQuery: ref("camera"),
+      filterParams: ref({ minRating: "4" }),
+    })
+    await secondPaginatedItems.refresh()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(secondPaginatedItems.items.value.map((item) => item.id)).toEqual([
+      "33333333-3333-3333-3333-333333333333",
+    ])
   })
 })

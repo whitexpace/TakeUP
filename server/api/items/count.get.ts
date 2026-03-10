@@ -4,11 +4,17 @@ import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 import { parseItemFilterQuery } from "./parse-item-filter-query"
 
-export default defineEventHandler(async (event) => {
-  const query = getQuery(event)
+export default defineCachedEventHandler(
+  async (event) => {
+    const query = getQuery(event)
 
-  const input = listItemsSchema.parse(parseItemFilterQuery(query))
+    const input = listItemsSchema.parse(parseItemFilterQuery(query))
 
-  const caller = appRouter.createCaller(await createContext(event))
-  return caller.item.countFiltered(input)
-})
+    const caller = appRouter.createCaller(await createContext(event))
+    return caller.item.countFiltered(input)
+  },
+  {
+    maxAge: 30,
+    swr: true,
+  },
+)

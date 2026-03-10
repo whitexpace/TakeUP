@@ -156,10 +156,26 @@ const monthNames = [
   "December",
 ]
 
+const parseYyyyMmDd = (value: string) => {
+  const [yearPart = "", monthPart = "", dayPart = ""] = value.split("-")
+  const year = Number(yearPart)
+  const month = Number(monthPart)
+  const day = Number(dayPart)
+
+  if ([year, month, day].some((part) => Number.isNaN(part))) {
+    return null
+  }
+
+  return { year, month, day }
+}
+
 const formattedDate = computed(() => {
   if (!props.modelValue) return ""
   // Split by '-' to avoid timezone shifts when parsing YYYY-MM-DD
-  const [year, month, day] = props.modelValue.split("-").map(Number)
+  const parsedDate = parseYyyyMmDd(props.modelValue)
+  if (!parsedDate) return ""
+
+  const { year, month, day } = parsedDate
   return `${month.toString().padStart(2, "0")}/${day.toString().padStart(2, "0")}/${year}`
 })
 
@@ -209,10 +225,16 @@ const isDateDisabled = (day: number) => {
   }
 
   if (props.minDate) {
-    const [minYear, minMonth, minDay] = props.minDate.split("-").map(Number)
-    const minDateObj = new Date(minYear, minMonth - 1, minDay)
-    minDateObj.setHours(0, 0, 0, 0)
-    if (date < minDateObj) return true
+    const parsedMinDate = parseYyyyMmDd(props.minDate)
+    if (parsedMinDate) {
+      const minDateObj = new Date(
+        parsedMinDate.year,
+        parsedMinDate.month - 1,
+        parsedMinDate.day,
+      )
+      minDateObj.setHours(0, 0, 0, 0)
+      if (date < minDateObj) return true
+    }
   }
 
   return false
@@ -230,7 +252,10 @@ const selectDate = (day: number) => {
 
 const isSelected = (day: number) => {
   if (!props.modelValue) return false
-  const [year, month, date] = props.modelValue.split("-").map(Number)
+  const parsedDate = parseYyyyMmDd(props.modelValue)
+  if (!parsedDate) return false
+
+  const { year, month, day: date } = parsedDate
   return (
     date === day && month === currentMonth.value + 1 && year === currentYear.value
   )
