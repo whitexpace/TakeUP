@@ -147,42 +147,97 @@
         leave-from-class="transform translate-y-0 opacity-100"
         leave-to-class="transform -translate-y-2 opacity-0"
       >
-        <div v-if="!collapsedSections.categories" class="space-y-1.5 pr-2 pb-5 pt-1">
-          <label
-            v-for="cat in categories"
-            :key="cat.name"
-            class="flex items-center justify-between py-0.5 group cursor-pointer"
-          >
-            <div class="flex items-center">
-              <div class="relative flex items-center justify-center">
-                <input
-                  v-model="selectedCategories"
-                  type="checkbox"
-                  :value="cat.name"
-                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/60 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
-                />
+        <div v-if="!collapsedSections.categories" class="space-y-3 pr-2 pb-5 pt-1">
+          <div class="relative" @keydown.escape="closeCategoryDropdown">
+            <div class="relative flex items-center">
+              <input
+                v-model="categorySearch"
+                type="text"
+                placeholder="Search categories"
+                class="w-full h-[44px] bg-white rounded-[12px] border border-cinnamon-ice/60 px-4 pr-10 font-geist text-[14px] text-noble-black placeholder:text-noble-black/45 focus:outline-none focus:border-burning-orange transition-colors"
+                @focus="openCategoryDropdown"
+                @input="openCategoryDropdown"
+              />
+              <button
+                type="button"
+                class="absolute right-3 p-1 text-noble-black/50 hover:text-noble-black transition-colors"
+                @click="toggleCategoryDropdown"
+              >
                 <svg
-                  class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
+                  class="w-4 h-4 transition-transform duration-200"
+                  :class="{ 'rotate-180': isCategoryDropdownOpen }"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
-                  stroke-width="3"
                 >
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
-              </div>
-              <span
-                class="ml-3 font-geist text-[14px] text-noble-black/80 group-hover:text-noble-black transition-colors duration-300"
+              </button>
+            </div>
+
+            <div
+              v-if="isCategoryDropdownOpen"
+              class="absolute left-0 right-0 mt-2 max-h-60 overflow-y-auto rounded-[12px] border border-cinnamon-ice/60 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.08)] z-20"
+            >
+              <button
+                v-for="cat in filteredCategoryOptions"
+                :key="cat.name"
+                type="button"
+                class="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-cream transition-colors"
+                @click="selectCategory(cat.name)"
               >
+                <span class="font-geist text-[14px] text-noble-black/80">
+                  {{ cat.name }}
+                </span>
+                <span class="font-geist text-[12px] text-noble-black/35"> ({{ cat.count }}) </span>
+              </button>
+              <div
+                v-if="filteredCategoryOptions.length === 0"
+                class="px-4 py-3 font-geist text-[13px] text-noble-black/45"
+              >
+                No matching categories
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedCategoryEntries.length > 0" class="flex flex-wrap gap-2">
+            <div
+              v-for="cat in selectedCategoryEntries"
+              :key="cat.name"
+              class="inline-flex max-w-full items-center gap-2 rounded-[10px] border border-cinnamon-ice/60 bg-white px-3 py-2"
+            >
+              <span class="font-geist text-[13px] text-noble-black/85 truncate">
                 {{ cat.name }}
               </span>
+              <button
+                type="button"
+                class="shrink-0 text-noble-black/45 hover:text-burning-orange transition-colors"
+                :title="`Remove ${cat.name}`"
+                @click="removeCategory(cat.name)"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M18 6L6 18M6 6l12 12"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
             </div>
-            <span
-              class="font-geist text-[12px] text-noble-black/30 group-hover:text-noble-black/60 transition-colors duration-300"
-            >
-              ({{ cat.count }})
-            </span>
-          </label>
+          </div>
         </div>
       </transition>
       <div class="w-full h-[1px] bg-cinnamon-ice/50"></div>
@@ -494,7 +549,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from "vue"
+import { ref, reactive, computed, watch, watchEffect } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import {
   PRICE_RANGES,
@@ -539,6 +594,8 @@ const dateFrom = ref<string>(props.dateFrom ?? "")
 const timeFrom = ref<string>(props.timeFrom ?? "")
 const dateTo = ref<string>(props.dateTo ?? "")
 const timeTo = ref<string>(props.timeTo ?? "")
+const categorySearch = ref("")
+const isCategoryDropdownOpen = ref(false)
 
 // Sync inbound prop changes (e.g. clearAll from parent)
 watchEffect(() => {
@@ -580,6 +637,65 @@ const categories = computed(() =>
     return { name, count }
   }),
 )
+
+type CategoryEntry = (typeof categories.value)[number]
+
+const selectedCategoryEntries = computed<CategoryEntry[]>(() => {
+  const entries: CategoryEntry[] = []
+
+  for (const name of selectedCategories.value) {
+    const matchedCategory = categories.value.find((category) => category.name === name)
+    if (matchedCategory) {
+      entries.push(matchedCategory)
+    }
+  }
+
+  return entries
+})
+
+const filteredCategoryOptions = computed(() => {
+  const query = categorySearch.value.trim().toLowerCase()
+
+  return categories.value.filter((category) => {
+    if (selectedCategories.value.includes(category.name)) {
+      return false
+    }
+
+    if (!query) {
+      return true
+    }
+
+    return category.name.toLowerCase().includes(query)
+  })
+})
+
+const openCategoryDropdown = () => {
+  isCategoryDropdownOpen.value = true
+}
+
+const closeCategoryDropdown = () => {
+  isCategoryDropdownOpen.value = false
+}
+
+const toggleCategoryDropdown = () => {
+  isCategoryDropdownOpen.value = !isCategoryDropdownOpen.value
+}
+
+const selectCategory = (categoryName: string) => {
+  if (selectedCategories.value.includes(categoryName)) {
+    categorySearch.value = ""
+    closeCategoryDropdown()
+    return
+  }
+
+  selectedCategories.value = [...selectedCategories.value, categoryName]
+  categorySearch.value = ""
+  closeCategoryDropdown()
+}
+
+const removeCategory = (categoryName: string) => {
+  selectedCategories.value = selectedCategories.value.filter((name) => name !== categoryName)
+}
 
 // ── Price ranges with live counts ─────────────────────────────────────────────
 const priceRanges = computed(() =>
