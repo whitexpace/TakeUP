@@ -252,9 +252,17 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
 }
 
 const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
-  const { availability, categories, tags, lender: _lender, ...rest } = item
+  const { availability, categories, tags, lender, ...rest } = item
+  const lenderUser = lender.user
+  const ownerName =
+    lenderUser.username ||
+    [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
+    lenderUser.email ||
+    item.lenderId
+
   return {
     ...rest,
+    ownerName,
     availability: availability.map((entry) => ({
       id: entry.id,
       startDate: entry.startDate,

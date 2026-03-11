@@ -41,7 +41,7 @@ export const mapListedItemToCard = (
     rating: item.rating.toFixed(1),
     reviews: item.bookingCount,
     price: item.freeToBorrow ? undefined : item.rentalFee,
-    owner: item.lenderId,
+    owner: item.ownerName,
   }
 }
 

@@ -287,8 +287,8 @@ const searchSuggestions = computed<SearchSuggestion[]>(() => {
       pushSuggestion({ label: item.name, value: item.name, type: "item" })
     }
 
-    if (item.lenderId.toLowerCase().includes(query)) {
-      pushSuggestion({ label: item.lenderId, value: item.lenderId, type: "lender" })
+    if (item.ownerName.toLowerCase().includes(query)) {
+      pushSuggestion({ label: item.ownerName, value: item.ownerName, type: "lender" })
     }
 
     if (item.condition.toLowerCase().includes(query)) {
