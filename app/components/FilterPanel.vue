@@ -656,6 +656,16 @@ const clearAll = () => {
   timeFrom.value = ""
   dateTo.value = ""
   timeTo.value = ""
+
+  emit("update:selectedListingTypes", [])
+  emit("update:selectedCategories", [])
+  emit("update:selectedPriceRange", "")
+  emit("update:selectedRating", null)
+  emit("update:selectedConditions", [])
+  emit("update:dateFrom", "")
+  emit("update:timeFrom", "")
+  emit("update:dateTo", "")
+  emit("update:timeTo", "")
 }
 </script>
 

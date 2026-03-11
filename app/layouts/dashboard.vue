@@ -51,33 +51,6 @@
             : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
         ]"
       >
-        <!-- Sidebar Header with Toggle -->
-        <div class="p-6 flex items-center justify-between">
-          <div class="font-bold text-xl text-blue-estate" />
-          <button
-            class="p-1 hover:bg-pale-cashmere rounded-full transition-colors"
-            title="Hide Sidebar"
-            @click="toggleSidebar"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="text-noble-black"
-            >
-              <path
-                d="M15 18L9 12L15 6"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-
         <!-- Sidebar Content Area -->
         <div class="px-6 space-y-0 pb-12">
           <FilterPanel
