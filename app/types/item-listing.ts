@@ -35,6 +35,7 @@ export interface ListedItem {
   likeCount: number
   rating: number
   lenderId: string
+  ownerName: string
   borrowerId: string | null
   categories: string[]
   tags: string[]
