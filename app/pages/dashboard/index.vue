@@ -1,0 +1,471 @@
+<template>
+  <div class="container mx-auto px-4 py-8 pt-16 max-w-7xl">
+    <!-- Header Section -->
+    <div class="mb-10">
+      <h1 class="font-rewon text-[40px] text-noble-black leading-tight mb-2">
+        Good {{ greeting }}, {{ firstName }}!
+      </h1>
+      <p class="font-geist font-normal text-[20px] text-noble-black/70">
+        Discover items to rent or borrow near you.
+      </p>
+
+      <!-- Search Bar Section -->
+      <div class="mt-6 sm:mt-8 flex items-center gap-2 sm:gap-4 w-full">
+        <!-- Input Container -->
+        <div class="relative flex-1">
+          <!-- Clear Button (X) or Search Icon -->
+          <button
+            v-if="searchInput"
+            class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 focus:outline-none"
+            title="Clear search"
+            @click="clearSearch"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="sm:w-6 sm:h-6 stroke-noble-black/70"
+              stroke-width="1"
+            >
+              <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <div
+            v-else
+            class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 pointer-events-none"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="sm:w-6 sm:h-6 stroke-noble-black/70"
+              stroke-width="1"
+            >
+              <path
+                d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path d="M21 21L16.65 16.65" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+
+          <!-- Search Input -->
+          <input
+            v-model="searchInput"
+            type="text"
+            placeholder="Search for items to rent or buy"
+            class="w-full h-[48px] sm:h-[60px] bg-cream rounded-[12px] sm:rounded-[15px] pl-11 sm:pl-14 pr-4 sm:pr-6 font-geist font-normal text-base sm:text-[20px] text-noble-black placeholder:text-noble-black/70 focus:outline-none border border-transparent focus:border-cinnamon-ice transition-colors"
+            @focus="onSearchFocus"
+            @blur="onSearchBlur"
+            @keydown.down.prevent="moveSuggestionHighlight(1)"
+            @keydown.up.prevent="moveSuggestionHighlight(-1)"
+            @keydown.enter.prevent="applySuggestionOrSearch"
+          />
+
+          <div
+            v-if="showSuggestions"
+            class="absolute top-full left-0 right-0 mt-2 z-30 rounded-[12px] border border-cinnamon-ice/50 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.12)] overflow-hidden"
+          >
+            <button
+              v-for="(suggestion, index) in searchSuggestions"
+              :key="`${suggestion.type}-${suggestion.value}-${index}`"
+              type="button"
+              class="w-full px-4 py-3 text-left font-geist text-[14px] text-noble-black hover:bg-cream/80 transition-colors flex items-center justify-between"
+              :class="index === highlightedSuggestionIndex ? 'bg-cream' : ''"
+              @mousedown.prevent="selectSuggestion(suggestion.value)"
+            >
+              <span class="truncate">{{ suggestion.label }}</span>
+              <span class="ml-3 text-[11px] uppercase tracking-wide text-noble-black/45">{{
+                suggestion.type
+              }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Button -->
+        <button
+          class="h-[48px] sm:h-[60px] px-6 sm:px-10 bg-burning-orange text-white rounded-[12px] sm:rounded-[15px] font-geist font-medium text-base sm:text-[20px] hover:bg-blue-estate transition-colors shrink-0 flex items-center justify-center"
+          @click="applySearch"
+        >
+          Search
+        </button>
+      </div>
+
+      <!-- Results Count -->
+      <p v-if="totalResultsCount !== null" class="mt-3 font-geist text-[14px] text-noble-black/50">
+        {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
+      </p>
+    </div>
+
+    <!-- Items Grid -->
+    <div
+      v-if="cardItems.length > 0 || isLoading"
+      class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6"
+    >
+      <ItemCard
+        v-for="item in cardItems"
+        :id="item.id"
+        :key="item.id"
+        :type="item.type"
+        :is-trending="item.isTrending"
+        :image="item.image"
+        :category="item.category"
+        :name="item.name"
+        :rating="item.rating"
+        :reviews="item.reviews"
+        :price="item.price"
+        :owner="item.owner"
+      />
+
+      <template v-if="isLoading">
+        <ItemCardSkeleton v-for="i in 4" :key="`skeleton-${i}`" />
+      </template>
+    </div>
+
+    <!-- Error State -->
+    <div
+      v-else-if="errorMessage"
+      class="w-full flex flex-col items-center justify-center py-24 px-4 text-center bg-cream rounded-[20px] border border-cinnamon-ice/50 shadow-sm mt-4"
+    >
+      <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">
+        Unable to load items
+      </h3>
+      <p
+        class="font-geist font-normal text-[16px] sm:text-[18px] text-noble-black/70 max-w-md mx-auto"
+      >
+        {{ errorMessage }}
+      </p>
+      <button
+        class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
+        @click="reload"
+      >
+        Retry
+      </button>
+    </div>
+
+    <!-- Empty State -->
+    <div
+      v-else
+      class="w-full flex flex-col items-center justify-center py-24 px-4 text-center bg-cream rounded-[20px] border border-cinnamon-ice/50 shadow-sm mt-4"
+    >
+      <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          class="stroke-cinnamon-ice"
+          stroke-width="1.5"
+        >
+          <path
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path d="M8 11h4m-4 0v-4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">
+        No items found
+      </h3>
+      <p
+        class="font-geist font-normal text-[16px] sm:text-[18px] text-noble-black/70 max-w-md mx-auto"
+      >
+        We couldn't find any items matching your search or filters. Try adjusting them to see more
+        results!
+      </p>
+      <button
+        v-if="searchInput || filters.hasActiveFilters.value"
+        class="mt-8 h-[48px] px-8 bg-burning-orange text-white rounded-[12px] font-geist font-medium text-[16px] hover:bg-blue-estate transition-colors"
+        @click="
+          () => {
+            clearSearch()
+            filters.clearAll()
+          }
+        "
+      >
+        Clear Search & Filters
+      </button>
+    </div>
+
+    <!-- Intersection Trigger -->
+    <div ref="loadMoreTrigger" class="h-10 w-full mt-4 flex items-center justify-center" />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue"
+import type { ItemCardViewModel } from "../../types/item-listing"
+import { mapListedItemsToCards } from "../../utils/item-card-mapper"
+import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
+import { usePaginatedItems } from "../../composables/use-paginated-items"
+import { useFilteredResultsCount } from "../../composables/use-filtered-results-count"
+import type { useDashboardFilters } from "../../composables/use-dashboard-filters"
+
+definePageMeta({
+  layout: "dashboard",
+})
+
+// ── Injected filter state from layout ────────────────────────────────────────
+const filters = inject<ReturnType<typeof useDashboardFilters>>("dashboardFilters")!
+
+// User & Greeting State
+const user = useSupabaseUser()
+const firstName = computed(() => {
+  if (!user.value) return "User"
+  const fullName = user.value.user_metadata?.full_name || user.value.user_metadata?.name || "User"
+  return fullName.split(" ")[0]
+})
+
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 12) return "morning"
+  if (hour < 18) return "afternoon"
+  return "evening"
+})
+
+// Search State
+const searchInput = ref("")
+const appliedSearch = ref("")
+let searchApplyTimeout: ReturnType<typeof setTimeout> | null = null
+let searchBlurTimeout: ReturnType<typeof setTimeout> | null = null
+const isSearchFocused = ref(false)
+const highlightedSuggestionIndex = ref(-1)
+
+const clearSearch = () => {
+  searchInput.value = ""
+  appliedSearch.value = ""
+}
+
+const applySearch = () => {
+  if (searchApplyTimeout !== null) {
+    clearTimeout(searchApplyTimeout)
+    searchApplyTimeout = null
+  }
+  appliedSearch.value = searchInput.value.trim()
+}
+
+const scheduleSearchApply = (delayMs = 250) => {
+  if (searchApplyTimeout !== null) {
+    clearTimeout(searchApplyTimeout)
+  }
+
+  searchApplyTimeout = setTimeout(() => {
+    appliedSearch.value = searchInput.value.trim()
+    searchApplyTimeout = null
+  }, delayMs)
+}
+
+type SearchSuggestion = {
+  label: string
+  value: string
+  type: "item" | "tag" | "category" | "lender" | "condition"
+}
+
+const searchSuggestions = computed<SearchSuggestion[]>(() => {
+  const query = searchInput.value.trim().toLowerCase()
+  if (!query) return []
+
+  const suggestions: SearchSuggestion[] = []
+  const seen = new Set<string>()
+
+  const pushSuggestion = (suggestion: SearchSuggestion) => {
+    const key = `${suggestion.type}:${suggestion.value.toLowerCase()}`
+    if (seen.has(key)) return
+    seen.add(key)
+    suggestions.push(suggestion)
+  }
+
+  for (const item of listedItems.value) {
+    if (item.name.toLowerCase().includes(query)) {
+      pushSuggestion({ label: item.name, value: item.name, type: "item" })
+    }
+
+    if (item.ownerName.toLowerCase().includes(query)) {
+      pushSuggestion({ label: item.ownerName, value: item.ownerName, type: "lender" })
+    }
+
+    if (item.condition.toLowerCase().includes(query)) {
+      pushSuggestion({ label: item.condition, value: item.condition, type: "condition" })
+    }
+
+    for (const category of item.categories) {
+      if (category.toLowerCase().includes(query)) {
+        pushSuggestion({ label: category, value: category, type: "category" })
+      }
+    }
+
+    for (const tag of item.tags) {
+      if (tag.toLowerCase().includes(query)) {
+        pushSuggestion({ label: tag, value: tag, type: "tag" })
+      }
+    }
+  }
+
+  return suggestions.slice(0, 8)
+})
+
+const showSuggestions = computed(
+  () =>
+    isSearchFocused.value &&
+    searchInput.value.trim().length > 0 &&
+    searchSuggestions.value.length > 0,
+)
+
+const resetSuggestionHighlight = () => {
+  highlightedSuggestionIndex.value = -1
+}
+
+const onSearchFocus = () => {
+  isSearchFocused.value = true
+  if (searchBlurTimeout !== null) {
+    clearTimeout(searchBlurTimeout)
+    searchBlurTimeout = null
+  }
+}
+
+const onSearchBlur = () => {
+  searchBlurTimeout = setTimeout(() => {
+    isSearchFocused.value = false
+    resetSuggestionHighlight()
+    searchBlurTimeout = null
+  }, 120)
+}
+
+const selectSuggestion = (value: string) => {
+  searchInput.value = value
+  applySearch()
+  isSearchFocused.value = false
+  resetSuggestionHighlight()
+}
+
+const moveSuggestionHighlight = (step: number) => {
+  if (!showSuggestions.value) return
+  const total = searchSuggestions.value.length
+  if (total === 0) return
+
+  if (highlightedSuggestionIndex.value < 0) {
+    highlightedSuggestionIndex.value = step > 0 ? 0 : total - 1
+    return
+  }
+
+  highlightedSuggestionIndex.value = (highlightedSuggestionIndex.value + step + total) % total
+}
+
+const applySuggestionOrSearch = () => {
+  if (
+    showSuggestions.value &&
+    highlightedSuggestionIndex.value >= 0 &&
+    highlightedSuggestionIndex.value < searchSuggestions.value.length
+  ) {
+    selectSuggestion(searchSuggestions.value[highlightedSuggestionIndex.value]!.value)
+    return
+  }
+  applySearch()
+}
+
+const {
+  items: listedItems,
+  isLoading,
+  hasMore,
+  errorMessage,
+  fetchNextPage,
+  refresh,
+} = usePaginatedItems({
+  searchQuery: appliedSearch,
+  filterParams: filters.filterQueryParams,
+  pageSize: 12,
+})
+
+const trendingItemIds = computed(() =>
+  getTrendingItemIds(listedItems.value, DEFAULT_TRENDING_BADGE_STRATEGY),
+)
+
+const cardItems = computed<ItemCardViewModel[]>(() =>
+  mapListedItemsToCards(listedItems.value, {
+    trendingItemIds: trendingItemIds.value,
+  }),
+)
+
+const {
+  totalResultsCount,
+  refreshResultsCount,
+  scheduleResultsCountRefresh,
+  cancelPendingResultsCountRefresh,
+} = useFilteredResultsCount({
+  searchQuery: appliedSearch,
+  filterParams: filters.filterQueryParams,
+})
+
+const reload = async () => {
+  await Promise.all([refresh(), refreshResultsCount()])
+}
+
+const scheduleReload = () => {
+  void refresh()
+  scheduleResultsCountRefresh()
+}
+
+// Infinite Scroll State
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
+
+onMounted(() => {
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting && hasMore.value && !isLoading.value) {
+        void fetchNextPage()
+      }
+    },
+    {
+      rootMargin: "100px",
+      threshold: 0.1,
+    },
+  )
+
+  void reload()
+
+  if (loadMoreTrigger.value) {
+    observer.observe(loadMoreTrigger.value)
+  }
+})
+
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect()
+  }
+  if (searchApplyTimeout !== null) {
+    clearTimeout(searchApplyTimeout)
+    searchApplyTimeout = null
+  }
+  if (searchBlurTimeout !== null) {
+    clearTimeout(searchBlurTimeout)
+    searchBlurTimeout = null
+  }
+  cancelPendingResultsCountRefresh()
+})
+
+watch(appliedSearch, () => {
+  scheduleReload()
+})
+
+watch(searchInput, () => {
+  resetSuggestionHighlight()
+  scheduleSearchApply()
+})
+
+// Re-fetch when filters change
+watch(
+  filters.filterQueryParams,
+  () => {
+    scheduleReload()
+  },
+  { deep: true },
+)
+</script>

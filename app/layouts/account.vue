@@ -163,7 +163,7 @@ const confirmLogout = async () => {
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    <circle cx="12" cy="12" r="10" fill="#3b4883" />
+                    <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
                     <path
                       d="M8 12L11 15L16 9"
                       stroke="white"
@@ -186,7 +186,7 @@ const confirmLogout = async () => {
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    <circle cx="12" cy="12" r="10" fill="#3b4883" />
+                    <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
                     <path
                       d="M8 12L11 15L16 9"
                       stroke="white"

@@ -10,20 +10,23 @@ onMounted(async () => {
 
     const email = session?.user?.email?.toLowerCase() ?? ""
     if (!session || !email) {
-      errorMessage.value = "Google Sign-In failed. No Supabase session was created."
+      const msg = "Google Sign-In failed. No Supabase session was created."
+      await navigateTo(`/?error=${encodeURIComponent(msg)}`)
       return
     }
 
     if (!email.endsWith("@up.edu.ph")) {
       await supabase.auth.signOut()
-      errorMessage.value = "Only up.edu.ph email addresses are allowed."
+      const msg = "Only up.edu.ph email addresses are allowed."
+      await navigateTo(`/?error=${encodeURIComponent(msg)}&status=blocked_domain`)
       return
     }
 
-    await navigateTo("/")
+    await navigateTo("/dashboard")
   } catch (error) {
-    errorMessage.value =
+    const msg =
       (error as { message?: string })?.message || "Google Sign-In failed. Please try again."
+    await navigateTo(`/?error=${encodeURIComponent(msg)}`)
   }
 })
 </script>

@@ -10,9 +10,11 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
     "lint": "eslint .",
     "format": "prettier . --write && prisma format",
     "format:prisma": "prisma format",
+    "check": "pnpm format && pnpm lint && pnpm typecheck && pnpm test",
     "typecheck": "nuxi typecheck",
     "test": "vitest run",
     "postinstall": "nuxt prepare"
@@ -39,6 +41,10 @@
     "prettier": "^3.3.3",
     "prisma": "^5.19.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "vue-tsc": "^3.2.5"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
   }
 }
