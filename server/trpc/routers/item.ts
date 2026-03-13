@@ -59,6 +59,10 @@ type ItemWithTaxonomy = Prisma.ItemGetPayload<{
   include: typeof itemWithTaxonomy
 }>
 
+type ItemWithUserLike = ItemWithTaxonomy & {
+  likes?: Array<{ id: string }>
+}
+
 const itemSearchSelect = {
   id: true,
   createdAt: true,
@@ -253,8 +257,8 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
   return ranked.map((entry) => entry.item)
 }
 
-const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
-  const { availability, categories, tags, lender, ...rest } = item
+const mapItemTaxonomy = (item: ItemWithUserLike) => {
+  const { availability, categories, tags, lender, likes, ...rest } = item
   const lenderUser = lender.user
   const ownerName =
     lenderUser.username ||
@@ -265,6 +269,7 @@ const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
   return {
     ...rest,
     ownerName,
+    isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     availability: availability.map((entry) => ({
       id: entry.id,
       startDate: entry.startDate,
@@ -420,6 +425,17 @@ const buildPaginationWhereFromCursor = (cursor: {
   ],
 })
 
+const buildItemInclude = (userId: string | null) =>
+  ({
+    ...itemWithTaxonomy,
+    likes: userId
+      ? {
+          where: { userId },
+          select: { id: true },
+        }
+      : false,
+  }) satisfies Prisma.ItemInclude
+
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
     const search = input?.search?.trim()
@@ -427,7 +443,7 @@ export const itemRouter = router({
     const records = await ctx.prisma.item.findMany({
       take: search ? SEARCH_SCAN_LIMIT : 50,
       orderBy: getDefaultItemOrderBy(),
-      include: itemWithTaxonomy,
+      include: buildItemInclude(ctx.user?.id ?? null),
       where: buildListWhere(input, { includeSearch: !search }),
     })
 
@@ -449,7 +465,7 @@ export const itemRouter = router({
     const records = await ctx.prisma.item.findMany({
       take: search ? SEARCH_SCAN_LIMIT : input.limit + 1,
       orderBy: getDefaultItemOrderBy(),
-      include: itemWithTaxonomy,
+      include: buildItemInclude(ctx.user?.id ?? null),
       where: paginationWhere ? { AND: [baseWhere, paginationWhere] } : baseWhere,
     })
 
@@ -634,9 +650,9 @@ export const itemRouter = router({
     return ctx.prisma.item
       .findUnique({
         where: { id: input.id },
-        include: itemWithTaxonomy,
+        include: buildItemInclude(ctx.user?.id ?? null),
       })
-      .then((item: ItemWithTaxonomy | null) => (item ? mapItemTaxonomy(item) : null))
+      .then((item: ItemWithUserLike | null) => (item ? mapItemTaxonomy(item) : null))
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
@@ -784,4 +800,3 @@ export const itemRouter = router({
     }
   }),
 })
-

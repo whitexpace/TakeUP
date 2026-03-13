@@ -39,6 +39,7 @@ export interface ListedItem {
   borrowerId: string | null
   categories: string[]
   tags: string[]
+  isLiked?: boolean
 }
 
 export interface PaginatedItemsResponse {

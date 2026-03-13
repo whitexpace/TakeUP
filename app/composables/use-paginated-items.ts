@@ -91,6 +91,7 @@ export const usePaginatedItems = ({
   filterParams,
   pageSize = 12,
 }: UsePaginatedItemsOptions) => {
+  const supabase = useSupabaseClient()
   const items = ref<ListedItem[]>([])
   const cursor = ref<ItemPaginationCursor | null>(null)
   const isLoading = ref(false)
@@ -143,8 +144,20 @@ export const usePaginatedItems = ({
     isLoading.value = true
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+
       const response = await $fetch<PaginatedItemsResponse>("/api/items", {
         query,
+        ...(accessToken
+          ? {
+              headers: {
+                authorization: `Bearer ${accessToken}`,
+              },
+            }
+          : {}),
       })
 
       if (version !== requestVersion.value) return

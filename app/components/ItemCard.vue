@@ -18,8 +18,10 @@
       <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2">
         <!-- Like Button -->
         <button
-          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group"
+          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group disabled:opacity-60"
           title="Favorite"
+          :disabled="isTogglingLike"
+          :aria-pressed="isLiked"
           @click.stop="toggleLike"
         >
           <svg
@@ -130,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, watch } from "vue"
 import { buildItemDetailPath } from "../utils/item-detail-route"
 
 const props = defineProps<{
@@ -147,9 +149,18 @@ const props = defineProps<{
   isLiked?: boolean
 }>()
 
-const isLiked = ref(props.isLiked ?? false)
-const { $trpc } = useNuxtApp()
+const isLiked = ref(Boolean(props.isLiked))
+const isTogglingLike = ref(false)
 const router = useRouter()
+
+watch(
+  () => props.isLiked,
+  (nextValue) => {
+    if (typeof nextValue === "boolean") {
+      isLiked.value = nextValue
+    }
+  },
+)
 
 const itemDetailPath = computed(() =>
   buildItemDetailPath({
@@ -163,15 +174,66 @@ const navigateToDetails = () => {
 }
 
 const toggleLike = async () => {
+  if (isTogglingLike.value) return
+
+  let previousValue: boolean | null = null
+
   try {
-    const result = await (($trpc as unknown) as { item: { toggleLike: { mutate: (arg: { itemId: string }) => Promise<{ isLiked: boolean }> } } }).item.toggleLike.mutate({
-      itemId: String(props.id),
+    // Check if user is authenticated via Supabase
+    const user = useSupabaseUser()
+    const supabase = useSupabaseClient()
+    if (!user.value) {
+      console.error("User not authenticated. Please log in first.")
+      return
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      console.error("No active Supabase session token found.")
+      return
+    }
+
+    previousValue = isLiked.value
+    isLiked.value = !previousValue
+    isTogglingLike.value = true
+
+    const response = await $fetch("/api/trpc/item.toggleLike", {
+      method: "POST",
+      body: {
+        json: {
+          itemId: String(props.id),
+        },
+      },
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
     })
-    isLiked.value = result.isLiked
+
+    const typedResponse = response as {
+      result?: { data?: { isLiked?: boolean; json?: { isLiked?: boolean } } }
+    }
+    const nextIsLiked =
+      typedResponse.result?.data?.isLiked ?? typedResponse.result?.data?.json?.isLiked
+
+    if (typeof nextIsLiked === "boolean") {
+      isLiked.value = nextIsLiked
+    }
   } catch (error) {
-    console.error("Failed to toggle like:", error)
+    if (previousValue !== null) {
+      isLiked.value = previousValue
+    }
+
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error("Failed to toggle like:", error.message)
+    } else {
+      console.error("Failed to toggle like:", error)
+    }
+  } finally {
+    isTogglingLike.value = false
   }
 }
 </script>
-
-
