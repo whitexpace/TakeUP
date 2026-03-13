@@ -10,9 +10,11 @@ import {
   paginatedItemsSchema,
   itemStatusSchema,
   updateItemSchema,
+  toggleLikeSchema,
   KNOWN_SIDEBAR_DB_CATEGORIES,
   UI_OTHERS_SENTINEL,
 } from "../../../shared/schemas/item"
+
 import { getDefaultItemOrderBy } from "./item-sorting"
 
 const SEARCH_SCAN_LIMIT = 2000
@@ -721,4 +723,65 @@ export const itemRouter = router({
       })
       .then(mapItemTaxonomy)
   }),
+
+  toggleLike: protectedProcedure.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
+    const userId = ctx.user.id
+    const { itemId } = input
+
+    // Check if item exists
+    const item = await ctx.prisma.item.findUnique({
+      where: { id: itemId },
+      select: { id: true },
+    })
+
+    if (!item) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Item not found." })
+    }
+
+    // Check if like already exists
+    const existingLike = await ctx.prisma.like.findUnique({
+      where: {
+        userId_itemId: {
+          userId,
+          itemId,
+        },
+      },
+    })
+
+    if (existingLike) {
+      // Unlike: delete the like
+      await ctx.prisma.like.delete({
+        where: {
+          userId_itemId: {
+            userId,
+            itemId,
+          },
+        },
+      })
+    } else {
+      // Like: create the like
+      await ctx.prisma.like.create({
+        data: {
+          userId,
+          itemId,
+        },
+      })
+    }
+
+    // Return the current like status
+    const currentLike = await ctx.prisma.like.findUnique({
+      where: {
+        userId_itemId: {
+          userId,
+          itemId,
+        },
+      },
+    })
+
+    return {
+      isLiked: !!currentLike,
+      itemId,
+    }
+  }),
 })
+

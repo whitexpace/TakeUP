@@ -147,4 +147,80 @@ describe("itemRouter", () => {
     expect(result.categories).toEqual(["ELECTRONICS"])
     expect(result.tags).toEqual(["photo"])
   })
+
+  it("toggleLike creates a like when it does not exist", async () => {
+    const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const likeFindUnique = vi.fn()
+      .mockResolvedValueOnce(null) // check if like exists
+      .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // after create, check like exists
+
+    const create = vi.fn().mockResolvedValue({ userId: "user-1", itemId: VALID_UUID })
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        item: { findUnique: itemFindUnique },
+        like: { findUnique: likeFindUnique, create, delete: vi.fn() },
+      } as never,
+      user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
+    })
+
+    const result = await caller.toggleLike({ itemId: VALID_UUID })
+
+    expect(create).toHaveBeenCalledWith({
+      data: { userId: "user-1", itemId: VALID_UUID },
+    })
+    expect(result.isLiked).toBe(true)
+    expect(result.itemId).toBe(VALID_UUID)
+  })
+
+  it("toggleLike deletes a like when it exists", async () => {
+    const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const likeFindUnique = vi.fn()
+      .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists
+      .mockResolvedValueOnce(null) // after delete, check like exists
+
+    const deleteLike = vi.fn().mockResolvedValue({ userId: "user-1", itemId: VALID_UUID })
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        item: { findUnique: itemFindUnique },
+        like: { findUnique: likeFindUnique, delete: deleteLike, create: vi.fn() },
+      } as never,
+      user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
+    })
+
+    const result = await caller.toggleLike({ itemId: VALID_UUID })
+
+    expect(deleteLike).toHaveBeenCalledWith({
+      where: {
+        userId_itemId: {
+          userId: "user-1",
+          itemId: VALID_UUID,
+        },
+      },
+    })
+    expect(result.isLiked).toBe(false)
+    expect(result.itemId).toBe(VALID_UUID)
+  })
+
+  it("toggleLike throws NOT_FOUND when item does not exist", async () => {
+    const itemFindUnique = vi.fn().mockResolvedValue(null) // item not found
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        item: { findUnique: itemFindUnique },
+        like: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
+      } as never,
+      user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
+    })
+
+    await expect(caller.toggleLike({ itemId: VALID_UUID })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    })
+  })
+
 })
+

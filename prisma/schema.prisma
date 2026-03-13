@@ -85,6 +85,8 @@ model Item {
   lender   Lender    @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
   borrower Borrower? @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
 
+  likes Like[]
+
   @@index([lenderId])
   @@index([borrowerId])
 }
@@ -147,10 +149,27 @@ model User {
 
   points Int @default(0)
 
+  likes Like[]
+
   lender   Lender?
   borrower Borrower?
   admin    Admin?
 }
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  itemId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+  @@index([userId])
+  @@index([itemId])
+}
+
 
 model Admin {
   userId String @id
