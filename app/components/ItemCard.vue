@@ -1,7 +1,7 @@
 <template>
-  <NuxtLink
-    :to="itemDetailPath"
+  <div
     class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto cursor-pointer"
+    @click="navigateToDetails"
   >
     <!-- Image Section (~70% of card) -->
     <div class="relative aspect-square w-full bg-gray-50">
@@ -20,7 +20,7 @@
         <button
           class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group"
           title="Favorite"
-          @click.stop.prevent="toggleLike"
+          @click.stop="toggleLike"
         >
           <svg
             class="w-4 h-4 sm:w-5 sm:h-5 transition-colors"
@@ -126,7 +126,7 @@
         </svg>
       </button>
     </div>
-  </NuxtLink>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -149,6 +149,7 @@ const props = defineProps<{
 
 const isLiked = ref(props.isLiked ?? false)
 const { $trpc } = useNuxtApp()
+const router = useRouter()
 
 const itemDetailPath = computed(() =>
   buildItemDetailPath({
@@ -156,6 +157,10 @@ const itemDetailPath = computed(() =>
     name: props.name,
   }),
 )
+
+const navigateToDetails = () => {
+  router.push(itemDetailPath.value)
+}
 
 const toggleLike = async () => {
   try {
@@ -168,4 +173,5 @@ const toggleLike = async () => {
   }
 }
 </script>
+
 
