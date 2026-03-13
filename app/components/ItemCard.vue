@@ -20,9 +20,11 @@
         <button
           class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group"
           title="Favorite"
+          @click.stop.prevent="toggleLike"
         >
           <svg
-            class="w-4 h-4 sm:w-5 sm:h-5 stroke-noble-black group-hover:fill-noble-black/10 transition-colors"
+            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors"
+            :class="isLiked ? 'fill-burning-orange stroke-burning-orange' : 'stroke-noble-black group-hover:fill-noble-black/10'"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -128,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref } from "vue"
 import { buildItemDetailPath } from "../utils/item-detail-route"
 
 const props = defineProps<{
@@ -142,7 +144,11 @@ const props = defineProps<{
   reviews: number | string
   price?: string | number
   owner: string
+  isLiked?: boolean
 }>()
+
+const isLiked = ref(props.isLiked ?? false)
+const { $trpc } = useNuxtApp()
 
 const itemDetailPath = computed(() =>
   buildItemDetailPath({
@@ -150,4 +156,16 @@ const itemDetailPath = computed(() =>
     name: props.name,
   }),
 )
+
+const toggleLike = async () => {
+  try {
+    const result = await (($trpc as unknown) as { item: { toggleLike: { mutate: (arg: { itemId: string }) => Promise<{ isLiked: boolean }> } } }).item.toggleLike.mutate({
+      itemId: String(props.id),
+    })
+    isLiked.value = result.isLiked
+  } catch (error) {
+    console.error("Failed to toggle like:", error)
+  }
+}
 </script>
+

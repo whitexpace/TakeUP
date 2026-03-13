@@ -57,6 +57,7 @@ export interface ItemCardViewModel {
   reviews: number | string
   price?: string | number
   owner: string
+  isLiked?: boolean
 }
 
 export interface FilterMetadata {
