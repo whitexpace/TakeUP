@@ -42,6 +42,7 @@ export const mapListedItemToCard = (
     reviews: item.bookingCount,
     price: item.freeToBorrow ? undefined : item.rentalFee,
     owner: item.ownerName,
+    isLiked: Boolean(item.isLiked),
   }
 }
 
