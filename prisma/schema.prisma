@@ -170,7 +170,6 @@ model Like {
   @@index([itemId])
 }
 
-
 model Admin {
   userId String @id
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

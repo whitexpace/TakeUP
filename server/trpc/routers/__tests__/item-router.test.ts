@@ -150,7 +150,8 @@ describe("itemRouter", () => {
 
   it("toggleLike creates a like when it does not exist", async () => {
     const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
-    const likeFindUnique = vi.fn()
+    const likeFindUnique = vi
+      .fn()
       .mockResolvedValueOnce(null) // check if like exists
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // after create, check like exists
 
@@ -176,7 +177,8 @@ describe("itemRouter", () => {
 
   it("toggleLike deletes a like when it exists", async () => {
     const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
-    const likeFindUnique = vi.fn()
+    const likeFindUnique = vi
+      .fn()
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists
       .mockResolvedValueOnce(null) // after delete, check like exists
 
@@ -221,6 +223,4 @@ describe("itemRouter", () => {
       code: "NOT_FOUND",
     })
   })
-
 })
-
