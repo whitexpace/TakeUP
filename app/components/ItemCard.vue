@@ -138,6 +138,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import { buildItemDetailPath } from "../utils/item-detail-route"
+import { resetPaginatedItemsCache } from "../composables/use-paginated-items"
 
 const props = defineProps<{
   id: string | number
@@ -227,6 +228,7 @@ const toggleLike = async () => {
 
     if (typeof nextIsLiked === "boolean") {
       isLiked.value = nextIsLiked
+      resetPaginatedItemsCache()
       emit("likeChanged", {
         itemId: String(props.id),
         isLiked: nextIsLiked,
