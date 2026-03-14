@@ -19,6 +19,11 @@ const slugParam = computed(() => {
 })
 
 const itemId = computed(() => extractItemIdFromSlug(slugParam.value))
+const isFromLikesPage = computed(() => route.query.from === "likes")
+const backNavigationPath = computed(() => (isFromLikesPage.value ? "/likes" : "/dashboard"))
+const backNavigationLabel = computed(() =>
+  isFromLikesPage.value ? "Back to liked items" : "Back to listings",
+)
 
 const { data, pending, error } = await useAsyncData(
   () => `item:${itemId.value ?? "missing"}`,
@@ -118,7 +123,7 @@ watch(
   [slugParam, canonicalPath],
   ([slug, canonical]) => {
     if (canonical && `/items/${slug}` !== canonical) {
-      void navigateTo(canonical, { replace: true })
+      void navigateTo({ path: canonical, query: route.query }, { replace: true })
     }
   },
   { immediate: true },
@@ -129,11 +134,11 @@ watch(
   <div class="min-h-screen bg-[#f6f1e7] text-noble-black">
     <div class="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
       <NuxtLink
-        to="/dashboard"
+        :to="backNavigationPath"
         class="inline-flex items-center gap-2 rounded-full border border-cinnamon-ice bg-white px-4 py-2 font-geist text-sm transition-colors hover:bg-cream"
       >
         <span aria-hidden="true">←</span>
-        <span>Back to listings</span>
+        <span>{{ backNavigationLabel }}</span>
       </NuxtLink>
 
       <div v-if="pending" class="mt-8 grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">

@@ -152,6 +152,7 @@ const props = defineProps<{
   price?: string | number
   owner: string
   isLiked?: boolean
+  fromPage?: "likes" | "dashboard"
 }>()
 const emit = defineEmits<{
   likeChanged: [payload: { itemId: string; isLiked: boolean }]
@@ -178,6 +179,14 @@ const itemDetailPath = computed(() =>
 )
 
 const navigateToDetails = () => {
+  if (props.fromPage) {
+    router.push({
+      path: itemDetailPath.value,
+      query: { from: props.fromPage },
+    })
+    return
+  }
+
   router.push(itemDetailPath.value)
 }
 

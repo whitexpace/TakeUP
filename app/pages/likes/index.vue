@@ -407,13 +407,14 @@ watch(
           v-if="cardItems.length > 0 || isLoading"
           class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-6 md:grid-cols-2 lg:grid-cols-4"
         >
-          <ItemCard
-            v-for="item in cardItems"
-            :id="item.id"
-            :key="item.id"
-            :type="item.type"
-            :is-trending="item.isTrending"
-            :image="item.image"
+        <ItemCard
+          v-for="item in cardItems"
+          :id="item.id"
+          :key="item.id"
+          from-page="likes"
+          :type="item.type"
+          :is-trending="item.isTrending"
+          :image="item.image"
             :category="item.category"
             :name="item.name"
             :rating="item.rating"
