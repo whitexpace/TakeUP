@@ -283,6 +283,7 @@ const mapItemTaxonomy = (item: ItemWithUserLike) => {
 
 type ListWhereFilters = {
   search?: string
+  likedOnly?: boolean
   status?: ItemStatus
   statuses?: ItemStatus[]
   // May contain real DB categories or the UI-only "OTHERS" sentinel
@@ -299,9 +300,10 @@ type ListWhereFilters = {
 
 const buildListWhere = (
   input?: ListWhereFilters,
-  options: { includeSearch?: boolean } = {},
+  options: { includeSearch?: boolean; userId?: string | null } = {},
 ): Prisma.ItemWhereInput => {
   const search = input?.search?.trim()
+  const likedOnly = input?.likedOnly
   const status = input?.status
   const statuses = input?.statuses
   const rawCategories = input?.categories
@@ -314,6 +316,7 @@ const buildListWhere = (
   const availableTo = input?.availableTo
   const minRating = input?.minRating
   const includeSearch = options.includeSearch ?? true
+  const userId = options.userId ?? null
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? status
@@ -351,6 +354,17 @@ const buildListWhere = (
 
   return {
     status: statusFilter,
+    ...(likedOnly
+      ? userId
+        ? {
+            likes: {
+              some: {
+                userId,
+              },
+            },
+          }
+        : { id: "__liked_requires_user__" }
+      : {}),
     ...categoryFilter,
     ...(search && includeSearch
       ? {
@@ -444,7 +458,10 @@ export const itemRouter = router({
       take: search ? SEARCH_SCAN_LIMIT : 50,
       orderBy: getDefaultItemOrderBy(),
       include: buildItemInclude(ctx.user?.id ?? null),
-      where: buildListWhere(input, { includeSearch: !search }),
+      where: buildListWhere(input, {
+        includeSearch: !search,
+        userId: ctx.user?.id ?? null,
+      }),
     })
 
     const matchedItems = search ? filterAndRankSearchResults(records, search).slice(0, 50) : records
@@ -453,7 +470,10 @@ export const itemRouter = router({
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
     const search = input.search?.trim()
-    const baseWhere = buildListWhere(input, { includeSearch: !search })
+    const baseWhere = buildListWhere(input, {
+      includeSearch: !search,
+      userId: ctx.user?.id ?? null,
+    })
     const paginationWhere = input.cursor
       ? buildPaginationWhereFromCursor({
           bookingCount: input.cursor.bookingCount,
@@ -493,12 +513,15 @@ export const itemRouter = router({
     const search = input?.search?.trim()
 
     if (!search) {
-      const where = buildListWhere(input)
+      const where = buildListWhere(input, { userId: ctx.user?.id ?? null })
       const count = await ctx.prisma.item.count({ where })
       return { count }
     }
 
-    const where = buildListWhere(input, { includeSearch: false })
+    const where = buildListWhere(input, {
+      includeSearch: false,
+      userId: ctx.user?.id ?? null,
+    })
     let totalCount = 0
     let cursor: { id: string; createdAt: Date; bookingCount: number } | null = null
 

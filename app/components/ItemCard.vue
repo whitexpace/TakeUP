@@ -152,6 +152,9 @@ const props = defineProps<{
   owner: string
   isLiked?: boolean
 }>()
+const emit = defineEmits<{
+  likeChanged: [payload: { itemId: string; isLiked: boolean }]
+}>()
 
 const isLiked = ref(Boolean(props.isLiked))
 const isTogglingLike = ref(false)
@@ -224,6 +227,10 @@ const toggleLike = async () => {
 
     if (typeof nextIsLiked === "boolean") {
       isLiked.value = nextIsLiked
+      emit("likeChanged", {
+        itemId: String(props.id),
+        isLiked: nextIsLiked,
+      })
     }
   } catch (error) {
     if (previousValue !== null) {
