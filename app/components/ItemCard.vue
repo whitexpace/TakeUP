@@ -1,7 +1,7 @@
 <template>
-  <NuxtLink
-    :to="itemDetailPath"
+  <div
     class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto cursor-pointer"
+    @click="navigateToDetails"
   >
     <!-- Image Section (~70% of card) -->
     <div class="relative aspect-square w-full bg-gray-50">
@@ -18,11 +18,19 @@
       <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2">
         <!-- Like Button -->
         <button
-          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group"
+          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group disabled:opacity-60"
           title="Favorite"
+          :disabled="isTogglingLike"
+          :aria-pressed="isLiked"
+          @click.stop="toggleLike"
         >
           <svg
-            class="w-4 h-4 sm:w-5 sm:h-5 stroke-noble-black group-hover:fill-noble-black/10 transition-colors"
+            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors"
+            :class="
+              isLiked
+                ? 'fill-burning-orange stroke-burning-orange'
+                : 'stroke-noble-black group-hover:fill-noble-black/10'
+            "
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -124,12 +132,13 @@
         </svg>
       </button>
     </div>
-  </NuxtLink>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref, watch } from "vue"
 import { buildItemDetailPath } from "../utils/item-detail-route"
+import { resetPaginatedItemsCache } from "../composables/use-paginated-items"
 
 const props = defineProps<{
   id: string | number
@@ -142,7 +151,25 @@ const props = defineProps<{
   reviews: number | string
   price?: string | number
   owner: string
+  isLiked?: boolean
+  fromPage?: "likes" | "dashboard"
 }>()
+const emit = defineEmits<{
+  likeChanged: [payload: { itemId: string; isLiked: boolean }]
+}>()
+
+const isLiked = ref(Boolean(props.isLiked))
+const isTogglingLike = ref(false)
+const router = useRouter()
+
+watch(
+  () => props.isLiked,
+  (nextValue) => {
+    if (typeof nextValue === "boolean") {
+      isLiked.value = nextValue
+    }
+  },
+)
 
 const itemDetailPath = computed(() =>
   buildItemDetailPath({
@@ -150,4 +177,85 @@ const itemDetailPath = computed(() =>
     name: props.name,
   }),
 )
+
+const navigateToDetails = () => {
+  if (props.fromPage) {
+    router.push({
+      path: itemDetailPath.value,
+      query: { from: props.fromPage },
+    })
+    return
+  }
+
+  router.push(itemDetailPath.value)
+}
+
+const toggleLike = async () => {
+  if (isTogglingLike.value) return
+
+  let previousValue: boolean | null = null
+
+  try {
+    // Check if user is authenticated via Supabase
+    const user = useSupabaseUser()
+    const supabase = useSupabaseClient()
+    if (!user.value) {
+      console.error("User not authenticated. Please log in first.")
+      return
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      console.error("No active Supabase session token found.")
+      return
+    }
+
+    previousValue = isLiked.value
+    isLiked.value = !previousValue
+    isTogglingLike.value = true
+
+    const response = await $fetch("/api/trpc/item.toggleLike", {
+      method: "POST",
+      body: {
+        json: {
+          itemId: String(props.id),
+        },
+      },
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    const typedResponse = response as {
+      result?: { data?: { isLiked?: boolean; json?: { isLiked?: boolean } } }
+    }
+    const nextIsLiked =
+      typedResponse.result?.data?.isLiked ?? typedResponse.result?.data?.json?.isLiked
+
+    if (typeof nextIsLiked === "boolean") {
+      isLiked.value = nextIsLiked
+      resetPaginatedItemsCache()
+      emit("likeChanged", {
+        itemId: String(props.id),
+        isLiked: nextIsLiked,
+      })
+    }
+  } catch (error) {
+    if (previousValue !== null) {
+      isLiked.value = previousValue
+    }
+
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error("Failed to toggle like:", error.message)
+    } else {
+      console.error("Failed to toggle like:", error)
+    }
+  } finally {
+    isTogglingLike.value = false
+  }
+}
 </script>

@@ -72,6 +72,7 @@ export const useFilteredResultsCount = ({
   filterParams,
   debounceMs = 200,
 }: UseFilteredResultsCountOptions) => {
+  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const totalResultsCount = ref<number | null>(null)
   const isCountLoading = ref(false)
   const requestVersion = ref(0)
@@ -100,8 +101,23 @@ export const useFilteredResultsCount = ({
     isCountLoading.value = true
 
     try {
+      let accessToken: string | undefined
+      if (supabase) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        accessToken = session?.access_token
+      }
+
       const result = await $fetch<{ count: number }>("/api/items/count", {
         query,
+        ...(accessToken
+          ? {
+              headers: {
+                authorization: `Bearer ${accessToken}`,
+              },
+            }
+          : {}),
       })
 
       if (version === requestVersion.value) {

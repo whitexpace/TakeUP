@@ -120,6 +120,7 @@
         :reviews="item.reviews"
         :price="item.price"
         :owner="item.owner"
+        :is-liked="item.isLiked"
       />
 
       <template v-if="isLoading">
