@@ -18,17 +18,16 @@
       <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2">
         <!-- Like Button -->
         <button
-          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group disabled:opacity-60"
+          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all duration-150 group active:scale-90"
           title="Favorite"
-          :disabled="isTogglingLike"
           :aria-pressed="isLiked"
           @click.stop="toggleLike"
         >
           <svg
-            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors"
+            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-150"
             :class="
               isLiked
-                ? 'fill-burning-orange stroke-burning-orange'
+                ? 'fill-cinnabar-red/90 stroke-cinnabar-red/90'
                 : 'stroke-noble-black group-hover:fill-noble-black/10'
             "
             viewBox="0 0 24 24"

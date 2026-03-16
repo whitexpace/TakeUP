@@ -20,7 +20,7 @@ type NavGroup = {
   }>
 }
 
-const activeItem = ref<NavItemId>("account-information")
+const activeItem = ref<NavItemId>("my-listings")
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const showLogoutModal = ref(false)
@@ -141,6 +141,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("resize", checkMobile)
 })
+
+provide("accountActiveItem", activeItem)
 </script>
 
 <template>
