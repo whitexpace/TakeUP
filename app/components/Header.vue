@@ -11,9 +11,9 @@ defineOptions({
     <!-- Left Section: Logo & App Name (Sidebar width on desktop) -->
     <div class="w-auto lg:w-80 flex items-center px-4 sm:px-6 shrink-0 gap-4">
       <slot name="left" />
-      <NuxtLink to="/" class="flex items-center gap-3">
+      <a href="/" class="flex items-center gap-3">
         <img src="/images/logo.svg" alt="TakeUP Logo" class="h-8 w-auto" />
-      </NuxtLink>
+      </a>
     </div>
 
     <!-- Middle Section: Navigation (Centered) -->
@@ -150,4 +150,3 @@ defineOptions({
     </div>
   </header>
 </template>
-

@@ -1,7 +1,32 @@
 <template>
   <div class="flex flex-col h-screen font-geist bg-white relative overflow-hidden">
     <!-- Top Header -->
-    <Header />
+    <Header>
+      <template #left>
+        <button
+          class="flex items-center justify-center h-10 w-10 rounded-full text-noble-black transition-colors hover:bg-cream hover:text-burning-orange"
+          aria-label="Toggle Sidebar"
+          title="Toggle Sidebar"
+          @click="toggleSidebar"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 6H20M4 12H20M4 18H20"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      </template>
+    </Header>
 
     <div class="flex flex-1 overflow-hidden h-[calc(100vh-56px)] relative">
       <!-- Sidebar Overlay for Mobile -->
@@ -20,33 +45,6 @@
             : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
         ]"
       >
-        <!-- Sidebar Header with Toggle -->
-        <div class="p-6 flex items-center justify-between">
-          <div class="font-bold text-xl text-blue-estate"></div>
-          <button
-            @click="toggleSidebar"
-            class="p-1 hover:bg-pale-cashmere rounded-full transition-colors"
-            title="Hide Sidebar"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="text-noble-black"
-            >
-              <path
-                d="M15 18L9 12L15 6"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-
         <!-- Sidebar Content Area -->
         <div class="px-6 space-y-0 pb-12">
           <FilterPanel
@@ -61,7 +59,6 @@
             :time-from="filters.timeFrom.value"
             :date-to="filters.dateTo.value"
             :time-to="filters.timeTo.value"
-            @toggle-sidebar="toggleSidebar"
             @update:selected-listing-types="(v) => (filters.selectedListingTypes.value = v)"
             @update:selected-categories="(v) => (filters.selectedCategories.value = v)"
             @update:selected-price-range="(v) => (filters.selectedPriceRange.value = v)"
@@ -80,31 +77,6 @@
       <main
         class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-300 ease-in-out relative"
       >
-        <!-- Floating Toggle Button (visible when sidebar is hidden) -->
-        <button
-          v-if="!isSidebarOpen"
-          @click="toggleSidebar"
-          class="fixed left-4 top-[72px] z-20 p-2.5 bg-white border border-cinnamon-ice rounded-full shadow-md hover:bg-cream transition-all hover:scale-110 flex items-center justify-center"
-          title="Show Sidebar"
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="text-noble-black group-hover:text-burning-orange transition-colors"
-          >
-            <path
-              d="M4 6H20M4 12H20M4 18H20"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
-
         <slot />
       </main>
     </div>
