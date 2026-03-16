@@ -21,14 +21,16 @@ const makeTx = (id: string, overrides: Record<string, unknown> = {}) => ({
   createdAt: new Date("2026-03-15T00:00:00.000Z"),
   updatedAt: new Date("2026-03-15T00:00:00.000Z"),
   item: { id: ITEM_ID, name: "Camera", thumbnailImage: null, rateOption: "PER_DAY" },
-  borrower: { user: { username: "borrower1", firstName: "Borrow", middleName: null, lastName: "Er" } },
+  borrower: {
+    user: { username: "borrower1", firstName: "Borrow", middleName: null, lastName: "Er" },
+  },
   lender: { user: { username: "lender1", firstName: "Lend", middleName: null, lastName: "Er" } },
   ...overrides,
 })
 
 const makeContext = (user = mockUser, findMany = vi.fn().mockResolvedValue([])) => ({
   event: { context: {} } as never,
-  prisma: { transaction: { findMany } } as never,
+  prisma: { rentalTransaction: { findMany } } as never,
   user,
 })
 
@@ -111,9 +113,7 @@ describe("transactionRouter", () => {
       expect(findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([
-              { startDate: { gte: from, lte: to } },
-            ]),
+            AND: expect.arrayContaining([{ startDate: { gte: from, lte: to } }]),
           }),
         }),
       )

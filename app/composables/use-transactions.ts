@@ -4,8 +4,7 @@ import type { AppRouter } from "../../server/trpc/routers"
 import type { TransactionStatus } from "../../shared/schemas/transaction"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
-export type TransactionListItem =
-  RouterOutputs["transaction"]["list"]["transactions"][number]
+export type TransactionListItem = RouterOutputs["transaction"]["list"]["transactions"][number]
 
 type TransactionListResponse = RouterOutputs["transaction"]["list"]
 
@@ -88,7 +87,7 @@ export const useTransactions = ({ role, status, searchQuery }: UseTransactionsOp
     const q = searchQuery.value.trim().toLowerCase()
     if (!q) return transactions.value
 
-    return transactions.value.filter((tx) => {
+    return transactions.value.filter((tx: TransactionListItem) => {
       const itemName = tx.item.name.toLowerCase()
       const orderId = tx.id.slice(0, 16).toUpperCase().toLowerCase()
       const counterpart =

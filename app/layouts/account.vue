@@ -71,7 +71,6 @@ const confirmLogout = async () => {
 
     <!-- Main Content Container -->
     <div class="flex flex-1 lg:overflow-hidden lg:h-[calc(100vh-77px)]">
-
       <!-- Mobile sidebar backdrop -->
       <Transition name="fade">
         <div
@@ -83,8 +82,7 @@ const confirmLogout = async () => {
 
       <!-- Left Sidebar (desktop: static; mobile: slide-in drawer) -->
       <aside
-        class="fixed lg:static inset-y-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0
-               transform transition-transform duration-300 ease-in-out lg:translate-x-0"
+        class="fixed lg:static inset-y-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out lg:translate-x-0"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full'"
       >
         <!-- Mobile close button -->
@@ -95,7 +93,12 @@ const confirmLogout = async () => {
             @click="showMobileSidebar = false"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>

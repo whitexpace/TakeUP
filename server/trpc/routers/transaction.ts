@@ -45,16 +45,16 @@ export const transactionRouter = router({
     const { role, status, startDateFrom, startDateTo, limit, cursor } = input
     const userId = ctx.user.id
 
-    const roleWhere: Prisma.TransactionWhereInput =
+    const roleWhere: Prisma.RentalTransactionWhereInput =
       role === "LENDER"
         ? { lenderId: userId }
         : role === "BORROWER"
           ? { borrowerId: userId }
           : { OR: [{ lenderId: userId }, { borrowerId: userId }] }
 
-    const statusWhere: Prisma.TransactionWhereInput = status ? { status } : {}
+    const statusWhere: Prisma.RentalTransactionWhereInput = status ? { status } : {}
 
-    const dateWhere: Prisma.TransactionWhereInput =
+    const dateWhere: Prisma.RentalTransactionWhereInput =
       startDateFrom || startDateTo
         ? {
             startDate: {
@@ -64,7 +64,7 @@ export const transactionRouter = router({
           }
         : {}
 
-    const cursorWhere: Prisma.TransactionWhereInput = cursor
+    const cursorWhere: Prisma.RentalTransactionWhereInput = cursor
       ? {
           OR: [
             { createdAt: { lt: cursor.createdAt } },
@@ -73,11 +73,11 @@ export const transactionRouter = router({
         }
       : {}
 
-    const baseWhere: Prisma.TransactionWhereInput = {
+    const baseWhere: Prisma.RentalTransactionWhereInput = {
       AND: [roleWhere, statusWhere, dateWhere, cursorWhere],
     }
 
-    const records = await ctx.prisma.transaction.findMany({
+    const records = await ctx.prisma.rentalTransaction.findMany({
       where: baseWhere,
       include: transactionInclude,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -86,13 +86,9 @@ export const transactionRouter = router({
 
     const hasMore = records.length > limit
     const pageRecords = hasMore ? records.slice(0, limit) : records
+    const lastRecord = pageRecords.at(-1)
     const nextCursor =
-      hasMore
-        ? {
-            id: pageRecords[pageRecords.length - 1].id,
-            createdAt: pageRecords[pageRecords.length - 1].createdAt,
-          }
-        : null
+      hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
     return { transactions: pageRecords, nextCursor }
   }),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue"
+import { ref, computed, onMounted } from "vue"
 import type { TransactionStatus } from "../../../shared/schemas/transaction"
 import { useTransactions } from "../../composables/use-transactions"
 
@@ -130,7 +130,9 @@ const sectionSubtitle = computed(() =>
     <div class="bg-orange-50 rounded-[20px] border border-red-300 p-4 sm:p-6">
       <!-- Section title -->
       <h2 class="text-neutral-800 text-lg sm:text-xl font-semibold">{{ sectionTitle }}</h2>
-      <p class="text-neutral-800/80 text-sm sm:text-base font-normal tracking-wide mt-1 mb-4 sm:mb-5">
+      <p
+        class="text-neutral-800/80 text-sm sm:text-base font-normal tracking-wide mt-1 mb-4 sm:mb-5"
+      >
         {{ sectionSubtitle }}
       </p>
 

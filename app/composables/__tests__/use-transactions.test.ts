@@ -19,9 +19,20 @@ const makeTx = (id: string, overrides = {}) => ({
   status: "ACTIVE" as TransactionStatus,
   createdAt: new Date("2026-03-15"),
   updatedAt: new Date("2026-03-15"),
-  item: { id: "item-1", name: "Camera", thumbnailImage: null, rateOption: "PER_DAY", rentalFee: 250, freeToBorrow: false },
-  borrower: { user: { username: "borrower1", firstName: "Juan", middleName: null, lastName: "Cruz" } },
-  lender: { user: { username: "lender1", firstName: "Issa", middleName: null, lastName: "Santos" } },
+  item: {
+    id: "item-1",
+    name: "Camera",
+    thumbnailImage: null,
+    rateOption: "PER_DAY",
+    rentalFee: 250,
+    freeToBorrow: false,
+  },
+  borrower: {
+    user: { username: "borrower1", firstName: "Juan", middleName: null, lastName: "Cruz" },
+  },
+  lender: {
+    user: { username: "lender1", firstName: "Issa", middleName: null, lastName: "Santos" },
+  },
   ...overrides,
 })
 
@@ -62,7 +73,7 @@ describe("useTransactions", () => {
 
     await fetchPage()
     expect(transactions.value).toHaveLength(1)
-    expect(transactions.value[0].id).toBe(TX_ID_1)
+    expect(transactions.value[0]!.id).toBe(TX_ID_1)
   })
 
   it("sets hasMore to true when nextCursor is returned", async () => {
@@ -148,8 +159,26 @@ describe("useTransactions", () => {
   it("filters transactions by searchQuery against item name", async () => {
     fetchMock = vi.fn().mockResolvedValue({
       transactions: [
-        makeTx(TX_ID_1, { item: { id: "i1", name: "Camera", thumbnailImage: null, rateOption: "PER_DAY", rentalFee: 100, freeToBorrow: false } }),
-        makeTx(TX_ID_2, { item: { id: "i2", name: "Keyboard", thumbnailImage: null, rateOption: "PER_DAY", rentalFee: 50, freeToBorrow: false } }),
+        makeTx(TX_ID_1, {
+          item: {
+            id: "i1",
+            name: "Camera",
+            thumbnailImage: null,
+            rateOption: "PER_DAY",
+            rentalFee: 100,
+            freeToBorrow: false,
+          },
+        }),
+        makeTx(TX_ID_2, {
+          item: {
+            id: "i2",
+            name: "Keyboard",
+            thumbnailImage: null,
+            rateOption: "PER_DAY",
+            rentalFee: 50,
+            freeToBorrow: false,
+          },
+        }),
       ],
       nextCursor: null,
     })
@@ -167,6 +196,6 @@ describe("useTransactions", () => {
 
     searchQuery.value = "camera"
     expect(filteredTransactions.value).toHaveLength(1)
-    expect(filteredTransactions.value[0].item.name).toBe("Camera")
+    expect(filteredTransactions.value[0]!.item.name).toBe("Camera")
   })
 })

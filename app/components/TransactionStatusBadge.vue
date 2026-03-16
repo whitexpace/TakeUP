@@ -16,6 +16,8 @@ const label = computed(() => {
       return "Completed"
     case "CANCELLED":
       return "Cancelled"
+    default:
+      return ""
   }
 })
 
@@ -28,6 +30,8 @@ const badgeClass = computed(() => {
       return "bg-indigo-900"
     case "CANCELLED":
       return "bg-cinnabar-red"
+    default:
+      return "bg-gray-400"
   }
 })
 </script>

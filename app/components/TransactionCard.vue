@@ -68,7 +68,9 @@ const isCompleted = computed(() => props.transaction.status === "COMPLETED")
 <template>
   <div class="bg-white rounded-2xl border-[0.50px] border-red-300 overflow-hidden font-geist">
     <!-- Top row -->
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-6 py-3 border-b border-stone-300/50">
+    <div
+      class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-6 py-3 border-b border-stone-300/50"
+    >
       <span class="text-neutral-800/80 text-base font-bold tracking-wide mr-auto">
         {{ counterpartName }}
       </span>
