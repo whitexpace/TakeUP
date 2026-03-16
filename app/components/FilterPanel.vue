@@ -1,45 +1,20 @@
 <template>
   <div class="space-y-0">
-    <!-- Sticky Header Unit (FILTERS + Clear All + X Icon + Divider) -->
+    <!-- Sticky Header Unit (FILTERS + Clear All + Divider) -->
     <div
       class="sticky top-0 bg-cream z-20 -mx-6 px-6 pt-4 pb-4 shadow-[0_4px_12px_-4px_rgba(32,33,36,0.02)]"
     >
       <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-4">
-          <h2
-            class="font-geist font-bold text-[16px] tracking-widest text-noble-black/65 uppercase whitespace-nowrap"
-          >
-            FILTERS
-          </h2>
-          <div class="w-[1px] h-4 bg-cinnamon-ice/40"></div>
-          <button
-            class="font-geist font-normal text-[13px] text-burning-orange hover:text-blue-estate transition-all duration-300 whitespace-nowrap"
-            @click="clearAll"
-          >
-            Clear all
-          </button>
-        </div>
-
-        <button
-          class="p-1 hover:bg-pale-cashmere rounded-full transition-colors text-noble-black/60 hover:text-noble-black"
-          title="Close Sidebar"
-          @click="$emit('toggle-sidebar')"
+        <h2
+          class="font-geist font-bold text-[16px] tracking-widest text-noble-black/65 uppercase whitespace-nowrap"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M18 6L6 18M6 6L18 18"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          FILTERS
+        </h2>
+        <button
+          class="font-geist font-normal text-[13px] text-burning-orange hover:text-blue-estate transition-all duration-300 whitespace-nowrap"
+          @click="clearAll"
+        >
+          Clear all
         </button>
       </div>
       <div class="w-full h-[1px] bg-cinnamon-ice/50 mt-4 -mb-4"></div>
@@ -572,7 +547,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  "toggle-sidebar": []
   "update:selectedListingTypes": [v: string[]]
   "update:selectedCategories": [v: string[]]
   "update:selectedPriceRange": [v: string]

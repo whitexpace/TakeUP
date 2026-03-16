@@ -156,7 +156,6 @@ async function restoreSession() {
         "UP User",
     }
     loginStatus.value = "success"
-    await navigateTo("/dashboard")
   } catch {
     currentUser.value = null
     loginStatus.value = "idle"
