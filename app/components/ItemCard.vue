@@ -138,6 +138,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import { buildItemDetailPath } from "../utils/item-detail-route"
+import { resetPaginatedItemsCache } from "../composables/use-paginated-items"
 
 const props = defineProps<{
   id: string | number
@@ -151,6 +152,10 @@ const props = defineProps<{
   price?: string | number
   owner: string
   isLiked?: boolean
+  fromPage?: "likes" | "dashboard"
+}>()
+const emit = defineEmits<{
+  likeChanged: [payload: { itemId: string; isLiked: boolean }]
 }>()
 
 const isLiked = ref(Boolean(props.isLiked))
@@ -174,6 +179,14 @@ const itemDetailPath = computed(() =>
 )
 
 const navigateToDetails = () => {
+  if (props.fromPage) {
+    router.push({
+      path: itemDetailPath.value,
+      query: { from: props.fromPage },
+    })
+    return
+  }
+
   router.push(itemDetailPath.value)
 }
 
@@ -224,6 +237,11 @@ const toggleLike = async () => {
 
     if (typeof nextIsLiked === "boolean") {
       isLiked.value = nextIsLiked
+      resetPaginatedItemsCache()
+      emit("likeChanged", {
+        itemId: String(props.id),
+        isLiked: nextIsLiked,
+      })
     }
   } catch (error) {
     if (previousValue !== null) {

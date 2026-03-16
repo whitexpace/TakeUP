@@ -72,6 +72,7 @@ model Item {
   photos         String[]
   categories     ItemCategoryOnItem[]
   tags           ItemTagOnItem[]
+  likes          Like[]
 
   isTrending   Boolean @default(false)
   viewCount    Int     @default(0)
@@ -84,8 +85,6 @@ model Item {
 
   lender   Lender    @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
   borrower Borrower? @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
-
-  likes Like[]
 
   @@index([lenderId])
   @@index([borrowerId])

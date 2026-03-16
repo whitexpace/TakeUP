@@ -19,6 +19,10 @@ export const parseItemFilterQuery = (query: ItemFilterQuery) => {
   const parsed: Record<string, unknown> = {}
 
   if (typeof query.search === "string") parsed.search = query.search
+  if (typeof query.status === "string") parsed.status = query.status
+
+  const likedOnly = parseBooleanParam(query.likedOnly)
+  if (likedOnly !== undefined) parsed.likedOnly = likedOnly
 
   const categories = parseListParam(query.categories)
   if (categories) parsed.categories = categories
