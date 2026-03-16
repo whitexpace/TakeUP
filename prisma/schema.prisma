@@ -49,6 +49,13 @@ enum RateOption {
   PER_DAY
 }
 
+enum TransactionStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 model Item {
   id          String        @id @default(uuid())
   name        String
@@ -62,6 +69,7 @@ model Item {
   replacementCost Int?
   freeToBorrow    Boolean
   availability    ItemAvailability[]
+  transactions    Transaction[]
 
   whatItemOffers   String?
   whatIsIncluded   String?
@@ -166,7 +174,8 @@ model Lender {
 
   lenderRating Int @default(0)
 
-  listedItem Item[]
+  listedItem   Item[]
+  transactions Transaction[]
 }
 
 model Borrower {
@@ -177,6 +186,7 @@ model Borrower {
   borrowerRating Int    @default(0)
 
   borrowedItems Item[]
+  transactions  Transaction[]
 }
 
 enum AccountType {
@@ -189,4 +199,27 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   PENDING
+}
+
+model Transaction {
+  id          String            @id @default(uuid())
+  itemId      String
+  borrowerId  String
+  lenderId    String
+  startDate   DateTime
+  endDate     DateTime
+  totalAmount Int
+  status      TransactionStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  item     Item     @relation(fields: [itemId],     references: [id],     onDelete: Cascade)
+  borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
+  lender   Lender   @relation(fields: [lenderId],   references: [userId], onDelete: Cascade)
+
+  @@index([borrowerId])
+  @@index([lenderId])
+  @@index([itemId])
+  @@index([status])
+  @@index([createdAt])
 }

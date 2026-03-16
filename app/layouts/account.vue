@@ -3,18 +3,31 @@ import { ref } from "vue"
 
 const currentLink = ref("Account Information")
 const showLogoutModal = ref(false)
+const showMobileSidebar = ref(false)
+const route = useRoute()
 
-const links = [
-  "Account Information",
-  "My Wallet",
-  "My Transactions",
-  "My Listings",
-  "My Listing Analytics",
-  "My Rewards",
+type SidebarLink = {
+  label: string
+  to?: string
+}
+
+const links: SidebarLink[] = [
+  { label: "Account Information", to: "/account" },
+  { label: "My Wallet" },
+  { label: "My Transactions", to: "/account/transactions" },
+  { label: "My Listings" },
+  { label: "My Listing Analytics" },
+  { label: "My Rewards" },
 ]
 
-const selectLink = (link: string) => {
-  currentLink.value = link
+const isActive = (link: SidebarLink) => {
+  if (link.to) return route.path === link.to
+  return currentLink.value === link.label
+}
+
+const selectLink = (link: SidebarLink) => {
+  if (!link.to) currentLink.value = link.label
+  showMobileSidebar.value = false
 }
 const supabase = useSupabaseClient()
 
@@ -38,42 +51,96 @@ const confirmLogout = async () => {
   <div class="flex flex-col min-h-screen font-geist bg-white relative">
     <!-- Top Navbar -->
     <nav
-      class="h-[77px] w-full bg-white border-b border-cinnamon-ice shrink-0 flex items-center px-8"
+      class="h-[77px] w-full bg-white border-b border-cinnamon-ice shrink-0 flex items-center px-4 lg:px-8 gap-3"
     >
-      <!-- Empty content for now -->
+      <!-- Hamburger button (mobile only) -->
+      <button
+        class="lg:hidden p-2 rounded-lg text-noble-black hover:bg-cream transition-colors"
+        aria-label="Open menu"
+        @click="showMobileSidebar = true"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <line x1="3" y1="6" x2="21" y2="6" stroke-width="2" stroke-linecap="round" />
+          <line x1="3" y1="12" x2="21" y2="12" stroke-width="2" stroke-linecap="round" />
+          <line x1="3" y1="18" x2="21" y2="18" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
+      <!-- Mobile title -->
+      <span class="lg:hidden font-bold text-lg text-blue-estate">MY ACCOUNT</span>
     </nav>
 
     <!-- Main Content Container -->
-    <div class="flex flex-1 overflow-hidden h-[calc(100vh-77px)]">
-      <!-- Left Sidebar -->
-      <aside class="w-[360px] bg-cream flex flex-col shrink-0">
-        <!-- Sidebar Title -->
-        <div class="px-8 pt-10 pb-6">
+    <div class="flex flex-1 lg:overflow-hidden lg:h-[calc(100vh-77px)]">
+
+      <!-- Mobile sidebar backdrop -->
+      <Transition name="fade">
+        <div
+          v-if="showMobileSidebar"
+          class="fixed inset-0 z-40 bg-noble-black/50 lg:hidden"
+          @click="showMobileSidebar = false"
+        />
+      </Transition>
+
+      <!-- Left Sidebar (desktop: static; mobile: slide-in drawer) -->
+      <aside
+        class="fixed lg:static inset-y-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0
+               transform transition-transform duration-300 ease-in-out lg:translate-x-0"
+        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full'"
+      >
+        <!-- Mobile close button -->
+        <div class="flex items-center justify-between px-6 pt-6 pb-2 lg:hidden">
+          <h2 class="font-bold text-[22px] text-blue-estate">MY ACCOUNT</h2>
+          <button
+            class="p-2 rounded-lg text-noble-black hover:bg-pale-cashmere"
+            @click="showMobileSidebar = false"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Sidebar Title (desktop only) -->
+        <div class="hidden lg:block px-8 pt-10 pb-6">
           <h2 class="font-bold text-[25px] text-blue-estate">MY ACCOUNT</h2>
         </div>
 
         <!-- Navigation Links -->
         <nav class="flex-1 flex flex-col">
-          <a
-            v-for="link in links"
-            :key="link"
-            href="#"
-            class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
-            :class="[
-              currentLink === link
-                ? 'bg-burning-orange text-white font-medium'
-                : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere',
-            ]"
-            @click.prevent="selectLink(link)"
-          >
-            {{ link }}
-          </a>
+          <template v-for="link in links" :key="link.label">
+            <NuxtLink
+              v-if="link.to"
+              :to="link.to"
+              class="block w-full px-6 lg:px-8 py-3 text-[17px] lg:text-[18px] transition-all duration-200"
+              :class="[
+                isActive(link)
+                  ? 'bg-burning-orange text-white font-medium'
+                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere',
+              ]"
+              @click="showMobileSidebar = false"
+            >
+              {{ link.label }}
+            </NuxtLink>
+            <a
+              v-else
+              href="#"
+              class="block w-full px-6 lg:px-8 py-3 text-[17px] lg:text-[18px] transition-all duration-200"
+              :class="[
+                isActive(link)
+                  ? 'bg-burning-orange text-white font-medium'
+                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere',
+              ]"
+              @click.prevent="selectLink(link)"
+            >
+              {{ link.label }}
+            </a>
+          </template>
         </nav>
 
         <!-- Logout Section -->
         <div class="mt-auto border-t border-cinnamon-ice bg-cream">
           <button
-            class="flex items-center gap-3 w-full px-8 py-5 group transition-all duration-200 text-noble-black"
+            class="flex items-center gap-3 w-full px-6 lg:px-8 py-5 group transition-all duration-200 text-noble-black"
             @click="openLogoutModal"
           >
             <!-- Logout Icon -->
@@ -102,7 +169,7 @@ const confirmLogout = async () => {
       </aside>
 
       <!-- Page Content Slot -->
-      <main class="flex-1 bg-white overflow-y-auto p-8">
+      <main class="flex-1 bg-white overflow-y-auto p-4 sm:p-6 lg:p-8">
         <slot />
       </main>
     </div>
@@ -223,3 +290,14 @@ const confirmLogout = async () => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
