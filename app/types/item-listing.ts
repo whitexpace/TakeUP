@@ -39,6 +39,7 @@ export interface ListedItem {
   borrowerId: string | null
   categories: string[]
   tags: string[]
+  isLiked?: boolean
 }
 
 export interface PaginatedItemsResponse {
@@ -57,6 +58,7 @@ export interface ItemCardViewModel {
   reviews: number | string
   price?: string | number
   owner: string
+  isLiked?: boolean
 }
 
 export interface FilterMetadata {

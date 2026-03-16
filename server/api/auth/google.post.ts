@@ -17,15 +17,6 @@ type IdentityInput = {
   name: string
 }
 
-type UserDelegate = {
-  upsert: (args: {
-    where: { googleSub: string }
-    update: { email: string; name: string }
-    create: { googleSub: string; email: string; name: string }
-    select: { id: true; email: true; name: true }
-  }) => Promise<AuthUserRow>
-}
-
 type AuthUserRow = {
   id: string
   email: string
@@ -33,40 +24,81 @@ type AuthUserRow = {
 }
 
 async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promise<AuthUserRow> {
-  const userDelegate = (db as unknown as { user?: UserDelegate }).user
+  // Try to find existing user by googleSub
+  let user = await db.user.findUnique({
+    where: { googleSub: identity.googleSub },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      googleSub: true,
+    },
+  })
 
-  if (userDelegate) {
-    return userDelegate.upsert({
-      where: { googleSub: identity.googleSub },
-      update: { email: identity.email, name: identity.name },
-      create: {
-        googleSub: identity.googleSub,
-        email: identity.email,
-        name: identity.name,
-      },
+  if (!user) {
+    // Fallback lookup by email to avoid duplicate records when the provider subject changes.
+    user = await db.user.findUnique({
+      where: { email: identity.email },
       select: {
         id: true,
         email: true,
-        name: true,
+        username: true,
+        googleSub: true,
+      },
+    })
+
+    if (user && user.googleSub !== identity.googleSub) {
+      user = await db.user.update({
+        where: { id: user.id },
+        data: { googleSub: identity.googleSub },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          googleSub: true,
+        },
+      })
+    }
+
+    if (!user) {
+      const emailPrefix = identity.email?.split("@")[0] ?? "user"
+      user = await db.user.create({
+        data: {
+          googleSub: identity.googleSub,
+          email: identity.email,
+          username: emailPrefix,
+          firstName: emailPrefix,
+          lastName: "User",
+          accountType: "BORROWER",
+          status: "ACTIVE",
+        },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          googleSub: true,
+        },
+      })
+    }
+  } else if (user.email !== identity.email) {
+    // Update email if it changed
+    user = await db.user.update({
+      where: { googleSub: identity.googleSub },
+      data: { email: identity.email },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        googleSub: true,
       },
     })
   }
 
-  const rows = await db.$queryRaw<AuthUserRow[]>`
-    INSERT INTO "User" ("googleSub", "email", "name")
-    VALUES (${identity.googleSub}, ${identity.email}, ${identity.name})
-    ON CONFLICT ("googleSub")
-    DO UPDATE SET
-      "email" = EXCLUDED."email",
-      "name" = EXCLUDED."name"
-    RETURNING "id", "email", "name"
-  `
-
-  const user = rows[0]
-  if (!user) {
-    throw new Error("Failed to upsert user record.")
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.username,
   }
-  return user
 }
 
 export default defineEventHandler(async (event) => {
