@@ -35,24 +35,47 @@
             />
           </svg>
         </button>
-
-        <span
-          v-if="isTrending"
-          class="inline-flex items-center gap-1 rounded-full bg-burning-orange text-white px-2 sm:px-2.5 py-1 font-geist font-medium text-[10px] sm:text-[11px] leading-none shadow-sm whitespace-nowrap"
-          title="Trending item"
-        >
-          <span aria-hidden="true">🔥</span>
-          <span>Trending</span>
-        </span>
       </div>
     </div>
 
     <!-- Details Section -->
     <div class="p-3 sm:p-5 flex-1 flex flex-col bg-white">
       <div
-        class="font-geist font-medium text-[11px] sm:text-[13px] uppercase tracking-wide text-burning-orange mb-1 sm:mb-1.5"
+        class="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-1.5 min-w-0 font-geist font-medium text-[11px] sm:text-[13px] uppercase tracking-wide"
       >
-        {{ category }}
+        <div class="text-burning-orange min-w-0 truncate">
+          {{ category }}
+        </div>
+
+        <template v-if="isTrending">
+          <span class="h-1 w-1 shrink-0 rounded-full bg-noble-black/30" aria-hidden="true" />
+          <span class="inline-flex shrink-0 items-center gap-1 text-blue-estate normal-case">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 16L10 10L14 14L20 8"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M14 8H20V14"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>Trending</span>
+          </span>
+        </template>
       </div>
 
       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-2">
