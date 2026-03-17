@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue"
+import { computed, inject, onMounted, ref } from "vue"
 import type { Ref } from "vue"
+import type { ListedItem } from "../../types/item-listing"
+import { FALLBACK_ITEM_IMAGES } from "../../utils/item-card-mapper"
+import { usePaginatedItems } from "../../composables/use-paginated-items"
 
 definePageMeta({
   layout: "account",
@@ -35,78 +38,56 @@ const activeItem = inject<Ref<AccountNavId>>("accountActiveItem", ref("my-listin
 
 const searchQuery = ref("")
 const selectedFilter = ref<ListingFilter>("All")
+const serverSearchQuery = ref("")
 
-const listingItems = ref<ListingCardItem[]>([
-  {
-    id: "1",
-    type: "Rent",
-    status: "ACTIVE",
-    image: "/images/popular/macbook.jpg",
-    category: "Electronics",
-    name: "MacBook Air M1",
-    rating: 4.8,
-    reviews: 21,
-    price: 850,
-    requestCount: 3,
-  },
-  {
-    id: "2",
-    type: "Borrow",
-    status: "IN USE",
-    image: "/images/popular/camera.jpg",
-    category: "Photography",
-    name: "Canon EOS M50 Camera Kit",
-    rating: 4.9,
-    reviews: 12,
-    requestCount: 8,
-  },
-  {
-    id: "3",
-    type: "Rent",
-    status: "INACTIVE",
-    image: "/images/popular/dress.jpg",
-    category: "Event & Party",
-    name: "Formal Event Dress",
-    rating: 4.6,
-    reviews: 9,
-    price: 280,
-    requestCount: 0,
-  },
-  {
-    id: "4",
-    type: "Borrow",
-    status: "ACTIVE",
-    image: "/images/popular/scical.jpg",
-    category: "Books & Academics",
-    name: "Scientific Calculator",
-    rating: 4.7,
-    reviews: 17,
-    requestCount: 2,
-  },
-  {
-    id: "5",
-    type: "Rent",
-    status: "ACTIVE",
-    image: "/images/popular/camera.jpg",
-    category: "Music & Audio",
-    name: "Portable Speaker System",
-    rating: 4.5,
-    reviews: 14,
-    price: 420,
-    requestCount: 5,
-  },
-  {
-    id: "6",
-    type: "Borrow",
-    status: "IN USE",
-    image: "/images/popular/macbook.jpg",
-    category: "Electronics",
-    name: "Tablet with Stylus",
-    rating: 4.9,
-    reviews: 6,
-    requestCount: 4,
-  },
-])
+const filterParams = computed<Record<string, string | undefined>>(() => ({
+  ownedOnly: "true",
+}))
+
+const {
+  items: listedItems,
+  hasMore,
+  errorMessage,
+  fetchNextPage,
+  refresh,
+} = usePaginatedItems({
+  searchQuery: serverSearchQuery,
+  filterParams,
+  pageSize: 48,
+})
+
+const formatCategory = (category: string | undefined) => {
+  if (!category) return "General"
+  return category
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
+const toListingStatus = (status: ListedItem["status"]): ListingStatus => {
+  if (status === "RENTED") return "IN USE"
+  if (status === "AVAILABLE") return "ACTIVE"
+  return "INACTIVE"
+}
+
+const listingItems = computed<ListingCardItem[]>(() =>
+  listedItems.value.map((item, index) => ({
+    id: item.id,
+    type: item.freeToBorrow ? "Borrow" : "Rent",
+    status: toListingStatus(item.status),
+    image:
+      item.thumbnailImage ??
+      item.photos[0] ??
+      FALLBACK_ITEM_IMAGES[index % FALLBACK_ITEM_IMAGES.length]!,
+    category: formatCategory(item.categories[0]),
+    name: item.name,
+    rating: Number(item.rating.toFixed(1)),
+    reviews: item.bookingCount,
+    price: item.freeToBorrow ? undefined : item.rentalFee,
+    requestCount: item.bookingCount,
+  })),
+)
 
 const filterConfig: Array<{ label: ListingFilter; status?: ListingStatus }> = [
   { label: "All" },
@@ -142,6 +123,18 @@ const filteredListings = computed(() => {
 
     return matchesFilter && matchesSearch
   })
+})
+
+const loadAllOwnedListings = async () => {
+  await refresh()
+
+  while (hasMore.value && !errorMessage.value) {
+    await fetchNextPage()
+  }
+}
+
+onMounted(() => {
+  void loadAllOwnedListings()
 })
 
 </script>

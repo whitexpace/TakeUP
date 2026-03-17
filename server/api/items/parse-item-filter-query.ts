@@ -24,6 +24,9 @@ export const parseItemFilterQuery = (query: ItemFilterQuery) => {
   const likedOnly = parseBooleanParam(query.likedOnly)
   if (likedOnly !== undefined) parsed.likedOnly = likedOnly
 
+  const ownedOnly = parseBooleanParam(query.ownedOnly)
+  if (ownedOnly !== undefined) parsed.ownedOnly = ownedOnly
+
   const categories = parseListParam(query.categories)
   if (categories) parsed.categories = categories
 
