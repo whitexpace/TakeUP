@@ -1,13 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  name:
-    | "user"
-    | "wallet"
-    | "transactions"
-    | "grid"
-    | "activity"
-    | "star"
-    | "logout"
+  name: "user" | "wallet" | "transactions" | "grid" | "activity" | "star" | "logout"
 }>()
 </script>
 

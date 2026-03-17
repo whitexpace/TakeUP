@@ -136,7 +136,6 @@ const loadAllOwnedListings = async () => {
 onMounted(() => {
   void loadAllOwnedListings()
 })
-
 </script>
 
 <template>
@@ -173,7 +172,9 @@ onMounted(() => {
           <div class="relative flex-1">
             <div
               class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/45 z-10 sm:left-6"
-              :class="{ 'cursor-pointer hover:text-noble-black transition-colors': searchQuery.length > 0 }"
+              :class="{
+                'cursor-pointer hover:text-noble-black transition-colors': searchQuery.length > 0,
+              }"
               @click="searchQuery.length > 0 && (searchQuery = '')"
             >
               <svg

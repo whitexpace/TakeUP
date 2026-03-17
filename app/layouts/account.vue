@@ -98,9 +98,11 @@ const profileInitials = computed(() => {
     .filter(Boolean)
 
   if (words.length === 0) return "TU"
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  if (words.length === 1) return (words[0] ?? "").slice(0, 2).toUpperCase()
 
-  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase()
+  const firstInitial = (words[0] ?? "").charAt(0)
+  const lastInitial = (words[words.length - 1] ?? "").charAt(0)
+  return `${firstInitial}${lastInitial}`.toUpperCase()
 })
 
 const avatarColorClasses = [
@@ -113,8 +115,8 @@ const avatarColorClasses = [
 ] as const
 
 const avatarColorClass = computed(() => {
-  const seed = user.value?.id || user.value?.email || profileName.value
-  const index = Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0)
+  const seed = String(user.value?.id ?? user.value?.email ?? profileName.value)
+  const index = Array.from(seed).reduce<number>((total, char) => total + char.charCodeAt(0), 0)
   return avatarColorClasses[index % avatarColorClasses.length]
 })
 
@@ -314,7 +316,9 @@ provide("accountActiveItem", activeItem)
           @click="cancelLogout"
         />
 
-        <div class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl">
+        <div
+          class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl"
+        >
           <div class="flex flex-col items-center px-8 py-10 text-center">
             <div
               class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream shadow-inner"
