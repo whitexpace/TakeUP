@@ -226,3 +226,17 @@ export const paginatedItemsSchema = itemFilterSchema
 export const toggleLikeSchema = z.object({
   itemId: z.string().uuid(),
 })
+
+export const myListingsCursorSchema = z.object({
+  id: z.string().uuid(),
+  createdAt: z.coerce.date(),
+})
+
+export const myListingsSchema = z
+  .object({
+    search: z.string().trim().optional(),
+    status: itemStatusSchema.optional(),
+    limit: z.number().int().min(1).max(48).default(24),
+    cursor: myListingsCursorSchema.optional(),
+  })
+  .default({})

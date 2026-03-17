@@ -27,7 +27,7 @@ defineOptions({
           Feed
         </NuxtLink>
         <NuxtLink
-          to="/list-item"
+          to="/account/listings/new"
           class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
           active-class="text-burning-orange"
         >

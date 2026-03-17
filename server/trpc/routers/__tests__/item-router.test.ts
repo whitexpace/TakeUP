@@ -223,4 +223,156 @@ describe("itemRouter", () => {
       code: "NOT_FOUND",
     })
   })
+
+  describe("myListings", () => {
+    const makeItem = (id: string, lenderId: string, status = "AVAILABLE") => ({
+      id,
+      name: "Test Item",
+      status,
+      lenderId,
+      lender: {
+        user: {
+          username: "lender1",
+          firstName: "Lender",
+          middleName: null,
+          lastName: "One",
+          email: "lender1@up.edu.ph",
+        },
+      },
+      availability: [],
+      categories: [{ category: "ELECTRONICS" }],
+      tags: [{ tag: { name: "photo" } }],
+    })
+
+    it("returns only items belonging to the authenticated user", async () => {
+      const findMany = vi.fn().mockResolvedValue([makeItem(VALID_UUID, VALID_UUID)])
+      const caller = itemRouter.createCaller({
+        event: { context: {} } as never,
+        prisma: { item: { findMany } } as never,
+        user: { id: VALID_UUID, email: "lender@up.edu.ph", name: "Lender" },
+      })
+
+      const result = await caller.myListings({})
+
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([expect.objectContaining({ lenderId: VALID_UUID })]),
+          }),
+        }),
+      )
+      expect(result.items).toHaveLength(1)
+      expect(result.nextCursor).toBeNull()
+    })
+
+    it("excludes DELETED items when no status filter is provided", async () => {
+      const findMany = vi.fn().mockResolvedValue([])
+      const caller = itemRouter.createCaller({
+        event: { context: {} } as never,
+        prisma: { item: { findMany } } as never,
+        user: { id: VALID_UUID, email: "lender@up.edu.ph", name: "Lender" },
+      })
+
+      await caller.myListings({})
+
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([expect.objectContaining({ status: { not: "DELETED" } })]),
+          }),
+        }),
+      )
+    })
+
+    it("filters by specific status when provided", async () => {
+      const findMany = vi.fn().mockResolvedValue([])
+      const caller = itemRouter.createCaller({
+        event: { context: {} } as never,
+        prisma: { item: { findMany } } as never,
+        user: { id: VALID_UUID, email: "lender@up.edu.ph", name: "Lender" },
+      })
+
+      await caller.myListings({ status: "DEACTIVATED" })
+
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([expect.objectContaining({ status: "DEACTIVATED" })]),
+          }),
+        }),
+      )
+    })
+
+    it("throws UNAUTHORIZED when the user is not authenticated", async () => {
+      const caller = itemRouter.createCaller({
+        event: { context: {} } as never,
+        prisma: { item: { findMany: vi.fn() } } as never,
+        user: null as never,
+      })
+
+      await expect(caller.myListings({})).rejects.toMatchObject({ code: "UNAUTHORIZED" })
+    })
+
+    it("returns nextCursor when results exceed the limit", async () => {
+      const item1 = makeItem(VALID_UUID, VALID_UUID)
+      const item2 = makeItem("33333333-3333-3333-3333-333333333333", VALID_UUID)
+      const findMany = vi.fn().mockResolvedValue([
+        {
+          ...item1,
+          createdAt: new Date("2026-03-15"),
+          updatedAt: new Date(),
+          bookingCount: 0,
+          rating: 0,
+          viewCount: 0,
+          likeCount: 0,
+          isTrending: false,
+          description: null,
+          rentalFee: 0,
+          replacementCost: null,
+          freeToBorrow: false,
+          rateOption: "PER_DAY",
+          thumbnailImage: null,
+          photos: [],
+          whatItemOffers: null,
+          whatIsIncluded: null,
+          knownIssues: null,
+          usageLimitations: null,
+          borrowerId: null,
+        },
+        {
+          ...item2,
+          createdAt: new Date("2026-03-14"),
+          updatedAt: new Date(),
+          bookingCount: 0,
+          rating: 0,
+          viewCount: 0,
+          likeCount: 0,
+          isTrending: false,
+          description: null,
+          rentalFee: 0,
+          replacementCost: null,
+          freeToBorrow: false,
+          rateOption: "PER_DAY",
+          thumbnailImage: null,
+          photos: [],
+          whatItemOffers: null,
+          whatIsIncluded: null,
+          knownIssues: null,
+          usageLimitations: null,
+          borrowerId: null,
+        },
+      ])
+      const caller = itemRouter.createCaller({
+        event: { context: {} } as never,
+        prisma: { item: { findMany } } as never,
+        user: { id: VALID_UUID, email: "lender@up.edu.ph", name: "Lender" },
+      })
+
+      const result = await caller.myListings({ limit: 1 })
+
+      expect(result.items).toHaveLength(1)
+      expect(result.nextCursor).not.toBeNull()
+      expect(result.nextCursor?.id).toBe(VALID_UUID)
+    })
+  })
 })
