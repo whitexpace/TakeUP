@@ -187,6 +187,7 @@ export const deleteItemSchema = itemIdSchema
 export const itemFilterSchema = z.object({
   search: z.string().trim().min(1).max(100).optional(),
   likedOnly: z.boolean().optional(),
+  ownedOnly: z.boolean().optional(),
   status: itemStatusSchema.optional(),
   statuses: z.array(itemStatusSchema).min(1).optional(),
   categories: z

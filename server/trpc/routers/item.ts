@@ -285,6 +285,7 @@ const mapItemTaxonomy = (item: ItemWithUserLike) => {
 type ListWhereFilters = {
   search?: string
   likedOnly?: boolean
+  ownedOnly?: boolean
   status?: ItemStatus
   statuses?: ItemStatus[]
   // May contain real DB categories or the UI-only "OTHERS" sentinel
@@ -305,6 +306,7 @@ const buildListWhere = (
 ): Prisma.ItemWhereInput => {
   const search = input?.search?.trim()
   const likedOnly = input?.likedOnly
+  const ownedOnly = input?.ownedOnly
   const status = input?.status
   const statuses = input?.statuses
   const rawCategories = input?.categories
@@ -365,6 +367,13 @@ const buildListWhere = (
             },
           }
         : { id: "__liked_requires_user__" }
+      : {}),
+    ...(ownedOnly
+      ? userId
+        ? {
+            lenderId: userId,
+          }
+        : { id: "__owned_requires_user__" }
       : {}),
     ...categoryFilter,
     ...(search && includeSearch
