@@ -38,21 +38,8 @@ onMounted(() => fetchListings())
       <div>
         <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">My Listings</h1>
         <p class="text-neutral-800 text-base sm:text-lg font-normal font-geist tracking-wide mt-1">
-          Manage your listed items for borrow, rent, or sale
+          Manage your listed items for borrow or rent
         </p>
-      </div>
-      <div class="flex flex-col sm:flex-row gap-3 shrink-0">
-        <NuxtLink
-          to="/account/listings/new"
-          class="inline-flex items-center justify-center px-5 py-3 bg-orange-500 text-white rounded-[30px] text-base sm:text-lg font-normal font-geist hover:bg-orange-600 transition-colors whitespace-nowrap"
-        >
-          Add a New Item
-        </NuxtLink>
-        <button
-          class="inline-flex items-center justify-center px-5 py-3 bg-blue-950 text-white rounded-[30px] text-base sm:text-lg font-normal font-geist hover:bg-indigo-900 transition-colors whitespace-nowrap"
-        >
-          View Requests
-        </button>
       </div>
     </div>
 
@@ -122,13 +109,6 @@ onMounted(() => fetchListings())
       <p class="text-neutral-800/60 text-lg font-geist">
         {{ searchQuery ? "No listings match your search." : "You haven't listed any items yet." }}
       </p>
-      <NuxtLink
-        v-if="!searchQuery"
-        to="/account/listings/new"
-        class="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-[30px] text-base font-geist hover:bg-orange-600 transition-colors"
-      >
-        List Your First Item
-      </NuxtLink>
     </div>
 
     <!-- Listings grid -->

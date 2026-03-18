@@ -72,7 +72,6 @@ const handleSubmit = async (data: Record<string, unknown>) => {
     <!-- Edit form -->
     <ListingForm
       v-else
-      mode="edit"
       :item="item"
       :is-submitting="isSubmitting"
       :submit-error="submitError"

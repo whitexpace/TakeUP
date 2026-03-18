@@ -2,7 +2,7 @@
 import { reactive, ref, watch } from "vue"
 import type { z } from "zod"
 import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
-import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
+import { updateItemSchema } from "../../shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
 type ItemCategory = z.infer<typeof itemCategorySchema>
@@ -16,7 +16,6 @@ type AvailabilityRange = {
 }
 
 const props = defineProps<{
-  mode: "new" | "edit"
   item?: MyListingItem | null
   isSubmitting?: boolean
   submitError?: string | null
@@ -142,7 +141,7 @@ const buildPayload = () => {
     }))
 
   return {
-    ...(props.mode === "edit" && props.item?.id ? { id: props.item.id } : {}),
+    ...(props.item?.id ? { id: props.item.id } : {}),
     name: form.name,
     description: form.description || undefined,
     condition: form.condition || undefined,
@@ -168,7 +167,7 @@ const handleSubmit = () => {
   availabilityErrors.value = []
   const payload = buildPayload()
 
-  const schema = props.mode === "new" ? createItemSchema : updateItemSchema
+  const schema = updateItemSchema
   const result = schema.safeParse(payload)
 
   if (!result.success) {
@@ -197,10 +196,10 @@ const handleSubmit = () => {
         ← Back to My Listings
       </NuxtLink>
       <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">
-        {{ mode === "new" ? "Add New Item" : "Edit Item" }}
+        Edit Item
       </h1>
       <p class="text-neutral-800 text-base sm:text-lg font-normal font-geist tracking-wide mt-1">
-        List an item for borrow, rent, or sale to other students
+        Update your listing details, availability, and status
       </p>
     </div>
 
@@ -616,7 +615,7 @@ const handleSubmit = () => {
           :disabled="isSubmitting"
           class="sm:flex-1 lg:flex-none px-8 py-3 bg-orange-500 text-white rounded-[30px] text-base font-medium font-geist hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {{ isSubmitting ? "Saving..." : mode === "new" ? "Publish Item" : "Save Item" }}
+          {{ isSubmitting ? "Saving..." : "Save Changes" }}
         </button>
         <button
           type="button"
