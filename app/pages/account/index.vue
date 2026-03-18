@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue"
+import { computed, inject, ref, onMounted } from "vue"
 import type { Ref } from "vue"
 
 definePageMeta({
@@ -36,7 +36,7 @@ const activeItem = inject<Ref<AccountNavId>>("accountActiveItem", ref("my-listin
 const searchQuery = ref("")
 const selectedFilter = ref<ListingFilter>("All")
 
-const listingItems = ref<ListingCardItem[]>([
+const defaultListings: ListingCardItem[] = [
   {
     id: "1",
     type: "Rent",
@@ -106,7 +106,18 @@ const listingItems = ref<ListingCardItem[]>([
     reviews: 6,
     requestCount: 4,
   },
-])
+]
+
+const listingItems = ref<ListingCardItem[]>([])
+
+onMounted(() => {
+  if (typeof localStorage !== 'undefined') {
+    const mockListings = JSON.parse(localStorage.getItem("mockMyListings") || "[]")
+    listingItems.value = [...mockListings, ...defaultListings]
+  } else {
+    listingItems.value = defaultListings
+  }
+})
 
 const filterConfig: Array<{ label: ListingFilter; status?: ListingStatus }> = [
   { label: "All" },
@@ -166,18 +177,19 @@ const filteredListings = computed(() => {
           >
             View Requests
           </button>
-          <button
-            class="inline-flex items-center justify-center rounded-full bg-blue-estate px-8 py-3 text-[15px] font-semibold text-white shadow-sm transition-all duration-300 hover:bg-burning-orange hover:shadow-md active:scale-[0.98]"
+          <NuxtLink
+            to="/items/new"
+            class="inline-flex items-center justify-center rounded-full bg-burning-orange px-8 py-3 text-[15px] font-semibold text-white shadow-sm transition-all duration-300 hover:bg-blue-estate hover:shadow-md active:scale-[0.98]"
           >
             Add Item
-          </button>
+          </NuxtLink>
         </div>
       </div>
 
       <!-- Search and Filters Section -->
       <div class="flex flex-col gap-4">
         <div class="flex w-full flex-col gap-3 sm:flex-row">
-          <div class="relative flex-1">
+          <div class="relative w-full">
             <div
               class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/45 z-10 sm:left-6"
               :class="{ 'cursor-pointer hover:text-noble-black transition-colors': searchQuery.length > 0 }"
@@ -233,12 +245,6 @@ const filteredListings = computed(() => {
               class="h-[48px] w-full rounded-[12px] border border-transparent bg-cream pl-11 pr-4 font-geist text-base font-normal text-noble-black outline-none transition-all placeholder:text-noble-black/70 focus:border-cinnamon-ice sm:h-[60px] sm:rounded-[15px] sm:pl-14 sm:pr-6 sm:text-[20px]"
             />
           </div>
-
-          <button
-            class="flex h-[48px] shrink-0 items-center justify-center rounded-[12px] bg-burning-orange px-6 font-geist text-base font-medium text-white transition-colors hover:bg-blue-estate sm:h-[60px] sm:rounded-[15px] sm:px-10 sm:text-[20px]"
-          >
-            Search
-          </button>
         </div>
 
         <div class="flex flex-wrap gap-2.5">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 
 type NavItemId =
   | "account-information"
@@ -20,13 +20,27 @@ type NavGroup = {
   }>
 }
 
-const activeItem = ref<NavItemId>("my-listings")
+const activeItem = ref<NavItemId>("account-information")
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const showLogoutModal = ref(false)
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
+const route = useRoute()
+
+// Watch route to update active item
+watch(
+  () => [route.path, route.query.tab],
+  ([path, tab]) => {
+    if (path.startsWith("/items") || tab === "my-listings") {
+      activeItem.value = "my-listings"
+    } else if (path === "/account") {
+      activeItem.value = "account-information"
+    }
+  },
+  { immediate: true },
+)
 
 const navGroups: NavGroup[] = [
   {
@@ -52,6 +66,13 @@ const navGroups: NavGroup[] = [
 
 const selectItem = (itemId: NavItemId) => {
   activeItem.value = itemId
+  if (itemId === "my-listings" && route.path !== "/account" && !route.path.startsWith("/items")) {
+    void navigateTo("/account")
+  }
+
+  if (itemId === "account-information" && route.path !== "/account") {
+    void navigateTo("/account")
+  }
 }
 
 const toggleSidebar = () => {
@@ -182,7 +203,7 @@ provide("accountActiveItem", activeItem)
       />
 
       <aside
-        class="bg-cream flex flex-col shrink-0 border-r-[0.5px] border-black/[0.07] transition-all duration-300 ease-in-out z-50 fixed bottom-0 left-0 top-14 lg:relative lg:bottom-auto lg:left-auto lg:top-auto lg:translate-x-0 font-geist"
+        class="bg-cream flex flex-col shrink-0 border-r border-cinnamon-ice transition-all duration-300 ease-in-out z-50 fixed bottom-0 left-0 top-14 lg:relative lg:bottom-auto lg:left-auto lg:top-auto lg:translate-x-0 font-geist"
         :class="[
           isSidebarOpen
             ? 'translate-x-0 w-80'

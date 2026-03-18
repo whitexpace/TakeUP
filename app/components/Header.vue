@@ -1,6 +1,15 @@
 <script setup lang="ts">
+import { computed } from "vue"
+import { useRoute } from "#imports"
+
 defineOptions({
   name: "AppHeader",
+})
+
+const route = useRoute()
+
+const isAccountActive = computed(() => {
+  return route.path.startsWith("/account") || route.path.startsWith("/items")
 })
 </script>
 
@@ -27,7 +36,7 @@ defineOptions({
           Feed
         </NuxtLink>
         <NuxtLink
-          to="/list-item"
+          to="/items/new"
           class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
           active-class="text-burning-orange"
         >
@@ -126,26 +135,24 @@ defineOptions({
       <!-- Profile Icon (Always Visible) -->
       <NuxtLink
         to="/account"
-        class="text-noble-black hover:text-burning-orange transition-colors p-1 md:pl-3 md:border-l border-cinnamon-ice md:ml-1"
-        active-class="text-burning-orange"
+        class="hover:text-burning-orange transition-colors p-1 md:pl-3 md:border-l border-cinnamon-ice md:ml-1"
+        :class="isAccountActive ? 'text-burning-orange' : 'text-noble-black'"
         title="Profile"
       >
-        <template #default="{ isActive }">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            :fill="isActive ? 'currentColor' : 'none'"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-        </template>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          :fill="isAccountActive ? 'currentColor' : 'none'"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
       </NuxtLink>
     </div>
   </header>

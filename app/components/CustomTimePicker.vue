@@ -81,6 +81,7 @@ const props = defineProps<{
   modelValue: string
   placeholder?: string
   minTime?: string // HH:mm
+  strictMin?: boolean
 }>()
 
 const emit = defineEmits(["update:modelValue"])
@@ -113,7 +114,7 @@ const timeOptions = (() => {
 
 const isTimeDisabled = (timeValue: string) => {
   if (!props.minTime) return false
-  return timeValue < props.minTime
+  return props.strictMin ? timeValue <= props.minTime : timeValue < props.minTime
 }
 
 const selectedLabel = computed(() => {
