@@ -132,7 +132,6 @@ const confirmLogout = async () => {
             {{ link.label }}
           </NuxtLink>
         </nav>
-
       </aside>
 
       <!-- Logout Section (Pinned to bottom-left of screen) -->
