@@ -195,9 +195,7 @@ const handleSubmit = () => {
       >
         ← Back to My Listings
       </NuxtLink>
-      <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">
-        Edit Item
-      </h1>
+      <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">Edit Item</h1>
       <p class="text-neutral-800 text-base sm:text-lg font-normal font-geist tracking-wide mt-1">
         Update your listing details, availability, and status
       </p>
