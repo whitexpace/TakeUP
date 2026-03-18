@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
-import type { TransactionStatus } from "../../../shared/schemas/transaction"
-import { useTransactions } from "../../composables/use-transactions"
+import type { TransactionStatus } from "../../../../shared/schemas/transaction"
+import { useTransactions } from "../../../composables/use-transactions"
 
 definePageMeta({
   layout: "account",
+  middleware: "account-auth",
 })
 
 type ActiveRole = "BORROWER" | "LENDER"

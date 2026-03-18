@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({
   layout: "account",
-  auth: false,
+  middleware: "account-auth",
 })
 </script>
 
