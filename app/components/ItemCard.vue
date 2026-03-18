@@ -18,17 +18,16 @@
       <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2">
         <!-- Like Button -->
         <button
-          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group disabled:opacity-60"
+          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all duration-150 group active:scale-90"
           title="Favorite"
-          :disabled="isTogglingLike"
           :aria-pressed="isLiked"
           @click.stop="toggleLike"
         >
           <svg
-            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors"
+            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-150"
             :class="
               isLiked
-                ? 'fill-burning-orange stroke-burning-orange'
+                ? 'fill-cinnabar-red/90 stroke-cinnabar-red/90'
                 : 'stroke-noble-black group-hover:fill-noble-black/10'
             "
             viewBox="0 0 24 24"
@@ -43,24 +42,47 @@
             />
           </svg>
         </button>
-
-        <span
-          v-if="isTrending"
-          class="inline-flex items-center gap-1 rounded-full bg-burning-orange text-white px-2 sm:px-2.5 py-1 font-geist font-medium text-[10px] sm:text-[11px] leading-none shadow-sm whitespace-nowrap"
-          title="Trending item"
-        >
-          <span aria-hidden="true">🔥</span>
-          <span>Trending</span>
-        </span>
       </div>
     </div>
 
     <!-- Details Section -->
     <div class="p-3 sm:p-5 flex-1 flex flex-col bg-white">
       <div
-        class="font-geist font-medium text-[11px] sm:text-[13px] uppercase tracking-wide text-burning-orange mb-1 sm:mb-1.5"
+        class="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-1.5 min-w-0 font-geist font-medium text-[11px] sm:text-[13px] uppercase tracking-wide"
       >
-        {{ category }}
+        <div class="text-burning-orange min-w-0 truncate">
+          {{ category }}
+        </div>
+
+        <template v-if="isTrending">
+          <span class="h-1 w-1 shrink-0 rounded-full bg-noble-black/30" aria-hidden="true" />
+          <span class="inline-flex shrink-0 items-center gap-1 text-blue-estate normal-case">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 16L10 10L14 14L20 8"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M14 8H20V14"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>Trending</span>
+          </span>
+        </template>
       </div>
 
       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-2">
