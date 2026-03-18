@@ -42,8 +42,11 @@ const knownIssues = ref("")
 
 // Pill Logic Helpers
 const addOffer = () => {
-  const items = offersInput.value.split(",").map(i => i.trim()).filter(Boolean)
-  items.forEach(item => {
+  const items = offersInput.value
+    .split(",")
+    .map((i) => i.trim())
+    .filter(Boolean)
+  items.forEach((item) => {
     if (!whatThisItemOffers.value.includes(item)) {
       whatThisItemOffers.value.push(item)
     }
@@ -62,8 +65,11 @@ const removeOffer = (index: number) => {
 }
 
 const addIncluded = () => {
-  const items = includedInput.value.split(",").map(i => i.trim()).filter(Boolean)
-  items.forEach(item => {
+  const items = includedInput.value
+    .split(",")
+    .map((i) => i.trim())
+    .filter(Boolean)
+  items.forEach((item) => {
     if (!whatsIncluded.value.includes(item)) {
       whatsIncluded.value.push(item)
     }
@@ -122,11 +128,19 @@ watch(availableFromDate, (newDateFrom) => {
   }
 })
 
-watch([availableFromTime, availableFromDate, availableUntilDate], ([newTimeFrom, newDateFrom, newDateTo]) => {
-  if (newDateFrom === newDateTo && newTimeFrom && availableUntilTime.value && newTimeFrom >= availableUntilTime.value) {
-    availableUntilTime.value = ""
-  }
-})
+watch(
+  [availableFromTime, availableFromDate, availableUntilDate],
+  ([newTimeFrom, newDateFrom, newDateTo]) => {
+    if (
+      newDateFrom === newDateTo &&
+      newTimeFrom &&
+      availableUntilTime.value &&
+      newTimeFrom >= availableUntilTime.value
+    ) {
+      availableUntilTime.value = ""
+    }
+  },
+)
 
 watch(listingType, (newType) => {
   if (newType === "Borrow") {
@@ -137,7 +151,13 @@ watch(listingType, (newType) => {
 
 const tagInput = ref("")
 const tags = ref<string[]>([])
-const suggestedTags = ref(["Student-friendly", "Brand new", "Deposit required", "ID required", "Popular"])
+const suggestedTags = ref([
+  "Student-friendly",
+  "Brand new",
+  "Deposit required",
+  "ID required",
+  "Popular",
+])
 const focusedField = ref<"itemName" | "rateAmount" | "replacementCost" | null>(null)
 
 // Modal State
@@ -147,24 +167,26 @@ const showCancelModal = ref(false)
 const showErrors = ref(false)
 const formErrors = computed(() => {
   const errors: Record<string, string> = {}
-  
+
   if (!coverImage.value) errors.coverImage = "Please upload a cover image"
   if (!itemName.value.trim()) errors.itemName = "Item name is required"
   if (!category.value) errors.category = "Please select a category"
   if (!description.value.trim()) errors.description = "Description is required"
-  if (whatThisItemOffers.value.length === 0) errors.whatThisItemOffers = "Please add at least one feature"
-  if (whatsIncluded.value.length === 0) errors.whatsIncluded = "Please add at least one included item"
-  
+  if (whatThisItemOffers.value.length === 0)
+    errors.whatThisItemOffers = "Please add at least one feature"
+  if (whatsIncluded.value.length === 0)
+    errors.whatsIncluded = "Please add at least one included item"
+
   if (!listingType.value) {
     errors.listingType = "Please select a listing type"
   } else if (listingType.value === "Rent") {
     if (!rateAmount.value.trim()) errors.rateAmount = "Rate amount is required for rent"
     if (!rateUnit.value) errors.rateUnit = "Rate unit is required for rent"
   }
-  
+
   if (!availableFromDate.value) errors.availableFromDate = "Start date is required"
   if (!availableFromTime.value) errors.availableFromTime = "Start time is required"
-  
+
   return errors
 })
 
@@ -271,8 +293,11 @@ const categories = [
 
 // Tag Logic
 const addTag = () => {
-  const newTags = tagInput.value.split(",").map(t => t.trim()).filter(Boolean)
-  newTags.forEach(tag => {
+  const newTags = tagInput.value
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+  newTags.forEach((tag) => {
     if (!tags.value.includes(tag)) {
       tags.value.push(tag)
       suggestedTags.value = suggestedTags.value.filter((t) => t !== tag)
@@ -340,13 +365,14 @@ const handlePublish = () => {
     name: itemName.value,
     rating: 0,
     reviews: 0,
-    price: listingType.value === "Rent" ? parseFloat(rateAmount.value.replace(/,/g, "")) : undefined,
+    price:
+      listingType.value === "Rent" ? parseFloat(rateAmount.value.replace(/,/g, "")) : undefined,
     requestCount: 0,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   }
 
   // Store in localStorage
-  if (typeof localStorage !== 'undefined') {
+  if (typeof localStorage !== "undefined") {
     const existingMockListings = JSON.parse(localStorage.getItem("mockMyListings") || "[]")
     localStorage.setItem("mockMyListings", JSON.stringify([newListing, ...existingMockListings]))
   }
@@ -365,7 +391,7 @@ const formatMoney = (value: string) => {
   const cleanValue = value.replace(/,/g, "")
   const num = parseFloat(cleanValue)
   if (isNaN(num)) return ""
-  
+
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -389,13 +415,13 @@ const handleReplacementCostInput = (event: Event) => {
 const blurInput = (event: Event) => {
   const field = focusedField.value
   focusedField.value = null
-  
+
   if (field === "rateAmount") {
     rateAmount.value = formatMoney(rateAmount.value)
   } else if (field === "replacementCost") {
     replacementCost.value = formatMoney(replacementCost.value)
   }
-  
+
   ;(event.target as HTMLElement).blur()
 }
 </script>
@@ -424,16 +450,21 @@ const blurInput = (event: Event) => {
     <!-- Form Sections -->
     <div class="mt-12 flex flex-col gap-8">
       <!-- Section 1: Images -->
-      <section 
+      <section
         class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
-        :class="{ 'ring-2 ring-cinnabar-red/20 border-cinnabar-red/30': showErrors && formErrors.coverImage }"
+        :class="{
+          'ring-2 ring-cinnabar-red/20 border-cinnabar-red/30': showErrors && formErrors.coverImage,
+        }"
       >
         <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
         <p class="mt-1 text-[14px] text-noble-black/50">
           Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
           review.
         </p>
-        <p v-if="showErrors && formErrors.coverImage" class="mt-2 text-[13px] font-medium text-cinnabar-red">
+        <p
+          v-if="showErrors && formErrors.coverImage"
+          class="mt-2 text-[13px] font-medium text-cinnabar-red"
+        >
           {{ formErrors.coverImage }}
         </p>
 
@@ -589,7 +620,11 @@ const blurInput = (event: Event) => {
                 type="text"
                 placeholder="e.g., Canon EOS R5 Camera with Lens Kit"
                 class="h-12 w-full rounded-[14px] border bg-white pl-4 pr-10 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-                :class="showErrors && formErrors.itemName ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30'"
+                :class="
+                  showErrors && formErrors.itemName
+                    ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                    : 'border-cinnamon-ice/30'
+                "
                 @focus="setFocusedField('itemName')"
                 @blur="blurInput"
                 @keydown.enter.prevent="blurInput"
@@ -599,12 +634,26 @@ const blurInput = (event: Event) => {
                 class="absolute right-3 top-1/2 -translate-y-1/2 text-noble-black/30 hover:text-noble-black transition-colors"
                 @click="itemName = ''"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <p v-if="showErrors && formErrors.itemName" class="text-[12px] font-medium text-cinnabar-red">{{ formErrors.itemName }}</p>
+            <p
+              v-if="showErrors && formErrors.itemName"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
+              {{ formErrors.itemName }}
+            </p>
           </div>
 
           <!-- Category -->
@@ -616,8 +665,12 @@ const blurInput = (event: Event) => {
               <div
                 class="flex h-12 w-full cursor-pointer items-center justify-between rounded-[14px] border bg-white px-4 transition-all hover:border-burning-orange/40"
                 :class="[
-                  isCategoryDropdownOpen ? 'border-burning-orange/50 ring-1 ring-burning-orange/20' : '',
-                  showErrors && formErrors.category ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30'
+                  isCategoryDropdownOpen
+                    ? 'border-burning-orange/50 ring-1 ring-burning-orange/20'
+                    : '',
+                  showErrors && formErrors.category
+                    ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                    : 'border-cinnamon-ice/30',
                 ]"
                 @click="toggleCategoryDropdown"
               >
@@ -625,10 +678,20 @@ const blurInput = (event: Event) => {
                   class="text-[14px] transition-colors"
                   :class="category ? 'text-noble-black font-normal' : 'text-noble-black/40'"
                 >
-                  {{ category || 'Select Category' }}
+                  {{ category || "Select Category" }}
                 </span>
-                <div class="text-noble-black/30 transition-transform duration-300" :class="{ 'rotate-180': isCategoryDropdownOpen }">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <div
+                  class="text-noble-black/30 transition-transform duration-300"
+                  :class="{ 'rotate-180': isCategoryDropdownOpen }"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
                     <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
                 </div>
@@ -651,7 +714,11 @@ const blurInput = (event: Event) => {
                       v-for="cat in categories"
                       :key="cat"
                       class="flex w-full items-center px-4 py-2.5 text-left text-[14px] transition-colors"
-                      :class="category === cat ? 'bg-burning-orange text-white font-bold' : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange'"
+                      :class="
+                        category === cat
+                          ? 'bg-burning-orange text-white font-bold'
+                          : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange'
+                      "
                       @click="selectCategory(cat)"
                     >
                       {{ cat }}
@@ -660,7 +727,12 @@ const blurInput = (event: Event) => {
                 </div>
               </transition>
             </div>
-            <p v-if="showErrors && formErrors.category" class="text-[12px] font-medium text-cinnabar-red">{{ formErrors.category }}</p>
+            <p
+              v-if="showErrors && formErrors.category"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
+              {{ formErrors.category }}
+            </p>
           </div>
           <!-- Description -->
           <div class="flex flex-col gap-2">
@@ -672,130 +744,168 @@ const blurInput = (event: Event) => {
                 v-model="description"
                 placeholder="Describe your item in detail."
                 class="min-h-[120px] w-full resize-y rounded-[14px] border bg-white p-4 pr-10 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-                :class="showErrors && formErrors.description ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30'"
+                :class="
+                  showErrors && formErrors.description
+                    ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                    : 'border-cinnamon-ice/30'
+                "
               ></textarea>
               <button
                 v-if="description"
                 class="absolute right-3 top-4 text-noble-black/30 hover:text-noble-black transition-colors"
                 @click="description = ''"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <p v-if="showErrors && formErrors.description" class="text-[12px] font-medium text-cinnabar-red">{{ formErrors.description }}</p>
+            <p
+              v-if="showErrors && formErrors.description"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
+              {{ formErrors.description }}
+            </p>
             <p v-else class="text-[12px] text-noble-black/30">
               Include details like brand, model, condition, and any unique features
             </p>
           </div>
         </div>
-        </section>
+      </section>
 
-        <!-- Section 3: Additional Details -->
-        <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
-          <h2 class="text-[20px] font-bold text-noble-black">Additional Details</h2>
-          <p class="mt-1 text-[14px] text-noble-black/50">
-            Help renters understand what they're getting.
-          </p>
+      <!-- Section 3: Additional Details -->
+      <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
+        <h2 class="text-[20px] font-bold text-noble-black">Additional Details</h2>
+        <p class="mt-1 text-[14px] text-noble-black/50">
+          Help renters understand what they're getting.
+        </p>
 
-          <div class="mt-8 flex flex-col gap-6">
-            <!-- What This Item Offers -->
-            <div class="flex flex-col gap-2">
-              <label class="text-[14px] font-semibold text-noble-black">
-                What This Item Offers <span class="text-cinnabar-red">*</span>
-              </label>
-              <div
-                class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[14px] border bg-white p-2.5 transition-all focus-within:border-burning-orange/50 focus-within:ring-1 focus-within:ring-burning-orange/20"
-                :class="showErrors && formErrors.whatThisItemOffers ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30'"
-              >
-                <div
-                  v-for="(offer, index) in whatThisItemOffers"
-                  :key="`${offer}-${index}`"
-                  class="group flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black transition-colors hover:bg-cinnamon-ice/20"
-                >
-                  <span>{{ offer }}</span>
-                  <button
-                    class="flex h-4 w-4 items-center justify-center rounded-full text-noble-black/40 transition-all hover:bg-cinnabar-red hover:text-white"
-                    @click="removeOffer(index)"
-                  >
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                    >
-                      <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                  </button>
-                </div>
-
-                <input
-                  v-model="offersInput"
-                  type="text"
-                  :placeholder="whatThisItemOffers.length > 0 ? '' : 'e.g., 33MP Full-Frame Sensor, 4K 60p Video Recording'"
-                  class="min-w-[220px] flex-1 bg-transparent px-1.5 text-[14px] outline-none placeholder:text-noble-black/40"
-                  @input="handleOfferInput"
-                  @keydown.enter.prevent="blurInput"
-                  @blur="addOffer"
-                />
-              </div>
-              <p v-if="showErrors && formErrors.whatThisItemOffers" class="text-[12px] font-medium text-cinnabar-red">{{ formErrors.whatThisItemOffers }}</p>
-              <p v-else class="text-[12px] text-noble-black/30">Separate features with commas</p>
-            </div>
-
-            <!-- What's Included -->
-            <div class="flex flex-col gap-2">
-              <label class="text-[14px] font-semibold text-noble-black">
-                What's Included <span class="text-cinnabar-red">*</span>
-              </label>
-              <div
-                class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[14px] border bg-white p-2.5 transition-all focus-within:border-burning-orange/50 focus-within:ring-1 focus-within:ring-burning-orange/20"
-                :class="showErrors && formErrors.whatsIncluded ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30'"
-              >
-                <div
-                  v-for="(included, index) in whatsIncluded"
-                  :key="`${included}-${index}`"
-                  class="group flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black transition-colors hover:bg-cinnamon-ice/20"
-                >
-                  <span>{{ included }}</span>
-                  <button
-                    class="flex h-4 w-4 items-center justify-center rounded-full text-noble-black/40 transition-all hover:bg-cinnabar-red hover:text-white"
-                    @click="removeIncluded(index)"
-                  >
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                    >
-                      <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                  </button>
-                </div>
-
-                <input
-                  v-model="includedInput"
-                  type="text"
-                  :placeholder="whatsIncluded.length > 0 ? '' : 'e.g., Battery Charger, Camera Strap'"
-                  class="min-w-[220px] flex-1 bg-transparent px-1.5 text-[14px] outline-none placeholder:text-noble-black/40"
-                  @input="handleIncludedInput"
-                  @keydown.enter.prevent="blurInput"
-                  @blur="addIncluded"
-                />
-              </div>
-              <p v-if="showErrors && formErrors.whatsIncluded" class="text-[12px] font-medium text-cinnabar-red">{{ formErrors.whatsIncluded }}</p>
-              <p v-else class="text-[12px] text-noble-black/30">Separate items with commas</p>
-            </div>
-          <!-- Known Issues -->
+        <div class="mt-8 flex flex-col gap-6">
+          <!-- What This Item Offers -->
           <div class="flex flex-col gap-2">
             <label class="text-[14px] font-semibold text-noble-black">
-              Known Issues
+              What This Item Offers <span class="text-cinnabar-red">*</span>
             </label>
+            <div
+              class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[14px] border bg-white p-2.5 transition-all focus-within:border-burning-orange/50 focus-within:ring-1 focus-within:ring-burning-orange/20"
+              :class="
+                showErrors && formErrors.whatThisItemOffers
+                  ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                  : 'border-cinnamon-ice/30'
+              "
+            >
+              <div
+                v-for="(offer, index) in whatThisItemOffers"
+                :key="`${offer}-${index}`"
+                class="group flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black transition-colors hover:bg-cinnamon-ice/20"
+              >
+                <span>{{ offer }}</span>
+                <button
+                  class="flex h-4 w-4 items-center justify-center rounded-full text-noble-black/40 transition-all hover:bg-cinnabar-red hover:text-white"
+                  @click="removeOffer(index)"
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              <input
+                v-model="offersInput"
+                type="text"
+                :placeholder="
+                  whatThisItemOffers.length > 0
+                    ? ''
+                    : 'e.g., 33MP Full-Frame Sensor, 4K 60p Video Recording'
+                "
+                class="min-w-[220px] flex-1 bg-transparent px-1.5 text-[14px] outline-none placeholder:text-noble-black/40"
+                @input="handleOfferInput"
+                @keydown.enter.prevent="blurInput"
+                @blur="addOffer"
+              />
+            </div>
+            <p
+              v-if="showErrors && formErrors.whatThisItemOffers"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
+              {{ formErrors.whatThisItemOffers }}
+            </p>
+            <p v-else class="text-[12px] text-noble-black/30">Separate features with commas</p>
+          </div>
+
+          <!-- What's Included -->
+          <div class="flex flex-col gap-2">
+            <label class="text-[14px] font-semibold text-noble-black">
+              What's Included <span class="text-cinnabar-red">*</span>
+            </label>
+            <div
+              class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[14px] border bg-white p-2.5 transition-all focus-within:border-burning-orange/50 focus-within:ring-1 focus-within:ring-burning-orange/20"
+              :class="
+                showErrors && formErrors.whatsIncluded
+                  ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                  : 'border-cinnamon-ice/30'
+              "
+            >
+              <div
+                v-for="(included, index) in whatsIncluded"
+                :key="`${included}-${index}`"
+                class="group flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black transition-colors hover:bg-cinnamon-ice/20"
+              >
+                <span>{{ included }}</span>
+                <button
+                  class="flex h-4 w-4 items-center justify-center rounded-full text-noble-black/40 transition-all hover:bg-cinnabar-red hover:text-white"
+                  @click="removeIncluded(index)"
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              <input
+                v-model="includedInput"
+                type="text"
+                :placeholder="whatsIncluded.length > 0 ? '' : 'e.g., Battery Charger, Camera Strap'"
+                class="min-w-[220px] flex-1 bg-transparent px-1.5 text-[14px] outline-none placeholder:text-noble-black/40"
+                @input="handleIncludedInput"
+                @keydown.enter.prevent="blurInput"
+                @blur="addIncluded"
+              />
+            </div>
+            <p
+              v-if="showErrors && formErrors.whatsIncluded"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
+              {{ formErrors.whatsIncluded }}
+            </p>
+            <p v-else class="text-[12px] text-noble-black/30">Separate items with commas</p>
+          </div>
+          <!-- Known Issues -->
+          <div class="flex flex-col gap-2">
+            <label class="text-[14px] font-semibold text-noble-black"> Known Issues </label>
             <div class="relative">
               <textarea
                 v-model="knownIssues"
@@ -807,7 +917,16 @@ const blurInput = (event: Event) => {
                 class="absolute right-3 top-4 text-noble-black/30 hover:text-noble-black transition-colors"
                 @click="knownIssues = ''"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
@@ -817,10 +936,10 @@ const blurInput = (event: Event) => {
             </p>
           </div>
         </div>
-        </section>
+      </section>
 
-        <!-- Section 4: Pricing -->
-        <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
+      <!-- Section 4: Pricing -->
+      <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
         <h2 class="text-[20px] font-bold text-noble-black">Pricing</h2>
         <p class="mt-1 text-[14px] text-noble-black/50">Set your rental rate or sale price</p>
 
@@ -838,7 +957,11 @@ const blurInput = (event: Event) => {
                     type="radio"
                     value="Borrow"
                     class="peer h-5 w-5 appearance-none rounded-full border border-cinnamon-ice/60 bg-white transition-all checked:border-burning-orange"
-                    :class="showErrors && formErrors.listingType ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : ''"
+                    :class="
+                      showErrors && formErrors.listingType
+                        ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                        : ''
+                    "
                   />
                   <div
                     class="absolute h-2.5 w-2.5 scale-0 rounded-full bg-burning-orange transition-transform peer-checked:scale-100"
@@ -853,7 +976,11 @@ const blurInput = (event: Event) => {
                     type="radio"
                     value="Rent"
                     class="peer h-5 w-5 appearance-none rounded-full border border-cinnamon-ice/60 bg-white transition-all checked:border-burning-orange"
-                    :class="showErrors && formErrors.listingType ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : ''"
+                    :class="
+                      showErrors && formErrors.listingType
+                        ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                        : ''
+                    "
                   />
                   <div
                     class="absolute h-2.5 w-2.5 scale-0 rounded-full bg-burning-orange transition-transform peer-checked:scale-100"
@@ -862,7 +989,12 @@ const blurInput = (event: Event) => {
                 <span class="text-[14px] font-medium text-noble-black/70">For Rent</span>
               </label>
             </div>
-            <p v-if="showErrors && formErrors.listingType" class="text-[12px] font-medium text-cinnabar-red">{{ formErrors.listingType }}</p>
+            <p
+              v-if="showErrors && formErrors.listingType"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
+              {{ formErrors.listingType }}
+            </p>
           </div>
 
           <!-- Rate -->
@@ -872,13 +1004,20 @@ const blurInput = (event: Event) => {
             </label>
             <div class="flex items-center gap-3">
               <div class="relative flex-1">
-                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-medium text-noble-black/60">₱</span>
+                <span
+                  class="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-medium text-noble-black/60"
+                  >₱</span
+                >
                 <input
                   v-model="rateAmount"
                   type="text"
                   placeholder="0.00"
                   class="h-12 w-full rounded-[14px] border bg-white pl-8 pr-10 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-                  :class="showErrors && formErrors.rateAmount ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30'"
+                  :class="
+                    showErrors && formErrors.rateAmount
+                      ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                      : 'border-cinnamon-ice/30'
+                  "
                   :disabled="listingType === 'Borrow'"
                   @focus="setFocusedField('rateAmount')"
                   @input="handleRateInput"
@@ -888,32 +1027,55 @@ const blurInput = (event: Event) => {
                 <button
                   v-if="rateAmount && focusedField === 'rateAmount'"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-noble-black/30 hover:text-noble-black transition-colors"
-                  :class="{ 'hidden': listingType === 'Borrow' }"
+                  :class="{ hidden: listingType === 'Borrow' }"
                   @click="rateAmount = ''"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
                     <path d="M18 6L6 18M6 6l12 12" />
                   </svg>
                 </button>
               </div>
               <div ref="rateUnitDropdownRef" class="relative w-40">
-                  <div
-                    class="flex h-12 w-full cursor-pointer items-center justify-between rounded-[14px] border bg-white px-4 transition-all hover:border-burning-orange/40"
-                    :class="[
-                      isRateUnitDropdownOpen ? 'border-burning-orange/50 ring-1 ring-burning-orange/20' : '',
-                      showErrors && formErrors.rateUnit ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30',
-                      listingType === 'Borrow' ? 'opacity-50 cursor-not-allowed grayscale-[0.5]' : ''
-                    ]"
-                    @click="listingType !== 'Borrow' && toggleRateUnitDropdown()"
+                <div
+                  class="flex h-12 w-full cursor-pointer items-center justify-between rounded-[14px] border bg-white px-4 transition-all hover:border-burning-orange/40"
+                  :class="[
+                    isRateUnitDropdownOpen
+                      ? 'border-burning-orange/50 ring-1 ring-burning-orange/20'
+                      : '',
+                    showErrors && formErrors.rateUnit
+                      ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                      : 'border-cinnamon-ice/30',
+                    listingType === 'Borrow' ? 'opacity-50 cursor-not-allowed grayscale-[0.5]' : '',
+                  ]"
+                  @click="listingType !== 'Borrow' && toggleRateUnitDropdown()"
+                >
+                  <span
+                    class="text-[14px] transition-colors"
+                    :class="rateUnit ? 'text-noble-black font-normal' : 'text-noble-black/40'"
                   >
-                    <span
-                      class="text-[14px] transition-colors"
-                      :class="rateUnit ? 'text-noble-black font-normal' : 'text-noble-black/40'"
+                    {{ rateUnit || "Per" }}
+                  </span>
+                  <div
+                    class="text-noble-black/30 transition-transform duration-300"
+                    :class="{ 'rotate-180': isRateUnitDropdownOpen }"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
                     >
-                      {{ rateUnit || 'Per' }}
-                    </span>
-                    <div class="text-noble-black/30 transition-transform duration-300" :class="{ 'rotate-180': isRateUnitDropdownOpen }">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                       <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                   </div>
@@ -936,7 +1098,11 @@ const blurInput = (event: Event) => {
                         v-for="unit in ['Per Day', 'Per Hour']"
                         :key="unit"
                         class="flex w-full items-center px-4 py-2.5 text-left text-[14px] transition-colors"
-                        :class="rateUnit === unit ? 'bg-burning-orange text-white font-bold' : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange'"
+                        :class="
+                          rateUnit === unit
+                            ? 'bg-burning-orange text-white font-bold'
+                            : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange'
+                        "
                         @click="selectRateUnit(unit)"
                       >
                         {{ unit }}
@@ -944,25 +1110,34 @@ const blurInput = (event: Event) => {
                     </div>
                   </div>
                 </transition>
-              </div>            </div>
-            <p v-if="showErrors && (formErrors.rateAmount || formErrors.rateUnit)" class="text-[12px] font-medium text-cinnabar-red">
+              </div>
+            </div>
+            <p
+              v-if="showErrors && (formErrors.rateAmount || formErrors.rateUnit)"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
               {{ formErrors.rateAmount || formErrors.rateUnit }}
             </p>
           </div>
 
           <!-- Replacement Cost -->
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black">
-              Replacement Cost
-            </label>
+            <label class="text-[14px] font-semibold text-noble-black"> Replacement Cost </label>
             <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-medium text-noble-black/60">₱</span>
+              <span
+                class="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-medium text-noble-black/60"
+                >₱</span
+              >
               <input
                 v-model="replacementCost"
                 type="text"
                 placeholder="0.00"
                 class="h-12 w-full rounded-[14px] border bg-white pl-8 pr-10 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-                :class="showErrors && formErrors.replacementCost ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10' : 'border-cinnamon-ice/30'"
+                :class="
+                  showErrors && formErrors.replacementCost
+                    ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
+                    : 'border-cinnamon-ice/30'
+                "
                 @focus="setFocusedField('replacementCost')"
                 @input="handleReplacementCostInput"
                 @blur="blurInput"
@@ -973,7 +1148,16 @@ const blurInput = (event: Event) => {
                 class="absolute right-3 top-1/2 -translate-y-1/2 text-noble-black/30 hover:text-noble-black transition-colors"
                 @click="replacementCost = ''"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
@@ -983,7 +1167,7 @@ const blurInput = (event: Event) => {
             </p>
           </div>
         </div>
-        </section>
+      </section>
       <!-- Section 5: Availability -->
       <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
         <h2 class="text-[20px] font-bold text-noble-black">Availability</h2>
@@ -1001,25 +1185,32 @@ const blurInput = (event: Event) => {
                 placeholder="Select date"
                 disable-past
                 class="w-full sm:flex-1"
-                :class="{ 'ring-1 ring-cinnabar-red/50 rounded-[10px]': showErrors && formErrors.availableFromDate }"
+                :class="{
+                  'ring-1 ring-cinnabar-red/50 rounded-[10px]':
+                    showErrors && formErrors.availableFromDate,
+                }"
               />
               <CustomTimePicker
                 v-model="availableFromTime"
                 placeholder="Select time"
                 class="w-full sm:w-48"
-                :class="{ 'ring-1 ring-cinnabar-red/50 rounded-[10px]': showErrors && formErrors.availableFromTime }"
+                :class="{
+                  'ring-1 ring-cinnabar-red/50 rounded-[10px]':
+                    showErrors && formErrors.availableFromTime,
+                }"
               />
             </div>
-            <p v-if="showErrors && (formErrors.availableFromDate || formErrors.availableFromTime)" class="text-[12px] font-medium text-cinnabar-red">
+            <p
+              v-if="showErrors && (formErrors.availableFromDate || formErrors.availableFromTime)"
+              class="text-[12px] font-medium text-cinnabar-red"
+            >
               {{ formErrors.availableFromDate || formErrors.availableFromTime }}
             </p>
           </div>
 
           <!-- Available Until -->
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black">
-              Available Until
-            </label>
+            <label class="text-[14px] font-semibold text-noble-black"> Available Until </label>
             <div class="flex flex-wrap items-center gap-3">
               <CustomCalendar
                 v-model="availableUntilDate"
@@ -1163,7 +1354,9 @@ const blurInput = (event: Event) => {
           @click="showCancelModal = false"
         />
 
-        <div class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl">
+        <div
+          class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl"
+        >
           <div class="flex flex-col items-center px-8 py-10 text-center">
             <div
               class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream shadow-inner"
@@ -1186,7 +1379,9 @@ const blurInput = (event: Event) => {
               </svg>
             </div>
 
-            <h3 class="mb-3 text-[22px] font-bold tracking-tight text-noble-black">Discard changes?</h3>
+            <h3 class="mb-3 text-[22px] font-bold tracking-tight text-noble-black">
+              Discard changes?
+            </h3>
             <p class="mb-10 text-[14px] leading-relaxed text-noble-black/40 max-w-[260px]">
               You have unsaved changes. Are you sure you want to go back?
             </p>

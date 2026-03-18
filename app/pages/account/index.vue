@@ -111,7 +111,7 @@ const defaultListings: ListingCardItem[] = [
 const listingItems = ref<ListingCardItem[]>([])
 
 onMounted(() => {
-  if (typeof localStorage !== 'undefined') {
+  if (typeof localStorage !== "undefined") {
     const mockListings = JSON.parse(localStorage.getItem("mockMyListings") || "[]")
     listingItems.value = [...mockListings, ...defaultListings]
   } else {
@@ -154,7 +154,6 @@ const filteredListings = computed(() => {
     return matchesFilter && matchesSearch
   })
 })
-
 </script>
 
 <template>
@@ -192,7 +191,9 @@ const filteredListings = computed(() => {
           <div class="relative w-full">
             <div
               class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/45 z-10 sm:left-6"
-              :class="{ 'cursor-pointer hover:text-noble-black transition-colors': searchQuery.length > 0 }"
+              :class="{
+                'cursor-pointer hover:text-noble-black transition-colors': searchQuery.length > 0,
+              }"
               @click="searchQuery.length > 0 && (searchQuery = '')"
             >
               <svg

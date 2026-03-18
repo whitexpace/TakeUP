@@ -25,7 +25,9 @@
         </div>
       </div>
 
-      <div class="mb-2 flex flex-col gap-1 sm:mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+      <div
+        class="mb-2 flex flex-col gap-1 sm:mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-2"
+      >
         <h3
           class="w-full truncate font-geist text-[14px] font-semibold leading-tight text-noble-black sm:text-[17px]"
         >

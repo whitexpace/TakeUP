@@ -33,9 +33,11 @@ const route = useRoute()
 watch(
   () => [route.path, route.query.tab],
   ([path, tab]) => {
-    if (path.startsWith("/items") || tab === "my-listings") {
+    const currentPath = path as string
+    const currentTab = Array.isArray(tab) ? tab[0] : tab
+    if (currentPath.startsWith("/items") || currentTab === "my-listings") {
       activeItem.value = "my-listings"
-    } else if (path === "/account") {
+    } else if (currentPath === "/account") {
       activeItem.value = "account-information"
     }
   },
@@ -119,9 +121,11 @@ const profileInitials = computed(() => {
     .filter(Boolean)
 
   if (words.length === 0) return "TU"
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  if (words.length === 1) return (words[0] ?? "").slice(0, 2).toUpperCase()
 
-  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase()
+  const firstWord = words[0] ?? ""
+  const lastWord = words[words.length - 1] ?? ""
+  return `${firstWord[0] ?? ""}${lastWord[0] ?? ""}`.toUpperCase()
 })
 
 const avatarColorClasses = [
@@ -134,8 +138,10 @@ const avatarColorClasses = [
 ] as const
 
 const avatarColorClass = computed(() => {
-  const seed = user.value?.id || user.value?.email || profileName.value
-  const index = Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0)
+  const seed = user.value?.id || user.value?.email || profileName.value || ""
+  const index = seed
+    .split("")
+    .reduce((total: number, char: string) => total + char.charCodeAt(0), 0)
   return avatarColorClasses[index % avatarColorClasses.length]
 })
 
@@ -335,7 +341,9 @@ provide("accountActiveItem", activeItem)
           @click="cancelLogout"
         />
 
-        <div class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl">
+        <div
+          class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl"
+        >
           <div class="flex flex-col items-center px-8 py-10 text-center">
             <div
               class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream shadow-inner"
