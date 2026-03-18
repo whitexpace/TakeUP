@@ -1,152 +1,30 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue"
+import { ref } from "vue"
 
-type NavItemId =
-  | "account-information"
-  | "my-wallet"
-  | "my-transactions"
-  | "my-listings"
-  | "my-listing-analytics"
-  | "my-rewards"
-
-type NavIconName = "user" | "wallet" | "transactions" | "grid" | "activity" | "star"
-
-type NavGroup = {
-  label: string
-  items: Array<{
-    id: NavItemId
-    label: string
-    icon: NavIconName
-  }>
-}
-
-const activeItem = ref<NavItemId>("account-information")
-const isSidebarOpen = ref(true)
-const isMobile = ref(false)
+const route = useRoute()
+const showMobileSidebar = ref(false)
 const showLogoutModal = ref(false)
 
-const supabase = useSupabaseClient()
-const user = useSupabaseUser()
-const route = useRoute()
-
-// Watch route to update active item
-watch(
-  () => [route.path, route.query.tab],
-  ([path, tab]) => {
-    const currentPath = path as string
-    const currentTab = Array.isArray(tab) ? tab[0] : tab
-    if (currentPath.startsWith("/items") || currentTab === "my-listings") {
-      activeItem.value = "my-listings"
-    } else if (currentPath === "/account") {
-      activeItem.value = "account-information"
-    }
-  },
-  { immediate: true },
-)
-
-const navGroups: NavGroup[] = [
-  {
-    label: "Account",
-    items: [
-      { id: "account-information", label: "Account Information", icon: "user" },
-      { id: "my-wallet", label: "My Wallet", icon: "wallet" },
-      { id: "my-transactions", label: "My Transactions", icon: "transactions" },
-    ],
-  },
-  {
-    label: "Listings",
-    items: [
-      { id: "my-listings", label: "My Listings", icon: "grid" },
-      { id: "my-listing-analytics", label: "My Listing Analytics", icon: "activity" },
-    ],
-  },
-  {
-    label: "Perks",
-    items: [{ id: "my-rewards", label: "My Rewards", icon: "star" }],
-  },
+const links = [
+  { label: "Account Information", to: "/account" },
+  { label: "My Wallet", to: null },
+  { label: "My Transactions", to: "/account/transactions" },
+  { label: "My Listings", to: "/account/listings" },
+  { label: "My Listing Analytics", to: null },
+  { label: "My Rewards", to: null },
 ]
 
-const selectItem = (itemId: NavItemId) => {
-  activeItem.value = itemId
-  if (itemId === "my-listings" && route.path !== "/account" && !route.path.startsWith("/items")) {
-    void navigateTo("/account")
-  }
-
-  if (itemId === "account-information" && route.path !== "/account") {
-    void navigateTo("/account")
-  }
+const isActive = (link: { label: string; to: string | null }) => {
+  if (!link.to) return false
+  if (link.to === "/account") return route.path === "/account"
+  return route.path.startsWith(link.to)
 }
 
-const toggleSidebar = () => {
-  isSidebarOpen.value = !isSidebarOpen.value
-}
-
-const checkMobile = () => {
-  isMobile.value = window.innerWidth < 1024
-  if (isMobile.value) {
-    isSidebarOpen.value = false
-  } else {
-    isSidebarOpen.value = true
-  }
-}
-
-const profileName = computed(() => {
-  if (!user.value) return "Account User"
-
-  const fullName =
-    (user.value.user_metadata?.full_name as string | undefined) ||
-    (user.value.user_metadata?.name as string | undefined) ||
-    user.value.email ||
-    "Account User"
-
-  return fullName
-})
-
-const profileSubtitle = computed(() => user.value?.email ?? "Signed in to TakeUP")
-
-const profileImageUrl = computed(() => {
-  if (!user.value) return ""
-
-  return (
-    (user.value.user_metadata?.avatar_url as string | undefined) ||
-    (user.value.user_metadata?.picture as string | undefined) ||
-    ""
-  )
-})
-
-const profileInitials = computed(() => {
-  const words = profileName.value
-    .split(" ")
-    .map((word) => word.trim())
-    .filter(Boolean)
-
-  if (words.length === 0) return "TU"
-  if (words.length === 1) return (words[0] ?? "").slice(0, 2).toUpperCase()
-
-  const firstWord = words[0] ?? ""
-  const lastWord = words[words.length - 1] ?? ""
-  return `${firstWord[0] ?? ""}${lastWord[0] ?? ""}`.toUpperCase()
-})
-
-const avatarColorClasses = [
-  "bg-blue-estate",
-  "bg-burning-orange",
-  "bg-cinnamon-ice",
-  "bg-wahoo",
-  "bg-success-green",
-  "bg-cinnabar-red",
-] as const
-
-const avatarColorClass = computed(() => {
-  const seed = user.value?.id || user.value?.email || profileName.value || ""
-  const index = seed
-    .split("")
-    .reduce((total: number, char: string) => total + char.charCodeAt(0), 0)
-  return avatarColorClasses[index % avatarColorClasses.length]
-})
+const supabase = useSupabaseClient()
 
 const openLogoutModal = () => {
   showLogoutModal.value = true
+  showMobileSidebar.value = false
 }
 
 const cancelLogout = () => {
@@ -159,219 +37,162 @@ const confirmLogout = async () => {
   await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
   await navigateTo("/")
 }
-
-onMounted(() => {
-  checkMobile()
-  window.addEventListener("resize", checkMobile)
-})
-
-onUnmounted(() => {
-  window.removeEventListener("resize", checkMobile)
-})
-
-provide("accountActiveItem", activeItem)
 </script>
 
 <template>
-  <div class="flex flex-col h-screen font-geist bg-white relative overflow-hidden text-noble-black">
+  <div class="flex flex-col min-h-screen font-geist bg-white relative">
+    <!-- Top Navbar -->
     <Header>
-      <template #left>
+      <template #mobile-menu>
         <button
-          class="flex items-center justify-center h-10 w-10 rounded-full text-noble-black transition-colors hover:bg-cream hover:text-burning-orange"
-          aria-label="Toggle account sidebar"
-          title="Toggle account sidebar"
-          @click="toggleSidebar"
+          class="lg:hidden p-2 text-noble-black hover:text-burning-orange transition-colors"
+          aria-label="Open menu"
+          @click="showMobileSidebar = true"
         >
           <svg
-            width="22"
-            height="22"
+            width="24"
+            height="24"
             viewBox="0 0 24 24"
             fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
           >
-            <path
-              d="M4 6H20M4 12H20M4 18H20"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
       </template>
     </Header>
 
-    <div class="flex flex-1 overflow-hidden h-[calc(100vh-56px)] relative">
-      <div
-        v-if="isSidebarOpen && isMobile"
-        class="fixed inset-0 bg-noble-black/50 z-40 lg:hidden transition-opacity duration-300"
-        @click="isSidebarOpen = false"
-      />
+    <!-- Main Content Container -->
+    <div class="flex flex-1 overflow-hidden lg:h-[calc(100vh-56px)]">
+      <!-- Mobile backdrop -->
+      <Transition name="fade">
+        <div
+          v-if="showMobileSidebar"
+          class="fixed inset-0 z-30 bg-noble-black/50 lg:hidden"
+          @click="showMobileSidebar = false"
+        />
+      </Transition>
 
+      <!-- Left Sidebar -->
       <aside
-        class="bg-cream flex flex-col shrink-0 border-r border-cinnamon-ice transition-all duration-300 ease-in-out z-50 fixed bottom-0 left-0 top-14 lg:relative lg:bottom-auto lg:left-auto lg:top-auto lg:translate-x-0 font-geist"
-        :class="[
-          isSidebarOpen
-            ? 'translate-x-0 w-80'
-            : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
-        ]"
+        class="fixed lg:static top-0 left-0 z-40 h-full w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0 transition-transform duration-300"
+        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
-        <!-- Profile Section -->
-        <div class="border-b-[0.5px] border-black/[0.07] px-6 py-7">
-          <div class="flex items-center gap-3">
-            <div class="relative flex h-10 w-10 shrink-0 items-center justify-center">
-              <!-- Three-color Arc Stroke -->
-              <svg class="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 40 40">
-                <circle
-                  cx="20"
-                  cy="20"
-                  r="19.25"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-dasharray="40.32 80.63"
-                  class="text-burning-orange"
-                />
-                <circle
-                  cx="20"
-                  cy="20"
-                  r="19.25"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-dasharray="40.32 80.63"
-                  stroke-dashoffset="-40.32"
-                  class="text-cinnamon-ice"
-                />
-                <circle
-                  cx="20"
-                  cy="20"
-                  r="19.25"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-dasharray="40.32 80.63"
-                  stroke-dashoffset="-80.64"
-                  class="text-blue-estate"
-                />
-              </svg>
+        <!-- Mobile close button -->
+        <button
+          class="lg:hidden absolute top-4 right-4 p-2 text-noble-black/50 hover:text-noble-black"
+          @click="showMobileSidebar = false"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
 
-              <!-- Avatar Core -->
-              <div
-                class="relative z-10 flex h-[37px] w-[37px] shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold text-white shadow-sm"
-                :class="profileImageUrl ? 'bg-pale-cashmere' : avatarColorClass"
-              >
-                <img
-                  v-if="profileImageUrl"
-                  :src="profileImageUrl"
-                  :alt="`${profileName} profile picture`"
-                  class="h-full w-full object-cover"
-                />
-                <span v-else>{{ profileInitials }}</span>
-              </div>
-            </div>
-
-            <div class="min-w-0">
-              <p class="truncate text-[16px] font-semibold text-noble-black leading-tight">
-                {{ profileName }}
-              </p>
-              <p class="truncate text-[12px] text-noble-black/50 mt-1">
-                {{ profileSubtitle }}
-              </p>
-            </div>
-          </div>
+        <!-- Sidebar Title -->
+        <div class="px-8 pt-10 pb-6">
+          <h2 class="font-bold text-[25px] text-blue-estate">MY ACCOUNT</h2>
         </div>
 
-        <!-- Navigation Section -->
-        <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-6 py-8">
-          <section
-            v-for="(group, groupIndex) in navGroups"
-            :key="group.label"
-            :class="groupIndex === 0 ? '' : 'mt-10'"
-          >
-            <p class="mb-4 text-[15px] font-semibold uppercase tracking-[0.05em] text-cinnamon-ice">
-              {{ group.label }}
-            </p>
-
-            <div class="space-y-1.5">
-              <button
-                v-for="item in group.items"
-                :key="item.id"
-                class="flex w-full items-center gap-3.5 py-3 px-4 transition-all text-left text-[14px] leading-5 font-geist rounded-xl group"
-                :class="
-                  activeItem === item.id
-                    ? 'bg-burning-orange/10 text-burning-orange font-bold border-l-4 border-burning-orange pl-[12px]'
-                    : 'text-noble-black/80 hover:bg-black/5 hover:text-noble-black'
-                "
-                @click="selectItem(item.id)"
-              >
-                <AccountSidebarIcon :name="item.icon" />
-                <span class="truncate">{{ item.label }}</span>
-              </button>
-            </div>
-          </section>
+        <!-- Navigation Links -->
+        <nav class="flex-1 flex flex-col">
+          <template v-for="link in links" :key="link.label">
+            <NuxtLink
+              v-if="link.to"
+              :to="link.to"
+              class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
+              :class="
+                isActive(link)
+                  ? 'bg-burning-orange text-white font-medium'
+                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere'
+              "
+              @click="showMobileSidebar = false"
+            >
+              {{ link.label }}
+            </NuxtLink>
+            <a
+              v-else
+              href="#"
+              class="block w-full px-8 py-3 text-[18px] transition-all duration-200 text-noble-black bg-cream font-normal hover:bg-pale-cashmere"
+              @click.prevent
+            >
+              {{ link.label }}
+            </a>
+          </template>
         </nav>
 
         <!-- Logout Section -->
-        <div class="mt-auto border-t-[0.5px] border-black/[0.07] px-6 py-4">
+        <div class="mt-auto border-t border-cinnamon-ice bg-cream">
           <button
-            class="flex w-full items-center gap-3.5 rounded-xl px-4 py-2 text-left text-[14px] font-medium text-noble-black/80 transition-all font-geist hover:bg-cinnabar-red/10 hover:text-cinnabar-red"
+            class="flex items-center gap-3 w-full px-8 py-5 group transition-all duration-200 text-noble-black"
             @click="openLogoutModal"
           >
-            <AccountSidebarIcon name="logout" />
-            <span>Log Out</span>
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="transition-colors duration-200 group-hover:text-burning-orange"
+            >
+              <path
+                d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span
+              class="font-normal text-[18px] transition-colors duration-200 group-hover:text-burning-orange"
+              >Log Out</span
+            >
           </button>
         </div>
       </aside>
 
-      <main
-        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar p-8 transition-all duration-300 ease-in-out"
-      >
+      <!-- Page Content Slot -->
+      <main class="flex-1 bg-white overflow-y-auto p-4 sm:p-6 lg:p-8 min-w-0">
         <slot />
       </main>
     </div>
 
+    <!-- Logout Confirmation Modal -->
     <Teleport to="body">
       <div
         v-if="showLogoutModal"
-        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 font-geist"
       >
         <div
-          class="absolute inset-0 bg-noble-black/40 backdrop-blur-[2px] transition-opacity"
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm transition-opacity"
           @click="cancelLogout"
         />
-
         <div
-          class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl"
+          class="relative bg-white rounded-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 shadow-2xl"
         >
-          <div class="flex flex-col items-center px-8 py-10 text-center">
-            <div
-              class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream shadow-inner"
-            >
+          <div class="p-8 flex flex-col items-center text-center">
+            <div class="w-16 h-16 bg-cream rounded-full flex items-center justify-center mb-6">
               <svg
-                width="30"
-                height="30"
+                width="32"
+                height="32"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
-                class="text-burning-orange"
+                class="text-cinnabar-red"
               >
                 <path
-                  d="M10 3H6C5.46957 3 4.96086 3.21071 4.58579 3.58579C4.21071 3.96086 4 4.46957 4 5V19C4 19.5304 4.21071 20.0391 4.58579 20.4142C4.96086 20.7893 5.46957 21 6 21H10"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <path
-                  d="M16 17L21 12L16 7"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <path
-                  d="M21 12H9"
+                  d="M12 9V11M12 15H12.01M5.07183 19H18.9282C20.4678 19 21.4301 17.3333 20.6603 16L13.7321 4C12.9623 2.66667 11.0378 2.66667 10.268 4L3.33978 16C2.56998 17.3333 3.53223 19 5.07183 19Z"
                   stroke="currentColor"
                   stroke-width="2"
                   stroke-linecap="round"
@@ -379,24 +200,54 @@ provide("accountActiveItem", activeItem)
                 />
               </svg>
             </div>
-
-            <h3 class="mb-3 text-[22px] font-bold tracking-tight text-noble-black">Log out?</h3>
-            <p class="mb-10 text-[14px] leading-relaxed text-noble-black/40 max-w-[260px]">
-              Requests will remain pending. You can review them after logging back in.
-            </p>
-
-            <div class="flex items-center justify-center gap-3">
+            <h3 class="text-2xl font-bold text-blue-estate mb-2">Confirm Logout</h3>
+            <p class="text-noble-black/50 mb-8 font-medium">Are you sure you want to log out?</p>
+            <div
+              class="w-full bg-cream rounded-xl p-5 mb-8 text-left space-y-4 border border-cinnamon-ice/30"
+            >
+              <div class="flex items-center gap-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
+                  <path
+                    d="M8 12L11 15L16 9"
+                    stroke="white"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span class="text-noble-black text-[15px] font-light leading-tight"
+                  >Requests will remain pending</span
+                >
+              </div>
+              <div class="flex items-center gap-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
+                  <path
+                    d="M8 12L11 15L16 9"
+                    stroke="white"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span class="text-noble-black text-[15px] font-light leading-tight"
+                  >You can review them after logging back in</span
+                >
+              </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3 w-full">
               <button
-                class="h-10 rounded-xl border border-cinnamon-ice/30 px-6 text-[14px] font-semibold text-noble-black/60 transition-all hover:bg-pale-cashmere hover:text-noble-black"
+                class="flex-1 px-6 py-3 border-[0.5px] border-cinnamon-ice rounded-lg text-noble-black font-medium hover:bg-pale-cashmere transition-colors duration-200 focus:outline-none"
                 @click="cancelLogout"
               >
                 Go Back
               </button>
               <button
-                class="h-10 rounded-xl bg-burning-orange px-6 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-cinnabar-red hover:shadow-md"
+                class="flex-1 px-6 py-3 bg-burning-orange text-white rounded-lg font-medium hover:bg-cinnabar-red transition-colors duration-200 focus:outline-none"
                 @click="confirmLogout"
               >
-                Log Out
+                Log Out Anyway
               </button>
             </div>
           </div>
@@ -407,47 +258,12 @@ provide("accountActiveItem", activeItem)
 </template>
 
 <style scoped>
-.custom-sidebar-scrollbar::-webkit-scrollbar {
-  width: 4px;
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
 }
-
-.custom-sidebar-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 50%");
-  border-radius: 20px;
-}
-
-.custom-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.cinnamon-ice");
-}
-
-.custom-sidebar-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.cinnamon-ice / 50%") transparent;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%");
-  border-radius: 20px;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
-}
-
-.custom-main-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.noble-black / 10%") transparent;
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

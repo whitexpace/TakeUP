@@ -1,130 +1,130 @@
+<script setup lang="ts">
+import type { MyListingItem } from "../composables/use-my-listings"
+
+const props = defineProps<{
+  item: MyListingItem
+  isToggling?: boolean
+}>()
+
+const emit = defineEmits<{
+  toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
+}>()
+
+const typeBadge = computed(() => {
+  if (props.item.freeToBorrow) return { label: "Borrow", class: "bg-indigo-900 text-orange-50" }
+  return { label: "Rent", class: "bg-red-300 text-neutral-800" }
+})
+
+const statusLabel = computed(() => {
+  switch (props.item.status) {
+    case "AVAILABLE":
+      return "ACTIVE"
+    case "RENTED":
+      return "IN USE"
+    case "DEACTIVATED":
+      return "INACTIVE"
+    default:
+      return props.item.status
+  }
+})
+
+const priceDisplay = computed(() => {
+  if (props.item.freeToBorrow) return "₱Free"
+  const rate = props.item.rateOption === "PER_HOUR" ? "/hr" : "/day"
+  return `₱${props.item.rentalFee.toLocaleString()}${rate}`
+})
+
+const primaryCategory = computed(() =>
+  props.item.categories.length > 0 ? props.item.categories[0] : "OTHER",
+)
+
+const formattedCategory = computed(() =>
+  String(primaryCategory.value)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase()),
+)
+
+const canToggle = computed(() => props.item.status !== "RENTED")
+const toggleLabel = computed(() =>
+  props.item.status === "DEACTIVATED" ? "Activate" : "Deactivate",
+)
+const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
+  props.item.status === "DEACTIVATED" ? "AVAILABLE" : "DEACTIVATED",
+)
+</script>
+
 <template>
   <div
-    class="mx-auto flex h-full w-full max-w-[340px] cursor-pointer flex-col overflow-hidden rounded-[15px] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-shadow duration-300 hover:shadow-lg sm:rounded-[20px]"
+    class="flex flex-col rounded-[20px] overflow-hidden border border-orange-500/30 bg-white hover:shadow-md transition-shadow duration-200"
   >
-    <!-- Image Section -->
-    <div class="relative aspect-square w-full bg-gray-50">
-      <img :src="image" :alt="name" class="h-full w-full object-cover" />
-
-      <!-- Type Tag -->
-      <div
-        class="absolute left-2 top-2 flex h-[24px] min-w-[50px] items-center justify-center whitespace-nowrap rounded-full font-geist text-[11px] font-normal tracking-wide shadow-sm sm:left-4 sm:top-4 sm:h-[32px] sm:min-w-[80px] sm:text-[15px]"
-        :class="type === 'Rent' ? 'bg-cinnamon-ice text-noble-black' : 'bg-blue-estate text-white'"
-      >
-        {{ type }}
-      </div>
-    </div>
-
-    <!-- Details Section -->
-    <div class="flex flex-1 flex-col bg-white p-3 sm:p-5">
-      <div
-        class="mb-1 flex items-center justify-between gap-2 font-geist text-[11px] font-medium uppercase tracking-wide sm:mb-1.5 sm:gap-3 sm:text-[13px]"
-      >
-        <div class="min-w-0 truncate text-burning-orange">
-          {{ category }}
-        </div>
-      </div>
-
-      <div
-        class="mb-2 flex flex-col gap-1 sm:mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-2"
-      >
-        <h3
-          class="w-full truncate font-geist text-[14px] font-semibold leading-tight text-noble-black sm:text-[17px]"
-        >
-          {{ name }}
-        </h3>
-        <div class="flex shrink-0 items-center gap-1 sm:pt-0.5">
-          <svg
-            class="h-3 w-3 fill-burning-orange sm:h-3.5 sm:w-3.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-            />
-          </svg>
-          <span
-            class="font-geist text-[11px] font-medium text-noble-black opacity-80 sm:text-[13px]"
-            >{{ rating }}</span
-          >
-          <span class="font-geist text-[11px] font-light text-noble-black opacity-60 sm:text-[13px]"
-            >({{ reviews }})</span
-          >
-        </div>
-      </div>
-
-      <div class="mt-auto">
-        <div v-if="price !== undefined" class="flex items-baseline gap-1">
-          <span class="font-geist text-[15px] font-bold text-burning-orange sm:text-[19px]"
-            >₱{{ price }}</span
-          >
-          <span
-            class="font-geist text-[12px] font-normal text-noble-black opacity-70 sm:text-[15px]"
-            >/day</span
-          >
-        </div>
-      </div>
-    </div>
-
-    <!-- Divider -->
-    <div class="h-[1px] w-full bg-cinnamon-ice"></div>
-
-    <!-- Owner/Request Section -->
-    <div class="flex items-center justify-between bg-white px-3 py-2 sm:px-5 sm:py-4">
+    <!-- Image with type badge -->
+    <div class="relative">
+      <img
+        :src="item.thumbnailImage || 'https://placehold.co/289x200'"
+        :alt="item.name"
+        class="w-full h-40 sm:h-48 object-cover"
+      />
       <span
-        class="truncate font-geist text-[12px] font-normal text-noble-black opacity-80 sm:text-[15px]"
-        >by You</span
+        class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-sm font-normal font-geist tracking-wide"
+        :class="typeBadge.class"
       >
+        {{ typeBadge.label }}
+      </span>
+    </div>
 
-      <div
-        class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium tracking-[0.05em] sm:px-2.5 sm:py-1"
-        :class="[statusClasses.text, statusClasses.badge]"
-      >
-        <span class="h-1.5 w-1.5 rounded-full" :class="statusClasses.dot" />
-        <span>{{ status }}</span>
+    <!-- Card Info -->
+    <div class="p-3 flex flex-col gap-1 flex-1">
+      <!-- Category + Status row -->
+      <div class="flex justify-between items-center">
+        <span class="text-orange-500 text-xs font-medium font-geist uppercase">{{
+          formattedCategory
+        }}</span>
+        <span class="text-indigo-900 text-xs font-medium font-geist">{{ statusLabel }}</span>
+      </div>
+
+      <!-- Item name -->
+      <p class="text-blue-950 text-sm sm:text-base font-semibold font-geist line-clamp-1">
+        {{ item.name }}
+      </p>
+
+      <!-- Rating row -->
+      <div class="flex items-center gap-1">
+        <span class="w-2.5 h-2.5 bg-orange-500 inline-block" />
+        <span class="text-neutral-800/80 text-xs font-medium font-geist">{{
+          item.rating.toFixed(1)
+        }}</span>
+        <span class="text-neutral-800/60 text-xs font-light font-geist"
+          >({{ item.bookingCount }})</span
+        >
+      </div>
+
+      <!-- Divider -->
+      <hr class="border-red-300/50 my-1" />
+
+      <!-- Price -->
+      <p class="text-orange-500 text-base sm:text-lg font-bold font-geist">{{ priceDisplay }}</p>
+
+      <!-- Action buttons -->
+      <div class="flex gap-2 mt-2">
+        <NuxtLink
+          :to="`/account/listings/${item.id}/edit`"
+          class="flex-1 py-1.5 text-center text-sm font-medium font-geist text-white bg-indigo-900 rounded-lg hover:bg-indigo-800 transition-colors"
+        >
+          Edit
+        </NuxtLink>
+        <button
+          :disabled="!canToggle || isToggling"
+          class="flex-1 py-1.5 text-sm font-medium font-geist rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="
+            item.status === 'DEACTIVATED'
+              ? 'text-white bg-burning-orange hover:bg-orange-600'
+              : 'text-neutral-800 border border-neutral-300 hover:bg-neutral-50'
+          "
+          @click="emit('toggleStatus', item.id, toggleTarget)"
+        >
+          {{ isToggling ? "..." : toggleLabel }}
+        </button>
       </div>
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed } from "vue"
-
-const props = defineProps<{
-  id: string | number
-  type: "Rent" | "Borrow"
-  status: "IN USE" | "ACTIVE" | "INACTIVE"
-  image: string
-  category: string
-  name: string
-  rating: number | string
-  reviews: number | string
-  price?: string | number
-  requestCount: number
-}>()
-
-const statusClasses = computed(() => {
-  if (props.status === "IN USE") {
-    return {
-      text: "text-cinnabar-red",
-      dot: "bg-cinnabar-red",
-      badge: "bg-cinnabar-red/10",
-    }
-  }
-
-  if (props.status === "ACTIVE") {
-    return {
-      text: "text-success-green",
-      dot: "bg-success-green",
-      badge: "bg-success-green/10",
-    }
-  }
-
-  return {
-    text: "text-noble-black/45",
-    dot: "bg-noble-black/35",
-    badge: "bg-noble-black/5",
-  }
-})
-</script>

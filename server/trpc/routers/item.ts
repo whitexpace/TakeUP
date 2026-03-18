@@ -7,6 +7,7 @@ import {
   deleteItemSchema,
   itemIdSchema,
   listItemsSchema,
+  myListingsSchema,
   paginatedItemsSchema,
   itemStatusSchema,
   updateItemSchema,
@@ -620,7 +621,14 @@ export const itemRouter = router({
     }
   }),
 
-  create: protectedProcedure.input(createItemSchema).mutation(({ ctx, input }) => {
+  create: protectedProcedure.input(createItemSchema).mutation(async ({ ctx, input }) => {
+    // Ensure Lender profile exists for this user
+    await ctx.prisma.lender.upsert({
+      where: { userId: ctx.user.id },
+      create: { userId: ctx.user.id, lenderRating: 0 },
+      update: {},
+    })
+
     return ctx.prisma.item
       .create({
         data: {
@@ -761,6 +769,45 @@ export const itemRouter = router({
         include: itemWithTaxonomy,
       })
       .then(mapItemTaxonomy)
+  }),
+
+  myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
+    const { search, status, limit, cursor } = input
+    const userId = ctx.user.id
+
+    const baseWhere: Prisma.ItemWhereInput = {
+      lenderId: userId,
+      status: status ? status : { not: itemStatusSchema.enum.DELETED },
+    }
+
+    const cursorWhere: Prisma.ItemWhereInput = cursor
+      ? {
+          OR: [
+            { createdAt: { lt: cursor.createdAt } },
+            { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+          ],
+        }
+      : {}
+
+    const records = await ctx.prisma.item.findMany({
+      where: { AND: [baseWhere, cursorWhere] },
+      include: itemWithTaxonomy,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: search ? SEARCH_SCAN_LIMIT : limit + 1,
+    })
+
+    const filteredRecords = search
+      ? filterAndRankSearchResults(records, search, { sortByScore: false })
+      : records
+    const hasMore = filteredRecords.length > limit
+    const pageRecords = hasMore ? filteredRecords.slice(0, limit) : filteredRecords
+    const lastRecord = pageRecords.at(-1)
+
+    return {
+      items: pageRecords.map(mapItemTaxonomy),
+      nextCursor:
+        hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null,
+    }
   }),
 
   toggleLike: protectedProcedure.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
