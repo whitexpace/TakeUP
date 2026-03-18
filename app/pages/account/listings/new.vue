@@ -27,21 +27,11 @@ const handleSubmit = async (data: Record<string, unknown>) => {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <!-- Page header -->
-    <div>
-      <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">Add New Item</h1>
-      <p class="text-neutral-800/70 text-sm sm:text-base font-geist mt-1">
-        Fill in the details below to list your item for borrow or rent.
-      </p>
-    </div>
-
-    <ListingForm
-      mode="new"
-      :is-submitting="isSubmitting"
-      :submit-error="submitError"
-      @submit="handleSubmit"
-      @cancel="navigateTo('/account/listings')"
-    />
-  </div>
+  <ListingForm
+    mode="new"
+    :is-submitting="isSubmitting"
+    :submit-error="submitError"
+    @submit="handleSubmit"
+    @cancel="navigateTo('/account/listings')"
+  />
 </template>
