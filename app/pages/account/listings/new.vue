@@ -28,24 +28,6 @@ const handleSubmit = async (data: Record<string, unknown>) => {
 
 <template>
   <div class="space-y-4">
-    <!-- Breadcrumb -->
-    <NuxtLink
-      to="/account/listings"
-      class="inline-flex items-center gap-2 text-neutral-800/70 text-sm font-medium font-geist hover:text-neutral-800 transition-colors"
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path d="M19 12H5M12 5l-7 7 7 7" />
-      </svg>
-      Back to My Listings
-    </NuxtLink>
-
     <!-- Page header -->
     <div>
       <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">Add New Item</h1>
