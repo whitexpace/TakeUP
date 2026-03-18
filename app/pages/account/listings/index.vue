@@ -41,6 +41,24 @@ onMounted(() => fetchListings())
           Manage your listed items for borrow or rent
         </p>
       </div>
+      <div class="flex gap-3 shrink-0">
+        <NuxtLink
+          to="/account/listings/new"
+          class="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white rounded-[30px] text-sm font-medium font-geist hover:bg-orange-600 transition-colors"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add New Item
+        </NuxtLink>
+      </div>
     </div>
 
     <!-- Search bar -->

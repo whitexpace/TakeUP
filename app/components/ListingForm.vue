@@ -16,6 +16,7 @@ type AvailabilityRange = {
 }
 
 const props = defineProps<{
+  mode?: "new" | "edit"
   item?: MyListingItem | null
   isSubmitting?: boolean
   submitError?: string | null
@@ -613,7 +614,15 @@ const handleSubmit = () => {
           :disabled="isSubmitting"
           class="sm:flex-1 lg:flex-none px-8 py-3 bg-orange-500 text-white rounded-[30px] text-base font-medium font-geist hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {{ isSubmitting ? "Saving..." : "Save Changes" }}
+          {{
+            isSubmitting
+              ? props.mode === "new"
+                ? "Publishing..."
+                : "Saving..."
+              : props.mode === "new"
+                ? "Publish Item"
+                : "Save Changes"
+          }}
         </button>
         <button
           type="button"

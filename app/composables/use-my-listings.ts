@@ -42,6 +42,12 @@ export const useMyListings = () => {
     }
   }
 
+  const createListing = async (data: Record<string, unknown>): Promise<MyListingItem> => {
+    const result = await $fetch<MyListingItem>("/api/items", { method: "POST", body: data })
+    listings.value = [result, ...listings.value]
+    return result
+  }
+
   const updateListing = async (
     id: string,
     data: Record<string, unknown>,
@@ -80,6 +86,7 @@ export const useMyListings = () => {
     error,
     hasMore,
     fetchListings,
+    createListing,
     updateListing,
     toggleStatus,
     loadMore,
