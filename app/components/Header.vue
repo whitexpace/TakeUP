@@ -20,7 +20,7 @@ defineOptions({
     <div class="flex-1 flex justify-center overflow-hidden px-2">
       <nav class="hidden lg:flex items-center gap-8 whitespace-nowrap px-4">
         <NuxtLink
-          to="/dashboard"
+          to="/feed"
           class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
           active-class="text-burning-orange"
         >
