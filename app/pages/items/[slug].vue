@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { inferRouterOutputs } from "@trpc/server"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
+import { useBag } from "../../composables/use-bag"
 import { buildItemDetailPath, extractItemIdFromSlug } from "../../utils/item-detail-route"
 import type { AppRouter } from "../../../server/trpc/routers"
 
@@ -631,6 +632,33 @@ const closeLightbox = () => {
   isLightboxOpen.value = false
   if (!isMobileModalOpen.value) {
     document.body.style.overflow = "auto"
+  }
+}
+
+const { bagItems, addToBag: addItemToBag } = useBag()
+
+const isInBag = computed(() => {
+  return bagItems.value.some((i) => i.id === item.value?.id)
+})
+
+const handleAddToBag = () => {
+  if (!item.value || !hasBookingSelection.value) return
+
+  addItemToBag({
+    id: item.value.id,
+    name: item.value.name,
+    price: item.value.rentalFee,
+    priceUnit: item.value.rateOption === "PER_HOUR" ? "hour" : "day",
+    image: item.value.thumbnailImage || item.value.photos[0] || "",
+    startDate: startDate.value,
+    endDate: endDate.value,
+    startTime: startTime.value,
+    endTime: endTime.value,
+  })
+
+  // Optionally close the mobile modal if it's open
+  if (isMobileModalOpen.value) {
+    closeBookingModal()
   }
 }
 
@@ -1328,11 +1356,30 @@ onUnmounted(() => {
                   </div>
                   <div>
                     <button
-                      class="w-full py-3 bg-burning-orange text-white rounded-2xl font-bold text-base hover:bg-blue-estate transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                      :disabled="!canSubmitBooking"
-                      @click="submitBookingRequest"
+                      class="w-full py-3 text-white rounded-2xl font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-3 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      :class="
+                        isInBag
+                          ? 'bg-noble-black hover:bg-noble-black/90'
+                          : 'bg-burning-orange hover:bg-blue-estate'
+                      "
+                      :disabled="!hasBookingSelection || isInBag"
+                      @click="handleAddToBag"
                     >
-                      {{ isSubmittingBooking ? "Submitting..." : "Add to Bag" }}
+                      <svg
+                        v-if="isInBag"
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      {{ isInBag ? "Added to Bag" : "Add to Bag" }}
                     </button>
                     <p
                       class="text-center text-[11px] font-normal"
@@ -1694,11 +1741,30 @@ onUnmounted(() => {
                     </div>
                   </div>
                   <button
-                    class="w-full py-2 bg-burning-orange text-white rounded-2xl font-medium text-base hover:bg-blue-estate transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    :disabled="!canSubmitBooking"
-                    @click="submitBookingRequest"
+                    class="w-full py-2 text-white rounded-2xl font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    :class="
+                      isInBag
+                        ? 'bg-noble-black hover:bg-noble-black/90'
+                        : 'bg-burning-orange hover:bg-blue-estate'
+                    "
+                    :disabled="!hasBookingSelection || isInBag"
+                    @click="handleAddToBag"
                   >
-                    {{ isSubmittingBooking ? "Submitting..." : "Add to Bag" }}
+                    <svg
+                      v-if="isInBag"
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {{ isInBag ? "Added to Bag" : "Add to Bag" }}
                   </button>
                   <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
                     {{ bookingFeedbackMessage }}
@@ -2220,11 +2286,30 @@ onUnmounted(() => {
                 </div>
               </div>
               <button
-                class="w-full py-2 bg-burning-orange text-white rounded-2xl font-medium text-base hover:bg-blue-estate transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="!canSubmitBooking"
-                @click="submitBookingRequest"
+                class="w-full py-2 text-white rounded-2xl font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                :class="
+                  isInBag
+                    ? 'bg-noble-black hover:bg-noble-black/90'
+                    : 'bg-burning-orange hover:bg-blue-estate'
+                "
+                :disabled="!hasBookingSelection || isInBag"
+                @click="handleAddToBag"
               >
-                {{ isSubmittingBooking ? "Submitting..." : "Add to Bag" }}
+                <svg
+                  v-if="isInBag"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {{ isInBag ? "Added to Bag" : "Add to Bag" }}
               </button>
               <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
                 {{ bookingFeedbackMessage }}
@@ -2292,10 +2377,25 @@ onUnmounted(() => {
         </button>
       </div>
       <button
-        class="px-6 py-2.5 bg-burning-orange text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all"
-        @click="openBookingModal"
+        class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
+        :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
+        @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
       >
-        {{ hasBookingSelection ? "Add to Bag" : "Check Availability" }}
+        <svg
+          v-if="isInBag"
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        {{ isInBag ? "Added to Bag" : hasBookingSelection ? "Add to Bag" : "Check Availability" }}
       </button>
     </div>
 
