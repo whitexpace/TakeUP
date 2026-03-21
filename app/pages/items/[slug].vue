@@ -87,7 +87,8 @@ const endTime = ref("06:00 PM")
 const isStartTimeOpen = ref(false)
 const isEndTimeOpen = ref(false)
 
-const normalizeDate = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate())
+const normalizeDate = (value: Date) =>
+  new Date(value.getFullYear(), value.getMonth(), value.getDate())
 
 const timeOptions = (() => {
   const options: string[] = []
@@ -121,13 +122,6 @@ const formatDate = (value: Date | null) => {
     year: "numeric",
   })
 }
-
-const formatAvailabilityDate = (value: Date | string) =>
-  new Date(value).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
 
 const humanizeEnum = (value: string) =>
   value
@@ -247,7 +241,6 @@ const ownerInitials = computed(() => {
 
 const ratingLabel = computed(() => (item.value ? item.value.rating.toFixed(1) : "0.0"))
 const bookingCountLabel = computed(() => `${item.value?.bookingCount ?? 0} booking(s)`)
-const likeCountLabel = computed(() => `${item.value?.likeCount ?? 0} like(s)`)
 
 const offerHighlights = computed(() => {
   const explicitOffers = splitDetailList(item.value?.whatItemOffers)
@@ -256,7 +249,9 @@ const offerHighlights = computed(() => {
   if (!item.value) return []
 
   return [
-    item.value.freeToBorrow ? "Available to borrow for free" : `${priceAmount.value} ${priceUnitLabel.value}`,
+    item.value.freeToBorrow
+      ? "Available to borrow for free"
+      : `${priceAmount.value} ${priceUnitLabel.value}`,
     `${formattedCondition.value} condition`,
     `Status: ${statusLabel.value}`,
     ...formattedCategories.value.slice(0, 2),
@@ -377,12 +372,8 @@ const isInRange = (date: Date | null) => {
 }
 
 const rangeHasUnavailable = (start: Date, end: Date) => {
-  const startBoundary = normalizeDate(
-    new Date(Math.min(start.getTime(), end.getTime())),
-  )
-  const endBoundary = normalizeDate(
-    new Date(Math.max(start.getTime(), end.getTime())),
-  )
+  const startBoundary = normalizeDate(new Date(Math.min(start.getTime(), end.getTime())))
+  const endBoundary = normalizeDate(new Date(Math.max(start.getTime(), end.getTime())))
 
   for (
     const cursor = new Date(startBoundary);
@@ -509,7 +500,9 @@ const selectStartTime = (timeValue: string) => {
   isStartTimeOpen.value = false
 
   if (isSameDay.value && timeToMinutes(timeValue) >= timeToMinutes(endTime.value)) {
-    const nextValidTime = timeOptions.find((option) => timeToMinutes(option) > timeToMinutes(timeValue))
+    const nextValidTime = timeOptions.find(
+      (option) => timeToMinutes(option) > timeToMinutes(timeValue),
+    )
     endTime.value = nextValidTime ?? endTime.value
   }
 }
@@ -544,7 +537,10 @@ const totalUnits = computed(() => {
 
   const bookingStart = createDateTime(startDate.value, startTime.value)
   const bookingEnd = createDateTime(displayEndDate.value, endTime.value)
-  const diffHours = Math.max(0.5, (bookingEnd.getTime() - bookingStart.getTime()) / (1000 * 60 * 60))
+  const diffHours = Math.max(
+    0.5,
+    (bookingEnd.getTime() - bookingStart.getTime()) / (1000 * 60 * 60),
+  )
 
   if (item.value.rateOption === "PER_HOUR") {
     return Math.max(1, Math.ceil(diffHours))
@@ -759,7 +755,9 @@ onUnmounted(() => {
             </button>
             <button
               class="p-2 transition-all duration-300 ease-in-out group"
-              :class="isSaved ? 'text-burning-orange' : 'text-noble-black/70 hover:text-noble-black'"
+              :class="
+                isSaved ? 'text-burning-orange' : 'text-noble-black/70 hover:text-noble-black'
+              "
               title="Save"
               @click="toggleSaved"
             >
@@ -883,7 +881,10 @@ onUnmounted(() => {
                   </svg>
                 </button>
               </div>
-              <div v-if="imageGallery.length > 1" class="relative mt-4 group/scroll overflow-hidden">
+              <div
+                v-if="imageGallery.length > 1"
+                class="relative mt-4 group/scroll overflow-hidden"
+              >
                 <div
                   v-if="!isAtStart"
                   class="absolute top-0 left-0 h-20 w-16 bg-gradient-to-r from-white via-white/80 to-transparent flex items-center justify-start pl-2 cursor-pointer z-10"
@@ -926,9 +927,7 @@ onUnmounted(() => {
                       :src="img"
                       class="w-full h-full object-cover transition-all duration-300"
                       :class="
-                        currentImageIndex === idx
-                          ? ''
-                          : 'blur-[1px] group-hover/thumb:blur-0'
+                        currentImageIndex === idx ? '' : 'blur-[1px] group-hover/thumb:blur-0'
                       "
                     />
                   </div>
@@ -1067,13 +1066,33 @@ onUnmounted(() => {
                               : '',
                           ]"
                           @mousedown="
-                            onMouseDown(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)
+                            onMouseDown(
+                              dayObj.fullDate,
+                              dayObj.isUnavailable ?? false,
+                              dayObj.isPast ?? false,
+                            )
                           "
-                          @mouseup="onMouseUp(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
+                          @mouseup="
+                            onMouseUp(
+                              dayObj.fullDate,
+                              dayObj.isUnavailable ?? false,
+                              dayObj.isPast ?? false,
+                            )
+                          "
                           @mouseenter="
-                            onMouseEnter(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)
+                            onMouseEnter(
+                              dayObj.fullDate,
+                              dayObj.isUnavailable ?? false,
+                              dayObj.isPast ?? false,
+                            )
                           "
-                          @click="onDateClick(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
+                          @click="
+                            onDateClick(
+                              dayObj.fullDate,
+                              dayObj.isUnavailable ?? false,
+                              dayObj.isPast ?? false,
+                            )
+                          "
                         >
                           {{ dayObj.day }}
                         </button>
@@ -1180,7 +1199,9 @@ onUnmounted(() => {
                   <div>
                     <div class="flex items-baseline gap-1 mb-4">
                       <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
-                      ><span class="text-sm text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+                      ><span class="text-sm text-noble-black/60 font-medium">{{
+                        priceUnitLabel
+                      }}</span>
                     </div>
                     <div class="grid grid-cols-2 mb-6 relative">
                       <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/30" />
@@ -1226,8 +1247,10 @@ onUnmounted(() => {
                     <div class="space-y-3 mb-4">
                       <div class="flex justify-between items-center text-sm text-noble-black/70">
                         <span>
-                          Rate ({{ item.freeToBorrow ? "Free" : formatPesoAmount(item.rentalFee) }} x
-                          {{ totalUnits }} {{ totalUnitsLabel }})
+                          Rate ({{
+                            item.freeToBorrow ? "Free" : formatPesoAmount(item.rentalFee)
+                          }}
+                          x {{ totalUnits }} {{ totalUnitsLabel }})
                         </span>
                         <span class="font-medium text-noble-black">
                           {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
@@ -1413,16 +1436,32 @@ onUnmounted(() => {
                                   : '',
                               ]"
                               @mousedown="
-                                onMouseDown(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)
+                                onMouseDown(
+                                  dayObj.fullDate,
+                                  dayObj.isUnavailable ?? false,
+                                  dayObj.isPast ?? false,
+                                )
                               "
                               @mouseup="
-                                onMouseUp(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)
+                                onMouseUp(
+                                  dayObj.fullDate,
+                                  dayObj.isUnavailable ?? false,
+                                  dayObj.isPast ?? false,
+                                )
                               "
                               @mouseenter="
-                                onMouseEnter(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)
+                                onMouseEnter(
+                                  dayObj.fullDate,
+                                  dayObj.isUnavailable ?? false,
+                                  dayObj.isPast ?? false,
+                                )
                               "
                               @click="
-                                onDateClick(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)
+                                onDateClick(
+                                  dayObj.fullDate,
+                                  dayObj.isUnavailable ?? false,
+                                  dayObj.isPast ?? false,
+                                )
                               "
                             >
                               {{ dayObj.day }}
@@ -1524,12 +1563,15 @@ onUnmounted(() => {
                 <div class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm">
                   <div class="flex items-baseline gap-1 mb-4">
                     <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
-                    ><span class="text-sm text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+                    ><span class="text-sm text-noble-black/60 font-medium">{{
+                      priceUnitLabel
+                    }}</span>
                   </div>
                   <div class="grid grid-cols-2 mb-6 relative">
                     <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/30" />
                     <div class="flex flex-col gap-1 pr-4">
-                      <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                      <span
+                        class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
                         >Start</span
                       >
                       <div class="flex flex-col">
@@ -1540,7 +1582,8 @@ onUnmounted(() => {
                       </div>
                     </div>
                     <div class="flex flex-col gap-1 pl-4">
-                      <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                      <span
+                        class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
                         >End</span
                       >
                       <div class="flex flex-col">
@@ -1674,7 +1717,9 @@ onUnmounted(() => {
                       :key="issue"
                       class="text-sm leading-relaxed text-noble-black/80 flex items-start gap-2"
                     >
-                      <span class="text-burning-orange mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current" />
+                      <span
+                        class="text-burning-orange mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current"
+                      />
                       {{ issue }}
                     </p>
                   </div>
@@ -1691,7 +1736,9 @@ onUnmounted(() => {
                       :key="limitation"
                       class="text-sm leading-relaxed text-noble-black/80 flex items-start gap-2"
                     >
-                      <span class="text-burning-orange mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current" />
+                      <span
+                        class="text-burning-orange mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current"
+                      />
                       {{ limitation }}
                     </p>
                   </div>
@@ -1820,7 +1867,9 @@ onUnmounted(() => {
               @mouseleave="handleCalendarMouseLeave"
             >
               <div class="flex items-center justify-between mb-6">
-                <h3 class="font-semibold text-noble-black">{{ monthNames[viewMonth] }} {{ viewYear }}</h3>
+                <h3 class="font-semibold text-noble-black">
+                  {{ monthNames[viewMonth] }} {{ viewYear }}
+                </h3>
                 <div class="flex gap-2">
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
@@ -1916,10 +1965,34 @@ onUnmounted(() => {
                         ? 'text-burning-orange font-bold'
                         : '',
                     ]"
-                    @mousedown="onMouseDown(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
-                    @mouseup="onMouseUp(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
-                    @mouseenter="onMouseEnter(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
-                    @click="onDateClick(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
+                    @mousedown="
+                      onMouseDown(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
+                    @mouseup="
+                      onMouseUp(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
+                    @mouseenter="
+                      onMouseEnter(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
+                    @click="
+                      onDateClick(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
                   >
                     {{ dayObj.day }}
                   </button>
@@ -2261,10 +2334,34 @@ onUnmounted(() => {
                         ? 'text-burning-orange font-bold'
                         : '',
                     ]"
-                    @mousedown="onMouseDown(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
-                    @mouseup="onMouseUp(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
-                    @mouseenter="onMouseEnter(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
-                    @click="onDateClick(dayObj.fullDate, dayObj.isUnavailable ?? false, dayObj.isPast ?? false)"
+                    @mousedown="
+                      onMouseDown(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
+                    @mouseup="
+                      onMouseUp(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
+                    @mouseenter="
+                      onMouseEnter(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
+                    @click="
+                      onDateClick(
+                        dayObj.fullDate,
+                        dayObj.isUnavailable ?? false,
+                        dayObj.isPast ?? false,
+                      )
+                    "
                   >
                     {{ dayObj.day }}
                   </button>
