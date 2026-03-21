@@ -21,6 +21,15 @@ const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
 
 const itemWithTaxonomy = {
+  images: {
+    select: {
+      path: true,
+      isPrimary: true,
+      sortOrder: true,
+      createdAt: true,
+    },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  },
   availability: {
     select: {
       id: true,
@@ -257,17 +266,93 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
   return ranked.map((entry) => entry.item)
 }
 
+const normalizeImagePaths = (paths: string[]) =>
+  Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)))
+
+const ITEM_IMAGE_STORAGE_PATH_PATTERN =
+  /^items\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/(cover|gallery|original|thumb)\/[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/i
+const THUMBNAIL_IMAGE_VARIANTS = new Set(["cover", "thumb"])
+
+const getItemImageVariant = (path: string) => path.split("/")[3]?.toLowerCase() ?? ""
+
+const assertValidItemImagePaths = ({
+  paths,
+  userId,
+  itemId,
+  thumbnailPath,
+}: {
+  paths: string[]
+  userId: string
+  itemId: string
+  thumbnailPath: string | null
+}) => {
+  const expectedPrefix = `items/${userId}/${itemId}/`
+
+  for (const path of paths) {
+    if (!ITEM_IMAGE_STORAGE_PATH_PATTERN.test(path)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Invalid image path. Use items/{userId}/{itemId}/{cover|gallery|original|thumb}/{filename}.",
+      })
+    }
+
+    if (!path.startsWith(expectedPrefix)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Image path must match the current user and item.",
+      })
+    }
+  }
+
+  if (thumbnailPath) {
+    const thumbnailVariant = getItemImageVariant(thumbnailPath)
+    if (!THUMBNAIL_IMAGE_VARIANTS.has(thumbnailVariant)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Thumbnail image must be stored under either /cover/ or /thumb/.",
+      })
+    }
+  }
+}
+
+const buildItemImages = (thumbnailImage: string | null | undefined, photos: string[]) => {
+  const normalizedPhotos = normalizeImagePaths(photos)
+  const normalizedThumbnail = thumbnailImage?.trim() ?? ""
+  const coverImage = normalizedThumbnail.length > 0 ? normalizedThumbnail : null
+  const orderedPaths = normalizeImagePaths(
+    coverImage ? [coverImage, ...normalizedPhotos] : normalizedPhotos,
+  )
+
+  return orderedPaths.map((path, index) => ({
+    path,
+    isPrimary: coverImage ? path === coverImage : index === 0,
+    sortOrder: index,
+  }))
+}
+
 const mapItemTaxonomy = (item: ItemWithUserLike) => {
-  const { availability, categories, tags, lender, likes, ...rest } = item
+  const { availability, categories, tags, lender, likes, images, ...rest } = item
   const lenderUser = lender.user
   const ownerName =
     lenderUser.username ||
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
     lenderUser.email ||
     item.lenderId
+  const orderedImages = (images ?? []).slice().sort((a, b) => {
+    if (a.sortOrder === b.sortOrder) {
+      return a.createdAt.getTime() - b.createdAt.getTime()
+    }
+    return a.sortOrder - b.sortOrder
+  })
+  const thumbnailImage =
+    orderedImages.find((entry) => entry.isPrimary)?.path ?? orderedImages[0]?.path ?? null
+  const photos = orderedImages.map((entry) => entry.path)
 
   return {
     ...rest,
+    thumbnailImage,
+    photos,
     ownerName,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     availability: availability.map((entry) => ({
@@ -620,9 +705,16 @@ export const itemRouter = router({
     }
   }),
 
-  create: protectedProcedure.input(createItemSchema).mutation(({ ctx, input }) => {
-    return ctx.prisma.item
-      .create({
+  create: protectedProcedure.input(createItemSchema).mutation(async ({ ctx, input }) => {
+    // Ensure Lender profile exists for this user
+    await ctx.prisma.lender.upsert({
+      where: { userId: ctx.user.id },
+      create: { userId: ctx.user.id, lenderRating: 0 },
+      update: {},
+    })
+
+    return ctx.prisma.$transaction(async (tx) => {
+      const createdItem = await tx.item.create({
         data: {
           name: input.name,
           description: input.description ?? null,
@@ -643,12 +735,10 @@ export const itemRouter = router({
           whatIsIncluded: input.whatIsIncluded ?? null,
           knownIssues: input.knownIssues ?? null,
           usageLimitations: input.usageLimitations ?? null,
-          thumbnailImage: input.thumbnailImage ?? null,
           isTrending: input.isTrending ?? false,
           viewCount: input.viewCount ?? 0,
           bookingCount: input.bookingCount ?? 0,
           likeCount: input.likeCount ?? 0,
-          photos: input.photos,
           lenderId: ctx.user.id,
           categories: {
             create: input.categories.map((category) => ({ category })),
@@ -664,9 +754,42 @@ export const itemRouter = router({
             })),
           },
         },
+      })
+
+      const itemImages = buildItemImages(input.thumbnailImage ?? null, input.photos)
+      const thumbnailPath = itemImages.find((image) => image.isPrimary)?.path ?? null
+      assertValidItemImagePaths({
+        paths: itemImages.map((image) => image.path),
+        userId: ctx.user.id,
+        itemId: createdItem.id,
+        thumbnailPath,
+      })
+
+      if (itemImages.length) {
+        await tx.itemImage.createMany({
+          data: itemImages.map((image) => ({
+            itemId: createdItem.id,
+            path: image.path,
+            isPrimary: image.isPrimary,
+            sortOrder: image.sortOrder,
+          })),
+        })
+      }
+
+      const item = await tx.item.findUnique({
+        where: { id: createdItem.id },
         include: itemWithTaxonomy,
       })
-      .then(mapItemTaxonomy)
+
+      if (!item) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create item.",
+        })
+      }
+
+      return mapItemTaxonomy(item)
+    })
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(({ ctx, input }) => {
@@ -681,7 +804,18 @@ export const itemRouter = router({
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
     const existing = await ctx.prisma.item.findUnique({
       where: { id: input.id },
-      select: { lenderId: true },
+      select: {
+        lenderId: true,
+        images: {
+          select: {
+            path: true,
+            isPrimary: true,
+            sortOrder: true,
+            createdAt: true,
+          },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        },
+      },
     })
 
     if (!existing) {
@@ -692,7 +826,26 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
     }
 
-    const { id, availability, categories, tags, ...data } = input
+    const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
+    const existingPhotos = existing.images.map((entry) => entry.path)
+    const existingThumbnail =
+      existing.images.find((entry) => entry.isPrimary)?.path ?? existing.images[0]?.path ?? null
+    const resolvedPhotos = photos ?? existingPhotos
+    const resolvedThumbnail = thumbnailImage !== undefined ? thumbnailImage : existingThumbnail
+    const shouldUpdateImages = photos !== undefined || thumbnailImage !== undefined
+    const nextItemImages = shouldUpdateImages
+      ? buildItemImages(resolvedThumbnail, resolvedPhotos)
+      : []
+    const thumbnailPath = nextItemImages.find((image) => image.isPrimary)?.path ?? null
+
+    if (shouldUpdateImages) {
+      assertValidItemImagePaths({
+        paths: nextItemImages.map((image) => image.path),
+        userId: ctx.user.id,
+        itemId: id,
+        thumbnailPath,
+      })
+    }
 
     return ctx.prisma.item
       .update({
@@ -731,6 +884,18 @@ export const itemRouter = router({
                       },
                     },
                   })),
+                },
+              }
+            : {}),
+          ...(shouldUpdateImages
+            ? {
+                images: {
+                  deleteMany: {},
+                  ...(nextItemImages.length
+                    ? {
+                        create: nextItemImages,
+                      }
+                    : {}),
                 },
               }
             : {}),

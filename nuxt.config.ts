@@ -12,6 +12,7 @@ export default defineNuxtConfig({
         url: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
         key: process.env.NUXT_PUBLIC_SUPABASE_KEY || process.env.SUPABASE_KEY,
       },
+      itemImagesBucket: process.env.NUXT_PUBLIC_ITEM_IMAGES_BUCKET || "item-images",
       googleClientId: process.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
     },
   },

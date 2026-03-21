@@ -53,6 +53,14 @@ export const itemStatusSchema = z.enum(["AVAILABLE", "RENTED", "DEACTIVATED", "D
 export const rateOptionSchema = z.enum(["PER_HOUR", "PER_DAY"])
 
 const dedupe = <T>(items: T[]) => Array.from(new Set(items))
+const imagePathSchema = z
+  .string()
+  .trim()
+  .max(2048)
+  .regex(
+    /^items\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/(cover|gallery|original|thumb)\/[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/i,
+    "Image path must follow items/{userId}/{itemId}/{cover|gallery|original|thumb}/{filename}",
+  )
 
 export const itemTagsSchema = z
   .array(
@@ -119,12 +127,12 @@ export const createItemSchema = z.object({
   whatIsIncluded: z.string().max(2000).optional(),
   knownIssues: z.string().max(2000).optional(),
   usageLimitations: z.string().max(2000).optional(),
-  thumbnailImage: z.string().url().optional(),
+  thumbnailImage: imagePathSchema.optional(),
   isTrending: z.boolean().optional(),
   viewCount: z.number().int().min(0).optional(),
   bookingCount: z.number().int().min(0).optional(),
   likeCount: z.number().int().min(0).optional(),
-  photos: z.array(z.string().url()).default([]),
+  photos: z.array(imagePathSchema).default([]),
 })
 
 export const updateItemSchema = z
@@ -149,12 +157,12 @@ export const updateItemSchema = z
     whatIsIncluded: z.string().max(2000).nullable().optional(),
     knownIssues: z.string().max(2000).nullable().optional(),
     usageLimitations: z.string().max(2000).nullable().optional(),
-    thumbnailImage: z.string().url().nullable().optional(),
+    thumbnailImage: imagePathSchema.nullable().optional(),
     isTrending: z.boolean().optional(),
     viewCount: z.number().int().min(0).optional(),
     bookingCount: z.number().int().min(0).optional(),
     likeCount: z.number().int().min(0).optional(),
-    photos: z.array(z.string().url()).optional(),
+    photos: z.array(imagePathSchema).optional(),
   })
   .refine(
     (payload) =>
