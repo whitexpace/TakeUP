@@ -104,7 +104,7 @@ defineOptions({
       <!-- Cart Icon -->
       <button
         class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1"
-        title="Cart"
+        title="Bag"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
