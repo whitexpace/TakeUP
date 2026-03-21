@@ -160,6 +160,29 @@ model Booking {
   @@index([status])
 }
 
+model RentalTransaction {
+  id         String            @id @default(uuid())
+  itemId     String
+  borrowerId String
+  lenderId   String
+  startDate  DateTime
+  endDate    DateTime
+  status     TransactionStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
+  lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+
+  @@index([borrowerId])
+  @@index([createdAt])
+  @@index([itemId])
+  @@index([lenderId])
+  @@index([startDate])
+  @@index([status])
+}
+
 model ItemImage {
   id        String   @id @default(uuid())
   itemId    String
@@ -271,6 +294,7 @@ model Lender {
 
   listedItem Item[]
   bookings     Booking[]
+  transactions RentalTransaction[]
 }
 
 model Borrower {

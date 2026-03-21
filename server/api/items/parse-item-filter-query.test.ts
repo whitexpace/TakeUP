@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseItemFilterQuery } from "./parse-item-filter-query"
+import { parseItemFilterQuery } from "../../utils/parse-item-filter-query"
 
 describe("parseItemFilterQuery", () => {
   it("parses shared item filter params including rating", () => {
