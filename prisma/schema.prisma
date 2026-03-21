@@ -292,7 +292,7 @@ model Lender {
 
   lenderRating Int @default(0)
 
-  listedItem Item[]
+  listedItem   Item[]
   bookings     Booking[]
   transactions RentalTransaction[]
 }
