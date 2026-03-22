@@ -516,6 +516,51 @@ const syncItemStatusFromBookings = async (
   }
 }
 
+type ItemStatusSyncPrismaClient = Pick<Context["prisma"], "item"> & {
+  booking: {
+    findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
+  }
+}
+
+const syncItemStatusFromBookings = async (
+  prisma: ItemStatusSyncPrismaClient,
+  input: { itemId: string },
+) => {
+  const item = await prisma.item.findUnique({
+    where: { id: input.itemId },
+    select: { status: true },
+  })
+
+  if (!item || item.status === "DELETED") {
+    return
+  }
+
+  const blockingBooking = await prisma.booking.findFirst({
+    where: {
+      itemId: input.itemId,
+      status: { in: [...ITEM_BLOCKING_BOOKING_STATUSES] },
+    },
+    select: { id: true },
+  })
+
+  if (blockingBooking) {
+    if (item.status !== "RENTED") {
+      await prisma.item.update({
+        where: { id: input.itemId },
+        data: { status: "RENTED" },
+      })
+    }
+    return
+  }
+
+  if (item.status === "RENTED") {
+    await prisma.item.update({
+      where: { id: input.itemId },
+      data: { status: "AVAILABLE" },
+    })
+  }
+}
+
 export const bookingRouter = router({
   list: protectedProcedure.input(listBookingsSchema).query(async ({ ctx, input }) => {
     const bookingPrisma = getBookingPrisma(ctx)
