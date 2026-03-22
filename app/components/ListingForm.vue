@@ -549,8 +549,23 @@ const handleSubmit = () => {
 
   const payload = buildPayload()
 
-  const schema = isCreateMode.value ? createItemSchema : updateItemSchema
+  const schema = props.mode === "edit" ? updateItemSchema : createItemSchema
   const result = schema.safeParse(payload)
+
+  if (!result.success) {
+    const flat = result.error.flatten()
+
+    Object.entries(flat.fieldErrors).forEach(([key, messages]) => {
+      const firstMessage = messages?.[0]
+      if (firstMessage) {
+        fieldErrors.value[key] = firstMessage
+      }
+    })
+
+    if (flat.fieldErrors.availability) {
+      availabilityErrors.value = [...flat.fieldErrors.availability]
+    }
+  }
 
   const invalidAvailability = availabilityRanges.value.some(
     (range) =>
@@ -564,7 +579,7 @@ const handleSubmit = () => {
     availabilityErrors.value.push("Availability end dates must be later than start dates.")
   }
 
-  if (Object.keys(fieldErrors.value).length > 0 || availabilityErrors.value.length > 0) {
+  if (!result.success || Object.keys(fieldErrors.value).length > 0 || availabilityErrors.value.length > 0) {
     return
   }
 
