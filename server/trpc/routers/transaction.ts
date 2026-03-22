@@ -11,6 +11,11 @@ const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { createdAt: "asc" },
 ]
 
+const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+]
+
 const transactionInclude = {
   item: {
     select: {
