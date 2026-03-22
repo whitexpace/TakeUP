@@ -60,7 +60,6 @@ const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 const MAX_GALLERY_IMAGE_COUNT = 10
-const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
@@ -341,10 +340,7 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   })
 }
 
-const cleanupUploadedImages = async (
-  urls: string[],
-  options: { keepalive?: boolean } = {},
-) => {
+const cleanupUploadedImages = async (urls: string[], options: { keepalive?: boolean } = {}) => {
   const uniqueUrls = [...new Set(urls)].filter((url) => sessionUploadedImageUrls.has(url))
   if (uniqueUrls.length === 0) return
 
@@ -534,10 +530,7 @@ const handleFormEnterKeydown = (event: KeyboardEvent) => {
 }
 
 const buildPayload = () => {
-  const orderedImages = [
-    ...(coverImage.value ? [coverImage.value] : []),
-    ...galleryImages.value,
-  ]
+  const orderedImages = [...(coverImage.value ? [coverImage.value] : []), ...galleryImages.value]
   const photos = orderedImages.map((image) => image.url)
   const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
 
@@ -668,7 +661,9 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Images Section -->
-    <section class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300">
+    <section
+      class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
+    >
       <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
       <p class="mt-1 text-[14px] text-noble-black/50">
         Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
@@ -789,7 +784,9 @@ onBeforeUnmount(() => {
           :key="upload.id"
           class="flex aspect-square w-32 flex-col justify-between rounded-[18px] border border-cinnamon-ice/30 bg-white p-3"
         >
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white">
+          <div
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
+          >
             <svg
               width="20"
               height="20"
