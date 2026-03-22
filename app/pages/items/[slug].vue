@@ -280,6 +280,7 @@ const bookingAvailabilityMessage = computed(() => {
 
   return "Choose your dates and time to request this item."
 })
+const isItemAvailableForBooking = computed(() => item.value?.status === "AVAILABLE")
 const ownerName = computed(() => item.value?.ownerName ?? "TakeUP member")
 const ownerInitials = computed(() => {
   const parts = ownerName.value.split(/\s+/).filter(Boolean)
@@ -607,7 +608,7 @@ const selectedBookingWindow = computed(() => {
 
 const canSubmitBooking = computed(
   () =>
-    !isItemUnavailableForBooking.value &&
+    isItemAvailableForBooking.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
     !isSubmittingBooking.value,
@@ -729,8 +730,24 @@ const mobileBookingButtonLabel = computed(() => {
       : "Check Availability"
 })
 
+const canAddToBag = computed(
+  () =>
+    isItemAvailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isInBag.value,
+)
+
 const handleAddToBag = () => {
-  if (!item.value || isItemUnavailableForBooking.value || !hasBookingSelection.value) return
+  if (
+    !item.value ||
+    !isItemAvailableForBooking.value ||
+    !selectedBookingWindow.value ||
+    !startDate.value ||
+    !displayEndDate.value
+  ) {
+    return
+  }
 
   addItemToBag({
     id: item.value.id,
@@ -744,9 +761,13 @@ const handleAddToBag = () => {
       item.value.photos[0] ||
       "",
     startDate: startDate.value,
-    endDate: endDate.value,
+    endDate: displayEndDate.value,
     startTime: startTime.value,
     endTime: endTime.value,
+    lenderId: item.value.lenderId,
+    lenderName: item.value.ownerName,
+    lenderAvatarUrl: null, // As discussed, not yet in item schema, but we'll use name for initials
+    listingType: item.value.freeToBorrow ? "Borrow" : "Rent",
   })
 
   // Optionally close the mobile modal if it's open
@@ -1484,7 +1505,7 @@ onUnmounted(() => {
                           ? 'bg-noble-black hover:bg-noble-black/90'
                           : 'bg-burning-orange hover:bg-blue-estate'
                       "
-                      :disabled="isItemUnavailableForBooking || !hasBookingSelection || isInBag"
+                      :disabled="!canAddToBag"
                       @click="handleAddToBag"
                     >
                       <svg
@@ -1894,7 +1915,7 @@ onUnmounted(() => {
                         ? 'bg-noble-black hover:bg-noble-black/90'
                         : 'bg-burning-orange hover:bg-blue-estate'
                     "
-                    :disabled="isItemUnavailableForBooking || !hasBookingSelection || isInBag"
+                    :disabled="!canAddToBag"
                     @click="handleAddToBag"
                   >
                     <svg
@@ -2469,7 +2490,7 @@ onUnmounted(() => {
                     ? 'bg-noble-black hover:bg-noble-black/90'
                     : 'bg-burning-orange hover:bg-blue-estate'
                 "
-                :disabled="isItemUnavailableForBooking || !hasBookingSelection || isInBag"
+                :disabled="!canAddToBag"
                 @click="handleAddToBag"
               >
                 <svg

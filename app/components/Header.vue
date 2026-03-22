@@ -256,8 +256,10 @@ onBeforeUnmount(() => {
       </button>
 
       <!-- Cart Icon -->
-      <button
+      <NuxtLink
+        to="/bag"
         class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1 relative"
+        active-class="text-burning-orange"
         title="Bag"
       >
         <svg
@@ -281,7 +283,7 @@ onBeforeUnmount(() => {
         >
           {{ bagCount }}
         </span>
-      </button>
+      </NuxtLink>
 
       <!-- Profile Icon (Always Visible) -->
       <NuxtLink

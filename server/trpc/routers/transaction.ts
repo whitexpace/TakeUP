@@ -75,6 +75,7 @@ const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionSt
 
 type TransactionRecord = {
   id: string
+  bookingId: string | null
   itemId: string | null
   borrowerId: string | null
   lenderId: string | null
