@@ -608,7 +608,7 @@ const selectedBookingWindow = computed(() => {
 
 const canSubmitBooking = computed(
   () =>
-    isItemAvailableForBooking.value &&
+    !isItemUnavailableForBooking.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
     !isSubmittingBooking.value,
