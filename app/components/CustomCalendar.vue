@@ -43,6 +43,7 @@
         <!-- Calendar Header -->
         <div class="flex items-center justify-between mb-5 px-1">
           <button
+            type="button"
             class="p-2 hover:bg-cream rounded-xl text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="prevMonth"
           >
@@ -61,6 +62,7 @@
           </h4>
 
           <button
+            type="button"
             class="p-2 hover:bg-cream rounded-xl text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="nextMonth"
           >
@@ -95,6 +97,7 @@
           >
             <button
               v-if="day"
+              type="button"
               class="w-9 h-9 flex items-center justify-center rounded-xl text-[13px] transition-all duration-300 relative group"
               :class="[
                 isDateDisabled(day)
