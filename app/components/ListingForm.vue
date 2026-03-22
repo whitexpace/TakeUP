@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
+import type { z } from "zod"
+import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
 import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
@@ -57,7 +59,8 @@ const runtimeConfig = useRuntimeConfig()
 const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
-const MAX_GALLERY_IMAGE_COUNT = 10
+const MAX_IMAGE_COUNT = 10
+const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
@@ -161,6 +164,34 @@ const syncImagesFromItem = (item?: MyListingItem | null) => {
 
 syncImagesFromItem(props.item)
 
+const buildInitialImages = (item?: MyListingItem | null): ListingImage[] => {
+  if (!item) return []
+
+  const imageUrls = item.images.length
+    ? item.images.map((image) => image.path)
+    : item.photos ?? []
+
+  return imageUrls.map((url, index) => ({
+    id: `existing-${index}-${url}`,
+    url,
+    name: `Image ${index + 1}`,
+  }))
+}
+
+const syncImagesFromItem = (item?: MyListingItem | null) => {
+  images.value = buildInitialImages(item)
+  primaryImageId.value =
+    images.value.find(
+      (image) =>
+        image.url ===
+        (item?.images.find((entry) => entry.isPrimary)?.path ?? item?.thumbnailImage ?? null),
+    )?.id ??
+    images.value[0]?.id ??
+    null
+}
+
+syncImagesFromItem(props.item)
+
 watch(
   () => props.item,
   (item) => {
@@ -176,13 +207,9 @@ watch(
   },
 )
 
-const coverImage = computed(
-  () => images.value.find((image) => image.id === primaryImageId.value) ?? null,
-)
+const imageCountLabel = computed(() => `${images.value.length}/${MAX_IMAGE_COUNT}`)
 
-const galleryImages = computed(() =>
-  images.value.filter((image) => image.id !== primaryImageId.value),
-)
+const canAddMoreImages = computed(() => images.value.length < MAX_IMAGE_COUNT)
 
 const getSafeFileName = (fileName: string) => {
   const cleaned = fileName
