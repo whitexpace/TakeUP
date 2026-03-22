@@ -391,7 +391,6 @@ describe("bookingRouter", () => {
       }),
     )
   })
-
   it("marks the item as AVAILABLE again when a confirmed booking is cancelled", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce({
