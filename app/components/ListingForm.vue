@@ -60,6 +60,7 @@ const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 const MAX_GALLERY_IMAGE_COUNT = 10
+const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },

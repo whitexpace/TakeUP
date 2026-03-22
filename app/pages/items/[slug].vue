@@ -808,9 +808,13 @@ const handleAddToBag = async () => {
       item.value.photos[0] ||
       "",
     startDate: startDate.value,
-    endDate: endDate.value,
+    endDate: displayEndDate.value,
     startTime: startTime.value,
     endTime: endTime.value,
+    lenderId: item.value.lenderId,
+    lenderName: item.value.ownerName,
+    lenderAvatarUrl: null, // As discussed, not yet in item schema, but we'll use name for initials
+    listingType: item.value.freeToBorrow ? "Borrow" : "Rent",
   })
 
     if (isMobileModalOpen.value) {
