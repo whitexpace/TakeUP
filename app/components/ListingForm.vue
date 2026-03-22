@@ -595,6 +595,21 @@ const handleSubmit = () => {
     }
   }
 
+  if (!result.success) {
+    const flat = result.error.flatten()
+
+    Object.entries(flat.fieldErrors).forEach(([key, messages]) => {
+      const firstMessage = messages?.[0]
+      if (firstMessage) {
+        fieldErrors.value[key] = firstMessage
+      }
+    })
+
+    if (flat.fieldErrors.availability) {
+      availabilityErrors.value = [...flat.fieldErrors.availability]
+    }
+  }
+
   const invalidAvailability = availabilityRanges.value.some(
     (range) =>
       range.startDate &&
