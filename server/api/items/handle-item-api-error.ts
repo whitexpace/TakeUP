@@ -82,14 +82,18 @@ const toUnknownError = (error: Error, action: string) => {
     )
   }
 
-  if (/relation .*ItemTagOnItem.* does not exist|relation .*Tag.* does not exist/i.test(error.message)) {
+  if (
+    /relation .*ItemTagOnItem.* does not exist|relation .*Tag.* does not exist/i.test(error.message)
+  ) {
     return createItemApiError(
       500,
       "Listing creation failed because the item taxonomy tables are missing. Apply the latest Prisma schema changes to this database first.",
     )
   }
 
-  if (/column .*thumbnailImage.* does not exist|column .*photos.* does not exist/i.test(error.message)) {
+  if (
+    /column .*thumbnailImage.* does not exist|column .*photos.* does not exist/i.test(error.message)
+  ) {
     return createItemApiError(
       500,
       "Listing creation failed because the database no longer has the legacy item image columns expected by the server.",

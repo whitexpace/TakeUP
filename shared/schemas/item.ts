@@ -112,31 +112,31 @@ export const itemAvailabilitySchema = z
 
 export const createItemSchema = z
   .object({
-  name: requiredTextField("Item name", 120),
-  description: requiredTextField("Description", 2000),
-  condition: itemConditionSchema,
-  status: itemStatusSchema.default("AVAILABLE"),
-  rateOption: rateOptionSchema.default("PER_DAY"),
-  categories: z
-    .array(itemCategorySchema)
-    .min(1)
-    .transform((categories) => dedupe(categories)),
-  tags: itemTagsSchema,
-  rentalFee: z.number().int().min(0),
-  replacementCost: z.number().int().min(0).optional(),
-  availability: itemAvailabilitySchema,
-  freeToBorrow: z.boolean().default(false),
-  whatItemOffers: requiredTextField("What this item offers", 2000),
-  whatIsIncluded: requiredTextField("What's included", 2000),
-  knownIssues: z.string().max(2000).optional(),
-  usageLimitations: z.string().max(2000).optional(),
-  thumbnailImage: z.string().url().optional(),
-  isTrending: z.boolean().optional(),
-  viewCount: z.number().int().min(0).optional(),
-  bookingCount: z.number().int().min(0).optional(),
-  likeCount: z.number().int().min(0).optional(),
-  photos: z.array(z.string().url()).default([]),
-})
+    name: requiredTextField("Item name", 120),
+    description: requiredTextField("Description", 2000),
+    condition: itemConditionSchema,
+    status: itemStatusSchema.default("AVAILABLE"),
+    rateOption: rateOptionSchema.default("PER_DAY"),
+    categories: z
+      .array(itemCategorySchema)
+      .min(1)
+      .transform((categories) => dedupe(categories)),
+    tags: itemTagsSchema,
+    rentalFee: z.number().int().min(0),
+    replacementCost: z.number().int().min(0).optional(),
+    availability: itemAvailabilitySchema,
+    freeToBorrow: z.boolean().default(false),
+    whatItemOffers: requiredTextField("What this item offers", 2000),
+    whatIsIncluded: requiredTextField("What's included", 2000),
+    knownIssues: z.string().max(2000).optional(),
+    usageLimitations: z.string().max(2000).optional(),
+    thumbnailImage: z.string().url().optional(),
+    isTrending: z.boolean().optional(),
+    viewCount: z.number().int().min(0).optional(),
+    bookingCount: z.number().int().min(0).optional(),
+    likeCount: z.number().int().min(0).optional(),
+    photos: z.array(z.string().url()).default([]),
+  })
   .superRefine((item, ctx) => {
     if (!item.freeToBorrow && item.rentalFee <= 0) {
       ctx.addIssue({

@@ -18,8 +18,8 @@ const handleSubmit = async (data: Record<string, unknown>) => {
       return
     }
     submitError.value =
-      (err as { data?: { statusMessage?: string; error?: { message?: string } } })?.data
-        ?.error?.message ??
+      (err as { data?: { statusMessage?: string; error?: { message?: string } } })?.data?.error
+        ?.message ??
       (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
       (err as { statusMessage?: string })?.statusMessage ??
       (err as { message?: string })?.message ??

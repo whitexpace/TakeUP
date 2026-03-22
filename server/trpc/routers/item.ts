@@ -317,13 +317,11 @@ const buildOrderedImagePaths = (thumbnailImage?: string | null, photos?: string[
   }
 
   const seenPaths = new Set<string>()
-  return [...(photos ?? []), ...(thumbnailImage ? [thumbnailImage] : [])].filter(
-    (path) => {
-      if (!path || seenPaths.has(path)) return false
-      seenPaths.add(path)
-      return true
-    },
-  )
+  return [...(photos ?? []), ...(thumbnailImage ? [thumbnailImage] : [])].filter((path) => {
+    if (!path || seenPaths.has(path)) return false
+    seenPaths.add(path)
+    return true
+  })
 }
 
 const buildCreateImageWrites = (
@@ -728,7 +726,8 @@ export const itemRouter = router({
     if (!existingUser) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "Your account is missing from the database. Sign out and sign in again before publishing an item.",
+        message:
+          "Your account is missing from the database. Sign out and sign in again before publishing an item.",
       })
     }
 
