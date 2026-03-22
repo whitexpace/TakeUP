@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import type { z } from "zod"
 import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
 import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
@@ -59,7 +59,7 @@ const runtimeConfig = useRuntimeConfig()
 const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
-const MAX_IMAGE_COUNT = 10
+const MAX_GALLERY_IMAGE_COUNT = 10
 const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
@@ -207,9 +207,13 @@ watch(
   },
 )
 
-const imageCountLabel = computed(() => `${images.value.length}/${MAX_IMAGE_COUNT}`)
+const coverImage = computed(
+  () => images.value.find((image) => image.id === primaryImageId.value) ?? null,
+)
 
-const canAddMoreImages = computed(() => images.value.length < MAX_IMAGE_COUNT)
+const galleryImages = computed(() =>
+  images.value.filter((image) => image.id !== primaryImageId.value),
+)
 
 const getSafeFileName = (fileName: string) => {
   const cleaned = fileName
