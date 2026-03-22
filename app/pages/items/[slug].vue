@@ -40,7 +40,12 @@ const itemId = computed(() => extractItemIdFromSlug(slugParam.value))
 const backNavigationPath = "/dashboard"
 const backNavigationLabel = "Back to listings"
 
-const { data, pending, error } = await useAsyncData(
+const {
+  data,
+  pending,
+  error,
+  refresh: refreshItem,
+} = await useAsyncData(
   () => `item:${itemId.value ?? "missing"}`,
   async () => {
     if (!itemId.value) {
@@ -73,6 +78,9 @@ const isMobileModalOpen = ref(false)
 const isCalendarExpanded = ref(false)
 const isSaved = ref(false)
 const shareFeedback = ref("")
+const isSubmittingBooking = ref(false)
+const bookingErrorMessage = ref("")
+const bookingSuccessMessage = ref("")
 
 const viewMonth = ref(today.getMonth())
 const viewYear = ref(today.getFullYear())
@@ -533,6 +541,49 @@ const hasBookingSelection = computed(() => {
   return timeToMinutes(startTime.value) !== timeToMinutes(endTime.value)
 })
 
+const selectedBookingWindow = computed(() => {
+  if (!item.value || !startDate.value || !displayEndDate.value) return null
+
+  const bookingStart = createDateTime(startDate.value, startTime.value)
+  const bookingEnd = createDateTime(displayEndDate.value, endTime.value)
+
+  if (bookingEnd <= bookingStart) {
+    return null
+  }
+
+  return {
+    startDate: bookingStart,
+    endDate: bookingEnd,
+  }
+})
+
+const canSubmitBooking = computed(
+  () =>
+    hasBookingSelection.value && selectedBookingWindow.value !== null && !isSubmittingBooking.value,
+)
+
+const bookingFeedbackMessage = computed(() => {
+  if (bookingErrorMessage.value) return bookingErrorMessage.value
+  if (bookingSuccessMessage.value) return bookingSuccessMessage.value
+  return "You won't be charged yet."
+})
+
+const bookingFeedbackClass = computed(() => {
+  if (bookingErrorMessage.value) {
+    return "text-cinnabar-red"
+  }
+
+  if (bookingSuccessMessage.value) {
+    return "text-burning-orange"
+  }
+
+  return "text-noble-black/40"
+})
+
+const requestBookingButtonLabel = computed(() =>
+  isSubmittingBooking.value ? "Requesting Booking..." : "Request Booking",
+)
+
 const totalUnits = computed(() => {
   if (!item.value || !startDate.value || !displayEndDate.value) return 1
 
@@ -664,6 +715,66 @@ const shareItem = async () => {
   window.setTimeout(() => {
     shareFeedback.value = ""
   }, 1800)
+}
+
+const resolveBookingErrorMessage = (error: unknown) => {
+  const fetchError = error as {
+    data?: {
+      statusMessage?: string
+      error?: { message?: string }
+      data?: { error?: { message?: string } }
+    }
+    statusCode?: number
+    statusMessage?: string
+    message?: string
+  }
+
+  return (
+    fetchError.data?.statusMessage ??
+    fetchError.data?.error?.message ??
+    fetchError.data?.data?.error?.message ??
+    fetchError.statusMessage ??
+    (fetchError.statusCode === 500
+      ? "Booking failed on the server. Check that the booking and transaction schema is applied to this database."
+      : undefined) ??
+    fetchError.message ??
+    "Unable to submit your booking request."
+  )
+}
+
+const submitBookingRequest = async () => {
+  if (!item.value || !selectedBookingWindow.value || isSubmittingBooking.value) return
+
+  bookingErrorMessage.value = ""
+  bookingSuccessMessage.value = ""
+  isSubmittingBooking.value = true
+
+  try {
+    await $fetch("/api/bookings", {
+      method: "POST",
+      body: {
+        itemId: item.value.id,
+        startDate: selectedBookingWindow.value.startDate.toISOString(),
+        endDate: selectedBookingWindow.value.endDate.toISOString(),
+      },
+    })
+
+    bookingSuccessMessage.value = "Booking request sent to the lender."
+    startDate.value = null
+    endDate.value = null
+    closeBookingModal()
+    await refreshItem().catch(() => undefined)
+  } catch (error: unknown) {
+    const statusCode = (error as { statusCode?: number })?.statusCode
+    if (statusCode === 401) {
+      await navigateTo("/")
+      return
+    }
+
+    bookingErrorMessage.value = resolveBookingErrorMessage(error)
+  } finally {
+    isSubmittingBooking.value = false
+  }
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
@@ -1286,8 +1397,15 @@ onUnmounted(() => {
                       </svg>
                       {{ isInBag ? "Added to Bag" : "Add to Bag" }}
                     </button>
-                    <p class="text-center text-[11px] text-noble-black/40 font-normal">
-                      You won't be charged yet.
+                    <button
+                      class="w-full py-3 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
+                      :disabled="!canSubmitBooking"
+                      @click="submitBookingRequest"
+                    >
+                      {{ requestBookingButtonLabel }}
+                    </button>
+                    <p class="text-center text-[11px] font-normal" :class="bookingFeedbackClass">
+                      {{ bookingFeedbackMessage }}
                     </p>
                   </div>
                   <div>
@@ -1668,8 +1786,15 @@ onUnmounted(() => {
                     </svg>
                     {{ isInBag ? "Added to Bag" : "Add to Bag" }}
                   </button>
-                  <p class="text-center text-[11px] text-noble-black/40 mb-4 font-normal">
-                    You won't be charged yet.
+                  <button
+                    class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
+                    :disabled="!canSubmitBooking"
+                    @click="submitBookingRequest"
+                  >
+                    {{ requestBookingButtonLabel }}
+                  </button>
+                  <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
+                    {{ bookingFeedbackMessage }}
                   </p>
                   <div class="h-px bg-cinnamon-ice/30 mb-4" />
                   <div class="space-y-2 mb-4">
@@ -2213,8 +2338,15 @@ onUnmounted(() => {
                 </svg>
                 {{ isInBag ? "Added to Bag" : "Add to Bag" }}
               </button>
-              <p class="text-center text-[11px] text-noble-black/40 mb-4 font-normal">
-                You won't be charged yet.
+              <button
+                class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
+                :disabled="!canSubmitBooking"
+                @click="submitBookingRequest"
+              >
+                {{ requestBookingButtonLabel }}
+              </button>
+              <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
+                {{ bookingFeedbackMessage }}
               </p>
               <div class="h-px bg-cinnamon-ice/30 mb-4" />
               <div class="space-y-2 mb-4">
