@@ -1,4 +1,4 @@
-import type { Prisma} from "@prisma/client";
+import type { Prisma } from "@prisma/client"
 import { TransactionStatus as PrismaTransactionStatus } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
