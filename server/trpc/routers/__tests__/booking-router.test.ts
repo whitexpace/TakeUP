@@ -97,6 +97,9 @@ const makeContext = () => {
       }),
       update: vi.fn().mockResolvedValue({ id: ITEM_ID }),
     },
+    itemAvailability: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     rentalTransaction: {
       upsert: vi.fn().mockResolvedValue({ id: "txn-1" }),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -178,6 +181,98 @@ describe("bookingRouter", () => {
       }),
     )
     expect(result.bookings).toEqual([])
+  })
+
+  it("rejects create when the requested dates fall outside listing availability", async () => {
+    const ctx = makeContext()
+    ctx.prisma.itemAvailability.findMany.mockResolvedValueOnce([
+      {
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-02T00:00:00.000Z"),
+        status: "AVAILABLE",
+      },
+    ])
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        platformCommission: 50,
+        paymentMethod: "GCASH",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The selected dates are not fully available for this listing.",
+    })
+
+    expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
+  })
+
+  it("rejects create when the requested window overlaps an existing active booking", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findFirst.mockResolvedValueOnce({ id: "existing-booking-id" })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        platformCommission: 50,
+        paymentMethod: "GCASH",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The requested booking window overlaps an existing booking.",
+    })
+
+    expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
+  })
+
+  it("rejects update when the resulting endDate is not later than startDate", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
+      id: BOOKING_ID,
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-03T00:00:00.000Z"),
+      endDate: new Date("2026-04-04T00:00:00.000Z"),
+      totalFee: 450,
+      platformCommission: 50,
+      paymentMethod: "GCASH",
+      status: "PENDING",
+      paymentStatus: "PENDING",
+      cancellationReason: null,
+      confirmedAt: null,
+      cancelledAt: null,
+      completedAt: null,
+      disputeOpenedAt: null,
+      paymentProcessedAt: null,
+      item: {
+        id: ITEM_ID,
+        lenderId: LENDER_ID,
+        rateOption: "PER_DAY",
+        rentalFee: 200,
+        freeToBorrow: false,
+        status: "AVAILABLE",
+      },
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.update({
+        id: BOOKING_ID,
+        endDate: new Date("2026-04-02T00:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "endDate must be later than startDate.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
   })
 
   it("forbids access to a booking when the user is not a participant", async () => {

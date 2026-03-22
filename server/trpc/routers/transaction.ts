@@ -47,48 +47,10 @@ const transactionInclude = {
   },
 } satisfies Prisma.RentalTransactionInclude
 
-const getTransactionTotalAmount = (transaction: {
-  startDate: Date
-  endDate: Date
-  item: { freeToBorrow: boolean; rentalFee: number; rateOption: "PER_HOUR" | "PER_DAY" }
-  totalAmount?: number
-}) => {
-  if (typeof transaction.totalAmount === "number") return transaction.totalAmount
-  if (transaction.item.freeToBorrow) return 0
-
-  const durationMs = Math.max(transaction.endDate.getTime() - transaction.startDate.getTime(), 0)
-  const unitMs = transaction.item.rateOption === "PER_HOUR" ? 1000 * 60 * 60 : 1000 * 60 * 60 * 24
-  const units = Math.max(Math.ceil(durationMs / unitMs), 1)
-
-  return units * transaction.item.rentalFee
-}
-
 const getTransactionThumbnailImage = (item: {
   images?: Array<{ path: string; isPrimary?: boolean }>
 }): string | null =>
   item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
-
-const mapTransactionRecord = <
-  T extends { item: { images?: Array<{ path: string; isPrimary?: boolean }> } },
->(
-  record: T & {
-    startDate: Date
-    endDate: Date
-    item: T["item"] & {
-      freeToBorrow: boolean
-      rentalFee: number
-      rateOption: "PER_HOUR" | "PER_DAY"
-    }
-    totalAmount?: number
-  },
-) => ({
-  ...record,
-  totalAmount: getTransactionTotalAmount(record),
-  item: {
-    ...record.item,
-    thumbnailImage: getTransactionThumbnailImage(record.item),
-  } as T["item"] & { thumbnailImage: string | null },
-})
 
 const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
   PENDING: [PrismaTransactionStatus.PENDING, PrismaTransactionStatus.AWAITING_LENDER_APPROVAL],
@@ -133,7 +95,49 @@ type TransactionRecord = Prisma.RentalTransactionGetPayload<{
   include: typeof transactionInclude
 }>
 
-const normalizeTransaction = (record: TransactionRecord) => {
+type TransactionListItem = {
+  id: string
+  itemId: string
+  borrowerId: string
+  lenderId: string
+  startDate: Date
+  endDate: Date
+  totalAmount: number
+  status: UiTransactionStatus
+  createdAt: Date
+  updatedAt: Date
+  item: {
+    id: string
+    name: string
+    rateOption: "PER_HOUR" | "PER_DAY"
+    rentalFee: number
+    freeToBorrow: boolean
+    images: Array<{
+      path: string
+      isPrimary: boolean
+      sortOrder: number
+    }>
+    thumbnailImage: string | null
+  }
+  borrower: {
+    user: {
+      username: string
+      firstName: string
+      middleName: string | null
+      lastName: string
+    }
+  }
+  lender: {
+    user: {
+      username: string
+      firstName: string
+      middleName: string | null
+      lastName: string
+    }
+  }
+}
+
+const normalizeTransaction = (record: TransactionRecord): TransactionListItem | null => {
   if (
     !record.item ||
     !record.borrower ||
@@ -159,7 +163,10 @@ const normalizeTransaction = (record: TransactionRecord) => {
     status: toUiTransactionStatus(record.status),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
-    item: record.item,
+    item: {
+      ...record.item,
+      thumbnailImage: getTransactionThumbnailImage(record.item),
+    },
     borrower: { user: record.borrower },
     lender: { user: record.lender },
   }
@@ -214,14 +221,15 @@ export const transactionRouter = router({
     const hasMore = records.length > limit
     const pageRecords = hasMore ? records.slice(0, limit) : records
     const normalizedRecords = pageRecords
+      .filter(Boolean)
       .map(normalizeTransaction)
-      .filter((record): record is NonNullable<typeof record> => record !== null)
+      .filter((record): record is TransactionListItem => record !== null)
     const lastRecord = pageRecords.at(-1)
     const nextCursor =
       hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
     return {
-      transactions: pageRecords.map(mapTransactionRecord),
+      transactions: normalizedRecords,
       nextCursor,
     }
   }),

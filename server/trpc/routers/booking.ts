@@ -1,3 +1,4 @@
+import type { Prisma} from "@prisma/client";
 import { TransactionStatus as PrismaTransactionStatus } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
@@ -15,7 +16,10 @@ import {
   updateBookingSchema,
 } from "../../../shared/schemas/booking"
 
-const bookingItemImageOrderBy = [{ sortOrder: "asc" }, { createdAt: "asc" }] as const
+const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+]
 
 const bookingInclude = {
   item: {
@@ -63,62 +67,11 @@ const bookingInclude = {
       },
     },
   },
-} as const
+} satisfies Prisma.BookingInclude
 
-type BookingRecord = {
-  id: string
-  borrowerId: string
-  lenderId: string
-  itemId: string
-  startDate: Date
-  endDate: Date
-  totalFee: number
-  platformCommission: number
-  paymentMethod: PaymentMethod
-  status: keyof typeof bookingStatusSchema.enum
-  paymentStatus: keyof typeof bookingPaymentStatusSchema.enum
-  cancellationReason: string | null
-  requestedAt: Date
-  confirmedAt: Date | null
-  cancelledAt: Date | null
-  completedAt: Date | null
-  disputeOpenedAt: Date | null
-  paymentProcessedAt: Date | null
-  createdAt: Date
-  updatedAt: Date
-  item: {
-    id: string
-    name: string
-    lenderId: string
-    rateOption: "PER_HOUR" | "PER_DAY"
-    rentalFee: number
-    freeToBorrow: boolean
-    status: string
-    images: Array<{
-      path: string
-      isPrimary: boolean
-      sortOrder: number
-    }>
-  }
-  borrower: {
-    user: {
-      username: string
-      firstName: string
-      middleName: string | null
-      lastName: string
-      email: string
-    }
-  }
-  lender: {
-    user: {
-      username: string
-      firstName: string
-      middleName: string | null
-      lastName: string
-      email: string
-    }
-  }
-}
+type BookingRecord = Prisma.BookingGetPayload<{
+  include: typeof bookingInclude
+}>
 
 type BookingListItem = Omit<BookingRecord, "item"> & {
   item: Omit<BookingRecord["item"], "images"> & {
@@ -126,33 +79,39 @@ type BookingListItem = Omit<BookingRecord, "item"> & {
   }
 }
 
-type BookingEditableRecord = {
-  id: string
-  borrowerId: string
-  lenderId: string
-  itemId: string
-  startDate: Date
-  endDate: Date
-  totalFee: number
-  platformCommission: number
-  paymentMethod: PaymentMethod
-  status: keyof typeof bookingStatusSchema.enum
-  paymentStatus: keyof typeof bookingPaymentStatusSchema.enum
-  cancellationReason: string | null
-  confirmedAt: Date | null
-  cancelledAt: Date | null
-  completedAt: Date | null
-  disputeOpenedAt: Date | null
-  paymentProcessedAt: Date | null
+const bookingEditableSelect = {
+  id: true,
+  borrowerId: true,
+  lenderId: true,
+  itemId: true,
+  startDate: true,
+  endDate: true,
+  totalFee: true,
+  platformCommission: true,
+  paymentMethod: true,
+  status: true,
+  paymentStatus: true,
+  cancellationReason: true,
+  confirmedAt: true,
+  cancelledAt: true,
+  completedAt: true,
+  disputeOpenedAt: true,
+  paymentProcessedAt: true,
   item: {
-    id: string
-    lenderId: string
-    rateOption: "PER_HOUR" | "PER_DAY"
-    rentalFee: number
-    freeToBorrow: boolean
-    status: string
-  }
-}
+    select: {
+      id: true,
+      lenderId: true,
+      rateOption: true,
+      rentalFee: true,
+      freeToBorrow: true,
+      status: true,
+    },
+  },
+} satisfies Prisma.BookingSelect
+
+type BookingEditableRecord = Prisma.BookingGetPayload<{
+  select: typeof bookingEditableSelect
+}>
 
 type BookingDelegate = {
   findMany(args: Record<string, unknown>): Promise<BookingRecord[]>
@@ -177,9 +136,76 @@ type BookingMutationPrismaClient = {
 const getBookingPrisma = (ctx: Pick<Context, "prisma">) =>
   ctx.prisma as unknown as BookingPrismaClient
 
-const getBookingThumbnailImage = (
-  item: Pick<BookingRecord["item"], "images">,
-) => item.images.find((image) => image.isPrimary)?.path ?? item.images[0]?.path ?? null
+type AvailabilityValidationPrismaClient = Pick<Context["prisma"], "itemAvailability">
+
+type AvailabilityRangeRecord = {
+  startDate: Date
+  endDate: Date
+  status: "AVAILABLE" | "RENTED"
+}
+
+const normalizeCalendarDate = (value: Date) =>
+  new Date(value.getFullYear(), value.getMonth(), value.getDate())
+
+const isDateWithinAvailabilityRange = (date: Date, range: AvailabilityRangeRecord) => {
+  const normalizedDate = normalizeCalendarDate(date)
+  const rangeStart = normalizeCalendarDate(range.startDate)
+  const rangeEnd = normalizeCalendarDate(range.endDate)
+
+  return (
+    normalizedDate.getTime() >= rangeStart.getTime() &&
+    normalizedDate.getTime() <= rangeEnd.getTime()
+  )
+}
+
+const ensureBookingWindowMatchesAvailability = async (
+  prisma: AvailabilityValidationPrismaClient,
+  input: {
+    itemId: string
+    startDate: Date
+    endDate: Date
+  },
+) => {
+  const availabilityRanges = (await prisma.itemAvailability.findMany({
+    where: { itemId: input.itemId },
+    select: {
+      startDate: true,
+      endDate: true,
+      status: true,
+    },
+  })) as AvailabilityRangeRecord[]
+
+  if (!availabilityRanges.length) {
+    return
+  }
+
+  const startBoundary = normalizeCalendarDate(input.startDate)
+  const endBoundary = normalizeCalendarDate(input.endDate)
+
+  for (
+    const cursor = new Date(startBoundary);
+    cursor.getTime() <= endBoundary.getTime();
+    cursor.setDate(cursor.getDate() + 1)
+  ) {
+    const hasAvailableWindow = availabilityRanges.some(
+      (range) => range.status === "AVAILABLE" && isDateWithinAvailabilityRange(cursor, range),
+    )
+
+    const hasBlockedWindow = availabilityRanges.some(
+      (range) => range.status !== "AVAILABLE" && isDateWithinAvailabilityRange(cursor, range),
+    )
+
+    if (hasBlockedWindow || !hasAvailableWindow) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "The selected dates are not fully available for this listing.",
+      })
+    }
+  }
+}
+
+const getBookingThumbnailImage = (item: Pick<BookingRecord["item"], "images">) =>
+  item.images.find((image) => image.isPrimary)?.path ?? item.images[0]?.path ?? null
 
 const mapBookingRecord = (record: BookingRecord): BookingListItem => {
   const { item, ...rest } = record
@@ -263,7 +289,12 @@ const mapBookingToTransactionStatus = (
 const buildBookingTimestamps = (
   existing: Pick<
     BookingEditableRecord,
-    "confirmedAt" | "cancelledAt" | "completedAt" | "disputeOpenedAt" | "paymentProcessedAt" | "paymentStatus"
+    | "confirmedAt"
+    | "cancelledAt"
+    | "completedAt"
+    | "disputeOpenedAt"
+    | "paymentProcessedAt"
+    | "paymentStatus"
   >,
   nextStatus: keyof typeof bookingStatusSchema.enum | undefined,
   nextPaymentStatus: keyof typeof bookingPaymentStatusSchema.enum | undefined,
@@ -454,6 +485,12 @@ export const bookingRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not available for booking." })
       }
 
+      await ensureBookingWindowMatchesAvailability(tx, {
+        itemId: input.itemId,
+        startDate: input.startDate,
+        endDate: input.endDate,
+      })
+
       await ensureBookingWindowAvailable(bookingPrisma, {
         itemId: input.itemId,
         startDate: input.startDate,
@@ -461,7 +498,12 @@ export const bookingRouter = router({
       })
 
       const platformCommission = item.freeToBorrow ? 0 : input.platformCommission
-      const totalFee = calculateBookingTotal(item, input.startDate, input.endDate, platformCommission)
+      const totalFee = calculateBookingTotal(
+        item,
+        input.startDate,
+        input.endDate,
+        platformCommission,
+      )
 
       const booking = await tx.booking.create({
         data: {
@@ -515,35 +557,7 @@ export const bookingRouter = router({
     const bookingPrisma = getBookingPrisma(ctx)
     const existing = (await bookingPrisma.booking.findUnique({
       where: { id: input.id },
-      select: {
-        id: true,
-        borrowerId: true,
-        lenderId: true,
-        itemId: true,
-        startDate: true,
-        endDate: true,
-        totalFee: true,
-        platformCommission: true,
-        paymentMethod: true,
-        status: true,
-        paymentStatus: true,
-        cancellationReason: true,
-        confirmedAt: true,
-        cancelledAt: true,
-        completedAt: true,
-        disputeOpenedAt: true,
-        paymentProcessedAt: true,
-        item: {
-          select: {
-            id: true,
-            lenderId: true,
-            rateOption: true,
-            rentalFee: true,
-            freeToBorrow: true,
-            status: true,
-          },
-        },
-      },
+      select: bookingEditableSelect,
     })) as BookingEditableRecord | null
 
     if (!existing) {
@@ -563,6 +577,12 @@ export const bookingRouter = router({
     }
 
     if (input.startDate || input.endDate) {
+      await ensureBookingWindowMatchesAvailability(ctx.prisma, {
+        itemId: existing.itemId,
+        startDate,
+        endDate,
+      })
+
       await ensureBookingWindowAvailable(bookingPrisma, {
         itemId: existing.itemId,
         startDate,

@@ -77,7 +77,11 @@ const toUnknownError = (error: Error, action: string) => {
     )
   }
 
-  if (/relation .*Booking.* does not exist|relation .*transactions.* does not exist/i.test(error.message)) {
+  if (
+    /relation .*Booking.* does not exist|relation .*transactions.* does not exist/i.test(
+      error.message,
+    )
+  ) {
     return createBookingApiError(
       500,
       "Booking failed because the booking or transaction tables are missing. Apply the latest Prisma schema changes to this database first.",
@@ -105,7 +109,10 @@ export const handleBookingApiError = (error: unknown, action: string): never => 
       throw createBookingApiError(401, "You must be signed in to manage bookings.")
     }
     if (error.code === "FORBIDDEN") {
-      throw createBookingApiError(403, error.message || "You are not allowed to manage this booking.")
+      throw createBookingApiError(
+        403,
+        error.message || "You are not allowed to manage this booking.",
+      )
     }
     if (error.code === "NOT_FOUND") {
       throw createBookingApiError(404, error.message || "Booking not found.")

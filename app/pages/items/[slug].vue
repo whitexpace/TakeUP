@@ -40,7 +40,12 @@ const itemId = computed(() => extractItemIdFromSlug(slugParam.value))
 const backNavigationPath = "/dashboard"
 const backNavigationLabel = "Back to listings"
 
-const { data, pending, error, refresh: refreshItem } = await useAsyncData(
+const {
+  data,
+  pending,
+  error,
+  refresh: refreshItem,
+} = await useAsyncData(
   () => `item:${itemId.value ?? "missing"}`,
   async () => {
     if (!itemId.value) {
@@ -554,9 +559,7 @@ const selectedBookingWindow = computed(() => {
 
 const canSubmitBooking = computed(
   () =>
-    hasBookingSelection.value &&
-    selectedBookingWindow.value !== null &&
-    !isSubmittingBooking.value,
+    hasBookingSelection.value && selectedBookingWindow.value !== null && !isSubmittingBooking.value,
 )
 
 const bookingFeedbackMessage = computed(() => {
@@ -1401,10 +1404,7 @@ onUnmounted(() => {
                     >
                       {{ requestBookingButtonLabel }}
                     </button>
-                    <p
-                      class="text-center text-[11px] font-normal"
-                      :class="bookingFeedbackClass"
-                    >
+                    <p class="text-center text-[11px] font-normal" :class="bookingFeedbackClass">
                       {{ bookingFeedbackMessage }}
                     </p>
                   </div>
