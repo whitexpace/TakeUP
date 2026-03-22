@@ -33,6 +33,7 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   whatIsIncluded: null,
   knownIssues: null,
   usageLimitations: null,
+  images: [],
   thumbnailImage: null,
   photos: [],
   isTrending: false,

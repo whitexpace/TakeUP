@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import type { z } from "zod"
 import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
 import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
@@ -15,6 +15,18 @@ type AvailabilityRange = {
   status: "AVAILABLE" | "RENTED"
 }
 
+type ListingImage = {
+  id: string
+  url: string
+  name: string
+}
+
+type PendingUploadImage = {
+  id: string
+  name: string
+  progress: number
+}
+
 const props = defineProps<{
   mode?: "new" | "edit"
   item?: MyListingItem | null
@@ -26,6 +38,14 @@ const emit = defineEmits<{
   submit: [data: Record<string, unknown>]
   cancel: []
 }>()
+
+const supabase = useSupabaseClient()
+const runtimeConfig = useRuntimeConfig()
+const itemImageBucket = runtimeConfig.public.itemImageBucket
+const supabaseUrl = runtimeConfig.public.supabase.url
+const supabaseKey = runtimeConfig.public.supabase.key
+const MAX_IMAGE_COUNT = 10
+const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
@@ -74,12 +94,15 @@ const initForm = () => ({
   whatIsIncluded: props.item?.whatIsIncluded ?? "",
   knownIssues: props.item?.knownIssues ?? "",
   usageLimitations: props.item?.usageLimitations ?? "",
-  thumbnailImage: props.item?.thumbnailImage ?? "",
-  photoUrls: props.item?.photos?.join("\n") ?? "",
 })
 
 const form = reactive(initForm())
 const tagInput = ref("")
+const images = ref<ListingImage[]>([])
+const pendingUploads = ref<PendingUploadImage[]>([])
+const primaryImageId = ref<string | null>(null)
+const imageUploadError = ref<string | null>(null)
+const isUploadingImages = ref(false)
 const availabilityRanges = ref<AvailabilityRange[]>(
   props.item?.availability?.map((a) => ({
     startDate: new Date(a.startDate),
@@ -91,13 +114,41 @@ const availabilityRanges = ref<AvailabilityRange[]>(
 const fieldErrors = ref<Record<string, string>>({})
 const availabilityErrors = ref<string[]>([])
 
+const buildInitialImages = (item?: MyListingItem | null): ListingImage[] => {
+  if (!item) return []
+
+  const imageUrls = item.images.length
+    ? item.images.map((image) => image.path)
+    : item.photos ?? []
+
+  return imageUrls.map((url, index) => ({
+    id: `existing-${index}-${url}`,
+    url,
+    name: `Image ${index + 1}`,
+  }))
+}
+
+const syncImagesFromItem = (item?: MyListingItem | null) => {
+  images.value = buildInitialImages(item)
+  primaryImageId.value =
+    images.value.find(
+      (image) =>
+        image.url ===
+        (item?.images.find((entry) => entry.isPrimary)?.path ?? item?.thumbnailImage ?? null),
+    )?.id ??
+    images.value[0]?.id ??
+    null
+}
+
+syncImagesFromItem(props.item)
+
 watch(
   () => props.item,
   (item) => {
-    if (!item) return
     Object.assign(form, initForm())
+    syncImagesFromItem(item)
     availabilityRanges.value =
-      item.availability?.map((a) => ({
+      item?.availability?.map((a) => ({
         startDate: new Date(a.startDate),
         endDate: new Date(a.endDate),
         noEndDate: false,
@@ -105,6 +156,172 @@ watch(
       })) ?? []
   },
 )
+
+const imageCountLabel = computed(() => `${images.value.length}/${MAX_IMAGE_COUNT}`)
+
+const canAddMoreImages = computed(() => images.value.length < MAX_IMAGE_COUNT)
+
+const getSafeFileName = (fileName: string) => {
+  const cleaned = fileName
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+
+  return cleaned || "image"
+}
+
+const createItemImageStoragePath = (file: File) => {
+  const datePrefix = new Date().toISOString().slice(0, 10)
+  const uniqueId = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+  return `items/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
+}
+
+const setPrimaryImage = (imageId: string) => {
+  primaryImageId.value = imageId
+}
+
+const moveImage = (fromIndex: number, toIndex: number) => {
+  if (toIndex < 0 || toIndex >= images.value.length) return
+
+  const reordered = [...images.value]
+  const [movedImage] = reordered.splice(fromIndex, 1)
+  if (!movedImage) return
+  reordered.splice(toIndex, 0, movedImage)
+  images.value = reordered
+}
+
+const removeImage = (imageId: string) => {
+  images.value = images.value.filter((image) => image.id !== imageId)
+  if (primaryImageId.value === imageId) {
+    primaryImageId.value = images.value[0]?.id ?? null
+  }
+}
+
+const setPendingUploadProgress = (id: string, progress: number) => {
+  pendingUploads.value = pendingUploads.value.map((upload) =>
+    upload.id === id ? { ...upload, progress } : upload,
+  )
+}
+
+const removePendingUpload = (id: string) => {
+  pendingUploads.value = pendingUploads.value.filter((upload) => upload.id !== id)
+}
+
+const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/")
+
+const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
+  const storagePath = createItemImageStoragePath(file)
+  const uploadId = storagePath
+  pendingUploads.value = [
+    ...pendingUploads.value,
+    {
+      id: uploadId,
+      name: file.name,
+      progress: 0,
+    },
+  ]
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const accessToken = session?.access_token
+
+  return await new Promise<ListingImage>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${encodeStoragePath(storagePath)}`)
+    xhr.setRequestHeader("apikey", supabaseKey)
+    if (accessToken) {
+      xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
+    }
+    xhr.setRequestHeader("x-upsert", "false")
+    xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return
+      const progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
+      setPendingUploadProgress(uploadId, progress)
+    }
+
+    xhr.onerror = () => {
+      removePendingUpload(uploadId)
+      reject(new Error("Network error while uploading image."))
+    }
+
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        removePendingUpload(uploadId)
+        try {
+          const payload = JSON.parse(xhr.responseText) as { message?: string; error?: string }
+          reject(new Error(payload.message || payload.error || "Upload failed."))
+        } catch {
+          reject(new Error("Upload failed."))
+        }
+        return
+      }
+
+      setPendingUploadProgress(uploadId, 100)
+      const { data: publicUrlData } = supabase.storage.from(itemImageBucket).getPublicUrl(storagePath)
+      removePendingUpload(uploadId)
+      resolve({
+        id: storagePath,
+        url: publicUrlData.publicUrl,
+        name: file.name,
+      })
+    }
+
+    xhr.send(file)
+  })
+}
+
+const uploadSelectedImages = async (event: Event) => {
+  imageUploadError.value = null
+
+  const input = event.target as HTMLInputElement | null
+  const files = input?.files ? Array.from(input.files) : []
+
+  if (files.length === 0) {
+    return
+  }
+
+  if (images.value.length + files.length > MAX_IMAGE_COUNT) {
+    imageUploadError.value = `You can upload up to ${MAX_IMAGE_COUNT} images per listing.`
+    if (input) input.value = ""
+    return
+  }
+
+  isUploadingImages.value = true
+
+  try {
+    const invalidFile = files.find((file) => !file.type.startsWith("image/"))
+    if (invalidFile) {
+      imageUploadError.value = "Only image files can be uploaded."
+      return
+    }
+
+    const uploadedImages = await Promise.all(
+      files.map((file) => uploadFileWithProgress(file)),
+    )
+
+    images.value = [...images.value, ...uploadedImages]
+
+    if (!primaryImageId.value) {
+      primaryImageId.value = uploadedImages[0]?.id ?? null
+    }
+  } catch (error) {
+    imageUploadError.value =
+      error instanceof Error
+        ? `Unable to upload images: ${error.message}`
+        : "Unable to upload one or more images. Please try again."
+  } finally {
+    isUploadingImages.value = false
+    if (input) input.value = ""
+  }
+}
 
 const toggleCategory = (cat: ItemCategory) => {
   const idx = form.categories.indexOf(cat)
@@ -136,10 +353,9 @@ const handleFormEnterKeydown = (event: KeyboardEvent) => {
 }
 
 const buildPayload = () => {
-  const photos = form.photoUrls
-    .split("\n")
-    .map((u: string) => u.trim())
-    .filter(Boolean)
+  const photos = images.value.map((image) => image.url)
+  const thumbnailImage =
+    images.value.find((image) => image.id === primaryImageId.value)?.url ?? photos[0] ?? undefined
 
   const availability = availabilityRanges.value
     .filter((r) => r.startDate)
@@ -164,7 +380,7 @@ const buildPayload = () => {
     whatIsIncluded: form.whatIsIncluded || undefined,
     knownIssues: form.knownIssues || undefined,
     usageLimitations: form.usageLimitations || undefined,
-    thumbnailImage: (photos[0] ?? form.thumbnailImage) || undefined,
+    thumbnailImage,
     photos,
     availability,
     status: "AVAILABLE",
@@ -174,6 +390,13 @@ const buildPayload = () => {
 const handleSubmit = () => {
   fieldErrors.value = {}
   availabilityErrors.value = []
+  imageUploadError.value = null
+
+  if (isUploadingImages.value) {
+    imageUploadError.value = "Please wait for image uploads to finish."
+    return
+  }
+
   const payload = buildPayload()
 
   const schema = props.mode === "edit" ? updateItemSchema : createItemSchema
@@ -221,43 +444,109 @@ const handleSubmit = () => {
       <div>
         <h2 class="text-neutral-800 text-xl font-semibold font-geist">Images</h2>
         <p class="text-neutral-800/80 text-base font-normal font-geist tracking-wide">
-          Upload photos of your item. Add image URLs below (one per line, up to 10).
+          Upload photos from your device. These will be stored in your item image bucket.
         </p>
         <p class="text-neutral-800/60 text-xs font-geist mt-1">
-          Drag to reorder — the first URL becomes the cover image.
+          Choose up to 10 images. Set one as cover to control the item thumbnail.
         </p>
       </div>
       <div>
         <label class="block text-neutral-400 text-xs font-geist mb-1">
-          Add Images ({{ form.photoUrls.split("\n").filter(Boolean).length }}/10)
+          Add Images ({{ imageCountLabel }})
         </label>
-        <textarea
-          v-model="form.photoUrls"
-          rows="4"
-          placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg"
-          class="w-full bg-white rounded-[5px] border border-red-300/50 px-3 py-2 text-sm font-geist text-neutral-800 placeholder:text-neutral-800/50 focus:outline-none focus:border-orange-500 transition-colors resize-none"
+
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          :disabled="!canAddMoreImages || isUploadingImages"
+          class="block w-full bg-white rounded-[5px] border border-red-300/50 px-3 py-2 text-sm font-geist text-neutral-800 file:mr-3 file:rounded-[5px] file:border-0 file:bg-orange-500 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white disabled:opacity-60"
+          @change="uploadSelectedImages"
         />
-        <!-- Preview -->
         <div
-          v-if="form.photoUrls.split('\n').filter(Boolean).length > 0"
-          class="flex flex-wrap gap-2 mt-2"
+          v-if="isUploadingImages"
+          class="mt-2 text-sm font-geist text-neutral-800/70"
+        >
+          Uploading images...
+        </div>
+        <div v-if="pendingUploads.length > 0" class="mt-3 space-y-2">
+          <div
+            v-for="upload in pendingUploads"
+            :key="upload.id"
+            class="rounded-lg bg-white border border-red-300/30 px-3 py-2"
+          >
+            <div class="flex items-center justify-between gap-3 text-sm font-geist text-neutral-800/80">
+              <span class="truncate">{{ upload.name }}</span>
+              <span class="shrink-0">{{ upload.progress }}%</span>
+            </div>
+            <div class="mt-2 h-2 rounded-full bg-orange-100 overflow-hidden">
+              <div
+                class="h-full bg-orange-500 transition-[width] duration-150"
+                :style="{ width: `${upload.progress}%` }"
+              />
+            </div>
+          </div>
+        </div>
+        <p v-if="imageUploadError" class="mt-2 text-red-500 text-sm font-geist">
+          {{ imageUploadError }}
+        </p>
+        <div
+          v-if="images.length > 0"
+          class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-4"
         >
           <div
-            v-for="(url, i) in form.photoUrls.split('\n').filter(Boolean).slice(0, 10)"
-            :key="i"
-            class="relative"
+            v-for="(image, index) in images"
+            :key="image.id"
+            class="bg-white rounded-xl border border-red-300/30 p-2 space-y-2"
           >
             <img
-              :src="url"
-              :alt="`Photo ${i + 1}`"
-              class="w-16 h-16 object-cover rounded-lg border border-red-300/30"
-              @error="($event.target as HTMLImageElement).src = 'https://placehold.co/64x64'"
+              :src="image.url"
+              :alt="image.name"
+              class="w-full h-28 object-cover rounded-lg border border-red-300/30"
             />
-            <span
-              v-if="i === 0"
-              class="absolute -bottom-1 left-0 right-0 text-center text-white text-[9px] bg-orange-500 rounded-b-lg"
-              >Cover</span
-            >
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-geist text-neutral-800/70 truncate">
+                {{ image.name }}
+              </span>
+              <span
+                v-if="image.id === primaryImageId"
+                class="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-geist text-white"
+              >
+                Cover
+              </span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-md border border-orange-500 px-2 py-1 text-[11px] font-geist text-orange-500 hover:bg-orange-50"
+                @click="setPrimaryImage(image.id)"
+              >
+                Set Cover
+              </button>
+              <button
+                type="button"
+                class="rounded-md border border-red-300 px-2 py-1 text-[11px] font-geist text-neutral-800/70 hover:bg-orange-50 disabled:opacity-50"
+                :disabled="index === 0"
+                @click="moveImage(index, index - 1)"
+              >
+                Left
+              </button>
+              <button
+                type="button"
+                class="rounded-md border border-red-300 px-2 py-1 text-[11px] font-geist text-neutral-800/70 hover:bg-orange-50 disabled:opacity-50"
+                :disabled="index === images.length - 1"
+                @click="moveImage(index, index + 1)"
+              >
+                Right
+              </button>
+              <button
+                type="button"
+                class="rounded-md border border-red-300 px-2 py-1 text-[11px] font-geist text-red-500 hover:bg-red-50"
+                @click="removeImage(image.id)"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -625,11 +914,13 @@ const handleSubmit = () => {
       <div class="flex flex-col sm:flex-row gap-3">
         <button
           type="submit"
-          :disabled="isSubmitting"
+          :disabled="isSubmitting || isUploadingImages"
           class="sm:flex-1 lg:flex-none px-8 py-3 bg-orange-500 text-white rounded-[30px] text-base font-medium font-geist hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {{
-            isSubmitting
+            isUploadingImages
+              ? "Uploading Images..."
+              : isSubmitting
               ? props.mode === "new"
                 ? "Publishing..."
                 : "Saving..."

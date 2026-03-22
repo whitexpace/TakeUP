@@ -18,6 +18,7 @@ const makeItem = (id = ITEM_ID) =>
     rateOption: "PER_DAY",
     rentalFee: 100,
     replacementCost: null,
+    images: [],
     thumbnailImage: null,
     photos: [],
     categories: ["ELECTRONICS"],
