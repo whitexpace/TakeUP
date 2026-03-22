@@ -63,80 +63,32 @@ const getTransactionTotalAmount = (transaction: {
   return units * transaction.item.rentalFee
 }
 
-const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
-  PENDING: [PrismaTransactionStatus.PENDING, PrismaTransactionStatus.AWAITING_LENDER_APPROVAL],
-  ACTIVE: [
-    PrismaTransactionStatus.CONFIRMED,
-    PrismaTransactionStatus.PAID,
-    PrismaTransactionStatus.ONGOING,
-    PrismaTransactionStatus.RETURNED,
-    PrismaTransactionStatus.IN_DISPUTE,
-    PrismaTransactionStatus.APPEALED,
-  ],
-  COMPLETED: [PrismaTransactionStatus.COMPLETED],
-  CANCELLED: [
-    PrismaTransactionStatus.CANCELLED,
-    PrismaTransactionStatus.REFUNDED,
-    PrismaTransactionStatus.FAILED,
-  ],
-}
+const getTransactionThumbnailImage = (item: {
+  images?: Array<{ path: string; isPrimary?: boolean }>
+}): string | null =>
+  item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
 
-const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
-  switch (status) {
-    case PrismaTransactionStatus.PENDING:
-    case PrismaTransactionStatus.AWAITING_LENDER_APPROVAL:
-      return "PENDING"
-    case PrismaTransactionStatus.CONFIRMED:
-    case PrismaTransactionStatus.PAID:
-    case PrismaTransactionStatus.ONGOING:
-    case PrismaTransactionStatus.RETURNED:
-    case PrismaTransactionStatus.IN_DISPUTE:
-    case PrismaTransactionStatus.APPEALED:
-      return "ACTIVE"
-    case PrismaTransactionStatus.COMPLETED:
-      return "COMPLETED"
-    case PrismaTransactionStatus.CANCELLED:
-    case PrismaTransactionStatus.REFUNDED:
-    case PrismaTransactionStatus.FAILED:
-      return "CANCELLED"
-  }
-}
-
-type TransactionRecord = Prisma.RentalTransactionGetPayload<{
-  include: typeof transactionInclude
-}>
-
-const normalizeTransaction = (record: TransactionRecord) => {
-  if (
-    !record.item ||
-    !record.borrower ||
-    !record.lender ||
-    !record.itemId ||
-    !record.borrowerId ||
-    !record.lenderId ||
-    !record.startDate ||
-    !record.endDate ||
-    record.totalAmount === null
-  ) {
-    return null
-  }
-
-  return {
-    id: record.id,
-    itemId: record.itemId,
-    borrowerId: record.borrowerId,
-    lenderId: record.lenderId,
-    startDate: record.startDate,
-    endDate: record.endDate,
-    totalAmount: Number(record.totalAmount),
-    status: toUiTransactionStatus(record.status),
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-    item: record.item,
-    borrower: { user: record.borrower },
-    lender: { user: record.lender },
-  }
-}
+const mapTransactionRecord = <
+  T extends { item: { images?: Array<{ path: string; isPrimary?: boolean }> } },
+>(
+  record: T & {
+    startDate: Date
+    endDate: Date
+    item: T["item"] & {
+      freeToBorrow: boolean
+      rentalFee: number
+      rateOption: "PER_HOUR" | "PER_DAY"
+    }
+    totalAmount?: number
+  },
+) => ({
+  ...record,
+  totalAmount: getTransactionTotalAmount(record),
+  item: {
+    ...record.item,
+    thumbnailImage: getTransactionThumbnailImage(record.item),
+  } as T["item"] & { thumbnailImage: string | null },
+})
 
 export const transactionRouter = router({
   list: protectedProcedure.input(listTransactionsSchema).query(async ({ ctx, input }) => {
@@ -194,18 +146,7 @@ export const transactionRouter = router({
       hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
     return {
-      transactions: pageRecords.map((record) => ({
-        ...record,
-        totalAmount: getTransactionTotalAmount(record),
-        item: {
-          ...record.item,
-          thumbnailImage:
-            record.item.images?.find((image) => image.isPrimary)?.path ??
-            record.item.thumbnailImage ??
-            record.item.images?.[0]?.path ??
-            null,
-        },
-      })),
+      transactions: pageRecords.map(mapTransactionRecord),
       nextCursor,
     }
   }),

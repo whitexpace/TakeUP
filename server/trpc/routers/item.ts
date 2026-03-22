@@ -285,9 +285,14 @@ const mapItemTaxonomy = (
     lenderUser.email ||
     item.lenderId
   const orderedPhotos =
-    images?.map((entry) => entry.path) ?? item.photos ?? (item.thumbnailImage ? [item.thumbnailImage] : [])
+    images?.map((entry) => entry.path) ??
+    item.photos ??
+    (item.thumbnailImage ? [item.thumbnailImage] : [])
   const thumbnailImage =
-    images?.find((entry) => entry.isPrimary)?.path ?? item.thumbnailImage ?? orderedPhotos[0] ?? null
+    images?.find((entry) => entry.isPrimary)?.path ??
+    item.thumbnailImage ??
+    orderedPhotos[0] ??
+    null
 
   return {
     ...rest,
