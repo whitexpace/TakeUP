@@ -169,7 +169,10 @@ const formatDateRange = (item: BagItem) => {
   const bookingRange = getBookingRange(item)
   if (!bookingRange) return ""
 
-  const start = bookingRange.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  const start = bookingRange.startDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })
   const end = bookingRange.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
   return `${start} - ${end}`
 }
@@ -241,7 +244,7 @@ const handleRequestBooking = async () => {
           endDate: end.toISOString(),
         },
       })
-      
+
       const itemTotal = calculateItemTotal(item)
       successfulBookings.push({
         name: item.name,
@@ -250,7 +253,7 @@ const handleRequestBooking = async () => {
       })
       successfulLenders.add(item.lenderName)
       totalBookedAmount += itemTotal
-      
+
       removeFromBag(item.id)
       selectedItemIds.value.delete(item.id)
     } catch (err) {
@@ -290,8 +293,15 @@ const handleRequestBooking = async () => {
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
       <div class="mb-10">
-        <div class="text-noble-black mb-1" style="font-size: 30px; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em;">My Bag</div>
-        <p class="text-base text-noble-black/40 font-medium tracking-tight">Review and manage items you want to book</p>
+        <div
+          class="text-noble-black mb-1"
+          style="font-size: 30px; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em"
+        >
+          My Bag
+        </div>
+        <p class="text-base text-noble-black/40 font-medium tracking-tight">
+          Review and manage items you want to book
+        </p>
       </div>
 
       <div v-if="bagItems.length === 0" class="py-20 text-center">
@@ -324,7 +334,9 @@ const handleRequestBooking = async () => {
 
       <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <!-- Left Side: Items -->
-        <div class="lg:col-span-2 bg-cream rounded-[32px] border border-cinnamon-ice h-fit py-8 overflow-hidden">
+        <div
+          class="lg:col-span-2 bg-cream rounded-[32px] border border-cinnamon-ice h-fit py-8 overflow-hidden"
+        >
           <div class="flex flex-col">
             <!-- Select All Bar -->
             <div class="flex items-center gap-4 pb-6 px-8 border-b border-cinnamon-ice/60">
@@ -357,10 +369,14 @@ const handleRequestBooking = async () => {
 
             <!-- Groups by Lender -->
             <div class="px-8">
-              <div v-for="(group, lenderId, index) in groupedItems" :key="lenderId" class="flex flex-col">
+              <div
+                v-for="(group, lenderId, index) in groupedItems"
+                :key="lenderId"
+                class="flex flex-col"
+              >
                 <!-- Divider between lenders -->
                 <div v-if="index > 0" class="h-px bg-cinnamon-ice/60 -mx-8 my-4"></div>
-                
+
                 <!-- Lender Header -->
                 <div class="flex items-center gap-4 py-4">
                   <button
@@ -435,11 +451,17 @@ const handleRequestBooking = async () => {
                       <div class="flex flex-col gap-1 mb-1">
                         <span
                           class="w-fit text-[10px] uppercase font-bold tracking-wider px-3 py-0.5 rounded-full"
-                          :class="item.listingType === 'Rent' ? 'bg-cinnamon-ice text-noble-black' : 'bg-blue-estate text-white'"
+                          :class="
+                            item.listingType === 'Rent'
+                              ? 'bg-cinnamon-ice text-noble-black'
+                              : 'bg-blue-estate text-white'
+                          "
                         >
                           {{ item.listingType }}
                         </span>
-                        <h3 class="text-base font-bold text-noble-black truncate">{{ item.name }}</h3>
+                        <h3 class="text-base font-bold text-noble-black truncate">
+                          {{ item.name }}
+                        </h3>
                       </div>
                       <p class="text-sm text-noble-black/60">{{ calculateDuration(item) }}</p>
                     </div>
@@ -458,14 +480,19 @@ const handleRequestBooking = async () => {
                           fill="currentColor"
                           stroke="none"
                         >
-                          <path d="M19 6h-3.5l-1-1h-5l-1 1H5v2h14V6zM6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V8H6v11z" />
+                          <path
+                            d="M19 6h-3.5l-1-1h-5l-1 1H5v2h14V6zM6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V8H6v11z"
+                          />
                         </svg>
                       </button>
                       <div class="flex flex-col items-end">
                         <span class="text-base font-bold text-noble-black leading-none">{{
                           formatPesoAmount(calculateItemTotal(item))
                         }}</span>
-                        <span v-if="item.listingType === 'Rent'" class="text-[11px] text-noble-black/40 mt-1">
+                        <span
+                          v-if="item.listingType === 'Rent'"
+                          class="text-[11px] text-noble-black/40 mt-1"
+                        >
                           ({{ formatPesoAmount(item.price) }} / {{ item.priceUnit }})
                         </span>
                       </div>
@@ -495,7 +522,10 @@ const handleRequestBooking = async () => {
                 :disabled="selectedItemIds.size === 0 || isSubmitting"
                 @click="handleRequestBooking"
               >
-                <span v-if="isSubmitting" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                <span
+                  v-if="isSubmitting"
+                  class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                ></span>
                 {{ isSubmitting ? "Requesting..." : "Request Booking" }}
               </button>
 
@@ -507,7 +537,15 @@ const handleRequestBooking = async () => {
               </NuxtLink>
             </div>
 
-            <p v-if="bookingStatusMessage" class="mt-4 text-center text-xs font-bold" :class="bookingStatusMessage.includes('failed') ? 'text-cinnabar-red' : 'text-burning-orange'">
+            <p
+              v-if="bookingStatusMessage"
+              class="mt-4 text-center text-xs font-bold"
+              :class="
+                bookingStatusMessage.includes('failed')
+                  ? 'text-cinnabar-red'
+                  : 'text-burning-orange'
+              "
+            >
               {{ bookingStatusMessage }}
             </p>
 
@@ -563,40 +601,74 @@ const handleRequestBooking = async () => {
       leave-from-class="opacity-100 scale-100"
       leave-to-class="opacity-0 scale-95"
     >
-      <div v-if="isConfirmationModalOpen" class="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-noble-black/40 backdrop-blur-sm" @click="isConfirmationModalOpen = false"></div>
-        
-        <div class="relative w-full max-w-lg bg-white rounded-[40px] p-10 shadow-2xl border border-cinnamon-ice/30">
+      <div
+        v-if="isConfirmationModalOpen"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-noble-black/40 backdrop-blur-sm"
+          @click="isConfirmationModalOpen = false"
+        ></div>
+
+        <div
+          class="relative w-full max-w-lg bg-white rounded-[40px] p-10 shadow-2xl border border-cinnamon-ice/30"
+        >
           <div class="text-center mb-10">
             <div class="mb-6 flex justify-center">
-              <div class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center text-burning-orange">
-                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <div
+                class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center text-burning-orange"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
               </div>
             </div>
-            <h2 class="text-4xl font-extrabold text-noble-black mb-3 tracking-tight">Booking Request Sent!</h2>
+            <h2 class="text-4xl font-extrabold text-noble-black mb-3 tracking-tight">
+              Booking Request Sent!
+            </h2>
             <p class="text-lg text-noble-black/60 leading-relaxed">
-              Waiting for <span class="text-noble-black font-bold">{{ confirmationData.lenders }}</span> to confirm your request.
+              Waiting for
+              <span class="text-noble-black font-bold">{{ confirmationData.lenders }}</span> to
+              confirm your request.
             </p>
           </div>
 
-          <div class="bg-cream rounded-3xl p-6 mb-8 max-h-60 overflow-y-auto border border-cinnamon-ice/20">
+          <div
+            class="bg-cream rounded-3xl p-6 mb-8 max-h-60 overflow-y-auto border border-cinnamon-ice/20"
+          >
             <div class="space-y-4">
-              <div v-for="(item, idx) in confirmationData.items" :key="idx" class="flex justify-between items-start border-b border-cinnamon-ice/20 pb-4 last:border-0 last:pb-0">
+              <div
+                v-for="(item, idx) in confirmationData.items"
+                :key="idx"
+                class="flex justify-between items-start border-b border-cinnamon-ice/20 pb-4 last:border-0 last:pb-0"
+              >
                 <div class="flex flex-col gap-1 pr-4">
                   <span class="font-bold text-noble-black leading-tight">{{ item.name }}</span>
                   <span class="text-xs text-noble-black/50 font-medium">{{ item.dates }}</span>
                 </div>
-                <span class="font-bold text-noble-black text-sm shrink-0">{{ formatPesoAmount(item.price) }}</span>
+                <span class="font-bold text-noble-black text-sm shrink-0">{{
+                  formatPesoAmount(item.price)
+                }}</span>
               </div>
             </div>
           </div>
 
           <div class="flex justify-between items-center mb-10 px-2">
             <span class="text-lg font-bold text-noble-black/60">Total</span>
-            <span class="text-2xl font-black text-noble-black">{{ formatPesoAmount(confirmationData.total) }}</span>
+            <span class="text-2xl font-black text-noble-black">{{
+              formatPesoAmount(confirmationData.total)
+            }}</span>
           </div>
 
           <button
@@ -611,5 +683,4 @@ const handleRequestBooking = async () => {
   </div>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>
