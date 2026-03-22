@@ -244,7 +244,6 @@ const handleRequestBooking = async () => {
           endDate: end.toISOString(),
         },
       })
-
       const itemTotal = calculateItemTotal(item)
       successfulBookings.push({
         name: item.name,
@@ -253,7 +252,6 @@ const handleRequestBooking = async () => {
       })
       successfulLenders.add(item.lenderName)
       totalBookedAmount += itemTotal
-
       removeFromBag(item.id)
       selectedItemIds.value.delete(item.id)
     } catch (err) {
@@ -376,7 +374,6 @@ const handleRequestBooking = async () => {
               >
                 <!-- Divider between lenders -->
                 <div v-if="index > 0" class="h-px bg-cinnamon-ice/60 -mx-8 my-4"></div>
-
                 <!-- Lender Header -->
                 <div class="flex items-center gap-4 py-4">
                   <button
