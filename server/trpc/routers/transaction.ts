@@ -3,12 +3,24 @@ import { router } from "../init"
 import { protectedProcedure } from "../procedures"
 import { listTransactionsSchema } from "../../../shared/schemas/transaction"
 
+const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+]
+
 const transactionInclude = {
   item: {
     select: {
       id: true,
       name: true,
-      thumbnailImage: true,
+      images: {
+        select: {
+          path: true,
+          isPrimary: true,
+          sortOrder: true,
+        },
+        orderBy: itemImageOrderBy,
+      },
       rateOption: true,
       rentalFee: true,
       freeToBorrow: true,
@@ -38,7 +50,50 @@ const transactionInclude = {
       },
     },
   },
-} as const
+} satisfies Prisma.RentalTransactionInclude
+
+const getTransactionTotalAmount = (transaction: {
+  startDate: Date
+  endDate: Date
+  item: { freeToBorrow: boolean; rentalFee: number; rateOption: "PER_HOUR" | "PER_DAY" }
+  totalAmount?: number
+}) => {
+  if (typeof transaction.totalAmount === "number") return transaction.totalAmount
+  if (transaction.item.freeToBorrow) return 0
+
+  const durationMs = Math.max(transaction.endDate.getTime() - transaction.startDate.getTime(), 0)
+  const unitMs = transaction.item.rateOption === "PER_HOUR" ? 1000 * 60 * 60 : 1000 * 60 * 60 * 24
+  const units = Math.max(Math.ceil(durationMs / unitMs), 1)
+
+  return units * transaction.item.rentalFee
+}
+
+const getTransactionThumbnailImage = (item: {
+  images?: Array<{ path: string; isPrimary?: boolean }>
+}): string | null =>
+  item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
+
+const mapTransactionRecord = <
+  T extends { item: { images?: Array<{ path: string; isPrimary?: boolean }> } },
+>(
+  record: T & {
+    startDate: Date
+    endDate: Date
+    item: T["item"] & {
+      freeToBorrow: boolean
+      rentalFee: number
+      rateOption: "PER_HOUR" | "PER_DAY"
+    }
+    totalAmount?: number
+  },
+) => ({
+  ...record,
+  totalAmount: getTransactionTotalAmount(record),
+  item: {
+    ...record.item,
+    thumbnailImage: getTransactionThumbnailImage(record.item),
+  } as T["item"] & { thumbnailImage: string | null },
+})
 
 export const transactionRouter = router({
   list: protectedProcedure.input(listTransactionsSchema).query(async ({ ctx, input }) => {
@@ -90,6 +145,9 @@ export const transactionRouter = router({
     const nextCursor =
       hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
-    return { transactions: pageRecords, nextCursor }
+    return {
+      transactions: pageRecords.map(mapTransactionRecord),
+      nextCursor,
+    }
   }),
 })

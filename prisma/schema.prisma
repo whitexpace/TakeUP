@@ -57,6 +57,32 @@ enum TransactionStatus {
   CANCELLED
 }
 
+enum PaymentMethod {
+  gcash
+  card
+  bank
+  wallet
+  cash
+
+  @@map("payment_method_enum")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  IN_DISPUTE
+}
+
+enum BookingPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
 model Item {
   id          String        @id @default(uuid())
   name        String
@@ -70,6 +96,7 @@ model Item {
   replacementCost Int?
   freeToBorrow    Boolean
   availability    ItemAvailability[]
+  bookings        Booking[]
   transactions    RentalTransaction[]
 
   whatItemOffers   String?
@@ -77,11 +104,10 @@ model Item {
   knownIssues      String?
   usageLimitations String?
 
-  thumbnailImage String?
-  photos         String[]
-  categories     ItemCategoryOnItem[]
-  tags           ItemTagOnItem[]
-  likes          Like[]
+  images     ItemImage[]
+  categories ItemCategoryOnItem[]
+  tags       ItemTagOnItem[]
+  likes      Like[]
 
   isTrending   Boolean @default(false)
   viewCount    Int     @default(0)
@@ -99,8 +125,82 @@ model Item {
   @@index([borrowerId])
 }
 
+model Booking {
+  id                 String               @id @default(uuid())
+  itemId             String
+  borrowerId         String
+  lenderId           String
+  startDate          DateTime
+  endDate            DateTime
+  status             BookingStatus        @default(PENDING)
+  paymentStatus      BookingPaymentStatus @default(PENDING)
+  requestedAt        DateTime             @default(now())
+  confirmedAt        DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  disputeOpenedAt    DateTime?
+  paymentProcessedAt DateTime?
+  cancellationReason String?
+  paymentMethod      PaymentMethod
+  platformCommission Int                  @default(0)
+  totalFee           Int
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+
+  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
+  lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+
+  @@index([borrowerId])
+  @@index([createdAt])
+  @@index([itemId])
+  @@index([itemId, startDate, endDate])
+  @@index([lenderId])
+  @@index([paymentStatus])
+  @@index([status])
+}
+
+model RentalTransaction {
+  id         String            @id @default(uuid())
+  itemId     String
+  borrowerId String
+  lenderId   String
+  startDate  DateTime
+  endDate    DateTime
+  status     TransactionStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
+  lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+
+  @@index([borrowerId])
+  @@index([createdAt])
+  @@index([itemId])
+  @@index([lenderId])
+  @@index([startDate])
+  @@index([status])
+}
+
+model ItemImage {
+  id        String   @id @default(uuid())
+  itemId    String
+  path      String
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, path])
+  @@index([itemId])
+  @@index([itemId, sortOrder])
+  @@index([itemId, isPrimary])
+}
+
 model ItemAvailability {
-  id        String                 @id @default(uuid())
+  id        String                 @id @default(dbgenerated("(gen_random_uuid())::text"))
   itemId    String
   startDate DateTime
   endDate   DateTime
@@ -193,6 +293,7 @@ model Lender {
   lenderRating Int @default(0)
 
   listedItem   Item[]
+  bookings     Booking[]
   transactions RentalTransaction[]
 }
 
@@ -204,6 +305,7 @@ model Borrower {
   borrowerRating Int    @default(0)
 
   borrowedItems Item[]
+  bookings      Booking[]
   transactions  RentalTransaction[]
 }
 
@@ -217,28 +319,4 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   PENDING
-}
-
-model RentalTransaction {
-  id          String            @id @default(uuid())
-  itemId      String
-  borrowerId  String
-  lenderId    String
-  startDate   DateTime
-  endDate     DateTime
-  totalAmount Int
-  status      TransactionStatus @default(PENDING)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
-  lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
-
-  @@index([borrowerId])
-  @@index([lenderId])
-  @@index([itemId])
-  @@index([status])
-  @@index([createdAt])
-  @@map("transactions")
 }
