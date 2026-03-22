@@ -59,7 +59,7 @@ const runtimeConfig = useRuntimeConfig()
 const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
-const MAX_IMAGE_COUNT = 10
+const MAX_GALLERY_IMAGE_COUNT = 10
 const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
@@ -207,9 +207,13 @@ watch(
   },
 )
 
-const imageCountLabel = computed(() => `${images.value.length}/${MAX_IMAGE_COUNT}`)
+const coverImage = computed(
+  () => images.value.find((image) => image.id === primaryImageId.value) ?? null,
+)
 
-const canAddMoreImages = computed(() => images.value.length < MAX_IMAGE_COUNT)
+const galleryImages = computed(() =>
+  images.value.filter((image) => image.id !== primaryImageId.value),
+)
 
 const getSafeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -337,7 +341,10 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   })
 }
 
-const cleanupUploadedImages = async (urls: string[], options: { keepalive?: boolean } = {}) => {
+const cleanupUploadedImages = async (
+  urls: string[],
+  options: { keepalive?: boolean } = {},
+) => {
   const uniqueUrls = [...new Set(urls)].filter((url) => sessionUploadedImageUrls.has(url))
   if (uniqueUrls.length === 0) return
 
@@ -383,9 +390,13 @@ const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) =
     return
   }
 
-  if (images.value.length + files.length > MAX_IMAGE_COUNT) {
-    imageUploadError.value = `You can upload up to ${MAX_IMAGE_COUNT} images per listing.`
-    if (input) input.value = ""
+  if (options.asCover && files.length > 1) {
+    imageUploadError.value = "Please select only one cover image."
+    return
+  }
+
+  if (!options.asCover && galleryImages.value.length + files.length > MAX_GALLERY_IMAGE_COUNT) {
+    imageUploadError.value = `You can upload up to ${MAX_GALLERY_IMAGE_COUNT} gallery images.`
     return
   }
 
@@ -400,10 +411,14 @@ const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) =
 
     const uploadedImages = await Promise.all(files.map((file) => uploadFileWithProgress(file)))
 
-    images.value = [...images.value, ...uploadedImages]
-
-    if (!primaryImageId.value) {
-      primaryImageId.value = uploadedImages[0]?.id ?? null
+    if (options.asCover) {
+      const nextCoverImage = uploadedImages[0] ?? null
+      rebuildImages(nextCoverImage, [
+        ...(coverImage.value ? [coverImage.value] : []),
+        ...galleryImages.value,
+      ])
+    } else {
+      rebuildImages(coverImage.value, [...galleryImages.value, ...uploadedImages])
     }
   } catch (error) {
     imageUploadError.value =
@@ -519,9 +534,12 @@ const handleFormEnterKeydown = (event: KeyboardEvent) => {
 }
 
 const buildPayload = () => {
-  const photos = images.value.map((image) => image.url)
-  const thumbnailImage =
-    images.value.find((image) => image.id === primaryImageId.value)?.url ?? photos[0] ?? undefined
+  const orderedImages = [
+    ...(coverImage.value ? [coverImage.value] : []),
+    ...galleryImages.value,
+  ]
+  const photos = orderedImages.map((image) => image.url)
+  const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
 
   const availability = availabilityRanges.value
     .filter((r) => r.startDate)
@@ -650,9 +668,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Images Section -->
-    <section
-      class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
-    >
+    <section class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300">
       <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
       <p class="mt-1 text-[14px] text-noble-black/50">
         Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
@@ -773,9 +789,7 @@ onBeforeUnmount(() => {
           :key="upload.id"
           class="flex aspect-square w-32 flex-col justify-between rounded-[18px] border border-cinnamon-ice/30 bg-white p-3"
         >
-          <div
-            class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
-          >
+          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white">
             <svg
               width="20"
               height="20"
