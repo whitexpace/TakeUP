@@ -15,6 +15,8 @@ import {
   updateBookingSchema,
 } from "../../../shared/schemas/booking"
 
+const bookingItemImageOrderBy = [{ sortOrder: "asc" }, { createdAt: "asc" }] as const
+
 const bookingInclude = {
   item: {
     select: {
@@ -25,7 +27,14 @@ const bookingInclude = {
       rentalFee: true,
       freeToBorrow: true,
       status: true,
-      thumbnailImage: true,
+      images: {
+        select: {
+          path: true,
+          isPrimary: true,
+          sortOrder: true,
+        },
+        orderBy: bookingItemImageOrderBy,
+      },
     },
   },
   borrower: {
@@ -56,7 +65,7 @@ const bookingInclude = {
   },
 } as const
 
-type BookingListItem = {
+type BookingRecord = {
   id: string
   borrowerId: string
   lenderId: string
@@ -85,7 +94,11 @@ type BookingListItem = {
     rentalFee: number
     freeToBorrow: boolean
     status: string
-    thumbnailImage: string | null
+    images: Array<{
+      path: string
+      isPrimary: boolean
+      sortOrder: number
+    }>
   }
   borrower: {
     user: {
@@ -104,6 +117,12 @@ type BookingListItem = {
       lastName: string
       email: string
     }
+  }
+}
+
+type BookingListItem = Omit<BookingRecord, "item"> & {
+  item: Omit<BookingRecord["item"], "images"> & {
+    thumbnailImage: string | null
   }
 }
 
@@ -136,12 +155,12 @@ type BookingEditableRecord = {
 }
 
 type BookingDelegate = {
-  findMany(args: Record<string, unknown>): Promise<BookingListItem[]>
-  findUnique(args: Record<string, unknown>): Promise<BookingListItem | BookingEditableRecord | null>
+  findMany(args: Record<string, unknown>): Promise<BookingRecord[]>
+  findUnique(args: Record<string, unknown>): Promise<BookingRecord | BookingEditableRecord | null>
   findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
-  create(args: Record<string, unknown>): Promise<BookingListItem>
-  update(args: Record<string, unknown>): Promise<BookingListItem>
-  delete(args: Record<string, unknown>): Promise<BookingListItem>
+  create(args: Record<string, unknown>): Promise<BookingRecord>
+  update(args: Record<string, unknown>): Promise<BookingRecord>
+  delete(args: Record<string, unknown>): Promise<BookingRecord>
 }
 
 type BookingPrismaClient = Context["prisma"] & {
@@ -157,6 +176,23 @@ type BookingMutationPrismaClient = {
 
 const getBookingPrisma = (ctx: Pick<Context, "prisma">) =>
   ctx.prisma as unknown as BookingPrismaClient
+
+const getBookingThumbnailImage = (
+  item: Pick<BookingRecord["item"], "images">,
+) => item.images.find((image) => image.isPrimary)?.path ?? item.images[0]?.path ?? null
+
+const mapBookingRecord = (record: BookingRecord): BookingListItem => {
+  const { item, ...rest } = record
+  const { images, ...itemRest } = item
+
+  return {
+    ...rest,
+    item: {
+      ...itemRest,
+      thumbnailImage: getBookingThumbnailImage({ images }),
+    },
+  }
+}
 
 const DEFAULT_PAYMENT_METHOD: PaymentMethod = paymentMethodSchema.enum.GCASH
 
@@ -381,7 +417,7 @@ export const bookingRouter = router({
     const nextCursor =
       hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
-    return { bookings, nextCursor }
+    return { bookings: bookings.map(mapBookingRecord), nextCursor }
   }),
 
   create: protectedProcedure.input(createBookingSchema).mutation(async ({ ctx, input }) => {
@@ -456,7 +492,7 @@ export const bookingRouter = router({
         },
       })
 
-      return booking
+      return mapBookingRecord(booking)
     })
   }),
 
@@ -465,14 +501,14 @@ export const bookingRouter = router({
     const booking = (await bookingPrisma.booking.findUnique({
       where: { id: input.id },
       include: bookingInclude,
-    })) as BookingListItem | null
+    })) as BookingRecord | null
 
     if (!booking) {
       return null
     }
 
     assertParticipantAccess(booking, ctx.user.id)
-    return booking
+    return mapBookingRecord(booking)
   }),
 
   update: protectedProcedure.input(updateBookingSchema).mutation(async ({ ctx, input }) => {
@@ -565,7 +601,7 @@ export const bookingRouter = router({
 
       await syncBookingTransaction(tx as unknown as BookingMutationPrismaClient, updatedBooking)
 
-      return updatedBooking
+      return mapBookingRecord(updatedBooking)
     })
   }),
 
@@ -596,7 +632,7 @@ export const bookingRouter = router({
         where: { bookingId: input.id },
       })
 
-      return deletedBooking
+      return mapBookingRecord(deletedBooking)
     })
   }),
 })

@@ -577,6 +577,10 @@ const bookingFeedbackClass = computed(() => {
   return "text-noble-black/40"
 })
 
+const requestBookingButtonLabel = computed(() =>
+  isSubmittingBooking.value ? "Requesting Booking..." : "Request Booking",
+)
+
 const totalUnits = computed(() => {
   if (!item.value || !startDate.value || !displayEndDate.value) return 1
 
@@ -712,7 +716,11 @@ const shareItem = async () => {
 
 const resolveBookingErrorMessage = (error: unknown) => {
   const fetchError = error as {
-    data?: { statusMessage?: string }
+    data?: {
+      statusMessage?: string
+      error?: { message?: string }
+      data?: { error?: { message?: string } }
+    }
     statusCode?: number
     statusMessage?: string
     message?: string
@@ -720,7 +728,12 @@ const resolveBookingErrorMessage = (error: unknown) => {
 
   return (
     fetchError.data?.statusMessage ??
+    fetchError.data?.error?.message ??
+    fetchError.data?.data?.error?.message ??
     fetchError.statusMessage ??
+    (fetchError.statusCode === 500
+      ? "Booking failed on the server. Check that the booking and transaction schema is applied to this database."
+      : undefined) ??
     fetchError.message ??
     "Unable to submit your booking request."
   )
@@ -1381,6 +1394,13 @@ onUnmounted(() => {
                       </svg>
                       {{ isInBag ? "Added to Bag" : "Add to Bag" }}
                     </button>
+                    <button
+                      class="w-full py-3 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
+                      :disabled="!canSubmitBooking"
+                      @click="submitBookingRequest"
+                    >
+                      {{ requestBookingButtonLabel }}
+                    </button>
                     <p
                       class="text-center text-[11px] font-normal"
                       :class="bookingFeedbackClass"
@@ -1765,6 +1785,13 @@ onUnmounted(() => {
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                     {{ isInBag ? "Added to Bag" : "Add to Bag" }}
+                  </button>
+                  <button
+                    class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
+                    :disabled="!canSubmitBooking"
+                    @click="submitBookingRequest"
+                  >
+                    {{ requestBookingButtonLabel }}
                   </button>
                   <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
                     {{ bookingFeedbackMessage }}
@@ -2310,6 +2337,13 @@ onUnmounted(() => {
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
                 {{ isInBag ? "Added to Bag" : "Add to Bag" }}
+              </button>
+              <button
+                class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
+                :disabled="!canSubmitBooking"
+                @click="submitBookingRequest"
+              >
+                {{ requestBookingButtonLabel }}
               </button>
               <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
                 {{ bookingFeedbackMessage }}

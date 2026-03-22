@@ -37,7 +37,18 @@ const makeBooking = (overrides: Record<string, unknown> = {}) => ({
     rentalFee: 200,
     freeToBorrow: false,
     status: "AVAILABLE",
-    thumbnailImage: null,
+    images: [
+      {
+        path: "/images/camera-primary.jpg",
+        isPrimary: true,
+        sortOrder: 0,
+      },
+      {
+        path: "/images/camera-secondary.jpg",
+        isPrimary: false,
+        sortOrder: 1,
+      },
+    ],
   },
   borrower: {
     user: {
@@ -109,7 +120,7 @@ describe("bookingRouter", () => {
     const ctx = makeContext()
     const caller = bookingRouter.createCaller(ctx as never)
 
-    await caller.create({
+    const createdBooking = await caller.create({
       itemId: ITEM_ID,
       startDate: new Date("2026-04-01T00:00:00.000Z"),
       endDate: new Date("2026-04-03T00:00:00.000Z"),
@@ -150,13 +161,14 @@ describe("bookingRouter", () => {
         }),
       }),
     )
+    expect(createdBooking.item.thumbnailImage).toBe("/images/camera-primary.jpg")
   })
 
   it("filters list by borrower role", async () => {
     const ctx = makeContext()
     const caller = bookingRouter.createCaller(ctx as never)
 
-    await caller.list({ role: "BORROWER" })
+    const result = await caller.list({ role: "BORROWER" })
 
     expect(ctx.prisma.booking.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -165,6 +177,7 @@ describe("bookingRouter", () => {
         }),
       }),
     )
+    expect(result.bookings).toEqual([])
   })
 
   it("forbids access to a booking when the user is not a participant", async () => {

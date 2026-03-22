@@ -1,8 +1,8 @@
-import { TRPCError } from "@trpc/server"
 import { createError, getQuery } from "h3"
 import { listBookingsSchema } from "../../shared/schemas/booking"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
+import { handleBookingApiError } from "./bookings/handle-booking-api-error"
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -31,9 +31,6 @@ export default defineEventHandler(async (event) => {
   try {
     return await caller.booking.list(input)
   } catch (err) {
-    if (err instanceof TRPCError && err.code === "UNAUTHORIZED") {
-      throw createError({ statusCode: 401, statusMessage: "Unauthorized." })
-    }
-    throw err
+    handleBookingApiError(err, "list")
   }
 })

@@ -1,8 +1,8 @@
-import { TRPCError } from "@trpc/server"
 import { createError, getRouterParam } from "h3"
 import { bookingIdSchema } from "../../../shared/schemas/booking"
 import { createContext } from "../../trpc/context"
 import { appRouter } from "../../trpc/routers"
+import { handleBookingApiError } from "../bookings/handle-booking-api-error"
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, "id")
@@ -28,12 +28,6 @@ export default defineEventHandler(async (event) => {
 
     return booking
   } catch (err) {
-    if (err instanceof TRPCError) {
-      if (err.code === "UNAUTHORIZED")
-        throw createError({ statusCode: 401, statusMessage: "Unauthorized." })
-      if (err.code === "FORBIDDEN")
-        throw createError({ statusCode: 403, statusMessage: "Forbidden." })
-    }
-    throw err
+    handleBookingApiError(err, "fetch")
   }
 })
