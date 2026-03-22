@@ -16,21 +16,56 @@ const invalidateItemSearchCaches = () => {
 }
 
 export const useMyListings = () => {
+  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const listings = ref<MyListingItem[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const nextCursor = ref<PaginationCursor>(null)
+  const hasFetched = ref(false)
+  const requestVersion = ref(0)
   const hasMore = computed(() => nextCursor.value !== null)
 
-  const fetchListings = async (cursor: PaginationCursor = null, append = false) => {
-    if (isLoading.value) return
+  const reset = () => {
+    listings.value = []
+    nextCursor.value = null
+    error.value = null
+    isLoading.value = false
+  }
+
+  const fetchListings = async (
+    cursor: PaginationCursor = null,
+    append = false,
+    version = requestVersion.value,
+  ) => {
+    if (version !== requestVersion.value || isLoading.value) return
     isLoading.value = true
     error.value = null
+
     try {
       const query: Record<string, string | number> = {}
       if (cursor) query.cursor = JSON.stringify(cursor)
 
-      const result = await $fetch<MyListingsResponse>("/api/my-listings", { query })
+      let accessToken: string | undefined
+      if (supabase) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        accessToken = session?.access_token
+      }
+
+      const result = await $fetch<MyListingsResponse>("/api/my-listings", {
+        query,
+        ...(accessToken
+          ? {
+              headers: {
+                authorization: `Bearer ${accessToken}`,
+              },
+            }
+          : {}),
+      })
+
+      if (version !== requestVersion.value) return
+
       if (append) {
         listings.value = [...listings.value, ...result.items]
       } else {
@@ -43,9 +78,14 @@ export const useMyListings = () => {
         await navigateTo("/")
         return
       }
-      error.value = "Unable to load listings. Please try again."
+      if (version === requestVersion.value) {
+        error.value = "Unable to load listings. Please try again."
+      }
     } finally {
-      isLoading.value = false
+      if (version === requestVersion.value) {
+        hasFetched.value = true
+        isLoading.value = false
+      }
     }
   }
 
@@ -81,19 +121,22 @@ export const useMyListings = () => {
 
   const loadMore = () => {
     if (!hasMore.value || isLoading.value) return
-    fetchListings(nextCursor.value, true)
+    void fetchListings(nextCursor.value, true)
   }
 
   const refresh = async () => {
-    listings.value = []
-    nextCursor.value = null
-    await fetchListings()
+    requestVersion.value++
+    const currentVersion = requestVersion.value
+    hasFetched.value = false
+    reset()
+    await fetchListings(null, false, currentVersion)
   }
 
   return {
     listings,
     isLoading,
     error,
+    hasFetched,
     hasMore,
     fetchListings,
     createListing,

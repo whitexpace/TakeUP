@@ -7,6 +7,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     jwtSecret: process.env.JWT_SECRET,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     public: {
       supabase: {
         url: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,

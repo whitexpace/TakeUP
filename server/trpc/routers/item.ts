@@ -15,6 +15,7 @@ import {
   KNOWN_SIDEBAR_DB_CATEGORIES,
   UI_OTHERS_SENTINEL,
 } from "../../../shared/schemas/item"
+import { removeItemImagesFromStorage } from "../../utils/item-image-storage"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 
@@ -805,7 +806,14 @@ export const itemRouter = router({
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
     const existing = await ctx.prisma.item.findUnique({
       where: { id: input.id },
-      select: { lenderId: true },
+      select: {
+        lenderId: true,
+        images: {
+          select: {
+            path: true,
+          },
+        },
+      },
     })
 
     if (!existing) {
@@ -818,8 +826,12 @@ export const itemRouter = router({
 
     const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
     const imageWrites = buildUpdateImageWrites(thumbnailImage, photos)
+    const nextImageUrls = new Set(buildOrderedImagePaths(thumbnailImage, photos) ?? [])
+    const removedImageUrls = existing.images
+      .map((image) => image.path)
+      .filter((path) => !nextImageUrls.has(path))
 
-    return ctx.prisma.item
+    const updatedItem = await ctx.prisma.item
       .update({
         where: { id },
         data: {
@@ -864,6 +876,14 @@ export const itemRouter = router({
         include: itemWithTaxonomy,
       })
       .then(mapItemTaxonomy)
+
+    void removeItemImagesFromStorage(removedImageUrls, {
+      bucket: useRuntimeConfig(ctx.event).public.itemImageBucket,
+      supabaseUrl: useRuntimeConfig(ctx.event).public.supabase.url,
+      serviceRoleKey: useRuntimeConfig(ctx.event).supabaseServiceRoleKey,
+    })
+
+    return updatedItem
   }),
 
   delete: protectedProcedure.input(deleteItemSchema).mutation(async ({ ctx, input }) => {

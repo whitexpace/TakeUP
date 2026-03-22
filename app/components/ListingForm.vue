@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import type { z } from "zod"
 import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
 import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
@@ -44,7 +44,7 @@ const runtimeConfig = useRuntimeConfig()
 const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
-const MAX_IMAGE_COUNT = 10
+const MAX_GALLERY_IMAGE_COUNT = 10
 const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
@@ -98,11 +98,15 @@ const initForm = () => ({
 
 const form = reactive(initForm())
 const tagInput = ref("")
+const coverInput = ref<HTMLInputElement | null>(null)
+const galleryInput = ref<HTMLInputElement | null>(null)
 const images = ref<ListingImage[]>([])
 const pendingUploads = ref<PendingUploadImage[]>([])
 const primaryImageId = ref<string | null>(null)
 const imageUploadError = ref<string | null>(null)
 const isUploadingImages = ref(false)
+const draggedGalleryImageId = ref<string | null>(null)
+const lightboxImage = ref<ListingImage | null>(null)
 const availabilityRanges = ref<AvailabilityRange[]>(
   props.item?.availability?.map((a) => ({
     startDate: new Date(a.startDate),
@@ -113,6 +117,9 @@ const availabilityRanges = ref<AvailabilityRange[]>(
 )
 const fieldErrors = ref<Record<string, string>>({})
 const availabilityErrors = ref<string[]>([])
+const currentUserId = ref<string | null>(null)
+const sessionUploadedImageUrls = new Set<string>()
+const pendingUploadRequests = new Map<string, XMLHttpRequest>()
 
 const buildInitialImages = (item?: MyListingItem | null): ListingImage[] => {
   if (!item) return []
@@ -157,9 +164,13 @@ watch(
   },
 )
 
-const imageCountLabel = computed(() => `${images.value.length}/${MAX_IMAGE_COUNT}`)
+const coverImage = computed(
+  () => images.value.find((image) => image.id === primaryImageId.value) ?? null,
+)
 
-const canAddMoreImages = computed(() => images.value.length < MAX_IMAGE_COUNT)
+const galleryImages = computed(() =>
+  images.value.filter((image) => image.id !== primaryImageId.value),
+)
 
 const getSafeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -171,35 +182,27 @@ const getSafeFileName = (fileName: string) => {
   return cleaned || "image"
 }
 
-const createItemImageStoragePath = (file: File) => {
+const fetchCurrentUserId = async () => {
+  if (currentUserId.value) return currentUserId.value
+
+  const response = await $fetch<{ user: { id: string } }>("/api/auth/me")
+  currentUserId.value = response.user.id
+  return currentUserId.value
+}
+
+const createItemImageStoragePath = (file: File, userId: string) => {
   const datePrefix = new Date().toISOString().slice(0, 10)
   const uniqueId =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
-  return `items/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
+  return `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
 }
 
-const setPrimaryImage = (imageId: string) => {
-  primaryImageId.value = imageId
-}
-
-const moveImage = (fromIndex: number, toIndex: number) => {
-  if (toIndex < 0 || toIndex >= images.value.length) return
-
-  const reordered = [...images.value]
-  const [movedImage] = reordered.splice(fromIndex, 1)
-  if (!movedImage) return
-  reordered.splice(toIndex, 0, movedImage)
-  images.value = reordered
-}
-
-const removeImage = (imageId: string) => {
-  images.value = images.value.filter((image) => image.id !== imageId)
-  if (primaryImageId.value === imageId) {
-    primaryImageId.value = images.value[0]?.id ?? null
-  }
+const rebuildImages = (nextCoverImage: ListingImage | null, nextGalleryImages: ListingImage[]) => {
+  images.value = nextCoverImage ? [nextCoverImage, ...nextGalleryImages] : [...nextGalleryImages]
+  primaryImageId.value = nextCoverImage?.id ?? images.value[0]?.id ?? null
 }
 
 const setPendingUploadProgress = (id: string, progress: number) => {
@@ -215,7 +218,8 @@ const removePendingUpload = (id: string) => {
 const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/")
 
 const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
-  const storagePath = createItemImageStoragePath(file)
+  const userId = await fetchCurrentUserId()
+  const storagePath = createItemImageStoragePath(file, userId)
   const uploadId = storagePath
   pendingUploads.value = [
     ...pendingUploads.value,
@@ -234,6 +238,7 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
 
   return await new Promise<ListingImage>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
+    pendingUploadRequests.set(uploadId, xhr)
     xhr.open(
       "POST",
       `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${encodeStoragePath(storagePath)}`,
@@ -252,11 +257,19 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
     }
 
     xhr.onerror = () => {
+      pendingUploadRequests.delete(uploadId)
       removePendingUpload(uploadId)
       reject(new Error("Network error while uploading image."))
     }
 
+    xhr.onabort = () => {
+      pendingUploadRequests.delete(uploadId)
+      removePendingUpload(uploadId)
+      reject(new Error("Upload cancelled."))
+    }
+
     xhr.onload = () => {
+      pendingUploadRequests.delete(uploadId)
       if (xhr.status < 200 || xhr.status >= 300) {
         removePendingUpload(uploadId)
         try {
@@ -273,6 +286,7 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
         .from(itemImageBucket)
         .getPublicUrl(storagePath)
       removePendingUpload(uploadId)
+      sessionUploadedImageUrls.add(publicUrlData.publicUrl)
       resolve({
         id: storagePath,
         url: publicUrlData.publicUrl,
@@ -284,19 +298,62 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   })
 }
 
-const uploadSelectedImages = async (event: Event) => {
-  imageUploadError.value = null
+const cleanupUploadedImages = async (
+  urls: string[],
+  options: { keepalive?: boolean } = {},
+) => {
+  const uniqueUrls = [...new Set(urls)].filter((url) => sessionUploadedImageUrls.has(url))
+  if (uniqueUrls.length === 0) return
 
-  const input = event.target as HTMLInputElement | null
-  const files = input?.files ? Array.from(input.files) : []
+  try {
+    if (options.keepalive && typeof window !== "undefined") {
+      await fetch("/api/item-images/cleanup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ urls: uniqueUrls }),
+        keepalive: true,
+        credentials: "same-origin",
+      })
+    } else {
+      await $fetch("/api/item-images/cleanup", {
+        method: "POST",
+        body: { urls: uniqueUrls },
+      })
+    }
+
+    for (const url of uniqueUrls) {
+      sessionUploadedImageUrls.delete(url)
+    }
+  } catch {
+    // Swallow cleanup failures so they never block the listing flow.
+  }
+}
+
+const abortPendingUploads = () => {
+  for (const xhr of pendingUploadRequests.values()) {
+    xhr.abort()
+  }
+  pendingUploadRequests.clear()
+  pendingUploads.value = []
+  isUploadingImages.value = false
+}
+
+const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) => {
+  imageUploadError.value = null
 
   if (files.length === 0) {
     return
   }
 
-  if (images.value.length + files.length > MAX_IMAGE_COUNT) {
-    imageUploadError.value = `You can upload up to ${MAX_IMAGE_COUNT} images per listing.`
-    if (input) input.value = ""
+  if (options.asCover && files.length > 1) {
+    imageUploadError.value = "Please select only one cover image."
+    return
+  }
+
+  if (!options.asCover && galleryImages.value.length + files.length > MAX_GALLERY_IMAGE_COUNT) {
+    imageUploadError.value = `You can upload up to ${MAX_GALLERY_IMAGE_COUNT} gallery images.`
     return
   }
 
@@ -311,10 +368,14 @@ const uploadSelectedImages = async (event: Event) => {
 
     const uploadedImages = await Promise.all(files.map((file) => uploadFileWithProgress(file)))
 
-    images.value = [...images.value, ...uploadedImages]
-
-    if (!primaryImageId.value) {
-      primaryImageId.value = uploadedImages[0]?.id ?? null
+    if (options.asCover) {
+      const nextCoverImage = uploadedImages[0] ?? null
+      rebuildImages(nextCoverImage, [
+        ...(coverImage.value ? [coverImage.value] : []),
+        ...galleryImages.value,
+      ])
+    } else {
+      rebuildImages(coverImage.value, [...galleryImages.value, ...uploadedImages])
     }
   } catch (error) {
     imageUploadError.value =
@@ -323,8 +384,81 @@ const uploadSelectedImages = async (event: Event) => {
         : "Unable to upload one or more images. Please try again."
   } finally {
     isUploadingImages.value = false
-    if (input) input.value = ""
   }
+}
+
+const handleCoverSelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const files = input?.files ? Array.from(input.files) : []
+  await uploadFiles(files, { asCover: true })
+  if (input) input.value = ""
+}
+
+const handleGallerySelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const files = input?.files ? Array.from(input.files) : []
+  await uploadFiles(files)
+  if (input) input.value = ""
+}
+
+const triggerCoverUpload = () => {
+  coverInput.value?.click()
+}
+
+const triggerGalleryUpload = () => {
+  galleryInput.value?.click()
+}
+
+const removeCover = () => {
+  const removedCover = coverImage.value
+  const nextGalleryImages = [...galleryImages.value]
+  const nextCoverImage = nextGalleryImages.shift() ?? null
+  rebuildImages(nextCoverImage, nextGalleryImages)
+  if (removedCover) {
+    void cleanupUploadedImages([removedCover.url])
+  }
+}
+
+const removeGalleryImage = (index: number) => {
+  const nextGalleryImages = [...galleryImages.value]
+  const [removedImage] = nextGalleryImages.splice(index, 1)
+  rebuildImages(coverImage.value, nextGalleryImages)
+  if (removedImage) {
+    void cleanupUploadedImages([removedImage.url])
+  }
+}
+
+const onDragStart = (index: number) => {
+  draggedGalleryImageId.value = galleryImages.value[index]?.id ?? null
+}
+
+const onDragOver = (event: DragEvent) => {
+  event.preventDefault()
+}
+
+const onDrop = (index: number) => {
+  const draggedImageId = draggedGalleryImageId.value
+  if (!draggedImageId) return
+
+  const nextGalleryImages = [...galleryImages.value]
+  const draggedIndex = nextGalleryImages.findIndex((image) => image.id === draggedImageId)
+
+  if (draggedIndex === -1) return
+
+  const [movedImage] = nextGalleryImages.splice(draggedIndex, 1)
+  if (!movedImage) return
+
+  nextGalleryImages.splice(index, 0, movedImage)
+  rebuildImages(coverImage.value, nextGalleryImages)
+  draggedGalleryImageId.value = null
+}
+
+const openLightbox = (image: ListingImage) => {
+  lightboxImage.value = image
+}
+
+const closeLightbox = () => {
+  lightboxImage.value = null
 }
 
 const toggleCategory = (cat: ItemCategory) => {
@@ -357,9 +491,12 @@ const handleFormEnterKeydown = (event: KeyboardEvent) => {
 }
 
 const buildPayload = () => {
-  const photos = images.value.map((image) => image.url)
-  const thumbnailImage =
-    images.value.find((image) => image.id === primaryImageId.value)?.url ?? photos[0] ?? undefined
+  const orderedImages = [
+    ...(coverImage.value ? [coverImage.value] : []),
+    ...galleryImages.value,
+  ]
+  const photos = orderedImages.map((image) => image.url)
+  const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
 
   const availability = availabilityRanges.value
     .filter((r) => r.startDate)
@@ -419,6 +556,26 @@ const handleSubmit = () => {
 
   emit("submit", payload as Record<string, unknown>)
 }
+
+const cleanupSessionUploadsOnExit = () => {
+  if (props.isSubmitting) return
+  abortPendingUploads()
+  void cleanupUploadedImages(Array.from(sessionUploadedImageUrls), { keepalive: true })
+}
+
+const handleCancel = () => {
+  cleanupSessionUploadsOnExit()
+  emit("cancel")
+}
+
+onMounted(() => {
+  window.addEventListener("pagehide", cleanupSessionUploadsOnExit)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener("pagehide", cleanupSessionUploadsOnExit)
+  cleanupSessionUploadsOnExit()
+})
 </script>
 
 <template>
@@ -444,115 +601,178 @@ const handleSubmit = () => {
     </div>
 
     <!-- Images Section -->
-    <section class="bg-orange-50 rounded-[20px] border border-red-300 p-4 sm:p-6 space-y-4">
-      <div>
-        <h2 class="text-neutral-800 text-xl font-semibold font-geist">Images</h2>
-        <p class="text-neutral-800/80 text-base font-normal font-geist tracking-wide">
-          Upload photos from your device. These will be stored in your item image bucket.
-        </p>
-        <p class="text-neutral-800/60 text-xs font-geist mt-1">
-          Choose up to 10 images. Set one as cover to control the item thumbnail.
-        </p>
-      </div>
-      <div>
-        <label class="block text-neutral-400 text-xs font-geist mb-1">
-          Add Images ({{ imageCountLabel }})
-        </label>
+    <section class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300">
+      <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
+      <p class="mt-1 text-[14px] text-noble-black/50">
+        Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
+        review.
+      </p>
+      <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
+        {{ imageUploadError }}
+      </p>
 
+      <div class="mt-8 flex flex-wrap gap-4">
         <input
+          ref="coverInput"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="handleCoverSelect"
+        />
+        <input
+          ref="galleryInput"
           type="file"
           accept="image/*"
           multiple
-          :disabled="!canAddMoreImages || isUploadingImages"
-          class="block w-full bg-white rounded-[5px] border border-red-300/50 px-3 py-2 text-sm font-geist text-neutral-800 file:mr-3 file:rounded-[5px] file:border-0 file:bg-orange-500 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white disabled:opacity-60"
-          @change="uploadSelectedImages"
+          class="hidden"
+          @change="handleGallerySelect"
         />
         <div v-if="isUploadingImages" class="mt-2 text-sm font-geist text-neutral-800/70">
           Uploading images...
         </div>
-        <div v-if="pendingUploads.length > 0" class="mt-3 space-y-2">
+        <div class="relative group">
           <div
-            v-for="upload in pendingUploads"
-            :key="upload.id"
-            class="rounded-lg bg-white border border-red-300/30 px-3 py-2"
+            v-if="coverImage"
+            class="relative aspect-square w-32 overflow-hidden rounded-[18px] border border-cinnamon-ice/30 cursor-pointer"
+            @click="openLightbox(coverImage)"
+          >
+            <img :src="coverImage.url" class="h-full w-full object-cover" />
+            <button
+              type="button"
+              class="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-noble-black/60 text-white backdrop-blur-sm transition-all hover:bg-cinnabar-red opacity-0 group-hover:opacity-100"
+              @click.stop="removeCover"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div
+              class="absolute bottom-0 left-0 right-0 bg-noble-black/40 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-[2px]"
+            >
+              Cover
+            </div>
+          </div>
+          <div
+            v-else
+            class="border-dashed-long-md flex aspect-square w-32 cursor-pointer flex-col items-center justify-center rounded-[18px] bg-white transition-colors hover:bg-white/80"
+            @click="triggerCoverUpload"
           >
             <div
-              class="flex items-center justify-between gap-3 text-sm font-geist text-neutral-800/80"
+              class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
             >
-              <span class="truncate">{{ upload.name }}</span>
-              <span class="shrink-0">{{ upload.progress }}%</span>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </div>
-            <div class="mt-2 h-2 rounded-full bg-orange-100 overflow-hidden">
+            <span class="mt-2 text-center text-[12px] font-medium text-noble-black/40">
+              Select Cover
+            </span>
+          </div>
+        </div>
+
+        <div
+          v-for="(img, index) in galleryImages"
+          :key="img.id"
+          class="relative group"
+          draggable="true"
+          @dragstart="onDragStart(index)"
+          @dragover="onDragOver"
+          @drop="onDrop(index)"
+        >
+          <div
+            class="aspect-square w-32 overflow-hidden rounded-[18px] border border-cinnamon-ice/30 bg-white cursor-grab active:cursor-grabbing"
+            @click="openLightbox(img)"
+          >
+            <img :src="img.url" class="h-full w-full object-cover pointer-events-none" />
+            <button
+              type="button"
+              class="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-noble-black/60 text-white backdrop-blur-sm transition-all hover:bg-cinnabar-red opacity-0 group-hover:opacity-100"
+              @click.stop="removeGalleryImage(index)"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-for="upload in pendingUploads"
+          :key="upload.id"
+          class="flex aspect-square w-32 flex-col justify-between rounded-[18px] border border-cinnamon-ice/30 bg-white p-3"
+        >
+          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <p class="truncate text-[12px] font-medium text-noble-black/50">
+              {{ upload.name }}
+            </p>
+            <p class="mt-1 text-[12px] font-semibold text-blue-estate">{{ upload.progress }}%</p>
+            <div class="mt-2 h-2 overflow-hidden rounded-full bg-cinnamon-ice/20">
               <div
-                class="h-full bg-orange-500 transition-[width] duration-150"
+                class="h-full bg-blue-estate transition-[width] duration-150"
                 :style="{ width: `${upload.progress}%` }"
               />
             </div>
           </div>
         </div>
-        <p v-if="imageUploadError" class="mt-2 text-red-500 text-sm font-geist">
-          {{ imageUploadError }}
-        </p>
+
         <div
-          v-if="images.length > 0"
-          class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-4"
+          v-if="galleryImages.length < MAX_GALLERY_IMAGE_COUNT"
+          class="border-dashed-long-md flex aspect-square w-32 cursor-pointer flex-col items-center justify-center rounded-[18px] bg-white transition-colors hover:bg-white/80"
+          @click="triggerGalleryUpload"
         >
           <div
-            v-for="(image, index) in images"
-            :key="image.id"
-            class="bg-white rounded-xl border border-red-300/30 p-2 space-y-2"
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
           >
-            <img
-              :src="image.url"
-              :alt="image.name"
-              class="w-full h-28 object-cover rounded-lg border border-red-300/30"
-            />
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-[11px] font-geist text-neutral-800/70 truncate">
-                {{ image.name }}
-              </span>
-              <span
-                v-if="image.id === primaryImageId"
-                class="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-geist text-white"
-              >
-                Cover
-              </span>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="rounded-md border border-orange-500 px-2 py-1 text-[11px] font-geist text-orange-500 hover:bg-orange-50"
-                @click="setPrimaryImage(image.id)"
-              >
-                Set Cover
-              </button>
-              <button
-                type="button"
-                class="rounded-md border border-red-300 px-2 py-1 text-[11px] font-geist text-neutral-800/70 hover:bg-orange-50 disabled:opacity-50"
-                :disabled="index === 0"
-                @click="moveImage(index, index - 1)"
-              >
-                Left
-              </button>
-              <button
-                type="button"
-                class="rounded-md border border-red-300 px-2 py-1 text-[11px] font-geist text-neutral-800/70 hover:bg-orange-50 disabled:opacity-50"
-                :disabled="index === images.length - 1"
-                @click="moveImage(index, index + 1)"
-              >
-                Right
-              </button>
-              <button
-                type="button"
-                class="rounded-md border border-red-300 px-2 py-1 text-[11px] font-geist text-red-500 hover:bg-red-50"
-                @click="removeImage(image.id)"
-              >
-                Remove
-              </button>
-            </div>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
           </div>
+          <span class="mt-2 text-center text-[12px] font-medium text-noble-black/40">
+            Add Images ({{ galleryImages.length }}/{{ MAX_GALLERY_IMAGE_COUNT }})
+          </span>
         </div>
       </div>
+      <p class="mt-4 text-[12px] text-noble-black/30">Drag to reorder</p>
     </section>
 
     <!-- Basic Information -->
@@ -935,10 +1155,40 @@ const handleSubmit = () => {
         <button
           type="button"
           class="sm:flex-1 lg:flex-none px-8 py-3 border border-neutral-300 text-neutral-800 rounded-[30px] text-base font-normal font-geist hover:bg-neutral-50 transition-colors"
-          @click="emit('cancel')"
+          @click="handleCancel"
         >
           Cancel
         </button>
+      </div>
+    </div>
+
+    <div
+      v-if="lightboxImage"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-noble-black/70 p-6"
+      @click.self="closeLightbox"
+    >
+      <div class="relative max-w-3xl">
+        <button
+          type="button"
+          class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-noble-black/60 text-white"
+          @click="closeLightbox"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <img
+          :src="lightboxImage.url"
+          :alt="lightboxImage.name"
+          class="max-h-[80vh] rounded-[20px] object-contain shadow-2xl"
+        />
       </div>
     </div>
   </form>
