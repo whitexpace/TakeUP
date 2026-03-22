@@ -20,8 +20,20 @@ import { getDefaultItemOrderBy } from "./item-sorting"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
+const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+]
 
 const itemWithTaxonomy = {
+  images: {
+    select: {
+      path: true,
+      isPrimary: true,
+      sortOrder: true,
+    },
+    orderBy: itemImageOrderBy,
+  },
   availability: {
     select: {
       id: true,
@@ -54,7 +66,7 @@ const itemWithTaxonomy = {
       },
     },
   },
-} as const
+} satisfies Prisma.ItemInclude
 
 type ItemWithTaxonomy = Prisma.ItemGetPayload<{
   include: typeof itemWithTaxonomy
@@ -259,18 +271,23 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
 }
 
 const mapItemTaxonomy = (item: ItemWithUserLike) => {
-  const { availability, categories, tags, lender, likes, ...rest } = item
+  const { availability, categories, tags, lender, likes, images, ...rest } = item
   const lenderUser = lender.user
   const ownerName =
     lenderUser.username ||
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
     lenderUser.email ||
     item.lenderId
+  const orderedPhotos = images.map((entry) => entry.path)
+  const thumbnailImage =
+    images.find((entry) => entry.isPrimary)?.path ?? orderedPhotos[0] ?? null
 
   return {
     ...rest,
     ownerName,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
+    thumbnailImage,
+    photos: orderedPhotos,
     availability: availability.map((entry) => ({
       id: entry.id,
       startDate: entry.startDate,
@@ -279,6 +296,37 @@ const mapItemTaxonomy = (item: ItemWithUserLike) => {
     })),
     categories: categories.map((entry) => entry.category),
     tags: tags.map((entry) => entry.tag.name),
+  }
+}
+
+const buildImageWrites = (thumbnailImage?: string | null, photos?: string[]) => {
+  if (thumbnailImage === undefined && photos === undefined) {
+    return undefined
+  }
+
+  const seenPaths = new Set<string>()
+  const orderedPaths = [...(photos ?? []), ...(thumbnailImage ? [thumbnailImage] : [])].filter(
+    (path) => {
+      if (!path || seenPaths.has(path)) return false
+      seenPaths.add(path)
+      return true
+    },
+  )
+
+  if (orderedPaths.length === 0) {
+    return { deleteMany: {} }
+  }
+
+  const primaryPath =
+    thumbnailImage && orderedPaths.includes(thumbnailImage) ? thumbnailImage : orderedPaths[0]!
+
+  return {
+    deleteMany: {},
+    create: orderedPaths.map((path, index) => ({
+      path,
+      sortOrder: index,
+      isPrimary: path === primaryPath,
+    })),
   }
 }
 
@@ -452,12 +500,10 @@ const buildPaginationWhereFromCursor = (cursor: {
 const buildItemInclude = (userId: string | null) =>
   ({
     ...itemWithTaxonomy,
-    likes: userId
-      ? {
-          where: { userId },
-          select: { id: true },
-        }
-      : false,
+    likes: {
+      where: { userId: userId ?? "__anonymous_user__" },
+      select: { id: true },
+    },
   }) satisfies Prisma.ItemInclude
 
 export const itemRouter = router({
@@ -638,6 +684,8 @@ export const itemRouter = router({
       update: {},
     })
 
+    const imageWrites = buildImageWrites(input.thumbnailImage, input.photos)
+
     return ctx.prisma.item
       .create({
         data: {
@@ -660,13 +708,12 @@ export const itemRouter = router({
           whatIsIncluded: input.whatIsIncluded ?? null,
           knownIssues: input.knownIssues ?? null,
           usageLimitations: input.usageLimitations ?? null,
-          thumbnailImage: input.thumbnailImage ?? null,
           isTrending: input.isTrending ?? false,
           viewCount: input.viewCount ?? 0,
           bookingCount: input.bookingCount ?? 0,
           likeCount: input.likeCount ?? 0,
-          photos: input.photos,
           lenderId: ctx.user.id,
+          ...(imageWrites ? { images: imageWrites } : {}),
           categories: {
             create: input.categories.map((category) => ({ category })),
           },
@@ -709,7 +756,8 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
     }
 
-    const { id, availability, categories, tags, ...data } = input
+    const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
+    const imageWrites = buildImageWrites(thumbnailImage, photos)
 
     return ctx.prisma.item
       .update({
@@ -751,6 +799,7 @@ export const itemRouter = router({
                 },
               }
             : {}),
+          ...(imageWrites ? { images: imageWrites } : {}),
         },
         include: itemWithTaxonomy,
       })

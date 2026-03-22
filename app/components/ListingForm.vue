@@ -130,7 +130,7 @@ const removeTag = (tag: string) => {
 const buildPayload = () => {
   const photos = form.photoUrls
     .split("\n")
-    .map((u) => u.trim())
+    .map((u: string) => u.trim())
     .filter(Boolean)
 
   const availability = availabilityRanges.value
