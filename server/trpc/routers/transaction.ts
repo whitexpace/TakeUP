@@ -29,30 +29,6 @@ const transactionInclude = {
       freeToBorrow: true,
     },
   },
-  borrower: {
-    select: {
-      user: {
-        select: {
-          username: true,
-          firstName: true,
-          middleName: true,
-          lastName: true,
-        },
-      },
-    },
-  },
-  lender: {
-    select: {
-      user: {
-        select: {
-          username: true,
-          firstName: true,
-          middleName: true,
-          lastName: true,
-        },
-      },
-    },
-  },
 } satisfies Prisma.RentalTransactionInclude
 
 const getTransactionThumbnailImage = (item: {
@@ -120,22 +96,6 @@ type TransactionRecord = {
       isPrimary: boolean
       sortOrder: number
     }>
-  } | null
-  borrower: {
-    user: {
-      username: string
-      firstName: string
-      middleName: string | null
-      lastName: string
-    }
-  } | null
-  lender: {
-    user: {
-      username: string
-      firstName: string
-      middleName: string | null
-      lastName: string
-    }
   } | null
 }
 
