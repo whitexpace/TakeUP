@@ -11,14 +11,25 @@ definePageMeta({
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type BookingDetail = NonNullable<RouterOutputs["booking"]["byId"]>
+type AuthMeResponse = {
+  user: {
+    id: string
+    email: string
+    name: string
+  }
+}
 
 const route = useRoute()
-const user = useSupabaseUser()
 
 const bookingId = computed(() => {
   const id = route.params.id
   return Array.isArray(id) ? (id[0] ?? "") : (id ?? "")
 })
+
+const { data: authData } = await useAsyncData(
+  "auth:me",
+  () => $fetch<AuthMeResponse>("/api/auth/me"),
+)
 
 const {
   data,
@@ -151,7 +162,8 @@ const bookingBadge = computed(() => {
   }
 })
 
-const isLender = computed(() => booking.value.lenderId === (user.value?.id ?? null))
+const currentUserId = computed(() => authData.value?.user.id ?? null)
+const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
 
 const requesterInitial = computed(() => booking.value.borrower.user.firstName.charAt(0).toUpperCase())

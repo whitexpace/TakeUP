@@ -41,7 +41,10 @@ type StatusChip = {
 
 const statusChips = computed<StatusChip[]>(() => [
   { label: "All", value: null },
-  { label: activeRole.value === "BORROWER" ? "To Receive" : "To Deliver", value: "PENDING" },
+  {
+    label: activeRole.value === "BORROWER" ? "To Receive" : "For Approval",
+    value: "PENDING",
+  },
   { label: "In Use", value: "ACTIVE" },
   { label: "Completed", value: "COMPLETED" },
   { label: "Cancelled", value: "CANCELLED" },

@@ -5,7 +5,7 @@ import type { TransactionStatus } from "../../../shared/schemas/transaction"
 const getLabel = (status: TransactionStatus, role: "LENDER" | "BORROWER"): string => {
   switch (status) {
     case "PENDING":
-      return role === "BORROWER" ? "To Receive" : "To Deliver"
+      return role === "BORROWER" ? "To Receive" : "Ready for Approval"
     case "ACTIVE":
       return "In Use"
     case "COMPLETED":
@@ -33,8 +33,8 @@ describe("TransactionStatusBadge logic", () => {
       expect(getLabel("PENDING", "BORROWER")).toBe("To Receive")
     })
 
-    it("returns 'To Deliver' for PENDING as LENDER", () => {
-      expect(getLabel("PENDING", "LENDER")).toBe("To Deliver")
+    it("returns 'Ready for Approval' for PENDING as LENDER", () => {
+      expect(getLabel("PENDING", "LENDER")).toBe("Ready for Approval")
     })
 
     it("returns 'In Use' for ACTIVE (both roles)", () => {

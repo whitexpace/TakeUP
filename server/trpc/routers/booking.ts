@@ -140,7 +140,11 @@ type BookingPrismaClient = Context["prisma"] & {
 
 type BookingMutationPrismaClient = {
   rentalTransaction: {
-    upsert(args: Record<string, unknown>): Promise<unknown>
+    findUnique(
+      args: Record<string, unknown>,
+    ): Promise<{ id: string; status: PrismaTransactionStatus } | null>
+    create(args: Record<string, unknown>): Promise<unknown>
+    update(args: Record<string, unknown>): Promise<unknown>
     deleteMany(args: Record<string, unknown>): Promise<unknown>
   }
 }
@@ -299,7 +303,7 @@ const mapBookingToTransactionStatus = (
       return PrismaTransactionStatus.IN_DISPUTE
     case bookingStatusSchema.enum.PENDING:
     default:
-      return PrismaTransactionStatus.PENDING
+      return PrismaTransactionStatus.AWAITING_LENDER_APPROVAL
   }
 }
 
@@ -389,32 +393,64 @@ const syncBookingTransaction = async (
   >,
 ) => {
   const rentalFee = calculateRentalAmount(booking.totalFee, booking.platformCommission)
-  const status = mapBookingToTransactionStatus(booking.status, booking.paymentStatus)
+  const targetStatus = mapBookingToTransactionStatus(booking.status, booking.paymentStatus)
+  const transactionData = {
+    borrowerId: booking.borrowerId,
+    lenderId: booking.lenderId,
+    itemId: booking.itemId,
+    startDate: booking.startDate,
+    endDate: booking.endDate,
+    rentalFee,
+    platformFee: booking.platformCommission,
+  }
 
-  await bookingPrisma.rentalTransaction.upsert({
+  const existingTransaction = await bookingPrisma.rentalTransaction.findUnique({
     where: { bookingId: booking.id },
-    create: {
-      bookingId: booking.id,
-      borrowerId: booking.borrowerId,
-      lenderId: booking.lenderId,
-      itemId: booking.itemId,
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      rentalFee,
-      platformFee: booking.platformCommission,
-      status,
-    },
-    update: {
-      borrowerId: booking.borrowerId,
-      lenderId: booking.lenderId,
-      itemId: booking.itemId,
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      rentalFee,
-      platformFee: booking.platformCommission,
-      status,
+    select: {
+      id: true,
+      status: true,
     },
   })
+
+  if (!existingTransaction) {
+    await bookingPrisma.rentalTransaction.create({
+      data: {
+        bookingId: booking.id,
+        ...transactionData,
+        status: targetStatus,
+      },
+    })
+    return
+  }
+
+  const transitionSteps =
+    existingTransaction.status === PrismaTransactionStatus.PENDING &&
+    targetStatus === PrismaTransactionStatus.CONFIRMED
+      ? [
+          PrismaTransactionStatus.AWAITING_LENDER_APPROVAL,
+          PrismaTransactionStatus.CONFIRMED,
+        ]
+      : existingTransaction.status === PrismaTransactionStatus.PENDING &&
+          targetStatus === PrismaTransactionStatus.PAID
+        ? [
+            PrismaTransactionStatus.AWAITING_LENDER_APPROVAL,
+            PrismaTransactionStatus.CONFIRMED,
+            PrismaTransactionStatus.PAID,
+          ]
+        : existingTransaction.status === PrismaTransactionStatus.AWAITING_LENDER_APPROVAL &&
+            targetStatus === PrismaTransactionStatus.PAID
+          ? [PrismaTransactionStatus.CONFIRMED, PrismaTransactionStatus.PAID]
+          : [targetStatus]
+
+  for (const status of transitionSteps) {
+    await bookingPrisma.rentalTransaction.update({
+      where: { bookingId: booking.id },
+      data: {
+        ...transactionData,
+        status,
+      },
+    })
+  }
 }
 
 type ItemStatusSyncPrismaClient = Pick<Context["prisma"], "item"> & {
