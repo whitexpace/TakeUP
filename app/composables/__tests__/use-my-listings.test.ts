@@ -172,4 +172,58 @@ describe("useMyListings", () => {
       expect.objectContaining({ method: "PATCH", body: { status: "DEACTIVATED" } }),
     )
   })
+
+  it("refresh marks the initial fetch as loaded after completing", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { hasFetched, refresh } = useMyListings()
+
+    expect(hasFetched.value).toBe(false)
+
+    await refresh()
+
+    expect(hasFetched.value).toBe(true)
+  })
+
+  it("ignores stale responses from older refresh calls", async () => {
+    let resolveFirst: ((value: { items: MyListingItem[]; nextCursor: null }) => void) | undefined
+    let resolveSecond: ((value: { items: MyListingItem[]; nextCursor: null }) => void) | undefined
+
+    fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          }),
+      )
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { listings, refresh } = useMyListings()
+
+    const firstRefresh = refresh()
+    const secondRefresh = refresh()
+
+    resolveFirst?.({
+      items: [makeItem("33333333-3333-3333-3333-333333333333")],
+      nextCursor: null,
+    })
+    await firstRefresh
+
+    resolveSecond?.({
+      items: [makeItem("44444444-4444-4444-4444-444444444444")],
+      nextCursor: null,
+    })
+    await secondRefresh
+
+    expect(listings.value).toHaveLength(1)
+    expect(listings.value[0]!.id).toBe("44444444-4444-4444-4444-444444444444")
+  })
 })
