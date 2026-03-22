@@ -67,11 +67,7 @@ const coverImage = computed(
   >
     <!-- Image with type badge -->
     <div class="relative">
-      <img
-        :src="coverImage"
-        :alt="item.name"
-        class="w-full h-40 sm:h-48 object-cover"
-      />
+      <img :src="coverImage" :alt="item.name" class="w-full h-40 sm:h-48 object-cover" />
       <span
         class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-sm font-normal font-geist tracking-wide"
         :class="typeBadge.class"

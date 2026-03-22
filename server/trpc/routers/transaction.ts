@@ -31,18 +31,26 @@ const transactionInclude = {
   },
   borrower: {
     select: {
-      username: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
+      user: {
+        select: {
+          username: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+        },
+      },
     },
   },
   lender: {
     select: {
-      username: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
+      user: {
+        select: {
+          username: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+        },
+      },
     },
   },
 } satisfies Prisma.RentalTransactionInclude
@@ -53,47 +61,67 @@ const getTransactionThumbnailImage = (item: {
   item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
 
 const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
-  PENDING: [PrismaTransactionStatus.PENDING, PrismaTransactionStatus.AWAITING_LENDER_APPROVAL],
-  ACTIVE: [
-    PrismaTransactionStatus.CONFIRMED,
-    PrismaTransactionStatus.PAID,
-    PrismaTransactionStatus.ONGOING,
-    PrismaTransactionStatus.RETURNED,
-    PrismaTransactionStatus.IN_DISPUTE,
-    PrismaTransactionStatus.APPEALED,
-  ],
+  PENDING: [PrismaTransactionStatus.PENDING],
+  ACTIVE: [PrismaTransactionStatus.ACTIVE],
   COMPLETED: [PrismaTransactionStatus.COMPLETED],
-  CANCELLED: [
-    PrismaTransactionStatus.CANCELLED,
-    PrismaTransactionStatus.REFUNDED,
-    PrismaTransactionStatus.FAILED,
-  ],
+  CANCELLED: [PrismaTransactionStatus.CANCELLED],
 }
 
 const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
   switch (status) {
     case PrismaTransactionStatus.PENDING:
-    case PrismaTransactionStatus.AWAITING_LENDER_APPROVAL:
       return "PENDING"
-    case PrismaTransactionStatus.CONFIRMED:
-    case PrismaTransactionStatus.PAID:
-    case PrismaTransactionStatus.ONGOING:
-    case PrismaTransactionStatus.RETURNED:
-    case PrismaTransactionStatus.IN_DISPUTE:
-    case PrismaTransactionStatus.APPEALED:
+    case PrismaTransactionStatus.ACTIVE:
       return "ACTIVE"
     case PrismaTransactionStatus.COMPLETED:
       return "COMPLETED"
     case PrismaTransactionStatus.CANCELLED:
-    case PrismaTransactionStatus.REFUNDED:
-    case PrismaTransactionStatus.FAILED:
       return "CANCELLED"
+    default:
+      return "PENDING"
   }
 }
 
-type TransactionRecord = Prisma.RentalTransactionGetPayload<{
-  include: typeof transactionInclude
-}>
+type TransactionRecord = {
+  id: string
+  itemId: string | null
+  borrowerId: string | null
+  lenderId: string | null
+  startDate: Date | null
+  endDate: Date | null
+  totalAmount?: number | Prisma.Decimal | null
+  status: PrismaTransactionStatus
+  createdAt: Date
+  updatedAt: Date
+  item: {
+    id: string
+    name: string
+    rateOption: "PER_HOUR" | "PER_DAY"
+    rentalFee: number
+    freeToBorrow: boolean
+    images: Array<{
+      path: string
+      isPrimary: boolean
+      sortOrder: number
+    }>
+  } | null
+  borrower: {
+    user: {
+      username: string
+      firstName: string
+      middleName: string | null
+      lastName: string
+    }
+  } | null
+  lender: {
+    user: {
+      username: string
+      firstName: string
+      middleName: string | null
+      lastName: string
+    }
+  } | null
+}
 
 type TransactionListItem = {
   id: string
@@ -146,11 +174,18 @@ const normalizeTransaction = (record: TransactionRecord): TransactionListItem | 
     !record.borrowerId ||
     !record.lenderId ||
     !record.startDate ||
-    !record.endDate ||
-    record.totalAmount === null
+    !record.endDate
   ) {
     return null
   }
+
+  const totalAmountValue =
+    record.totalAmount ??
+    Math.max(
+      0,
+      record.item.rentalFee *
+        Math.ceil((record.endDate.getTime() - record.startDate.getTime()) / (24 * 60 * 60 * 1000)),
+    )
 
   return {
     id: record.id,
@@ -159,7 +194,7 @@ const normalizeTransaction = (record: TransactionRecord): TransactionListItem | 
     lenderId: record.lenderId,
     startDate: record.startDate,
     endDate: record.endDate,
-    totalAmount: Number(record.totalAmount),
+    totalAmount: Number(totalAmountValue),
     status: toUiTransactionStatus(record.status),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -167,8 +202,8 @@ const normalizeTransaction = (record: TransactionRecord): TransactionListItem | 
       ...record.item,
       thumbnailImage: getTransactionThumbnailImage(record.item),
     },
-    borrower: { user: record.borrower },
-    lender: { user: record.lender },
+    borrower: record.borrower,
+    lender: record.lender,
   }
 }
 
@@ -211,12 +246,12 @@ export const transactionRouter = router({
       AND: [roleWhere, statusWhere, dateWhere, cursorWhere],
     }
 
-    const records = await ctx.prisma.rentalTransaction.findMany({
+    const records = (await ctx.prisma.rentalTransaction.findMany({
       where: baseWhere,
       include: transactionInclude,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
-    })
+    })) as unknown as TransactionRecord[]
 
     const hasMore = records.length > limit
     const pageRecords = hasMore ? records.slice(0, limit) : records

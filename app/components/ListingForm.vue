@@ -45,7 +45,6 @@ const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 const MAX_GALLERY_IMAGE_COUNT = 10
-const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
@@ -126,7 +125,7 @@ const buildInitialImages = (item?: MyListingItem | null): ListingImage[] => {
 
   const imageUrls = item.images.length
     ? item.images.map((image) => image.path)
-    : item.photos ?? []
+    : (item.photos ?? [])
 
   return imageUrls.map((url, index) => ({
     id: `existing-${index}-${url}`,
@@ -192,9 +191,10 @@ const fetchCurrentUserId = async () => {
 
 const createItemImageStoragePath = (file: File, userId: string) => {
   const datePrefix = new Date().toISOString().slice(0, 10)
-  const uniqueId = typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const uniqueId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
   return `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
 }
@@ -238,7 +238,10 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   return await new Promise<ListingImage>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     pendingUploadRequests.set(uploadId, xhr)
-    xhr.open("POST", `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${encodeStoragePath(storagePath)}`)
+    xhr.open(
+      "POST",
+      `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${encodeStoragePath(storagePath)}`,
+    )
     xhr.setRequestHeader("apikey", supabaseKey)
     if (accessToken) {
       xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
@@ -278,7 +281,9 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
       }
 
       setPendingUploadProgress(uploadId, 100)
-      const { data: publicUrlData } = supabase.storage.from(itemImageBucket).getPublicUrl(storagePath)
+      const { data: publicUrlData } = supabase.storage
+        .from(itemImageBucket)
+        .getPublicUrl(storagePath)
       removePendingUpload(uploadId)
       sessionUploadedImageUrls.add(publicUrlData.publicUrl)
       resolve({
@@ -292,10 +297,7 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   })
 }
 
-const cleanupUploadedImages = async (
-  urls: string[],
-  options: { keepalive?: boolean } = {},
-) => {
+const cleanupUploadedImages = async (urls: string[], options: { keepalive?: boolean } = {}) => {
   const uniqueUrls = [...new Set(urls)].filter((url) => sessionUploadedImageUrls.has(url))
   if (uniqueUrls.length === 0) return
 
@@ -360,9 +362,7 @@ const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) =
       return
     }
 
-    const uploadedImages = await Promise.all(
-      files.map((file) => uploadFileWithProgress(file)),
-    )
+    const uploadedImages = await Promise.all(files.map((file) => uploadFileWithProgress(file)))
 
     if (options.asCover) {
       const nextCoverImage = uploadedImages[0] ?? null
@@ -487,10 +487,7 @@ const handleFormEnterKeydown = (event: KeyboardEvent) => {
 }
 
 const buildPayload = () => {
-  const orderedImages = [
-    ...(coverImage.value ? [coverImage.value] : []),
-    ...galleryImages.value,
-  ]
+  const orderedImages = [...(coverImage.value ? [coverImage.value] : []), ...galleryImages.value]
   const photos = orderedImages.map((image) => image.url)
   const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
 
@@ -597,7 +594,9 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Images Section -->
-    <section class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300">
+    <section
+      class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
+    >
       <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
       <p class="mt-1 text-[14px] text-noble-black/50">
         Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
@@ -716,7 +715,9 @@ onBeforeUnmount(() => {
           :key="upload.id"
           class="flex aspect-square w-32 flex-col justify-between rounded-[18px] border border-cinnamon-ice/30 bg-white p-3"
         >
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white">
+          <div
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
+          >
             <svg
               width="20"
               height="20"
@@ -1138,12 +1139,12 @@ onBeforeUnmount(() => {
             isUploadingImages
               ? "Uploading Images..."
               : isSubmitting
-              ? props.mode === "new"
-                ? "Publishing..."
-                : "Saving..."
-              : props.mode === "new"
-                ? "Publish Item"
-                : "Save Changes"
+                ? props.mode === "new"
+                  ? "Publishing..."
+                  : "Saving..."
+                : props.mode === "new"
+                  ? "Publish Item"
+                  : "Save Changes"
           }}
         </button>
         <button
