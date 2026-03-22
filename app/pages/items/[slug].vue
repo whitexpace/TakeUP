@@ -743,6 +743,14 @@ const mobileBookingButtonLabel = computed(() => {
   return hasBookingSelection.value ? "Add to Bag" : "Check Availability"
 })
 
+const canAddToBag = computed(
+  () =>
+    isItemAvailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isInBag.value,
+)
+
 const handleAddToBag = () => {
   if (!item.value || !canAddToBag.value || !startDate.value || !displayEndDate.value) return
 

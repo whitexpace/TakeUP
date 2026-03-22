@@ -64,6 +64,12 @@ export const useBag = () => {
         : null,
   })
 
+  const normalizeBagItem = (item: BagItem): BagItem => ({
+    ...item,
+    startDate: item.startDate ? new Date(item.startDate) : null,
+    endDate: item.endDate ? new Date(item.endDate) : item.startDate ? new Date(item.startDate) : null,
+  })
+
   // Initialize from localStorage on client side
   onMounted(() => {
     const savedBag = localStorage.getItem("takeup-bag")
