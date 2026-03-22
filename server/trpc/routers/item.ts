@@ -272,7 +272,7 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
 
 const mapItemTaxonomy = (
   item: ItemWithUserLike & {
-    images?: Array<{ path: string; isPrimary?: boolean }>
+    images?: Array<{ path: string; isPrimary?: boolean; sortOrder?: number }>
     thumbnailImage?: string | null
     photos?: string[]
   },
@@ -298,6 +298,12 @@ const mapItemTaxonomy = (
     ...rest,
     ownerName,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
+    images:
+      images?.map((entry, index) => ({
+        path: entry.path,
+        isPrimary: Boolean(entry.isPrimary),
+        sortOrder: entry.sortOrder ?? index,
+      })) ?? [],
     thumbnailImage,
     photos: orderedPhotos,
     availability: availability.map((entry) => ({

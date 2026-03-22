@@ -51,6 +51,14 @@ const toggleLabel = computed(() =>
 const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
   props.item.status === "DEACTIVATED" ? "AVAILABLE" : "DEACTIVATED",
 )
+
+const coverImage = computed(
+  () =>
+    props.item.images.find((image) => image.isPrimary)?.path ??
+    props.item.images[0]?.path ??
+    props.item.thumbnailImage ??
+    "https://placehold.co/289x200",
+)
 </script>
 
 <template>
@@ -60,7 +68,7 @@ const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
     <!-- Image with type badge -->
     <div class="relative">
       <img
-        :src="item.thumbnailImage || 'https://placehold.co/289x200'"
+        :src="coverImage"
         :alt="item.name"
         class="w-full h-40 sm:h-48 object-cover"
       />

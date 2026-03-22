@@ -140,7 +140,8 @@ const splitDetailList = (value?: string | null) =>
 const imageGallery = computed(() => {
   if (!item.value) return []
 
-  const images = [...item.value.photos]
+  const imagesFromRelation = item.value.images.map((image) => image.path)
+  const images = imagesFromRelation.length ? [...imagesFromRelation] : [...item.value.photos]
   if (item.value.thumbnailImage && !images.includes(item.value.thumbnailImage)) {
     images.unshift(item.value.thumbnailImage)
   }
@@ -605,7 +606,12 @@ const handleAddToBag = () => {
     name: item.value.name,
     price: item.value.rentalFee,
     priceUnit: item.value.rateOption === "PER_HOUR" ? "hour" : "day",
-    image: item.value.thumbnailImage || item.value.photos[0] || "",
+    image:
+      item.value.images.find((image) => image.isPrimary)?.path ||
+      item.value.images[0]?.path ||
+      item.value.thumbnailImage ||
+      item.value.photos[0] ||
+      "",
     startDate: startDate.value,
     endDate: endDate.value,
     startTime: startTime.value,
