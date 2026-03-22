@@ -287,14 +287,14 @@ const mapBookingToTransactionStatus = (
   switch (status) {
     case bookingStatusSchema.enum.CONFIRMED:
       return paymentStatus === bookingPaymentStatusSchema.enum.PAID
-        ? getPrismaTransactionStatus("PAID", PrismaTransactionStatus.ACTIVE)
-        : getPrismaTransactionStatus("CONFIRMED", PrismaTransactionStatus.ACTIVE)
+        ? getPrismaTransactionStatus("PAID", PrismaTransactionStatus.PENDING)
+        : getPrismaTransactionStatus("CONFIRMED", PrismaTransactionStatus.PENDING)
     case bookingStatusSchema.enum.CANCELLED:
       return PrismaTransactionStatus.CANCELLED
     case bookingStatusSchema.enum.COMPLETED:
       return PrismaTransactionStatus.COMPLETED
     case bookingStatusSchema.enum.IN_DISPUTE:
-      return getPrismaTransactionStatus("IN_DISPUTE", PrismaTransactionStatus.ACTIVE)
+      return getPrismaTransactionStatus("IN_DISPUTE", PrismaTransactionStatus.PENDING)
     case bookingStatusSchema.enum.PENDING:
     default:
       return PrismaTransactionStatus.PENDING

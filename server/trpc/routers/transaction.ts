@@ -56,7 +56,7 @@ const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
   ),
   ACTIVE: getTransactionStatusGroup(
     ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "RETURNED", "IN_DISPUTE", "APPEALED"],
-    [PrismaTransactionStatus.ACTIVE],
+    [PrismaTransactionStatus.PENDING],
   ),
   COMPLETED: [PrismaTransactionStatus.COMPLETED],
   CANCELLED: getTransactionStatusGroup(
