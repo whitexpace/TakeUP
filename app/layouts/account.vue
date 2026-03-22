@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { computed, ref } from "vue"
 
 const route = useRoute()
 const showMobileSidebar = ref(false)
 const showLogoutModal = ref(false)
+const hideSidebar = computed(() => Boolean(route.meta.hideAccountSidebar))
 
 type AccountLink = {
   label: string
@@ -71,11 +72,14 @@ const confirmLogout = async () => {
     </Header>
 
     <!-- Main Content Container -->
-    <div class="flex flex-1 overflow-hidden lg:h-[calc(100vh-56px)]">
+    <div
+      class="flex flex-1 overflow-hidden"
+      :class="hideSidebar ? 'lg:h-auto' : 'lg:h-[calc(100vh-56px)]'"
+    >
       <!-- Mobile backdrop -->
       <Transition name="fade">
         <div
-          v-if="showMobileSidebar"
+          v-if="showMobileSidebar && !hideSidebar"
           class="fixed inset-0 z-30 bg-noble-black/50 lg:hidden"
           @click="showMobileSidebar = false"
         />
@@ -83,12 +87,14 @@ const confirmLogout = async () => {
 
       <!-- Left panel background strip (connects sidebar + logout visually) -->
       <div
+        v-if="!hideSidebar"
         class="fixed top-0 bottom-0 left-0 z-[35] w-[300px] lg:w-[360px] bg-cream transition-transform duration-300 pointer-events-none"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       />
 
       <!-- Left Sidebar -->
       <aside
+        v-if="!hideSidebar"
         class="fixed lg:static top-0 left-0 z-40 h-full w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0 transition-transform duration-300 relative"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
@@ -136,6 +142,7 @@ const confirmLogout = async () => {
 
       <!-- Logout Section (Pinned to bottom-left of screen) -->
       <div
+        v-if="!hideSidebar"
         class="fixed bottom-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream transition-transform duration-300"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
@@ -167,7 +174,10 @@ const confirmLogout = async () => {
       </div>
 
       <!-- Page Content Slot -->
-      <main class="flex-1 bg-white overflow-y-auto p-4 sm:p-6 lg:p-8 min-w-0">
+      <main
+        class="flex-1 bg-white min-w-0"
+        :class="hideSidebar ? 'overflow-visible p-4 sm:p-6 lg:px-12 lg:py-8' : 'overflow-y-auto p-4 sm:p-6 lg:p-8'"
+      >
         <slot />
       </main>
     </div>

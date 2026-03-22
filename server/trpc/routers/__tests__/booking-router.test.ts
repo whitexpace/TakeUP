@@ -289,4 +289,87 @@ describe("bookingRouter", () => {
       code: "FORBIDDEN",
     })
   })
+
+  it("marks the item as RENTED when a lender approves a booking", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
+      id: BOOKING_ID,
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-01T00:00:00.000Z"),
+      endDate: new Date("2026-04-03T00:00:00.000Z"),
+      totalFee: 450,
+      platformCommission: 50,
+      paymentMethod: "GCASH",
+      status: "PENDING",
+      paymentStatus: "PENDING",
+      cancellationReason: null,
+      confirmedAt: null,
+      cancelledAt: null,
+      completedAt: null,
+      disputeOpenedAt: null,
+      paymentProcessedAt: null,
+      item: {
+        id: ITEM_ID,
+        lenderId: LENDER_ID,
+        rateOption: "PER_DAY",
+        rentalFee: 200,
+        freeToBorrow: false,
+        status: "AVAILABLE",
+      },
+    })
+    ctx.prisma.booking.update.mockResolvedValueOnce(makeBooking({ status: "CONFIRMED" }))
+    ctx.prisma.booking.findFirst.mockResolvedValueOnce({ id: BOOKING_ID })
+
+    const caller = bookingRouter.createCaller(ctx as never)
+    await caller.update({ id: BOOKING_ID, status: "CONFIRMED" })
+
+    expect(ctx.prisma.item.update).toHaveBeenCalledWith({
+      where: { id: ITEM_ID },
+      data: { status: "RENTED" },
+    })
+  })
+
+  it("marks the item as AVAILABLE again when a confirmed booking is cancelled", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
+      id: BOOKING_ID,
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-01T00:00:00.000Z"),
+      endDate: new Date("2026-04-03T00:00:00.000Z"),
+      totalFee: 450,
+      platformCommission: 50,
+      paymentMethod: "GCASH",
+      status: "CONFIRMED",
+      paymentStatus: "PENDING",
+      cancellationReason: null,
+      confirmedAt: new Date("2026-03-20T00:00:00.000Z"),
+      cancelledAt: null,
+      completedAt: null,
+      disputeOpenedAt: null,
+      paymentProcessedAt: null,
+      item: {
+        id: ITEM_ID,
+        lenderId: LENDER_ID,
+        rateOption: "PER_DAY",
+        rentalFee: 200,
+        freeToBorrow: false,
+        status: "RENTED",
+      },
+    })
+    ctx.prisma.booking.update.mockResolvedValueOnce(makeBooking({ status: "CANCELLED" }))
+    ctx.prisma.item.findUnique.mockResolvedValueOnce({ status: "RENTED" })
+    ctx.prisma.booking.findFirst.mockResolvedValueOnce(null)
+
+    const caller = bookingRouter.createCaller(ctx as never)
+    await caller.update({ id: BOOKING_ID, status: "CANCELLED" })
+
+    expect(ctx.prisma.item.update).toHaveBeenCalledWith({
+      where: { id: ITEM_ID },
+      data: { status: "AVAILABLE" },
+    })
+  })
 })

@@ -26,11 +26,17 @@ const bookingInclude = {
     select: {
       id: true,
       name: true,
+      description: true,
       lenderId: true,
       rateOption: true,
       rentalFee: true,
       freeToBorrow: true,
       status: true,
+      categories: {
+        select: {
+          category: true,
+        },
+      },
       images: {
         select: {
           path: true,
@@ -43,6 +49,12 @@ const bookingInclude = {
   },
   borrower: {
     select: {
+      borrowerRating: true,
+      _count: {
+        select: {
+          bookings: true,
+        },
+      },
       user: {
         select: {
           username: true,
@@ -228,6 +240,11 @@ const BOOKING_ACTIVE_STATUSES = [
   bookingStatusSchema.enum.IN_DISPUTE,
 ] as const
 
+const ITEM_BLOCKING_BOOKING_STATUSES = [
+  bookingStatusSchema.enum.CONFIRMED,
+  bookingStatusSchema.enum.IN_DISPUTE,
+] as const
+
 const assertParticipantAccess = (
   booking: Pick<BookingEditableRecord, "borrowerId" | "lenderId">,
   userId: string,
@@ -398,6 +415,51 @@ const syncBookingTransaction = async (
       status,
     },
   })
+}
+
+type ItemStatusSyncPrismaClient = Pick<Context["prisma"], "item"> & {
+  booking: {
+    findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
+  }
+}
+
+const syncItemStatusFromBookings = async (
+  prisma: ItemStatusSyncPrismaClient,
+  input: { itemId: string },
+) => {
+  const item = await prisma.item.findUnique({
+    where: { id: input.itemId },
+    select: { status: true },
+  })
+
+  if (!item || item.status === "DELETED") {
+    return
+  }
+
+  const blockingBooking = await prisma.booking.findFirst({
+    where: {
+      itemId: input.itemId,
+      status: { in: [...ITEM_BLOCKING_BOOKING_STATUSES] },
+    },
+    select: { id: true },
+  })
+
+  if (blockingBooking) {
+    if (item.status !== "RENTED") {
+      await prisma.item.update({
+        where: { id: input.itemId },
+        data: { status: "RENTED" },
+      })
+    }
+    return
+  }
+
+  if (item.status === "RENTED") {
+    await prisma.item.update({
+      where: { id: input.itemId },
+      data: { status: "AVAILABLE" },
+    })
+  }
 }
 
 export const bookingRouter = router({
@@ -620,6 +682,9 @@ export const bookingRouter = router({
       })
 
       await syncBookingTransaction(tx as unknown as BookingMutationPrismaClient, updatedBooking)
+      await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
+        itemId: updatedBooking.itemId,
+      })
 
       return mapBookingRecord(updatedBooking)
     })
@@ -650,6 +715,9 @@ export const bookingRouter = router({
 
       await tx.rentalTransaction.deleteMany({
         where: { bookingId: input.id },
+      })
+      await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
+        itemId: deletedBooking.itemId,
       })
 
       return mapBookingRecord(deletedBooking)

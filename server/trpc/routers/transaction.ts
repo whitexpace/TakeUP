@@ -97,6 +97,7 @@ type TransactionRecord = Prisma.RentalTransactionGetPayload<{
 
 type TransactionListItem = {
   id: string
+  bookingId: string | null
   itemId: string
   borrowerId: string
   lenderId: string
@@ -154,6 +155,7 @@ const normalizeTransaction = (record: TransactionRecord): TransactionListItem | 
 
   return {
     id: record.id,
+    bookingId: record.bookingId,
     itemId: record.itemId,
     borrowerId: record.borrowerId,
     lenderId: record.lenderId,
