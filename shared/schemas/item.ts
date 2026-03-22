@@ -54,6 +54,16 @@ export const rateOptionSchema = z.enum(["PER_HOUR", "PER_DAY"])
 
 const dedupe = <T>(items: T[]) => Array.from(new Set(items))
 
+const requiredTextField = (label: string, maxLength: number) =>
+  z
+    .string({ required_error: `${label} is required.` })
+    .trim()
+    .min(1, `${label} is required.`)
+    .max(maxLength)
+
+const optionalNonEmptyTextField = (label: string, maxLength: number) =>
+  z.string().trim().min(1, `${label} is required.`).max(maxLength).optional()
+
 export const itemTagsSchema = z
   .array(
     z
@@ -100,9 +110,10 @@ export const itemAvailabilitySchema = z
     }
   })
 
-export const createItemSchema = z.object({
-  name: z.string().min(1).max(120),
-  description: z.string().max(2000).optional(),
+export const createItemSchema = z
+  .object({
+  name: requiredTextField("Item name", 120),
+  description: requiredTextField("Description", 2000),
   condition: itemConditionSchema,
   status: itemStatusSchema.default("AVAILABLE"),
   rateOption: rateOptionSchema.default("PER_DAY"),
@@ -115,8 +126,8 @@ export const createItemSchema = z.object({
   replacementCost: z.number().int().min(0).optional(),
   availability: itemAvailabilitySchema,
   freeToBorrow: z.boolean().default(false),
-  whatItemOffers: z.string().max(2000).optional(),
-  whatIsIncluded: z.string().max(2000).optional(),
+  whatItemOffers: requiredTextField("What this item offers", 2000),
+  whatIsIncluded: requiredTextField("What's included", 2000),
   knownIssues: z.string().max(2000).optional(),
   usageLimitations: z.string().max(2000).optional(),
   thumbnailImage: z.string().url().optional(),
@@ -126,12 +137,21 @@ export const createItemSchema = z.object({
   likeCount: z.number().int().min(0).optional(),
   photos: z.array(z.string().url()).default([]),
 })
+  .superRefine((item, ctx) => {
+    if (!item.freeToBorrow && item.rentalFee <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rentalFee"],
+        message: "Rate must be greater than 0 for rental listings.",
+      })
+    }
+  })
 
 export const updateItemSchema = z
   .object({
     id: z.string().uuid(),
-    name: z.string().min(1).max(120).optional(),
-    description: z.string().max(2000).nullable().optional(),
+    name: optionalNonEmptyTextField("Item name", 120),
+    description: optionalNonEmptyTextField("Description", 2000),
     condition: itemConditionSchema.optional(),
     status: itemStatusSchema.optional(),
     rateOption: rateOptionSchema.optional(),
@@ -145,8 +165,8 @@ export const updateItemSchema = z
     replacementCost: z.number().int().min(0).nullable().optional(),
     availability: itemAvailabilitySchema.optional(),
     freeToBorrow: z.boolean().optional(),
-    whatItemOffers: z.string().max(2000).nullable().optional(),
-    whatIsIncluded: z.string().max(2000).nullable().optional(),
+    whatItemOffers: optionalNonEmptyTextField("What this item offers", 2000),
+    whatIsIncluded: optionalNonEmptyTextField("What's included", 2000),
     knownIssues: z.string().max(2000).nullable().optional(),
     usageLimitations: z.string().max(2000).nullable().optional(),
     thumbnailImage: z.string().url().nullable().optional(),

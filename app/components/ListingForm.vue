@@ -2,7 +2,7 @@
 import { reactive, ref, watch } from "vue"
 import type { z } from "zod"
 import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
-import { updateItemSchema } from "../../shared/schemas/item"
+import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
 type ItemCategory = z.infer<typeof itemCategorySchema>
@@ -127,6 +127,14 @@ const removeTag = (tag: string) => {
   form.tags = form.tags.filter((t) => t !== tag)
 }
 
+const handleFormEnterKeydown = (event: KeyboardEvent) => {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return
+  if (target instanceof HTMLTextAreaElement) return
+  if (target instanceof HTMLButtonElement) return
+  event.preventDefault()
+}
+
 const buildPayload = () => {
   const photos = form.photoUrls
     .split("\n")
@@ -168,7 +176,7 @@ const handleSubmit = () => {
   availabilityErrors.value = []
   const payload = buildPayload()
 
-  const schema = updateItemSchema
+  const schema = props.mode === "edit" ? updateItemSchema : createItemSchema
   const result = schema.safeParse(payload)
 
   if (!result.success) {
@@ -187,7 +195,7 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <form class="space-y-6" @submit.prevent="handleSubmit">
+  <form class="space-y-6" @submit.prevent="handleSubmit" @keydown.enter="handleFormEnterKeydown">
     <!-- Header -->
     <div>
       <NuxtLink

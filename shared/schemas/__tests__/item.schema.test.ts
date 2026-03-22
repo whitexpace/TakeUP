@@ -13,10 +13,13 @@ describe("item schema validations", () => {
   it("applies defaults and transforms for createItemSchema", () => {
     const parsed = createItemSchema.parse({
       name: "Cordless Drill",
+      description: "Reliable drill for home and lab work.",
       condition: "GOOD",
       categories: ["TOOLS", "TOOLS"],
       tags: ["  LAB  ", "lab", "  "],
       rentalFee: 150,
+      whatItemOffers: "A dependable drill with steady power.",
+      whatIsIncluded: "Drill body and battery.",
       availability: [
         {
           startDate: "2026-03-10T00:00:00.000Z",
@@ -34,6 +37,61 @@ describe("item schema validations", () => {
     expect(parsed.tags).toEqual(["lab"])
     expect(parsed.availability[0]?.startDate).toBeInstanceOf(Date)
     expect(parsed.availability[0]?.endDate).toBeInstanceOf(Date)
+  })
+
+  it("rejects missing text fields that the listing form marks as required", () => {
+    const result = createItemSchema.safeParse({
+      name: "Camera",
+      condition: "LIKE_NEW",
+      categories: ["ELECTRONICS"],
+      tags: ["photo"],
+      rentalFee: 500,
+      availability: [
+        {
+          startDate: "2026-03-10T00:00:00.000Z",
+          endDate: "2026-03-12T00:00:00.000Z",
+          status: "AVAILABLE",
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.description).toBeTruthy()
+      expect(result.error.flatten().fieldErrors.whatItemOffers).toBeTruthy()
+      expect(result.error.flatten().fieldErrors.whatIsIncluded).toBeTruthy()
+    }
+  })
+
+  it("rejects zero rental fee for paid listings", () => {
+    const result = createItemSchema.safeParse({
+      name: "Tripod",
+      description: "Lightweight tripod.",
+      condition: "GOOD",
+      categories: ["ELECTRONICS"],
+      tags: [],
+      rentalFee: 0,
+      freeToBorrow: false,
+      whatItemOffers: "Stable tripod support.",
+      whatIsIncluded: "Tripod and bag.",
+      availability: [
+        {
+          startDate: "2026-03-10T00:00:00.000Z",
+          endDate: "2026-03-12T00:00:00.000Z",
+          status: "AVAILABLE",
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join(".") === "rentalFee")).toBe(true)
+      expect(
+        result.error.issues.some((issue) =>
+          issue.message.includes("greater than 0 for rental listings"),
+        ),
+      ).toBe(true)
+    }
   })
 
   it("rejects availability ranges where endDate is not later than startDate", () => {
@@ -55,10 +113,13 @@ describe("item schema validations", () => {
   it("rejects overlapping availability ranges", () => {
     const result = createItemSchema.safeParse({
       name: "Camera",
+      description: "Mirrorless camera body.",
       condition: "LIKE_NEW",
       categories: ["ELECTRONICS"],
       tags: ["photo"],
       rentalFee: 500,
+      whatItemOffers: "High-quality stills and video.",
+      whatIsIncluded: "Camera body and battery.",
       availability: [
         {
           startDate: "2026-03-10T00:00:00.000Z",

@@ -1,12 +1,19 @@
 import { ref, computed } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
+import { resetPaginatedItemsCache } from "./use-paginated-items"
+import { resetFilteredResultsCountCache } from "./use-filtered-results-count"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type MyListingItem = RouterOutputs["item"]["myListings"]["items"][number]
 type MyListingsResponse = RouterOutputs["item"]["myListings"]
 
 type PaginationCursor = { id: string; createdAt: Date } | null
+
+const invalidateItemSearchCaches = () => {
+  resetPaginatedItemsCache()
+  resetFilteredResultsCountCache()
+}
 
 export const useMyListings = () => {
   const listings = ref<MyListingItem[]>([])
@@ -44,6 +51,7 @@ export const useMyListings = () => {
 
   const createListing = async (data: Record<string, unknown>): Promise<MyListingItem> => {
     const result = await $fetch<MyListingItem>("/api/items", { method: "POST", body: data })
+    invalidateItemSearchCaches()
     listings.value = [result, ...listings.value]
     return result
   }
@@ -53,6 +61,7 @@ export const useMyListings = () => {
     data: Record<string, unknown>,
   ): Promise<MyListingItem> => {
     const result = await $fetch<MyListingItem>(`/api/items/${id}`, { method: "PATCH", body: data })
+    invalidateItemSearchCaches()
     listings.value = listings.value.map((item) => (item.id === id ? result : item))
     return result
   }
@@ -65,6 +74,7 @@ export const useMyListings = () => {
       method: "PATCH",
       body: { status: newStatus },
     })
+    invalidateItemSearchCaches()
     listings.value = listings.value.map((item) => (item.id === id ? result : item))
     return result
   }
