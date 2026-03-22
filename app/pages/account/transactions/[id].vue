@@ -26,17 +26,11 @@ const bookingId = computed(() => {
   return Array.isArray(id) ? (id[0] ?? "") : (id ?? "")
 })
 
-const { data: authData } = await useAsyncData(
-  "auth:me",
-  () => $fetch<AuthMeResponse>("/api/auth/me"),
+const { data: authData } = await useAsyncData("auth:me", () =>
+  $fetch<AuthMeResponse>("/api/auth/me"),
 )
 
-const {
-  data,
-  pending,
-  error,
-  refresh,
-} = await useAsyncData(
+const { data, pending, error, refresh } = await useAsyncData(
   () => `booking:${bookingId.value || "missing"}`,
   async () => {
     if (!bookingId.value) {
@@ -166,15 +160,15 @@ const currentUserId = computed(() => authData.value?.user.id ?? null)
 const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
 
-const requesterInitial = computed(() => booking.value.borrower.user.firstName.charAt(0).toUpperCase())
-const requesterName = computed(
-  () =>
-    `${booking.value.borrower.user.firstName} ${booking.value.borrower.user.lastName}`.trim(),
+const requesterInitial = computed(() =>
+  booking.value.borrower.user.firstName.charAt(0).toUpperCase(),
 )
-const requesterEmail = computed(
-  () => `${booking.value.borrower.user.username}@up.edu.ph` || booking.value.borrower.user.email,
+const requesterName = computed(() =>
+  `${booking.value.borrower.user.firstName} ${booking.value.borrower.user.lastName}`.trim(),
 )
-const requesterRating = computed(() => Number(booking.value.borrower.borrowerRating ?? 0).toFixed(1))
+const requesterRating = computed(() =>
+  Number(booking.value.borrower.borrowerRating ?? 0).toFixed(1),
+)
 const requesterRentals = computed(() => booking.value.borrower._count?.bookings ?? 0)
 
 const primaryCategory = computed(() => {
@@ -190,7 +184,11 @@ const itemDetailPath = computed(() =>
 )
 
 const durationLabel = computed(() =>
-  computeDurationLabel(booking.value.startDate, booking.value.endDate, booking.value.item.rateOption),
+  computeDurationLabel(
+    booking.value.startDate,
+    booking.value.endDate,
+    booking.value.item.rateOption,
+  ),
 )
 const rateLabel = computed(() => {
   if (booking.value.item.freeToBorrow) return "Free"
@@ -264,7 +262,12 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
           class="inline-flex items-center gap-2 text-sm font-medium tracking-wide text-neutral-800/80 hover:text-neutral-800 transition-colors"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M15 18l-6-6 6-6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            <path
+              d="M15 18l-6-6 6-6"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
           Back to Requested Items
         </NuxtLink>
@@ -292,7 +295,9 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
             <h2 class="text-xl font-semibold text-neutral-800">Requester Information</h2>
             <div class="mt-5 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
               <div class="flex items-center gap-4">
-                <div class="flex h-16 w-16 items-center justify-center rounded-full bg-orange-500 text-3xl text-white">
+                <div
+                  class="flex h-16 w-16 items-center justify-center rounded-full bg-orange-500 text-3xl text-white"
+                >
                   {{ requesterInitial }}
                 </div>
                 <div class="space-y-1">
@@ -302,8 +307,16 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
                   </p>
                   <div class="flex items-center gap-3 text-sm text-neutral-800/80">
                     <span class="inline-flex items-center gap-1">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="text-orange-500">
-                        <path d="M12 2l2.93 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 7.07-1.01L12 2Z" />
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        class="text-orange-500"
+                      >
+                        <path
+                          d="M12 2l2.93 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 7.07-1.01L12 2Z"
+                        />
                       </svg>
                       {{ requesterRating }}
                     </span>
@@ -318,7 +331,12 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
                 class="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-900 px-5 py-2.5 text-sm font-medium tracking-wide text-white hover:bg-indigo-800 transition-colors"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                  <path
+                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
                 </svg>
                 Contact
               </a>
@@ -338,7 +356,12 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
                 class="flex h-44 w-44 items-center justify-center rounded-xl bg-white text-neutral-800/40"
               >
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M4 16l4.59-4.59a2 2 0 0 1 2.82 0L16 16m-2-2 1.59-1.59a2 2 0 0 1 2.82 0L20 14m-6-6h.01M6 20h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                  <path
+                    d="M4 16l4.59-4.59a2 2 0 0 1 2.82 0L16 16m-2-2 1.59-1.59a2 2 0 0 1 2.82 0L20 14m-6-6h.01M6 20h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
                 </svg>
               </div>
 
@@ -414,13 +437,28 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
               </div>
             </div>
 
-            <div class="mt-6 flex items-start gap-3 rounded-xl border border-orange-200 bg-white px-4 py-3">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="mt-0.5 shrink-0 text-orange-500">
-                <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            <div
+              class="mt-6 flex items-start gap-3 rounded-xl border border-orange-200 bg-white px-4 py-3"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                class="mt-0.5 shrink-0 text-orange-500"
+              >
+                <path
+                  d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
               <p class="text-xs tracking-tight text-neutral-800">
                 <span class="font-bold">Safety Reminder:</span>
-                Always meet in public places on campus. Verify the requester&apos;s UP ID before handing over items.
+                Always meet in public places on campus. Verify the requester&apos;s UP ID before
+                handing over items.
               </p>
             </div>
           </section>
@@ -464,7 +502,9 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
               {{ isActing ? "Updating..." : "Decline" }}
             </button>
 
-            <p v-if="actionSuccessMessage" class="text-sm text-green-700">{{ actionSuccessMessage }}</p>
+            <p v-if="actionSuccessMessage" class="text-sm text-green-700">
+              {{ actionSuccessMessage }}
+            </p>
             <p v-if="actionErrorMessage" class="text-sm text-red-600">{{ actionErrorMessage }}</p>
 
             <p v-if="!canRespond" class="text-sm text-neutral-800/70">

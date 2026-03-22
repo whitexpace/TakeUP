@@ -426,10 +426,7 @@ const syncBookingTransaction = async (
   const transitionSteps =
     existingTransaction.status === PrismaTransactionStatus.PENDING &&
     targetStatus === PrismaTransactionStatus.CONFIRMED
-      ? [
-          PrismaTransactionStatus.AWAITING_LENDER_APPROVAL,
-          PrismaTransactionStatus.CONFIRMED,
-        ]
+      ? [PrismaTransactionStatus.AWAITING_LENDER_APPROVAL, PrismaTransactionStatus.CONFIRMED]
       : existingTransaction.status === PrismaTransactionStatus.PENDING &&
           targetStatus === PrismaTransactionStatus.PAID
         ? [

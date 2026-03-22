@@ -176,7 +176,11 @@ const confirmLogout = async () => {
       <!-- Page Content Slot -->
       <main
         class="flex-1 bg-white min-w-0"
-        :class="hideSidebar ? 'overflow-visible p-4 sm:p-6 lg:px-12 lg:py-8' : 'overflow-y-auto p-4 sm:p-6 lg:p-8'"
+        :class="
+          hideSidebar
+            ? 'overflow-visible p-4 sm:p-6 lg:px-12 lg:py-8'
+            : 'overflow-y-auto p-4 sm:p-6 lg:p-8'
+        "
       >
         <slot />
       </main>
