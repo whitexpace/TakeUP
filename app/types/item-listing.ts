@@ -50,6 +50,7 @@ export interface PaginatedItemsResponse {
 export interface ItemCardViewModel {
   id: string
   type: "Rent" | "Borrow"
+  status: string
   isTrending: boolean
   image: string
   category: string

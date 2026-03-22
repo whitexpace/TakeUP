@@ -34,6 +34,7 @@ export const mapListedItemToCard = (
   return {
     id: item.id,
     type: item.freeToBorrow ? "Borrow" : "Rent",
+    status: item.status,
     isTrending,
     image,
     category: formatCategory(item.categories[0]),

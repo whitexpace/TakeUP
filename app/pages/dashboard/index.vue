@@ -112,6 +112,7 @@
         :id="item.id"
         :key="item.id"
         :type="item.type"
+        :status="item.status"
         :is-trending="item.isTrending"
         :image="item.image"
         :category="item.category"

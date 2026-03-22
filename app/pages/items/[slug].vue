@@ -239,6 +239,46 @@ const statusLabel = computed(() => (item.value ? humanizeEnum(item.value.status)
 const formattedCondition = computed(() => (item.value ? humanizeEnum(item.value.condition) : ""))
 const formattedCategories = computed(() => item.value?.categories.map(humanizeEnum) ?? [])
 const typeLabel = computed(() => (item.value?.freeToBorrow ? "Borrow" : "Rent"))
+const isItemRented = computed(() => item.value?.status === "RENTED")
+const isItemUnavailableForBooking = computed(() =>
+  Boolean(item.value && item.value.status !== "AVAILABLE"),
+)
+const unavailableItemLabel = computed(() => {
+  if (!item.value) return "Unavailable"
+  if (item.value.status === "RENTED") {
+    return item.value.freeToBorrow ? "Borrowed" : "Rented"
+  }
+  return "Unavailable"
+})
+const availabilityBadge = computed(() => {
+  if (isItemUnavailableForBooking.value) {
+    return {
+      label: unavailableItemLabel.value,
+      className: "bg-noble-black/90 text-white",
+    }
+  }
+
+  return {
+    label: typeLabel.value,
+    className: item.value?.freeToBorrow
+      ? "bg-blue-estate text-white"
+      : "bg-cinnamon-ice text-noble-black",
+  }
+})
+const bookingAvailabilityTitle = computed(() =>
+  isItemUnavailableForBooking.value ? "Currently unavailable" : "Select Dates & Time",
+)
+const bookingAvailabilityMessage = computed(() => {
+  if (isItemRented.value) {
+    return "This item already has an active rental. The calendar is locked until it is returned."
+  }
+
+  if (isItemUnavailableForBooking.value) {
+    return "This listing is not accepting bookings right now."
+  }
+
+  return "Choose your dates and time to request this item."
+})
 const ownerName = computed(() => item.value?.ownerName ?? "TakeUP member")
 const ownerInitials = computed(() => {
   const parts = ownerName.value.split(/\s+/).filter(Boolean)
@@ -282,6 +322,7 @@ const availabilityRanges = computed(() =>
 
 const isDateUnavailable = (date: Date | null) => {
   if (!date) return true
+  if (isItemUnavailableForBooking.value) return true
 
   const normalizedDate = normalizeDate(date)
   if (normalizedDate.getTime() < today.getTime()) return true
@@ -341,6 +382,8 @@ const days = computed(() => {
 })
 
 const changeMonth = (delta: number) => {
+  if (isItemUnavailableForBooking.value) return
+
   viewMonth.value += delta
 
   if (viewMonth.value > 11) {
@@ -524,11 +567,15 @@ const selectEndTime = (timeValue: string) => {
 }
 
 const toggleStartTime = () => {
+  if (isItemUnavailableForBooking.value) return
+
   isStartTimeOpen.value = !isStartTimeOpen.value
   isEndTimeOpen.value = false
 }
 
 const toggleEndTime = () => {
+  if (isItemUnavailableForBooking.value) return
+
   isEndTimeOpen.value = !isEndTimeOpen.value
   isStartTimeOpen.value = false
 }
@@ -559,16 +606,27 @@ const selectedBookingWindow = computed(() => {
 
 const canSubmitBooking = computed(
   () =>
-    hasBookingSelection.value && selectedBookingWindow.value !== null && !isSubmittingBooking.value,
+    !isItemUnavailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isSubmittingBooking.value,
 )
 
 const bookingFeedbackMessage = computed(() => {
+  if (isItemUnavailableForBooking.value) {
+    return bookingAvailabilityMessage.value
+  }
+
   if (bookingErrorMessage.value) return bookingErrorMessage.value
   if (bookingSuccessMessage.value) return bookingSuccessMessage.value
   return "You won't be charged yet."
 })
 
 const bookingFeedbackClass = computed(() => {
+  if (isItemUnavailableForBooking.value) {
+    return "text-noble-black/60"
+  }
+
   if (bookingErrorMessage.value) {
     return "text-cinnabar-red"
   }
@@ -580,9 +638,11 @@ const bookingFeedbackClass = computed(() => {
   return "text-noble-black/40"
 })
 
-const requestBookingButtonLabel = computed(() =>
-  isSubmittingBooking.value ? "Requesting Booking..." : "Request Booking",
-)
+const requestBookingButtonLabel = computed(() => {
+  if (isSubmittingBooking.value) return "Requesting Booking..."
+  if (isItemUnavailableForBooking.value) return `Currently ${unavailableItemLabel.value}`
+  return "Request Booking"
+})
 
 const totalUnits = computed(() => {
   if (!item.value || !startDate.value || !displayEndDate.value) return 1
@@ -648,8 +708,28 @@ const isInBag = computed(() => {
   return bagItems.value.some((i) => i.id === item.value?.id)
 })
 
+const addToBagButtonLabel = computed(() => {
+  if (isItemUnavailableForBooking.value) {
+    return `Currently ${unavailableItemLabel.value}`
+  }
+
+  return isInBag.value ? "Added to Bag" : "Add to Bag"
+})
+
+const mobileBookingButtonLabel = computed(() => {
+  if (isItemUnavailableForBooking.value) {
+    return `Currently ${unavailableItemLabel.value}`
+  }
+
+  return isInBag.value
+    ? "Added to Bag"
+    : hasBookingSelection.value
+      ? "Add to Bag"
+      : "Check Availability"
+})
+
 const handleAddToBag = () => {
-  if (!item.value || !hasBookingSelection.value) return
+  if (!item.value || isItemUnavailableForBooking.value || !hasBookingSelection.value) return
 
   addItemToBag({
     id: item.value.id,
@@ -670,7 +750,7 @@ const handleAddToBag = () => {
 }
 
 const openBookingModal = () => {
-  if (!import.meta.client) return
+  if (!import.meta.client || isItemUnavailableForBooking.value) return
 
   isMobileModalOpen.value = true
   document.body.style.overflow = "hidden"
@@ -743,7 +823,13 @@ const resolveBookingErrorMessage = (error: unknown) => {
 }
 
 const submitBookingRequest = async () => {
-  if (!item.value || !selectedBookingWindow.value || isSubmittingBooking.value) return
+  if (
+    !item.value ||
+    isItemUnavailableForBooking.value ||
+    !selectedBookingWindow.value ||
+    isSubmittingBooking.value
+  )
+    return
 
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
@@ -953,9 +1039,10 @@ onUnmounted(() => {
                   No image available
                 </div>
                 <div
-                  class="absolute top-4 left-4 px-4 py-1.5 min-w-[80px] h-[32px] rounded-full font-geist text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm bg-cinnamon-ice text-noble-black"
+                  class="absolute top-4 left-4 px-4 py-1.5 min-w-[80px] h-[32px] rounded-full font-geist text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm"
+                  :class="availabilityBadge.className"
                 >
-                  {{ typeLabel }}
+                  {{ availabilityBadge.label }}
                 </div>
                 <button
                   v-if="imageGallery.length > 1"
@@ -1104,6 +1191,15 @@ onUnmounted(() => {
                     class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm overflow-hidden"
                     @mouseleave="handleCalendarMouseLeave"
                   >
+                    <div
+                      v-if="isItemUnavailableForBooking"
+                      class="mb-5 rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+                    >
+                      <span class="font-semibold text-noble-black"
+                        >{{ bookingAvailabilityTitle }}.</span
+                      >
+                      {{ bookingAvailabilityMessage }}
+                    </div>
                     <!-- Calendar Grid -->
                     <div class="flex items-center justify-between mb-6">
                       <h3 class="font-semibold text-noble-black">
@@ -1112,6 +1208,7 @@ onUnmounted(() => {
                       <div class="flex gap-2">
                         <button
                           class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                          :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(-1)"
                         >
                           <svg
@@ -1129,6 +1226,7 @@ onUnmounted(() => {
                         </button>
                         <button
                           class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                          :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(1)"
                         >
                           <svg
@@ -1245,7 +1343,8 @@ onUnmounted(() => {
                         class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                         >Start Time</span
                       ><button
-                        class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                        class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="isItemUnavailableForBooking"
                         @click="toggleStartTime"
                       >
                         {{ startTime
@@ -1288,7 +1387,8 @@ onUnmounted(() => {
                         class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                         >End Time</span
                       ><button
-                        class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                        class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="isItemUnavailableForBooking"
                         @click="toggleEndTime"
                       >
                         {{ endTime
@@ -1378,7 +1478,7 @@ onUnmounted(() => {
                           ? 'bg-noble-black hover:bg-noble-black/90'
                           : 'bg-burning-orange hover:bg-blue-estate'
                       "
-                      :disabled="!hasBookingSelection || isInBag"
+                      :disabled="isItemUnavailableForBooking || !hasBookingSelection || isInBag"
                       @click="handleAddToBag"
                     >
                       <svg
@@ -1395,7 +1495,7 @@ onUnmounted(() => {
                       >
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                      {{ isInBag ? "Added to Bag" : "Add to Bag" }}
+                      {{ addToBagButtonLabel }}
                     </button>
                     <button
                       class="w-full py-3 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
@@ -1457,12 +1557,20 @@ onUnmounted(() => {
                     @click="isCalendarExpanded = !isCalendarExpanded"
                   >
                     <div class="flex flex-col items-start">
-                      <h3 class="font-bold text-noble-black">Select Dates & Time</h3>
+                      <h3 class="font-bold text-noble-black">
+                        {{
+                          isItemUnavailableForBooking
+                            ? bookingAvailabilityTitle
+                            : "Select Dates & Time"
+                        }}
+                      </h3>
                       <p class="text-[11px] text-noble-black/60 font-medium">
                         {{
-                          startDate
-                            ? `${formatDate(startDate)} at ${startTime} — ${endDate ? formatDate(endDate) : "Select end date"} at ${endTime}`
-                            : "When do you need this?"
+                          isItemUnavailableForBooking
+                            ? bookingAvailabilityMessage
+                            : startDate
+                              ? `${formatDate(startDate)} at ${startTime} — ${endDate ? formatDate(endDate) : "Select end date"} at ${endTime}`
+                              : "When do you need this?"
                         }}
                       </p>
                     </div>
@@ -1501,6 +1609,15 @@ onUnmounted(() => {
                       v-if="isCalendarExpanded"
                       class="mt-8 pt-6 border-t border-cinnamon-ice/20 space-y-8"
                     >
+                      <div
+                        v-if="isItemUnavailableForBooking"
+                        class="rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+                      >
+                        <span class="font-semibold text-noble-black"
+                          >{{ bookingAvailabilityTitle }}.</span
+                        >
+                        {{ bookingAvailabilityMessage }}
+                      </div>
                       <div>
                         <div class="flex items-center justify-between mb-6">
                           <h3 class="font-semibold text-noble-black">
@@ -1509,6 +1626,7 @@ onUnmounted(() => {
                           <div class="flex gap-2">
                             <button
                               class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                              :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(-1)"
                             >
                               <svg
@@ -1526,6 +1644,7 @@ onUnmounted(() => {
                             </button>
                             <button
                               class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                              :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(1)"
                             >
                               <svg
@@ -1641,7 +1760,8 @@ onUnmounted(() => {
                             class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                             >Start Time</span
                           ><button
-                            class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                            class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="isItemUnavailableForBooking"
                             @click="toggleStartTime"
                           >
                             {{ startTime
@@ -1684,7 +1804,8 @@ onUnmounted(() => {
                             class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                             >End Time</span
                           ><button
-                            class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                            class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="isItemUnavailableForBooking"
                             @click="toggleEndTime"
                           >
                             {{ endTime
@@ -1767,7 +1888,7 @@ onUnmounted(() => {
                         ? 'bg-noble-black hover:bg-noble-black/90'
                         : 'bg-burning-orange hover:bg-blue-estate'
                     "
-                    :disabled="!hasBookingSelection || isInBag"
+                    :disabled="isItemUnavailableForBooking || !hasBookingSelection || isInBag"
                     @click="handleAddToBag"
                   >
                     <svg
@@ -1784,7 +1905,7 @@ onUnmounted(() => {
                     >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    {{ isInBag ? "Added to Bag" : "Add to Bag" }}
+                    {{ addToBagButtonLabel }}
                   </button>
                   <button
                     class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
@@ -1846,10 +1967,22 @@ onUnmounted(() => {
                     >Status</span
                   >
                   <div
-                    class="flex w-fit items-center gap-2 rounded-full bg-burning-orange/10 px-3 py-1"
+                    class="flex w-fit items-center gap-2 rounded-full px-3 py-1"
+                    :class="
+                      isItemUnavailableForBooking ? 'bg-noble-black/10' : 'bg-burning-orange/10'
+                    "
                   >
-                    <div class="h-1.5 w-1.5 rounded-full bg-burning-orange" />
-                    <span class="text-xs font-bold text-burning-orange">{{ statusLabel }}</span>
+                    <div
+                      class="h-1.5 w-1.5 rounded-full"
+                      :class="isItemUnavailableForBooking ? 'bg-noble-black' : 'bg-burning-orange'"
+                    />
+                    <span
+                      class="text-xs font-bold"
+                      :class="
+                        isItemUnavailableForBooking ? 'text-noble-black' : 'text-burning-orange'
+                      "
+                      >{{ statusLabel }}</span
+                    >
                   </div>
                 </div>
                 <!-- Condition -->
@@ -2059,6 +2192,13 @@ onUnmounted(() => {
               class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm overflow-hidden"
               @mouseleave="handleCalendarMouseLeave"
             >
+              <div
+                v-if="isItemUnavailableForBooking"
+                class="mb-5 rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+              >
+                <span class="font-semibold text-noble-black">{{ bookingAvailabilityTitle }}.</span>
+                {{ bookingAvailabilityMessage }}
+              </div>
               <div class="flex items-center justify-between mb-6">
                 <h3 class="font-semibold text-noble-black">
                   {{ monthNames[viewMonth] }} {{ viewYear }}
@@ -2066,6 +2206,7 @@ onUnmounted(() => {
                 <div class="flex gap-2">
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
                     <svg
@@ -2083,6 +2224,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
                     <svg
@@ -2198,7 +2340,8 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >Start Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
                   {{ startTime
@@ -2239,7 +2382,8 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >End Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
                   {{ endTime
@@ -2319,7 +2463,7 @@ onUnmounted(() => {
                     ? 'bg-noble-black hover:bg-noble-black/90'
                     : 'bg-burning-orange hover:bg-blue-estate'
                 "
-                :disabled="!hasBookingSelection || isInBag"
+                :disabled="isItemUnavailableForBooking || !hasBookingSelection || isInBag"
                 @click="handleAddToBag"
               >
                 <svg
@@ -2336,7 +2480,7 @@ onUnmounted(() => {
                 >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                {{ isInBag ? "Added to Bag" : "Add to Bag" }}
+                {{ addToBagButtonLabel }}
               </button>
               <button
                 class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
@@ -2404,15 +2548,24 @@ onUnmounted(() => {
         </div>
         <button class="text-[11px] font-bold text-burning-orange" @click="openBookingModal">
           {{
-            startDate && displayEndDate
-              ? `${formatDate(startDate)} — ${formatDate(displayEndDate)}`
-              : "Select dates"
+            isItemUnavailableForBooking
+              ? `Currently ${unavailableItemLabel}`
+              : startDate && displayEndDate
+                ? `${formatDate(startDate)} — ${formatDate(displayEndDate)}`
+                : "Select dates"
           }}
         </button>
       </div>
       <button
         class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
-        :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
+        :class="
+          isItemUnavailableForBooking
+            ? 'bg-noble-black/60'
+            : isInBag
+              ? 'bg-noble-black'
+              : 'bg-burning-orange'
+        "
+        :disabled="isItemUnavailableForBooking"
         @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
       >
         <svg
@@ -2429,7 +2582,7 @@ onUnmounted(() => {
         >
           <polyline points="20 6 9 17 4 12" />
         </svg>
-        {{ isInBag ? "Added to Bag" : hasBookingSelection ? "Add to Bag" : "Check Availability" }}
+        {{ mobileBookingButtonLabel }}
       </button>
     </div>
 
@@ -2469,7 +2622,15 @@ onUnmounted(() => {
           </div>
           <div class="p-6 space-y-8 pb-32">
             <div class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
-              <h3 class="font-bold text-noble-black mb-6">Select Dates</h3>
+              <h3 class="font-bold text-noble-black mb-3">
+                {{ isItemUnavailableForBooking ? bookingAvailabilityTitle : "Select Dates" }}
+              </h3>
+              <p
+                v-if="isItemUnavailableForBooking"
+                class="mb-5 rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+              >
+                {{ bookingAvailabilityMessage }}
+              </p>
               <div class="flex items-center justify-between mb-6">
                 <h3 class="font-semibold text-noble-black">
                   {{ monthNames[viewMonth] }} {{ viewYear }}
@@ -2477,6 +2638,7 @@ onUnmounted(() => {
                 <div class="flex gap-2">
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
                     <svg
@@ -2494,6 +2656,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
                     <svg
@@ -2609,7 +2772,8 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >Start Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
                   {{ startTime
@@ -2650,7 +2814,8 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >End Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors"
+                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
                   {{ endTime
