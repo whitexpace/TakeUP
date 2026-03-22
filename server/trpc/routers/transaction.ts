@@ -68,6 +68,33 @@ const getTransactionTotalAmount = (transaction: {
   return units * transaction.item.rentalFee
 }
 
+const getTransactionThumbnailImage = (item: {
+  images?: Array<{ path: string; isPrimary?: boolean }>
+}): string | null =>
+  item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
+
+const mapTransactionRecord = <
+  T extends { item: { images?: Array<{ path: string; isPrimary?: boolean }> } },
+>(
+  record: T & {
+    startDate: Date
+    endDate: Date
+    item: T["item"] & {
+      freeToBorrow: boolean
+      rentalFee: number
+      rateOption: "PER_HOUR" | "PER_DAY"
+    }
+    totalAmount?: number
+  },
+) => ({
+  ...record,
+  totalAmount: getTransactionTotalAmount(record),
+  item: {
+    ...record.item,
+    thumbnailImage: getTransactionThumbnailImage(record.item),
+  } as T["item"] & { thumbnailImage: string | null },
+})
+
 export const transactionRouter = router({
   list: protectedProcedure.input(listTransactionsSchema).query(async ({ ctx, input }) => {
     const { role, status, startDateFrom, startDateTo, limit, cursor } = input
@@ -119,18 +146,7 @@ export const transactionRouter = router({
       hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
     return {
-      transactions: pageRecords.map((record) => ({
-        ...record,
-        totalAmount: getTransactionTotalAmount(record),
-        item: {
-          ...record.item,
-          thumbnailImage:
-            record.item.images?.find((image) => image.isPrimary)?.path ??
-            record.item.thumbnailImage ??
-            record.item.images?.[0]?.path ??
-            null,
-        },
-      })),
+      transactions: pageRecords.map(mapTransactionRecord),
       nextCursor,
     }
   }),
