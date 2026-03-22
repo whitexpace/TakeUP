@@ -312,10 +312,7 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   })
 }
 
-const cleanupUploadedImages = async (
-  urls: string[],
-  options: { keepalive?: boolean } = {},
-) => {
+const cleanupUploadedImages = async (urls: string[], options: { keepalive?: boolean } = {}) => {
   const uniqueUrls = [...new Set(urls)].filter((url) => sessionUploadedImageUrls.has(url))
   if (uniqueUrls.length === 0) return
 
@@ -505,10 +502,7 @@ const handleFormEnterKeydown = (event: KeyboardEvent) => {
 }
 
 const buildPayload = () => {
-  const orderedImages = [
-    ...(coverImage.value ? [coverImage.value] : []),
-    ...galleryImages.value,
-  ]
+  const orderedImages = [...(coverImage.value ? [coverImage.value] : []), ...galleryImages.value]
   const photos = orderedImages.map((image) => image.url)
   const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
 
