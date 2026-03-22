@@ -239,6 +239,7 @@ const statusLabel = computed(() => (item.value ? humanizeEnum(item.value.status)
 const formattedCondition = computed(() => (item.value ? humanizeEnum(item.value.condition) : ""))
 const formattedCategories = computed(() => item.value?.categories.map(humanizeEnum) ?? [])
 const typeLabel = computed(() => (item.value?.freeToBorrow ? "Borrow" : "Rent"))
+const isItemAvailableForBooking = computed(() => item.value?.status === "AVAILABLE")
 const ownerName = computed(() => item.value?.ownerName ?? "TakeUP member")
 const ownerInitials = computed(() => {
   const parts = ownerName.value.split(/\s+/).filter(Boolean)
@@ -559,16 +560,27 @@ const selectedBookingWindow = computed(() => {
 
 const canSubmitBooking = computed(
   () =>
-    hasBookingSelection.value && selectedBookingWindow.value !== null && !isSubmittingBooking.value,
+    isItemAvailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isSubmittingBooking.value,
 )
 
 const bookingFeedbackMessage = computed(() => {
+  if (item.value && !isItemAvailableForBooking.value) {
+    return `This item is currently marked as ${statusLabel.value.toLowerCase()} and cannot be booked.`
+  }
+
   if (bookingErrorMessage.value) return bookingErrorMessage.value
   if (bookingSuccessMessage.value) return bookingSuccessMessage.value
   return "You won't be charged yet."
 })
 
 const bookingFeedbackClass = computed(() => {
+  if (item.value && !isItemAvailableForBooking.value) {
+    return "text-cinnabar-red"
+  }
+
   if (bookingErrorMessage.value) {
     return "text-cinnabar-red"
   }
@@ -648,8 +660,24 @@ const isInBag = computed(() => {
   return bagItems.value.some((i) => i.id === item.value?.id)
 })
 
+const canAddToBag = computed(
+  () =>
+    isItemAvailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isInBag.value,
+)
+
 const handleAddToBag = () => {
-  if (!item.value || !hasBookingSelection.value) return
+  if (
+    !item.value ||
+    !isItemAvailableForBooking.value ||
+    !selectedBookingWindow.value ||
+    !startDate.value ||
+    !displayEndDate.value
+  ) {
+    return
+  }
 
   addItemToBag({
     id: item.value.id,
@@ -658,9 +686,13 @@ const handleAddToBag = () => {
     priceUnit: item.value.rateOption === "PER_HOUR" ? "hour" : "day",
     image: item.value.thumbnailImage || item.value.photos[0] || "",
     startDate: startDate.value,
-    endDate: endDate.value,
+    endDate: displayEndDate.value,
     startTime: startTime.value,
     endTime: endTime.value,
+    lenderId: item.value.lenderId,
+    lenderName: item.value.ownerName,
+    lenderAvatarUrl: null, // As discussed, not yet in item schema, but we'll use name for initials
+    listingType: item.value.freeToBorrow ? "Borrow" : "Rent",
   })
 
   // Optionally close the mobile modal if it's open
@@ -743,7 +775,14 @@ const resolveBookingErrorMessage = (error: unknown) => {
 }
 
 const submitBookingRequest = async () => {
-  if (!item.value || !selectedBookingWindow.value || isSubmittingBooking.value) return
+  if (
+    !item.value ||
+    !isItemAvailableForBooking.value ||
+    !selectedBookingWindow.value ||
+    isSubmittingBooking.value
+  ) {
+    return
+  }
 
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
@@ -1378,7 +1417,7 @@ onUnmounted(() => {
                           ? 'bg-noble-black hover:bg-noble-black/90'
                           : 'bg-burning-orange hover:bg-blue-estate'
                       "
-                      :disabled="!hasBookingSelection || isInBag"
+                      :disabled="!canAddToBag"
                       @click="handleAddToBag"
                     >
                       <svg
@@ -1767,7 +1806,7 @@ onUnmounted(() => {
                         ? 'bg-noble-black hover:bg-noble-black/90'
                         : 'bg-burning-orange hover:bg-blue-estate'
                     "
-                    :disabled="!hasBookingSelection || isInBag"
+                    :disabled="!canAddToBag"
                     @click="handleAddToBag"
                   >
                     <svg
@@ -2319,7 +2358,7 @@ onUnmounted(() => {
                     ? 'bg-noble-black hover:bg-noble-black/90'
                     : 'bg-burning-orange hover:bg-blue-estate'
                 "
-                :disabled="!hasBookingSelection || isInBag"
+                :disabled="!canAddToBag"
                 @click="handleAddToBag"
               >
                 <svg
@@ -2412,8 +2451,23 @@ onUnmounted(() => {
       </div>
       <button
         class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
-        :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
-        @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
+        :class="
+          isInBag
+            ? 'bg-noble-black'
+            : isItemAvailableForBooking
+              ? 'bg-burning-orange'
+              : 'bg-noble-black/40'
+        "
+        :disabled="!isInBag && !isItemAvailableForBooking"
+        @click="
+          isInBag
+            ? null
+            : !isItemAvailableForBooking
+              ? null
+              : hasBookingSelection
+                ? handleAddToBag()
+                : openBookingModal()
+        "
       >
         <svg
           v-if="isInBag"
@@ -2429,7 +2483,15 @@ onUnmounted(() => {
         >
           <polyline points="20 6 9 17 4 12" />
         </svg>
-        {{ isInBag ? "Added to Bag" : hasBookingSelection ? "Add to Bag" : "Check Availability" }}
+        {{
+          isInBag
+            ? "Added to Bag"
+            : !isItemAvailableForBooking
+              ? "Unavailable"
+              : hasBookingSelection
+                ? "Add to Bag"
+                : "Check Availability"
+        }}
       </button>
     </div>
 
