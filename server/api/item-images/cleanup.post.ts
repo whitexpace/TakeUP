@@ -1,6 +1,9 @@
 import { createError, readBody } from "h3"
 import { z } from "zod"
-import { removeItemImagesFromStorage, extractStoragePathFromPublicUrl } from "../../utils/item-image-storage"
+import {
+  removeItemImagesFromStorage,
+  extractStoragePathFromPublicUrl,
+} from "../../utils/item-image-storage"
 
 const cleanupItemImagesSchema = z.object({
   urls: z.array(z.string().url()).max(20),

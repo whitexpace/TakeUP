@@ -9,7 +9,10 @@ const STORAGE_UPLOAD_PREFIX = "items/"
 
 const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/")
 
-export const extractStoragePathFromPublicUrl = (imageUrl: string, bucket: string): string | null => {
+export const extractStoragePathFromPublicUrl = (
+  imageUrl: string,
+  bucket: string,
+): string | null => {
   let parsedUrl: URL
 
   try {

@@ -1,5 +1,12 @@
-import type { Prisma } from "@prisma/client"
-import { TransactionStatus as PrismaTransactionStatus } from "@prisma/client"
+import type {
+  BookingPaymentStatus as PrismaBookingPaymentStatus,
+  BookingStatus as PrismaBookingStatus,
+  Prisma,
+} from "@prisma/client"
+import {
+  PaymentMethod as PrismaPaymentMethod,
+  TransactionStatus as PrismaTransactionStatus,
+} from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
 import { router } from "../init"
@@ -279,33 +286,44 @@ const calculateRentalAmount = (totalFee: number, platformCommission: number) =>
   Math.max(0, totalFee - platformCommission)
 
 const mapBookingToTransactionStatus = (
-  status: keyof typeof bookingStatusSchema.enum,
-  paymentStatus: keyof typeof bookingPaymentStatusSchema.enum,
+  status: PrismaBookingStatus,
+  paymentStatus: PrismaBookingPaymentStatus,
 ) => {
   if (paymentStatus === bookingPaymentStatusSchema.enum.FAILED) {
-    return PrismaTransactionStatus.FAILED
+    return PrismaTransactionStatus.CANCELLED
   }
 
   if (paymentStatus === bookingPaymentStatusSchema.enum.REFUNDED) {
-    return PrismaTransactionStatus.REFUNDED
+    return PrismaTransactionStatus.CANCELLED
   }
 
   switch (status) {
     case bookingStatusSchema.enum.CONFIRMED:
-      return paymentStatus === bookingPaymentStatusSchema.enum.PAID
-        ? PrismaTransactionStatus.PAID
-        : PrismaTransactionStatus.CONFIRMED
+      return PrismaTransactionStatus.ACTIVE
     case bookingStatusSchema.enum.CANCELLED:
       return PrismaTransactionStatus.CANCELLED
     case bookingStatusSchema.enum.COMPLETED:
       return PrismaTransactionStatus.COMPLETED
     case bookingStatusSchema.enum.IN_DISPUTE:
-      return PrismaTransactionStatus.IN_DISPUTE
+      return PrismaTransactionStatus.ACTIVE
     case bookingStatusSchema.enum.PENDING:
     default:
       return PrismaTransactionStatus.AWAITING_LENDER_APPROVAL
   }
 }
+
+const prismaPaymentMethodMap: Record<
+  PaymentMethod,
+  (typeof PrismaPaymentMethod)[keyof typeof PrismaPaymentMethod]
+> = {
+  CASH: PrismaPaymentMethod.cash,
+  GCASH: PrismaPaymentMethod.gcash,
+  CARD: PrismaPaymentMethod.card,
+  BANK_TRANSFER: PrismaPaymentMethod.bank,
+  WALLET: PrismaPaymentMethod.wallet,
+}
+
+const toPrismaPaymentMethod = (method: PaymentMethod) => prismaPaymentMethodMap[method]
 
 const buildBookingTimestamps = (
   existing: Pick<
@@ -549,6 +567,7 @@ export const bookingRouter = router({
   create: protectedProcedure.input(createBookingSchema).mutation(async ({ ctx, input }) => {
     return ctx.prisma.$transaction(async (tx) => {
       const bookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+      const now = new Date()
 
       await tx.borrower.upsert({
         where: { userId: ctx.user.id },
@@ -600,7 +619,7 @@ export const bookingRouter = router({
         platformCommission,
       )
 
-      const booking = await tx.booking.create({
+      const booking = await bookingPrisma.booking.create({
         data: {
           borrowerId: ctx.user.id,
           lenderId: item.lenderId,
@@ -609,12 +628,13 @@ export const bookingRouter = router({
           endDate: input.endDate,
           totalFee,
           platformCommission,
-          paymentMethod: input.paymentMethod ?? DEFAULT_PAYMENT_METHOD,
+          paymentMethod: toPrismaPaymentMethod(input.paymentMethod ?? DEFAULT_PAYMENT_METHOD),
           status: bookingStatusSchema.enum.PENDING,
           paymentStatus: item.freeToBorrow
             ? bookingPaymentStatusSchema.enum.NOT_REQUIRED
             : bookingPaymentStatusSchema.enum.PENDING,
           cancellationReason: input.cancellationReason ?? null,
+          updatedAt: now,
         },
         include: bookingInclude,
       })
@@ -693,7 +713,8 @@ export const bookingRouter = router({
     const timestamps = buildBookingTimestamps(existing, input.status, input.paymentStatus)
 
     return ctx.prisma.$transaction(async (tx) => {
-      const updatedBooking = await tx.booking.update({
+      const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+      const updatedBooking = await txBookingPrisma.booking.update({
         where: { id: input.id },
         data: {
           ...(input.startDate ? { startDate } : {}),
@@ -701,7 +722,9 @@ export const bookingRouter = router({
           ...(input.startDate || input.endDate || input.platformCommission !== undefined
             ? { totalFee, platformCommission }
             : {}),
-          ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
+          ...(input.paymentMethod
+            ? { paymentMethod: toPrismaPaymentMethod(input.paymentMethod) }
+            : {}),
           ...(input.status ? { status: input.status } : {}),
           ...(input.paymentStatus ? { paymentStatus: input.paymentStatus } : {}),
           ...(input.cancellationReason !== undefined
@@ -741,12 +764,14 @@ export const bookingRouter = router({
     assertParticipantAccess(existing, ctx.user.id)
 
     return ctx.prisma.$transaction(async (tx) => {
-      const deletedBooking = await tx.booking.delete({
+      const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+      const txBookingMutationPrisma = tx as unknown as BookingMutationPrismaClient
+      const deletedBooking = await txBookingPrisma.booking.delete({
         where: { id: input.id },
         include: bookingInclude,
       })
 
-      await tx.rentalTransaction.deleteMany({
+      await txBookingMutationPrisma.rentalTransaction.deleteMany({
         where: { bookingId: input.id },
       })
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
