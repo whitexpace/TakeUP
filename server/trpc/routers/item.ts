@@ -270,7 +270,13 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
   return ranked.map((entry) => entry.item)
 }
 
-const mapItemTaxonomy = (item: ItemWithUserLike) => {
+const mapItemTaxonomy = (
+  item: ItemWithUserLike & {
+    images?: Array<{ path: string; isPrimary?: boolean }>
+    thumbnailImage?: string | null
+    photos?: string[]
+  },
+) => {
   const { availability, categories, tags, lender, likes, images, ...rest } = item
   const lenderUser = lender.user
   const ownerName =
@@ -278,9 +284,10 @@ const mapItemTaxonomy = (item: ItemWithUserLike) => {
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
     lenderUser.email ||
     item.lenderId
-  const orderedPhotos = images.map((entry) => entry.path)
+  const orderedPhotos =
+    images?.map((entry) => entry.path) ?? item.photos ?? (item.thumbnailImage ? [item.thumbnailImage] : [])
   const thumbnailImage =
-    images.find((entry) => entry.isPrimary)?.path ?? orderedPhotos[0] ?? null
+    images?.find((entry) => entry.isPrimary)?.path ?? item.thumbnailImage ?? orderedPhotos[0] ?? null
 
   return {
     ...rest,
