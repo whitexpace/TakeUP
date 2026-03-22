@@ -105,7 +105,10 @@ const detailPath = computed(() =>
     </div>
 
     <!-- Bottom row -->
-    <div class="flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4">
+    <NuxtLink
+      :to="`/account/transactions/${transaction.id}`"
+      class="flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4 hover:bg-cream/50 transition-colors cursor-pointer block"
+    >
       <!-- Thumbnail -->
       <img
         v-if="transaction.item.thumbnailImage"
@@ -167,6 +170,6 @@ const detailPath = computed(() =>
           </p>
         </div>
       </div>
-    </div>
+    </NuxtLink>
   </div>
 </template>
