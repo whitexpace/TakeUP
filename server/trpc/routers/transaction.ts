@@ -56,12 +56,13 @@ const getTransactionTotalAmount = (transaction: {
   startDate: Date
   endDate: Date
   item: { freeToBorrow: boolean; rentalFee: number; rateOption: "PER_HOUR" | "PER_DAY" }
+  totalAmount?: number
 }) => {
+  if (typeof transaction.totalAmount === "number") return transaction.totalAmount
   if (transaction.item.freeToBorrow) return 0
 
   const durationMs = Math.max(transaction.endDate.getTime() - transaction.startDate.getTime(), 0)
-  const unitMs =
-    transaction.item.rateOption === "PER_HOUR" ? 1000 * 60 * 60 : 1000 * 60 * 60 * 24
+  const unitMs = transaction.item.rateOption === "PER_HOUR" ? 1000 * 60 * 60 : 1000 * 60 * 60 * 24
   const units = Math.max(Math.ceil(durationMs / unitMs), 1)
 
   return units * transaction.item.rentalFee
@@ -124,7 +125,10 @@ export const transactionRouter = router({
         item: {
           ...record.item,
           thumbnailImage:
-            record.item.images.find((image) => image.isPrimary)?.path ?? record.item.images[0]?.path ?? null,
+            record.item.images?.find((image) => image.isPrimary)?.path ??
+            record.item.thumbnailImage ??
+            record.item.images?.[0]?.path ??
+            null,
         },
       })),
       nextCursor,
