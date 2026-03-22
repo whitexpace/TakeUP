@@ -50,7 +50,6 @@ const getTransactionStatusGroup = (
 }
 
 const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
-<<<<<<< HEAD
   PENDING: getTransactionStatusGroup(
     ["PENDING", "AWAITING_LENDER_APPROVAL"],
     [PrismaTransactionStatus.PENDING],
@@ -72,45 +71,6 @@ const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionSt
   if (statusGroups.COMPLETED.includes(status)) return "COMPLETED"
   if (statusGroups.CANCELLED.includes(status)) return "CANCELLED"
   return "PENDING"
-=======
-  PENDING: [PrismaTransactionStatus.PENDING, PrismaTransactionStatus.AWAITING_LENDER_APPROVAL],
-  ACTIVE: [
-    PrismaTransactionStatus.CONFIRMED,
-    PrismaTransactionStatus.PAID,
-    PrismaTransactionStatus.ONGOING,
-    PrismaTransactionStatus.IN_DISPUTE,
-    PrismaTransactionStatus.APPEALED,
-  ],
-  COMPLETED: [PrismaTransactionStatus.COMPLETED],
-  CANCELLED: [
-    PrismaTransactionStatus.CANCELLED,
-    PrismaTransactionStatus.REFUNDED,
-    PrismaTransactionStatus.FAILED,
-  ],
-  RETURNED: [PrismaTransactionStatus.RETURNED],
-}
-
-const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
-  switch (status) {
-    case PrismaTransactionStatus.PENDING:
-    case PrismaTransactionStatus.AWAITING_LENDER_APPROVAL:
-      return "PENDING"
-    case PrismaTransactionStatus.CONFIRMED:
-    case PrismaTransactionStatus.PAID:
-    case PrismaTransactionStatus.ONGOING:
-    case PrismaTransactionStatus.IN_DISPUTE:
-    case PrismaTransactionStatus.APPEALED:
-      return "ACTIVE"
-    case PrismaTransactionStatus.RETURNED:
-      return "RETURNED"
-    case PrismaTransactionStatus.COMPLETED:
-      return "COMPLETED"
-    case PrismaTransactionStatus.CANCELLED:
-    case PrismaTransactionStatus.REFUNDED:
-    case PrismaTransactionStatus.FAILED:
-      return "CANCELLED"
-  }
->>>>>>> 149da14 (feat(order-details): APP-43 order details page from my transactions nav)
 }
 
 type TransactionRecord = {
