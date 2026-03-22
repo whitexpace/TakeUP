@@ -285,45 +285,48 @@ const calculateBookingTotal = (
 const calculateRentalAmount = (totalFee: number, platformCommission: number) =>
   Math.max(0, totalFee - platformCommission)
 
+const prismaTransactionStatuses = PrismaTransactionStatus as Record<string, PrismaTransactionStatus>
+const prismaPaymentMethods = PrismaPaymentMethod as Record<string, string>
+
+const getPrismaTransactionStatus = (
+  preferred: string,
+  fallback: PrismaTransactionStatus,
+): PrismaTransactionStatus => prismaTransactionStatuses[preferred] ?? fallback
+
 const mapBookingToTransactionStatus = (
   status: PrismaBookingStatus,
   paymentStatus: PrismaBookingPaymentStatus,
 ) => {
   if (paymentStatus === bookingPaymentStatusSchema.enum.FAILED) {
-    return PrismaTransactionStatus.CANCELLED
+    return getPrismaTransactionStatus("FAILED", PrismaTransactionStatus.CANCELLED)
   }
 
   if (paymentStatus === bookingPaymentStatusSchema.enum.REFUNDED) {
-    return PrismaTransactionStatus.CANCELLED
+    return getPrismaTransactionStatus("REFUNDED", PrismaTransactionStatus.CANCELLED)
   }
 
   switch (status) {
     case bookingStatusSchema.enum.CONFIRMED:
-      return PrismaTransactionStatus.ACTIVE
+      return paymentStatus === bookingPaymentStatusSchema.enum.PAID
+        ? getPrismaTransactionStatus("PAID", PrismaTransactionStatus.ACTIVE)
+        : getPrismaTransactionStatus("CONFIRMED", PrismaTransactionStatus.ACTIVE)
     case bookingStatusSchema.enum.CANCELLED:
       return PrismaTransactionStatus.CANCELLED
     case bookingStatusSchema.enum.COMPLETED:
       return PrismaTransactionStatus.COMPLETED
     case bookingStatusSchema.enum.IN_DISPUTE:
-      return PrismaTransactionStatus.ACTIVE
+      return getPrismaTransactionStatus("IN_DISPUTE", PrismaTransactionStatus.ACTIVE)
     case bookingStatusSchema.enum.PENDING:
     default:
       return PrismaTransactionStatus.AWAITING_LENDER_APPROVAL
   }
 }
 
-const prismaPaymentMethodMap: Record<
-  PaymentMethod,
-  (typeof PrismaPaymentMethod)[keyof typeof PrismaPaymentMethod]
-> = {
-  CASH: PrismaPaymentMethod.cash,
-  GCASH: PrismaPaymentMethod.gcash,
-  CARD: PrismaPaymentMethod.card,
-  BANK_TRANSFER: PrismaPaymentMethod.bank,
-  WALLET: PrismaPaymentMethod.wallet,
-}
-
-const toPrismaPaymentMethod = (method: PaymentMethod) => prismaPaymentMethodMap[method]
+const toPrismaPaymentMethod = (method: PaymentMethod) =>
+  (prismaPaymentMethods[method] ??
+    prismaPaymentMethods[method.toLowerCase()] ??
+    prismaPaymentMethods.bank ??
+    method) as (typeof PrismaPaymentMethod)[keyof typeof PrismaPaymentMethod]
 
 const buildBookingTimestamps = (
   existing: Pick<
