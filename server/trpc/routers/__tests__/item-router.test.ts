@@ -5,6 +5,136 @@ import { itemRouter } from "../item"
 const VALID_UUID = "11111111-1111-1111-1111-111111111111"
 
 describe("itemRouter", () => {
+  it("create throws BAD_REQUEST when the signed-in user is missing from the database", async () => {
+    const userFindUnique = vi.fn().mockResolvedValue(null)
+    const lenderUpsert = vi.fn()
+    const itemCreate = vi.fn()
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        user: { findUnique: userFindUnique },
+        lender: { upsert: lenderUpsert },
+        item: { create: itemCreate },
+      } as never,
+      user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
+    })
+
+    await expect(
+      caller.create({
+        name: "Camera",
+        description: "Mirrorless camera for class projects.",
+        condition: "GOOD",
+        categories: ["ELECTRONICS"],
+        tags: [],
+        rentalFee: 250,
+        availability: [],
+        freeToBorrow: false,
+        rateOption: "PER_DAY",
+        whatItemOffers: "Sharp photos and reliable autofocus.",
+        whatIsIncluded: "Camera body and charger.",
+        photos: [],
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message:
+        "Your account is missing from the database. Sign out and sign in again before publishing an item.",
+    })
+
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { id: "owner-1" },
+      select: { id: true },
+    })
+    expect(lenderUpsert).not.toHaveBeenCalled()
+    expect(itemCreate).not.toHaveBeenCalled()
+  })
+
+  it("create uses nested image create writes without deleteMany", async () => {
+    const userFindUnique = vi.fn().mockResolvedValue({ id: "owner-1" })
+    const lenderUpsert = vi.fn().mockResolvedValue({ userId: "owner-1" })
+    const itemCreate = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      name: "Camera",
+      status: "AVAILABLE",
+      lenderId: "owner-1",
+      lender: {
+        user: {
+          username: "owner1",
+          firstName: "Owner",
+          middleName: null,
+          lastName: "One",
+          email: "owner1@up.edu.ph",
+        },
+      },
+      images: [
+        {
+          path: "https://example.com/camera.jpg",
+          isPrimary: true,
+          sortOrder: 0,
+        },
+      ],
+      availability: [],
+      categories: [{ category: "ELECTRONICS" }],
+      tags: [{ tag: { name: "photo" } }],
+      likes: [],
+      description: null,
+      condition: "GOOD",
+      rateOption: "PER_DAY",
+      createdAt: new Date("2026-03-22T00:00:00.000Z"),
+      rentalFee: 250,
+      replacementCost: null,
+      freeToBorrow: false,
+      whatItemOffers: null,
+      whatIsIncluded: null,
+      knownIssues: null,
+      usageLimitations: null,
+      isTrending: false,
+      viewCount: 0,
+      bookingCount: 0,
+      likeCount: 0,
+      rating: 0,
+      borrowerId: null,
+    })
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        user: { findUnique: userFindUnique },
+        lender: { upsert: lenderUpsert },
+        item: { create: itemCreate },
+      } as never,
+      user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
+    })
+
+    await caller.create({
+      name: "Camera",
+      description: "Mirrorless camera for class projects.",
+      condition: "GOOD",
+      categories: ["ELECTRONICS"],
+      tags: ["photo"],
+      rentalFee: 250,
+      availability: [],
+      freeToBorrow: false,
+      rateOption: "PER_DAY",
+      whatItemOffers: "Sharp photos and reliable autofocus.",
+      whatIsIncluded: "Camera body and charger.",
+      thumbnailImage: "https://example.com/camera.jpg",
+      photos: ["https://example.com/camera.jpg"],
+    })
+
+    const createArgs = itemCreate.mock.calls[0]?.[0]
+    expect(createArgs?.data.images).toEqual({
+      create: [
+        {
+          path: "https://example.com/camera.jpg",
+          sortOrder: 0,
+          isPrimary: true,
+        },
+      ],
+    })
+    expect(createArgs?.data.images).not.toHaveProperty("deleteMany")
+  })
+
   it("list maps taxonomy relations into plain arrays", async () => {
     const findMany = vi.fn().mockResolvedValue([
       {

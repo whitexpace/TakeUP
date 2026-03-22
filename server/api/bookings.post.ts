@@ -1,13 +1,13 @@
 import { createError, readBody } from "h3"
-import { createItemSchema } from "../../shared/schemas/item"
+import { createBookingSchema } from "../../shared/schemas/booking"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
-import { handleItemApiError } from "./items/handle-item-api-error"
+import { handleBookingApiError } from "./bookings/handle-booking-api-error"
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
 
-  const result = createItemSchema.safeParse(body)
+  const result = createBookingSchema.safeParse(body)
   if (!result.success) {
     throw createError({
       statusCode: 400,
@@ -18,8 +18,8 @@ export default defineEventHandler(async (event) => {
 
   const caller = appRouter.createCaller(await createContext(event))
   try {
-    return await caller.item.create(result.data)
+    return await caller.booking.create(result.data)
   } catch (err) {
-    handleItemApiError(err, "create")
+    handleBookingApiError(err, "create")
   }
 })

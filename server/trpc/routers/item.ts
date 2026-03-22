@@ -317,19 +317,48 @@ const mapItemTaxonomy = (
   }
 }
 
-const buildImageWrites = (thumbnailImage?: string | null, photos?: string[]) => {
+const buildOrderedImagePaths = (thumbnailImage?: string | null, photos?: string[]) => {
   if (thumbnailImage === undefined && photos === undefined) {
     return undefined
   }
 
   const seenPaths = new Set<string>()
-  const orderedPaths = [...(photos ?? []), ...(thumbnailImage ? [thumbnailImage] : [])].filter(
-    (path) => {
-      if (!path || seenPaths.has(path)) return false
-      seenPaths.add(path)
-      return true
-    },
-  )
+  return [...(photos ?? []), ...(thumbnailImage ? [thumbnailImage] : [])].filter((path) => {
+    if (!path || seenPaths.has(path)) return false
+    seenPaths.add(path)
+    return true
+  })
+}
+
+const buildCreateImageWrites = (
+  thumbnailImage?: string | null,
+  photos?: string[],
+): Prisma.ItemImageCreateNestedManyWithoutItemInput | undefined => {
+  const orderedPaths = buildOrderedImagePaths(thumbnailImage, photos)
+  if (!orderedPaths || orderedPaths.length === 0) {
+    return undefined
+  }
+
+  const primaryPath =
+    thumbnailImage && orderedPaths.includes(thumbnailImage) ? thumbnailImage : orderedPaths[0]!
+
+  return {
+    create: orderedPaths.map((path, index) => ({
+      path,
+      sortOrder: index,
+      isPrimary: path === primaryPath,
+    })),
+  }
+}
+
+const buildUpdateImageWrites = (
+  thumbnailImage?: string | null,
+  photos?: string[],
+): Prisma.ItemImageUpdateManyWithoutItemNestedInput | undefined => {
+  const orderedPaths = buildOrderedImagePaths(thumbnailImage, photos)
+  if (!orderedPaths) {
+    return undefined
+  }
 
   if (orderedPaths.length === 0) {
     return { deleteMany: {} }
@@ -695,6 +724,19 @@ export const itemRouter = router({
   }),
 
   create: protectedProcedure.input(createItemSchema).mutation(async ({ ctx, input }) => {
+    const existingUser = await ctx.prisma.user.findUnique({
+      where: { id: ctx.user.id },
+      select: { id: true },
+    })
+
+    if (!existingUser) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Your account is missing from the database. Sign out and sign in again before publishing an item.",
+      })
+    }
+
     // Ensure Lender profile exists for this user
     await ctx.prisma.lender.upsert({
       where: { userId: ctx.user.id },
@@ -702,7 +744,7 @@ export const itemRouter = router({
       update: {},
     })
 
-    const imageWrites = buildImageWrites(input.thumbnailImage, input.photos)
+    const imageWrites = buildCreateImageWrites(input.thumbnailImage, input.photos)
 
     return ctx.prisma.item
       .create({
@@ -775,7 +817,7 @@ export const itemRouter = router({
     }
 
     const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
-    const imageWrites = buildImageWrites(thumbnailImage, photos)
+    const imageWrites = buildUpdateImageWrites(thumbnailImage, photos)
 
     return ctx.prisma.item
       .update({

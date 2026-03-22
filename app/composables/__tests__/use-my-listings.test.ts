@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { MyListingItem } from "../use-my-listings"
 import { useMyListings } from "../use-my-listings"
+import * as paginatedItemsModule from "../use-paginated-items"
+import * as filteredResultsCountModule from "../use-filtered-results-count"
 
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -120,6 +122,38 @@ describe("useMyListings", () => {
       `/api/items/${ITEM_ID}`,
       expect.objectContaining({ method: "PATCH" }),
     )
+  })
+
+  it("createListing invalidates item search caches after creating an item", async () => {
+    const resetPaginatedItemsCache = vi.spyOn(paginatedItemsModule, "resetPaginatedItemsCache")
+    const resetFilteredResultsCountCache = vi.spyOn(
+      filteredResultsCountModule,
+      "resetFilteredResultsCountCache",
+    )
+    fetchMock = vi.fn().mockResolvedValue(makeItem())
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { createListing } = useMyListings()
+    await createListing({ name: "New Item" })
+
+    expect(resetPaginatedItemsCache).toHaveBeenCalledTimes(1)
+    expect(resetFilteredResultsCountCache).toHaveBeenCalledTimes(1)
+  })
+
+  it("toggleStatus invalidates item search caches after updating an item", async () => {
+    const resetPaginatedItemsCache = vi.spyOn(paginatedItemsModule, "resetPaginatedItemsCache")
+    const resetFilteredResultsCountCache = vi.spyOn(
+      filteredResultsCountModule,
+      "resetFilteredResultsCountCache",
+    )
+    fetchMock = vi.fn().mockResolvedValue({ ...makeItem(), status: "DEACTIVATED" })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { toggleStatus } = useMyListings()
+    await toggleStatus(ITEM_ID, "DEACTIVATED")
+
+    expect(resetPaginatedItemsCache).toHaveBeenCalledTimes(1)
+    expect(resetFilteredResultsCountCache).toHaveBeenCalledTimes(1)
   })
 
   it("toggleStatus calls status endpoint and updates listing in place", async () => {

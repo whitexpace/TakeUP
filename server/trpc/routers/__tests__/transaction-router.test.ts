@@ -96,7 +96,7 @@ describe("transactionRouter", () => {
       expect(findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([{ status: "COMPLETED" }]),
+            AND: expect.arrayContaining([{ status: { in: ["COMPLETED"] } }]),
           }),
         }),
       )
