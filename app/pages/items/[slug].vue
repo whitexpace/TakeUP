@@ -710,6 +710,13 @@ const isInBag = computed(() => {
   return bagItems.value.some((i) => i.id === item.value?.id)
 })
 
+const canAddToBag = computed(
+  () =>
+    isItemAvailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isInBag.value,
+)
 const addToBagButtonLabel = computed(() => {
   if (isItemUnavailableForBooking.value) {
     return `Currently ${unavailableItemLabel.value}`
@@ -719,35 +726,14 @@ const addToBagButtonLabel = computed(() => {
 })
 
 const mobileBookingButtonLabel = computed(() => {
-  if (isItemUnavailableForBooking.value) {
-    return `Currently ${unavailableItemLabel.value}`
-  }
+  if (isInBag.value) return "Added to Bag"
+  if (!isItemAvailableForBooking.value) return "Unavailable"
 
-  return isInBag.value
-    ? "Added to Bag"
-    : hasBookingSelection.value
-      ? "Add to Bag"
-      : "Check Availability"
+  return hasBookingSelection.value ? "Add to Bag" : "Check Availability"
 })
 
-const canAddToBag = computed(
-  () =>
-    isItemAvailableForBooking.value &&
-    hasBookingSelection.value &&
-    selectedBookingWindow.value !== null &&
-    !isInBag.value,
-)
-
 const handleAddToBag = () => {
-  if (
-    !item.value ||
-    !isItemAvailableForBooking.value ||
-    !selectedBookingWindow.value ||
-    !startDate.value ||
-    !displayEndDate.value
-  ) {
-    return
-  }
+  if (!item.value || !canAddToBag.value || !startDate.value || !displayEndDate.value) return
 
   addItemToBag({
     id: item.value.id,

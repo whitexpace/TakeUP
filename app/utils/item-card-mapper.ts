@@ -48,6 +48,7 @@ export const mapListedItemToCard = (
     rating: item.rating.toFixed(1),
     reviews: item.bookingCount,
     price: item.freeToBorrow ? undefined : item.rentalFee,
+    priceUnit: item.rateOption === "PER_HOUR" ? "hour" : "day",
     owner: item.ownerName,
     isLiked: Boolean(item.isLiked),
   }

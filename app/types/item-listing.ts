@@ -65,6 +65,7 @@ export interface ItemCardViewModel {
   rating: number | string
   reviews: number | string
   price?: string | number
+  priceUnit?: "hour" | "day"
   owner: string
   isLiked?: boolean
 }

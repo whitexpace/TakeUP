@@ -421,6 +421,7 @@ watch(
             :rating="item.rating"
             :reviews="item.reviews"
             :price="item.price"
+            :price-unit="item.priceUnit"
             :owner="item.owner"
             :is-liked="item.isLiked"
             @like-changed="handleLikeChanged"

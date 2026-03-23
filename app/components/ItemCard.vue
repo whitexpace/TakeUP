@@ -119,7 +119,7 @@
           >
           <span
             class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-70"
-            >/day</span
+            >/{{ displayPriceUnit }}</span
           >
         </div>
       </div>
@@ -173,6 +173,7 @@ const props = defineProps<{
   rating: number | string
   reviews: number | string
   price?: string | number
+  priceUnit?: "hour" | "day"
   owner: string
   isLiked?: boolean
   fromPage?: "likes" | "dashboard"
@@ -201,15 +202,18 @@ const itemDetailPath = computed(() =>
   }),
 )
 
+const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")
+const displayPriceUnit = computed(() => props.priceUnit ?? "day")
+
 const topBadge = computed(() => {
-  if (props.status === "RENTED") {
+  if (normalizedStatus.value === "RENTED") {
     return {
       label: props.type === "Borrow" ? "Borrowed" : "Rented",
       className: "bg-noble-black/90 text-white",
     }
   }
 
-  if (props.status === "DEACTIVATED") {
+  if (normalizedStatus.value && normalizedStatus.value !== "AVAILABLE") {
     return {
       label: "Unavailable",
       className: "bg-white/90 text-noble-black border border-noble-black/10",
