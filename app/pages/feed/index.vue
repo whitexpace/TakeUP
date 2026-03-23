@@ -52,18 +52,49 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
-              <button
-                v-for="filter in filters"
-                :key="filter"
-                class="px-6 py-2 rounded-full text-[14px] font-bold transition-all duration-300 border ease-in-out"
-                :class="
-                  activeFilter === filter
-                    ? 'bg-blue-estate text-white shadow-md transform scale-105 border-blue-estate'
-                    : 'bg-cream text-noble-black/40 hover:bg-white hover:text-noble-black/70 border-transparent hover:border-cinnamon-ice/30 hover:shadow-sm'
-                "
-                @click="activeFilter = filter"
+              <span
+                class="rounded-full border border-blue-estate/10 bg-blue-estate/5 px-6 py-2 text-[14px] font-bold text-blue-estate"
               >
-                {{ filter }}
+                Active requests
+              </span>
+              <span
+                class="rounded-full border border-cinnamon-ice/30 bg-cream px-6 py-2 text-[14px] font-bold text-noble-black/60"
+              >
+                Newest first
+              </span>
+            </div>
+
+            <div v-if="isLoading" class="flex flex-col gap-6">
+              <div
+                v-for="placeholder in 3"
+                :key="placeholder"
+                class="animate-pulse rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6"
+              >
+                <div class="h-4 w-28 rounded bg-white/80" />
+                <div class="mt-4 h-8 w-2/3 rounded bg-white/80" />
+                <div class="mt-4 h-4 w-full rounded bg-white/80" />
+                <div class="mt-2 h-4 w-5/6 rounded bg-white/80" />
+                <div class="mt-6 grid gap-3 sm:grid-cols-3">
+                  <div
+                    v-for="metric in 3"
+                    :key="metric"
+                    class="h-20 rounded-[18px] bg-white/80"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-else-if="errorMessage"
+              class="rounded-[24px] border border-red-200 bg-red-50 p-6 text-red-700"
+            >
+              <p class="text-[16px] font-semibold">Unable to load requests</p>
+              <p class="mt-2 text-[14px]">{{ errorMessage }}</p>
+              <button
+                class="mt-4 rounded-full bg-noble-black px-5 py-2 text-[14px] font-semibold text-white"
+                @click="refresh"
+              >
+                Try again
               </button>
             </div>
 
@@ -121,7 +152,7 @@
                 Create Request
               </button>
             </div>
-          </div>
+          </section>
 
           <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
             <div class="sticky top-6">
