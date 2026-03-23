@@ -655,10 +655,19 @@ const closeLightbox = () => {
   }
 }
 
-const { bagItems, addToBag: addItemToBag } = useBag()
+const { addToBag: addItemToBag, hasItemWithWindow } = useBag()
+
+const bagFeedbackMessage = ref("")
+const bagFeedbackTone = ref<"success" | "error">("success")
 
 const isInBag = computed(() => {
-  return bagItems.value.some((i) => i.id === item.value?.id)
+  if (!item.value || !selectedBookingWindow.value) return false
+
+  return hasItemWithWindow(
+    item.value.id,
+    selectedBookingWindow.value.startDate,
+    selectedBookingWindow.value.endDate,
+  )
 })
 
 const canAddToBag = computed(
@@ -669,41 +678,57 @@ const canAddToBag = computed(
     !isInBag.value,
 )
 
-const handleAddToBag = () => {
-  if (
-    !item.value ||
-    !isItemAvailableForBooking.value ||
-    !selectedBookingWindow.value ||
-    !startDate.value ||
-    !displayEndDate.value
-  ) {
-    return
-  }
+const showBagFeedback = (message: string, tone: "success" | "error") => {
+  bagFeedbackMessage.value = message
+  bagFeedbackTone.value = tone
 
-  addItemToBag({
-    id: item.value.id,
-    name: item.value.name,
-    price: item.value.rentalFee,
-    priceUnit: item.value.rateOption === "PER_HOUR" ? "hour" : "day",
-    image:
-      item.value.images.find((image) => image.isPrimary)?.path ||
-      item.value.images[0]?.path ||
-      item.value.thumbnailImage ||
-      item.value.photos[0] ||
-      "",
-    startDate: startDate.value,
-    endDate: displayEndDate.value,
-    startTime: startTime.value,
-    endTime: endTime.value,
-    lenderId: item.value.lenderId,
-    lenderName: item.value.ownerName,
-    lenderAvatarUrl: null, // As discussed, not yet in item schema, but we'll use name for initials
-    listingType: item.value.freeToBorrow ? "Borrow" : "Rent",
-  })
+  window.setTimeout(() => {
+    if (bagFeedbackMessage.value === message) {
+      bagFeedbackMessage.value = ""
+    }
+  }, 2400)
+}
 
-  // Optionally close the mobile modal if it's open
-  if (isMobileModalOpen.value) {
-    closeBookingModal()
+const handleAddToBag = async () => {
+  if (!item.value || !selectedBookingWindow.value || !canAddToBag.value) return
+
+  try {
+    await addItemToBag({
+      itemId: item.value.id,
+      startAt: selectedBookingWindow.value.startDate,
+      endAt: selectedBookingWindow.value.endDate,
+    })
+
+    showBagFeedback("Added to Bag.", "success")
+
+    if (isMobileModalOpen.value) {
+      closeBookingModal()
+    }
+  } catch (error: unknown) {
+    const statusCode = (error as { statusCode?: number })?.statusCode
+    const statusMessage =
+      (error as { data?: { statusMessage?: string }; statusMessage?: string })?.data
+        ?.statusMessage ?? (error as { statusMessage?: string })?.statusMessage
+
+    if (statusCode === 401) {
+      showBagFeedback("Sign in to add items to your bag.", "error")
+      return
+    }
+
+    if (statusCode === 409) {
+      showBagFeedback(
+        statusMessage ?? "This item with the selected dates is already in your bag.",
+        "error",
+      )
+      return
+    }
+
+    if (statusCode === 403 || statusCode === 400 || statusCode === 404) {
+      showBagFeedback(statusMessage ?? "This item cannot be added to your bag.", "error")
+      return
+    }
+
+    showBagFeedback("Unable to add this item to your bag right now.", "error")
   }
 }
 
@@ -1442,6 +1467,18 @@ onUnmounted(() => {
                       </svg>
                       {{ isInBag ? "Added to Bag" : "Add to Bag" }}
                     </button>
+                    <p
+                      class="text-center text-[11px] font-normal"
+                      :class="
+                        bagFeedbackMessage
+                          ? bagFeedbackTone === 'success'
+                            ? 'text-blue-estate'
+                            : 'text-cinnabar-red'
+                          : 'text-noble-black/40'
+                      "
+                    >
+                      {{ bagFeedbackMessage || "You won't be charged yet." }}
+                    </p>
                     <button
                       class="w-full py-3 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
                       :disabled="!canSubmitBooking"
@@ -1831,6 +1868,18 @@ onUnmounted(() => {
                     </svg>
                     {{ isInBag ? "Added to Bag" : "Add to Bag" }}
                   </button>
+                  <p
+                    class="text-center text-[11px] mb-4 font-normal"
+                    :class="
+                      bagFeedbackMessage
+                        ? bagFeedbackTone === 'success'
+                          ? 'text-blue-estate'
+                          : 'text-cinnabar-red'
+                        : 'text-noble-black/40'
+                    "
+                  >
+                    {{ bagFeedbackMessage || "You won't be charged yet." }}
+                  </p>
                   <button
                     class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
                     :disabled="!canSubmitBooking"
@@ -2383,6 +2432,18 @@ onUnmounted(() => {
                 </svg>
                 {{ isInBag ? "Added to Bag" : "Add to Bag" }}
               </button>
+              <p
+                class="text-center text-[11px] mb-4 font-normal"
+                :class="
+                  bagFeedbackMessage
+                    ? bagFeedbackTone === 'success'
+                      ? 'text-blue-estate'
+                      : 'text-cinnabar-red'
+                    : 'text-noble-black/40'
+                "
+              >
+                {{ bagFeedbackMessage || "You won't be charged yet." }}
+              </p>
               <button
                 class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
                 :disabled="!canSubmitBooking"
@@ -2440,65 +2501,79 @@ onUnmounted(() => {
     <!-- Sticky Bottom Bar (Mobile < sm) -->
     <div
       v-if="item"
-      class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice p-4 px-6 flex items-center justify-between z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+      class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
     >
-      <div class="flex flex-col">
-        <div class="flex items-baseline gap-1">
-          <span class="text-xl font-bold text-noble-black">{{ priceAmount }}</span>
-          <span class="text-xs text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-col">
+          <div class="flex items-baseline gap-1">
+            <span class="text-xl font-bold text-noble-black">{{ priceAmount }}</span>
+            <span class="text-xs text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+          </div>
+          <button class="text-[11px] font-bold text-burning-orange" @click="openBookingModal">
+            {{
+              startDate && displayEndDate
+                ? `${formatDate(startDate)} — ${formatDate(displayEndDate)}`
+                : "Select dates"
+            }}
+          </button>
         </div>
-        <button class="text-[11px] font-bold text-burning-orange" @click="openBookingModal">
+        <button
+          class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
+          :class="
+            isInBag
+              ? 'bg-noble-black'
+              : isItemAvailableForBooking
+                ? 'bg-burning-orange'
+                : 'bg-noble-black/40'
+          "
+          :disabled="!isInBag && !isItemAvailableForBooking"
+          @click="
+            isInBag
+              ? null
+              : !isItemAvailableForBooking
+                ? null
+                : hasBookingSelection
+                  ? handleAddToBag()
+                  : openBookingModal()
+          "
+        >
+          <svg
+            v-if="isInBag"
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
           {{
-            startDate && displayEndDate
-              ? `${formatDate(startDate)} — ${formatDate(displayEndDate)}`
-              : "Select dates"
+            isInBag
+              ? "Added to Bag"
+              : !isItemAvailableForBooking
+                ? "Unavailable"
+                : hasBookingSelection
+                  ? "Add to Bag"
+                  : "Check Availability"
           }}
         </button>
       </div>
-      <button
-        class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
+      <p
+        class="mt-2 text-center text-[11px] font-normal"
         :class="
-          isInBag
-            ? 'bg-noble-black'
-            : isItemAvailableForBooking
-              ? 'bg-burning-orange'
-              : 'bg-noble-black/40'
-        "
-        :disabled="!isInBag && !isItemAvailableForBooking"
-        @click="
-          isInBag
-            ? null
-            : !isItemAvailableForBooking
-              ? null
-              : hasBookingSelection
-                ? handleAddToBag()
-                : openBookingModal()
+          bagFeedbackMessage
+            ? bagFeedbackTone === 'success'
+              ? 'text-blue-estate'
+              : 'text-cinnabar-red'
+            : 'text-noble-black/40'
         "
       >
-        <svg
-          v-if="isInBag"
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-        {{
-          isInBag
-            ? "Added to Bag"
-            : !isItemAvailableForBooking
-              ? "Unavailable"
-              : hasBookingSelection
-                ? "Add to Bag"
-                : "Check Availability"
-        }}
-      </button>
+        {{ bagFeedbackMessage || "You won't be charged yet." }}
+      </p>
     </div>
 
     <!-- Mobile Full-Screen Booking Modal -->

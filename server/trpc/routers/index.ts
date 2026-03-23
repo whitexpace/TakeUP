@@ -1,5 +1,6 @@
 import { router } from "../init"
 import { authRouter } from "./auth"
+import { cartRouter } from "./cart"
 import { bookingRouter } from "./booking"
 import { healthRouter } from "./health"
 import { itemRouter } from "./item"
@@ -8,6 +9,7 @@ import { transactionRouter } from "./transaction"
 
 export const appRouter = router({
   auth: authRouter,
+  cart: cartRouter,
   booking: bookingRouter,
   health: healthRouter,
   item: itemRouter,
