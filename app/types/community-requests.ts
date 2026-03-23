@@ -1,10 +1,36 @@
+export const communityOfferConditions = ["New", "Like New", "Good", "Fair", "Well Used"] as const
+
+export type CommunityOfferCondition = (typeof communityOfferConditions)[number]
+
+export interface CommunityMember {
+  id: string
+  name: string
+  avatar: string
+}
+
+export interface CommunityOffer {
+  id: string
+  itemName: string
+  lender: CommunityMember
+  rentalTerms: string
+  fee: number
+  condition: CommunityOfferCondition
+  availabilityConfirmed: boolean
+  createdAt: number
+}
+
+export interface CommunityOfferFormInput {
+  itemName: string
+  rentalTerms: string
+  fee: number
+  condition: CommunityOfferCondition
+  availabilityConfirmed: boolean
+}
+
 export interface CommunityRequest {
   id: string
   createdAt: number
-  user: {
-    name: string
-    avatar: string
-  }
+  user: CommunityMember
   timeAgo: string
   flair: string
   title: string
@@ -12,14 +38,12 @@ export interface CommunityRequest {
   upvotes: number
   repliesCount: number
   replies: Reply[]
+  offers: CommunityOffer[]
 }
 
 export interface Reply {
   id: string
-  user: {
-    name: string
-    avatar: string
-  }
+  user: Pick<CommunityMember, "name" | "avatar">
   text: string
   upvotes: number
   replies?: Reply[] // For threading
@@ -35,4 +59,16 @@ export interface TrendingRequest {
   id: string
   title: string
   upvotes: number
+}
+
+export interface CommunityOfferNotification {
+  id: string
+  requestId: string
+  requestTitle: string
+  recipientId: string
+  actorName: string
+  itemName: string
+  fee: number
+  createdAt: number
+  read: boolean
 }

@@ -1,11 +1,12 @@
 <template>
-  <div
+  <form
     ref="containerRef"
     class="bg-cream rounded-[24px] border border-cinnamon-ice/30 p-6 flex flex-col gap-4 transition-all duration-500"
     :class="{
       'ring-4 ring-burning-orange/10 border-burning-orange/40 scale-[1.01] shadow-lg':
         isHighlighted,
     }"
+    @submit.prevent="handlePost"
   >
     <div class="flex gap-4">
       <!-- User Avatar -->
@@ -75,14 +76,14 @@
 
       <!-- Post Button -->
       <button
+        type="submit"
         class="px-8 py-2.5 bg-burning-orange text-white rounded-full font-bold text-[15px] hover:bg-blue-estate transition-all shadow-md active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed"
         :disabled="!postTitle.trim()"
-        @click="handlePost"
       >
         Post
       </button>
     </div>
-  </div>
+  </form>
 </template>
 
 <script setup lang="ts">
@@ -119,10 +120,14 @@ defineExpose({ triggerHighlight })
 const emit = defineEmits(["post"])
 
 const handlePost = () => {
-  if (!postTitle.value.trim()) return
+  const title = postTitle.value.trim()
+  const description = postDescription.value.trim()
+
+  if (!title) return
+
   emit("post", {
-    title: postTitle.value,
-    description: postDescription.value,
+    title,
+    description,
     flair: selectedFlair.value || "General",
   })
   postTitle.value = ""
