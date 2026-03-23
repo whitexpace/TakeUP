@@ -12,9 +12,9 @@ describe("request-feed utils", () => {
   })
 
   it("formats a request date range compactly", () => {
-    expect(
-      formatRequestDateRange("2026-03-25T00:00:00.000Z", "2026-03-27T00:00:00.000Z"),
-    ).toBe("Mar 25 - Mar 27, 2026")
+    expect(formatRequestDateRange("2026-03-25T00:00:00.000Z", "2026-03-27T00:00:00.000Z")).toBe(
+      "Mar 25 - Mar 27, 2026",
+    )
   })
 
   it("formats relative request recency", () => {
