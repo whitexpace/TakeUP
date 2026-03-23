@@ -9,7 +9,9 @@
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span class="text-[15px] font-bold text-noble-black">{{ request.borrower.name }}</span>
-            <span class="text-[12px] text-noble-black/40">{{ formatRelativeTime(request.createdAt) }}</span>
+            <span class="text-[12px] text-noble-black/40">{{
+              formatRelativeTime(request.createdAt)
+            }}</span>
           </div>
           <p class="text-[13px] text-noble-black/45">
             Request status: {{ formatRequestStatus(request.status) }}
@@ -268,12 +270,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: "offer-item" | "delete-request", requestId: number): void
-  (event: "update-request-status", payload: { requestId: number; status: CommunityRequestStatus }): void
-  (event: "update-offer-status", payload: {
-    offerId: number
-    requestId: number
-    status: CommunityOfferStatus
-  }): void
+  (
+    event: "update-request-status",
+    payload: { requestId: number; status: CommunityRequestStatus },
+  ): void
+  (
+    event: "update-offer-status",
+    payload: {
+      offerId: number
+      requestId: number
+      status: CommunityOfferStatus
+    },
+  ): void
 }>()
 
 const showOffers = ref(false)
@@ -355,7 +363,10 @@ const formatFee = (fee: number) => {
 }
 
 const formatCondition = (value: string) => {
-  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (character) => character.toUpperCase())
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
 const formatRequestStatus = (value: CommunityRequestStatus) => {

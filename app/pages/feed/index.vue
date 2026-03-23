@@ -32,6 +32,7 @@
               :user-avatar="currentUserAvatar"
               :user-name="currentUserName"
               :is-submitting="isCreatingRequest"
+              :server-error="requestComposerError"
               @post="handleCreateRequest"
             />
 
@@ -108,11 +109,10 @@
                   />
                 </svg>
               </div>
-              <h3 class="text-[22px] font-bold text-noble-black mb-2">
-                No live requests yet
-              </h3>
+              <h3 class="text-[22px] font-bold text-noble-black mb-2">No live requests yet</h3>
               <p class="text-[15px] text-noble-black/40 max-w-[360px] leading-relaxed mb-8">
-                The feed is now reading directly from the database. Create the first request to get it started.
+                The feed is now reading directly from the database. Create the first request to get
+                it started.
               </p>
               <button
                 class="px-8 py-2.5 bg-burning-orange text-white rounded-full font-bold text-[14px] hover:bg-blue-estate transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
@@ -138,6 +138,7 @@
       :items="offerableItems"
       :existing-offer="existingOfferForCurrentUser"
       :is-submitting="isSubmittingOffer"
+      :server-error="offerComposerError"
       @update:model-value="handleOfferComposerVisibility"
       @submit="submitOffer"
       @cancel-offer="cancelOffer"
@@ -329,6 +330,8 @@ const isLoadingFeed = ref(true)
 const isCreatingRequest = ref(false)
 const isSubmittingOffer = ref(false)
 const feedError = ref<string | null>(null)
+const requestComposerError = ref<string | null>(null)
+const offerComposerError = ref<string | null>(null)
 const isOfferComposerOpen = ref(false)
 const activeOfferRequestId = ref<number | null>(null)
 const feedHydrated = ref(false)
@@ -336,6 +339,50 @@ const feedHydrated = ref(false)
 const toDate = (value: string | Date | null | undefined) => {
   if (!value) return null
   return value instanceof Date ? value : new Date(value)
+}
+
+const getFirstFieldError = (value: unknown) => {
+  const record = asRecord(value)
+  if (!record) return undefined
+
+  for (const fieldValue of Object.values(record)) {
+    if (!Array.isArray(fieldValue)) continue
+    const message = fieldValue.find(
+      (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+    )
+    if (message) return message
+  }
+
+  return undefined
+}
+
+const getMeaningfulErrorMessage = (value: unknown) => {
+  if (typeof value !== "string") return undefined
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return undefined
+  if (trimmedValue.startsWith("[") || trimmedValue.toLowerCase().includes("fetch failed")) {
+    return undefined
+  }
+  return trimmedValue
+}
+
+const extractApiErrorMessage = (error: unknown, fallback: string) => {
+  const errorRecord = asRecord(error)
+  const data = asRecord(errorRecord?.data)
+  const nestedData = asRecord(data?.data)
+
+  return (
+    getFirstFieldError(data?.fieldErrors) ||
+    getFirstFieldError(nestedData?.fieldErrors) ||
+    getMeaningfulErrorMessage(data?.statusMessage) ||
+    getMeaningfulErrorMessage(data?.message) ||
+    getMeaningfulErrorMessage(asRecord(data?.error)?.message) ||
+    getMeaningfulErrorMessage(nestedData?.statusMessage) ||
+    getMeaningfulErrorMessage(nestedData?.message) ||
+    getMeaningfulErrorMessage(errorRecord?.statusMessage) ||
+    getMeaningfulErrorMessage(errorRecord?.message) ||
+    fallback
+  )
 }
 
 const normalizeMember = (member: ApiCommunityMember): CommunityMember => ({
@@ -506,9 +553,13 @@ const userActivity = computed<UserActivity>(() => {
     return { postsMade: 0, offersSent: 0, offersReceived: 0 }
   }
 
-  const myRequests = requests.value.filter((request) => request.borrower.userId === currentDbUserId.value)
+  const myRequests = requests.value.filter(
+    (request) => request.borrower.userId === currentDbUserId.value,
+  )
   const offersSent = requests.value.reduce((count, request) => {
-    return count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
+    return (
+      count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
+    )
   }, 0)
   const offersReceived = myRequests.reduce((count, request) => count + request.offersCount, 0)
 
@@ -553,7 +604,9 @@ const sortedRequests = computed(() => {
     })
   }
 
-  return filteredRequests.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+  return filteredRequests.sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  )
 })
 
 const ensureAuthenticatedHeaders = async () => {
@@ -568,11 +621,15 @@ const ensureAuthenticatedHeaders = async () => {
 }
 
 const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    requestComposerError.value = "You need to sign in before posting a request."
+    return
+  }
 
   isCreatingRequest.value = true
   feedError.value = null
+  requestComposerError.value = null
 
   try {
     await $fetch("/api/item-requests", {
@@ -592,7 +649,10 @@ const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
     feedMainRef.value?.scrollTo({ top: 0, behavior: "smooth" })
   } catch (error) {
     console.error("Failed to create item request", error)
-    feedError.value = "Unable to post your request right now."
+    requestComposerError.value = extractApiErrorMessage(
+      error,
+      "Unable to post your request right now.",
+    )
   } finally {
     isCreatingRequest.value = false
   }
@@ -608,6 +668,7 @@ const openOfferComposer = (requestId: number) => {
   }
   if (request.borrower.userId === currentDbUserId.value || request.status !== "OPEN") return
 
+  offerComposerError.value = null
   activeOfferRequestId.value = requestId
   isOfferComposerOpen.value = true
 }
@@ -617,16 +678,22 @@ const handleOfferComposerVisibility = (isVisible: boolean) => {
 
   if (!isVisible) {
     activeOfferRequestId.value = null
+    offerComposerError.value = null
   }
 }
 
 const submitOffer = async (offerInput: CommunityOfferFormInput) => {
   const request = selectedRequestForOffer.value
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers || !request) return
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    offerComposerError.value = "You need to sign in before sending an offer."
+    return
+  }
+  if (!request) return
 
   isSubmittingOffer.value = true
   feedError.value = null
+  offerComposerError.value = null
 
   try {
     if (existingOfferForCurrentUser.value) {
@@ -651,7 +718,7 @@ const submitOffer = async (offerInput: CommunityOfferFormInput) => {
     handleOfferComposerVisibility(false)
   } catch (error) {
     console.error("Failed to submit offer", error)
-    feedError.value = "Unable to save this offer right now."
+    offerComposerError.value = extractApiErrorMessage(error, "Unable to save this offer right now.")
   } finally {
     isSubmittingOffer.value = false
   }
@@ -663,6 +730,7 @@ const cancelOffer = async (offerId: number) => {
 
   isSubmittingOffer.value = true
   feedError.value = null
+  offerComposerError.value = null
 
   try {
     await $fetch(`/api/request-offers/${offerId}`, {
@@ -677,7 +745,10 @@ const cancelOffer = async (offerId: number) => {
     handleOfferComposerVisibility(false)
   } catch (error) {
     console.error("Failed to cancel offer", error)
-    feedError.value = "Unable to cancel this offer right now."
+    offerComposerError.value = extractApiErrorMessage(
+      error,
+      "Unable to cancel this offer right now.",
+    )
   } finally {
     isSubmittingOffer.value = false
   }

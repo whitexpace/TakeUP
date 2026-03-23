@@ -310,7 +310,8 @@ const fetchOfferRows = async (
     clauses.push(Prisma.sql`1 = 0`)
   }
 
-  const whereSql = clauses.length > 0 ? Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}` : Prisma.empty
+  const whereSql =
+    clauses.length > 0 ? Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}` : Prisma.empty
 
   return prisma.$queryRaw<OfferRow[]>(Prisma.sql`
     SELECT
@@ -384,7 +385,10 @@ const fetchMappedRequests = async (
 const assertUserExists = async (
   prisma: {
     user: {
-      findUnique(args: { where: { id: string }; select: { id: true } }): Promise<{ id: string } | null>
+      findUnique(args: {
+        where: { id: string }
+        select: { id: true }
+      }): Promise<{ id: string } | null>
     }
   },
   userId: string,
@@ -513,6 +517,7 @@ type ItemOwnershipRow = {
   numericId: number
   lenderId: string
   condition: string
+  status: string
 }
 
 const getOwnedItem = async (
@@ -525,7 +530,8 @@ const getOwnedItem = async (
     SELECT
       "numericId" AS "numericId",
       "lenderId" AS "lenderId",
-      "condition"::text AS "condition"
+      "condition"::text AS "condition",
+      "status"::text AS "status"
     FROM "Item"
     WHERE "numericId" = ${itemID}
     LIMIT 1
@@ -549,8 +555,8 @@ export const communityRouter = router({
         "createdAt"
       FROM "Item"
       WHERE "lenderId" = ${ctx.user.id}
-        AND "status" IN ('AVAILABLE'::"ItemStatus", 'RENTED'::"ItemStatus")
-      ORDER BY "status" ASC, "createdAt" DESC
+        AND "status" = 'AVAILABLE'::"ItemStatus"
+      ORDER BY "createdAt" DESC
     `)
 
     return rows.map((item) => ({
@@ -757,6 +763,13 @@ export const communityRouter = router({
         })
       }
 
+      if (item.status !== "AVAILABLE") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only active available listings can be offered on requests.",
+        })
+      }
+
       const existingOffers = await ctx.prisma.$queryRaw<Array<{ id: number }>>(Prisma.sql`
         SELECT "id"
         FROM "RequestOffer"
@@ -869,6 +882,13 @@ export const communityRouter = router({
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "You can only switch the offer to one of your own items.",
+          })
+        }
+
+        if (replacementItem.status !== "AVAILABLE") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Only active available listings can be offered on requests.",
           })
         }
       }

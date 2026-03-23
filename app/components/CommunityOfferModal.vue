@@ -41,7 +41,10 @@
             </button>
           </div>
 
-          <div v-if="items.length === 0" class="mt-6 rounded-[18px] border border-dashed border-cinnamon-ice/30 bg-white/70 px-5 py-5">
+          <div
+            v-if="items.length === 0"
+            class="mt-6 rounded-[18px] border border-dashed border-cinnamon-ice/30 bg-white/70 px-5 py-5"
+          >
             <p class="text-[14px] font-semibold text-noble-black">No offerable items found.</p>
             <p class="mt-1 text-[13px] leading-relaxed text-noble-black/50">
               Create a listing first so you can attach a real item to this offer.
@@ -55,13 +58,22 @@
               </span>
               <select
                 v-model="selectedItemIdInput"
-                class="w-full rounded-[16px] border border-cinnamon-ice/30 bg-white px-4 py-3 text-[15px] text-noble-black outline-none transition-all duration-300 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5"
+                class="w-full rounded-[16px] bg-white px-4 py-3 text-[15px] text-noble-black outline-none transition-all duration-300"
+                :class="
+                  showItemError
+                    ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
+                    : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
+                "
+                @blur="markTouched('item')"
               >
                 <option value="">Select an item</option>
                 <option v-for="item in items" :key="item.numericId" :value="String(item.numericId)">
                   {{ item.name }} · {{ formatFee(item.freeToBorrow ? 0 : item.rentalFee) }}
                 </option>
               </select>
+              <p v-if="showItemError" class="text-[12px] font-medium text-burning-orange">
+                {{ itemError }}
+              </p>
             </label>
 
             <label class="flex flex-col gap-2">
@@ -69,7 +81,12 @@
                 Rental fee
               </span>
               <div
-                class="flex items-center rounded-[16px] border border-cinnamon-ice/30 bg-white px-4 focus-within:border-blue-estate/30 focus-within:ring-4 focus-within:ring-blue-estate/5"
+                class="flex items-center rounded-[16px] bg-white px-4"
+                :class="
+                  showFeeError
+                    ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
+                    : 'border border-cinnamon-ice/30 focus-within:border-blue-estate/30 focus-within:ring-4 focus-within:ring-blue-estate/5'
+                "
               >
                 <span class="text-[15px] font-semibold text-noble-black/45">PHP</span>
                 <input
@@ -80,8 +97,12 @@
                   step="1"
                   placeholder="0"
                   class="w-full border-none bg-transparent px-3 py-3 text-[15px] text-noble-black outline-none"
+                  @blur="markTouched('fee')"
                 />
               </div>
+              <p v-if="showFeeError" class="text-[12px] font-medium text-burning-orange">
+                {{ feeError }}
+              </p>
             </label>
 
             <label class="flex flex-col gap-2">
@@ -106,18 +127,33 @@
                 v-model="rentalTerms"
                 rows="5"
                 placeholder="Share pickup details, inclusions, and any conditions the borrower should know."
-                class="w-full resize-none rounded-[16px] border border-cinnamon-ice/30 bg-white px-4 py-3 text-[15px] leading-relaxed text-noble-black outline-none transition-all duration-300 placeholder:text-noble-black/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5"
+                class="w-full resize-none rounded-[16px] bg-white px-4 py-3 text-[15px] leading-relaxed text-noble-black outline-none transition-all duration-300 placeholder:text-noble-black/30"
+                :class="
+                  showRentalTermsError
+                    ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
+                    : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
+                "
+                @blur="markTouched('rentalTerms')"
               ></textarea>
+              <p v-if="showRentalTermsError" class="text-[12px] font-medium text-burning-orange">
+                {{ rentalTermsError }}
+              </p>
             </label>
           </div>
 
           <label
-            class="mt-5 flex items-start gap-3 rounded-[18px] border border-cinnamon-ice/25 bg-white px-4 py-3"
+            class="mt-5 flex items-start gap-3 rounded-[18px] bg-white px-4 py-3"
+            :class="
+              showAvailabilityError
+                ? 'border border-burning-orange/40 ring-4 ring-burning-orange/10'
+                : 'border border-cinnamon-ice/25'
+            "
           >
             <input
               v-model="availabilityConfirmed"
               type="checkbox"
               class="mt-1 h-4 w-4 rounded border-cinnamon-ice text-blue-estate focus:ring-blue-estate/20"
+              @change="markTouched('availability')"
             />
             <div class="flex flex-col gap-1">
               <span class="text-[14px] font-semibold text-noble-black">
@@ -128,9 +164,12 @@
               </span>
             </div>
           </label>
+          <p v-if="showAvailabilityError" class="mt-3 text-[12px] font-medium text-burning-orange">
+            {{ availabilityError }}
+          </p>
 
-          <p v-if="validationMessage" class="mt-4 text-[13px] font-medium text-burning-orange">
-            {{ validationMessage }}
+          <p v-if="hasFeedbackError" class="mt-4 text-[13px] font-medium text-burning-orange">
+            {{ feedbackMessage }}
           </p>
 
           <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -166,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import type {
   CommunityOffer,
   CommunityOfferCondition,
@@ -182,10 +221,12 @@ const props = withDefaults(
     items: CommunityOfferableItem[]
     existingOffer?: CommunityOffer | null
     isSubmitting?: boolean
+    serverError?: string | null
   }>(),
   {
     existingOffer: null,
     isSubmitting: false,
+    serverError: null,
   },
 )
 
@@ -197,9 +238,16 @@ const emit = defineEmits<{
 
 const selectedItemIdInput = ref("")
 const rentalTerms = ref("")
-const feeInput = ref("")
+const feeInput = ref<string | number>("")
 const condition = ref<CommunityOfferCondition>(communityOfferConditions[2]!)
 const availabilityConfirmed = ref(false)
+const attemptedSubmit = ref(false)
+const touchedFields = reactive({
+  item: false,
+  fee: false,
+  rentalTerms: false,
+  availability: false,
+})
 
 const parsedFee = computed(() => Number(feeInput.value))
 const selectedItemId = computed(() => Number(selectedItemIdInput.value))
@@ -218,18 +266,44 @@ const formatFee = (fee: number) => {
 }
 
 const formatCondition = (value: CommunityOfferCondition) => {
-  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (character) => character.toUpperCase())
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+const hasInputValue = (value: string | number) => {
+  if (typeof value === "number") return Number.isFinite(value)
+  return value.trim().length > 0
+}
+
+const resetTouchedFields = () => {
+  touchedFields.item = false
+  touchedFields.fee = false
+  touchedFields.rentalTerms = false
+  touchedFields.availability = false
+}
+
+const markTouched = (field: keyof typeof touchedFields) => {
+  touchedFields[field] = true
 }
 
 const hydrateForm = () => {
   const initialItemId = props.existingOffer?.itemID ?? props.items[0]?.numericId ?? null
-  const initialItem = props.items.find((item) => item.numericId === initialItemId) ?? props.items[0] ?? null
+  const initialItem =
+    props.items.find((item) => item.numericId === initialItemId) ?? props.items[0] ?? null
 
   selectedItemIdInput.value = initialItemId ? String(initialItemId) : ""
   rentalTerms.value = props.existingOffer?.rentalTerms ?? ""
-  feeInput.value = String(props.existingOffer?.rentalFee ?? (initialItem?.freeToBorrow ? 0 : initialItem?.rentalFee ?? ""))
-  condition.value = props.existingOffer?.condition ?? initialItem?.condition ?? communityOfferConditions[2]!
+  feeInput.value = String(
+    props.existingOffer?.rentalFee ??
+      (initialItem?.freeToBorrow ? 0 : (initialItem?.rentalFee ?? "")),
+  )
+  condition.value =
+    props.existingOffer?.condition ?? initialItem?.condition ?? communityOfferConditions[2]!
   availabilityConfirmed.value = props.existingOffer?.availability ?? false
+  attemptedSubmit.value = false
+  resetTouchedFields()
 }
 
 watch(
@@ -250,22 +324,63 @@ watch(selectedItem, (item) => {
   }
 })
 
-const validationMessage = computed(() => {
-  if (props.items.length === 0) return "You need at least one active listing before you can submit an offer."
-  if (!selectedItem.value) return "Select one of your items."
-  if (!rentalTerms.value.trim()) return "Rental terms are required."
-  if (!Number.isFinite(parsedFee.value) || parsedFee.value < 0) return "Rental fee must be 0 or higher."
-  if (!availabilityConfirmed.value) return "Confirm item availability before submitting."
-  return ""
+const itemError = computed(() => {
+  if (props.items.length === 0) {
+    return "You need at least one active listing before you can submit an offer."
+  }
+  return selectedItem.value ? "" : "Select one of your items."
 })
-
+const feeError = computed(() =>
+  !Number.isFinite(parsedFee.value) || parsedFee.value < 0 ? "Rental fee must be 0 or higher." : "",
+)
+const rentalTermsError = computed(() =>
+  rentalTerms.value.trim() ? "" : "Rental terms are required.",
+)
+const availabilityError = computed(() =>
+  availabilityConfirmed.value ? "" : "Confirm item availability before submitting.",
+)
+const validationMessage = computed(
+  () => itemError.value || rentalTermsError.value || feeError.value || availabilityError.value,
+)
 const canSubmit = computed(() => validationMessage.value.length === 0)
+const hasStartedForm = computed(() => {
+  return (
+    selectedItemIdInput.value.length > 0 ||
+    hasInputValue(feeInput.value) ||
+    rentalTerms.value.trim().length > 0 ||
+    availabilityConfirmed.value ||
+    Object.values(touchedFields).some(Boolean)
+  )
+})
+const showItemError = computed(
+  () =>
+    Boolean(itemError.value) &&
+    (props.items.length === 0 || attemptedSubmit.value || touchedFields.item),
+)
+const showFeeError = computed(
+  () => Boolean(feeError.value) && (attemptedSubmit.value || touchedFields.fee),
+)
+const showRentalTermsError = computed(
+  () => Boolean(rentalTermsError.value) && (attemptedSubmit.value || touchedFields.rentalTerms),
+)
+const showAvailabilityError = computed(
+  () => Boolean(availabilityError.value) && (attemptedSubmit.value || touchedFields.availability),
+)
+const feedbackMessage = computed(
+  () => props.serverError || (hasStartedForm.value ? validationMessage.value : ""),
+)
+const hasFeedbackError = computed(
+  () => Boolean(props.serverError) || (hasStartedForm.value && Boolean(validationMessage.value)),
+)
 
 const closeModal = () => {
+  attemptedSubmit.value = false
+  resetTouchedFields()
   emit("update:modelValue", false)
 }
 
 const submitOffer = () => {
+  attemptedSubmit.value = true
   if (!canSubmit.value || !selectedItem.value) return
 
   emit("submit", {

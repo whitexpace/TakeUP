@@ -51,7 +51,7 @@ export const handleRequestOfferApiError = (error: unknown, action: string): neve
       case "P2002":
         throw createRequestOfferApiError(
           409,
-          "Request offer failed because a conflicting record already exists.",
+          "You already have an offer for this request. Update the existing offer instead.",
         )
       case "P2003":
         throw createRequestOfferApiError(

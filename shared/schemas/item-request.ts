@@ -17,6 +17,9 @@ const requiredTextField = (label: string, maxLength: number) =>
     .max(maxLength)
 
 const nonNegativeInt = z.coerce.number().int().min(0)
+const confirmedAvailabilitySchema = z
+  .boolean()
+  .refine((value) => value, "Confirm item availability before submitting.")
 
 const normalizeRequestedDates = (dates: Date[]) => {
   const uniqueByDay = new Map<number, Date>()
@@ -100,7 +103,7 @@ export const createRequestOfferSchema = z.object({
   requestID: z.coerce.number().int().positive(),
   itemID: z.coerce.number().int().positive(),
   rentalFee: nonNegativeInt,
-  availability: z.boolean(),
+  availability: confirmedAvailabilitySchema,
   condition: requestOfferConditionSchema,
   rentalTerms: requiredTextField("Rental terms", 2000),
   status: requestOfferStatusSchema.default("PENDING"),
@@ -111,7 +114,7 @@ export const updateRequestOfferSchema = z
     id: z.coerce.number().int().positive(),
     itemID: z.coerce.number().int().positive().optional(),
     rentalFee: nonNegativeInt.optional(),
-    availability: z.boolean().optional(),
+    availability: confirmedAvailabilitySchema.optional(),
     condition: requestOfferConditionSchema.optional(),
     rentalTerms: requiredTextField("Rental terms", 2000).optional(),
     status: requestOfferStatusSchema.optional(),

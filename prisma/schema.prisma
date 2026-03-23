@@ -193,12 +193,7 @@ model Item {
 
   @@index([lenderId])
   @@index([borrowerId])
-  @@index([createdAt])
   @@index([numericId])
-  @@index([isTrending])
-  @@index([rateOption])
-  @@index([rating])
-  @@index([status])
 }
 
 model Booking {
@@ -289,6 +284,7 @@ model ItemAvailability {
   startDate DateTime
   endDate   DateTime
   status    ItemAvailabilityStatus
+  createdAt DateTime               @default(now())
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -408,7 +404,7 @@ model ItemRequest {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  borrower Borrower      @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
+  borrower Borrower       @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
   offers   RequestOffer[]
 
   @@index([borrowerID])
