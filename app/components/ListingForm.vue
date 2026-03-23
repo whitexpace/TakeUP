@@ -1,18 +1,42 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue"
-import type { z } from "zod"
-import type { itemCategorySchema, itemConditionSchema } from "~~/shared/schemas/item"
-import { updateItemSchema } from "~~/shared/schemas/item"
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import type { MyListingItem } from "../composables/use-my-listings"
 
-type ItemCategory = z.infer<typeof itemCategorySchema>
-type ItemCondition = z.infer<typeof itemConditionSchema>
+type ItemCategory =
+  | "ELECTRONICS"
+  | "BOOKS"
+  | "CLOTHING"
+  | "TOOLS"
+  | "HOME_APPLIANCES"
+  | "SPORTS_OUTDOORS"
+  | "MUSIC_AUDIO"
+  | "TOYS_GAMES"
+  | "FURNITURE"
+  | "VEHICLES_ACCESSORIES"
+  | "HEALTH_BEAUTY"
+  | "SCHOOL_SUPPLIES"
+  | "PET_SUPPLIES"
+  | "OTHER"
+
+type ItemCondition = "NEW" | "LIKE_NEW" | "GOOD" | "FAIR" | "POOR"
 
 type AvailabilityRange = {
   startDate: Date | null
   endDate: Date | null
   noEndDate: boolean
   status: "AVAILABLE" | "RENTED"
+}
+
+type ListingImage = {
+  id: string
+  url: string
+  name: string
+}
+
+type PendingUploadImage = {
+  id: string
+  name: string
+  progress: number
 }
 
 const props = defineProps<{
@@ -26,6 +50,13 @@ const emit = defineEmits<{
   submit: [data: Record<string, unknown>]
   cancel: []
 }>()
+
+const supabase = useSupabaseClient()
+const runtimeConfig = useRuntimeConfig()
+const itemImageBucket = runtimeConfig.public.itemImageBucket
+const supabaseUrl = runtimeConfig.public.supabase.url
+const supabaseKey = runtimeConfig.public.supabase.key
+const MAX_GALLERY_IMAGE_COUNT = 10
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
@@ -74,12 +105,19 @@ const initForm = () => ({
   whatIsIncluded: props.item?.whatIsIncluded ?? "",
   knownIssues: props.item?.knownIssues ?? "",
   usageLimitations: props.item?.usageLimitations ?? "",
-  thumbnailImage: props.item?.thumbnailImage ?? "",
-  photoUrls: props.item?.photos?.join("\n") ?? "",
 })
 
 const form = reactive(initForm())
 const tagInput = ref("")
+const coverInput = ref<HTMLInputElement | null>(null)
+const galleryInput = ref<HTMLInputElement | null>(null)
+const images = ref<ListingImage[]>([])
+const pendingUploads = ref<PendingUploadImage[]>([])
+const primaryImageId = ref<string | null>(null)
+const imageUploadError = ref<string | null>(null)
+const isUploadingImages = ref(false)
+const draggedGalleryImageId = ref<string | null>(null)
+const lightboxImage = ref<ListingImage | null>(null)
 const availabilityRanges = ref<AvailabilityRange[]>(
   props.item?.availability?.map((a) => ({
     startDate: new Date(a.startDate),
@@ -90,14 +128,45 @@ const availabilityRanges = ref<AvailabilityRange[]>(
 )
 const fieldErrors = ref<Record<string, string>>({})
 const availabilityErrors = ref<string[]>([])
+const currentUserId = ref<string | null>(null)
+const sessionUploadedImageUrls = new Set<string>()
+const pendingUploadRequests = new Map<string, XMLHttpRequest>()
+
+const buildInitialImages = (item?: MyListingItem | null): ListingImage[] => {
+  if (!item) return []
+
+  const imageUrls = item.images.length
+    ? item.images.map((image) => image.path)
+    : (item.photos ?? [])
+
+  return imageUrls.map((url, index) => ({
+    id: `existing-${index}-${url}`,
+    url,
+    name: `Image ${index + 1}`,
+  }))
+}
+
+const syncImagesFromItem = (item?: MyListingItem | null) => {
+  images.value = buildInitialImages(item)
+  primaryImageId.value =
+    images.value.find(
+      (image) =>
+        image.url ===
+        (item?.images.find((entry) => entry.isPrimary)?.path ?? item?.thumbnailImage ?? null),
+    )?.id ??
+    images.value[0]?.id ??
+    null
+}
+
+syncImagesFromItem(props.item)
 
 watch(
   () => props.item,
   (item) => {
-    if (!item) return
     Object.assign(form, initForm())
+    syncImagesFromItem(item)
     availabilityRanges.value =
-      item.availability?.map((a) => ({
+      item?.availability?.map((a) => ({
         startDate: new Date(a.startDate),
         endDate: new Date(a.endDate),
         noEndDate: false,
@@ -105,6 +174,300 @@ watch(
       })) ?? []
   },
 )
+
+const coverImage = computed(
+  () => images.value.find((image) => image.id === primaryImageId.value) ?? null,
+)
+
+const galleryImages = computed(() =>
+  images.value.filter((image) => image.id !== primaryImageId.value),
+)
+
+const getSafeFileName = (fileName: string) => {
+  const cleaned = fileName
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+
+  return cleaned || "image"
+}
+
+const fetchCurrentUserId = async () => {
+  if (currentUserId.value) return currentUserId.value
+
+  const response = await $fetch<{ user: { id: string } }>("/api/auth/me")
+  currentUserId.value = response.user.id
+  return currentUserId.value
+}
+
+const createItemImageStoragePath = (file: File, userId: string) => {
+  const datePrefix = new Date().toISOString().slice(0, 10)
+  const uniqueId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+  return `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
+}
+
+const rebuildImages = (nextCoverImage: ListingImage | null, nextGalleryImages: ListingImage[]) => {
+  images.value = nextCoverImage ? [nextCoverImage, ...nextGalleryImages] : [...nextGalleryImages]
+  primaryImageId.value = nextCoverImage?.id ?? images.value[0]?.id ?? null
+}
+
+const setPendingUploadProgress = (id: string, progress: number) => {
+  pendingUploads.value = pendingUploads.value.map((upload) =>
+    upload.id === id ? { ...upload, progress } : upload,
+  )
+}
+
+const removePendingUpload = (id: string) => {
+  pendingUploads.value = pendingUploads.value.filter((upload) => upload.id !== id)
+}
+
+const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/")
+
+const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
+  const userId = await fetchCurrentUserId()
+  const storagePath = createItemImageStoragePath(file, userId)
+  const uploadId = storagePath
+  pendingUploads.value = [
+    ...pendingUploads.value,
+    {
+      id: uploadId,
+      name: file.name,
+      progress: 0,
+    },
+  ]
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const accessToken = session?.access_token
+
+  return await new Promise<ListingImage>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    pendingUploadRequests.set(uploadId, xhr)
+    xhr.open(
+      "POST",
+      `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${encodeStoragePath(storagePath)}`,
+    )
+    xhr.setRequestHeader("apikey", supabaseKey)
+    if (accessToken) {
+      xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
+    }
+    xhr.setRequestHeader("x-upsert", "false")
+    xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return
+      const progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
+      setPendingUploadProgress(uploadId, progress)
+    }
+
+    xhr.onerror = () => {
+      pendingUploadRequests.delete(uploadId)
+      removePendingUpload(uploadId)
+      reject(new Error("Network error while uploading image."))
+    }
+
+    xhr.onabort = () => {
+      pendingUploadRequests.delete(uploadId)
+      removePendingUpload(uploadId)
+      reject(new Error("Upload cancelled."))
+    }
+
+    xhr.onload = () => {
+      pendingUploadRequests.delete(uploadId)
+      if (xhr.status < 200 || xhr.status >= 300) {
+        removePendingUpload(uploadId)
+        try {
+          const payload = JSON.parse(xhr.responseText) as { message?: string; error?: string }
+          reject(new Error(payload.message || payload.error || "Upload failed."))
+        } catch {
+          reject(new Error("Upload failed."))
+        }
+        return
+      }
+
+      setPendingUploadProgress(uploadId, 100)
+      const { data: publicUrlData } = supabase.storage
+        .from(itemImageBucket)
+        .getPublicUrl(storagePath)
+      removePendingUpload(uploadId)
+      sessionUploadedImageUrls.add(publicUrlData.publicUrl)
+      resolve({
+        id: storagePath,
+        url: publicUrlData.publicUrl,
+        name: file.name,
+      })
+    }
+
+    xhr.send(file)
+  })
+}
+
+const cleanupUploadedImages = async (urls: string[], options: { keepalive?: boolean } = {}) => {
+  const uniqueUrls = [...new Set(urls)].filter((url) => sessionUploadedImageUrls.has(url))
+  if (uniqueUrls.length === 0) return
+
+  try {
+    if (options.keepalive && typeof window !== "undefined") {
+      await fetch("/api/item-images/cleanup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ urls: uniqueUrls }),
+        keepalive: true,
+        credentials: "same-origin",
+      })
+    } else {
+      await $fetch("/api/item-images/cleanup", {
+        method: "POST",
+        body: { urls: uniqueUrls },
+      })
+    }
+
+    for (const url of uniqueUrls) {
+      sessionUploadedImageUrls.delete(url)
+    }
+  } catch {
+    // Swallow cleanup failures so they never block the listing flow.
+  }
+}
+
+const abortPendingUploads = () => {
+  for (const xhr of pendingUploadRequests.values()) {
+    xhr.abort()
+  }
+  pendingUploadRequests.clear()
+  pendingUploads.value = []
+  isUploadingImages.value = false
+}
+
+const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) => {
+  imageUploadError.value = null
+
+  if (files.length === 0) {
+    return
+  }
+
+  if (options.asCover && files.length > 1) {
+    imageUploadError.value = "Please select only one cover image."
+    return
+  }
+
+  if (!options.asCover && galleryImages.value.length + files.length > MAX_GALLERY_IMAGE_COUNT) {
+    imageUploadError.value = `You can upload up to ${MAX_GALLERY_IMAGE_COUNT} gallery images.`
+    return
+  }
+
+  isUploadingImages.value = true
+
+  try {
+    const invalidFile = files.find((file) => !file.type.startsWith("image/"))
+    if (invalidFile) {
+      imageUploadError.value = "Only image files can be uploaded."
+      return
+    }
+
+    const uploadedImages = await Promise.all(files.map((file) => uploadFileWithProgress(file)))
+
+    if (options.asCover) {
+      const nextCoverImage = uploadedImages[0] ?? null
+      rebuildImages(nextCoverImage, [
+        ...(coverImage.value ? [coverImage.value] : []),
+        ...galleryImages.value,
+      ])
+    } else {
+      rebuildImages(coverImage.value, [...galleryImages.value, ...uploadedImages])
+    }
+  } catch (error) {
+    imageUploadError.value =
+      error instanceof Error
+        ? `Unable to upload images: ${error.message}`
+        : "Unable to upload one or more images. Please try again."
+  } finally {
+    isUploadingImages.value = false
+  }
+}
+
+const handleCoverSelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const files = input?.files ? Array.from(input.files) : []
+  await uploadFiles(files, { asCover: true })
+  if (input) input.value = ""
+}
+
+const handleGallerySelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const files = input?.files ? Array.from(input.files) : []
+  await uploadFiles(files)
+  if (input) input.value = ""
+}
+
+const triggerCoverUpload = () => {
+  coverInput.value?.click()
+}
+
+const triggerGalleryUpload = () => {
+  galleryInput.value?.click()
+}
+
+const removeCover = () => {
+  const removedCover = coverImage.value
+  const nextGalleryImages = [...galleryImages.value]
+  const nextCoverImage = nextGalleryImages.shift() ?? null
+  rebuildImages(nextCoverImage, nextGalleryImages)
+  if (removedCover) {
+    void cleanupUploadedImages([removedCover.url])
+  }
+}
+
+const removeGalleryImage = (index: number) => {
+  const nextGalleryImages = [...galleryImages.value]
+  const [removedImage] = nextGalleryImages.splice(index, 1)
+  rebuildImages(coverImage.value, nextGalleryImages)
+  if (removedImage) {
+    void cleanupUploadedImages([removedImage.url])
+  }
+}
+
+const onDragStart = (index: number) => {
+  draggedGalleryImageId.value = galleryImages.value[index]?.id ?? null
+}
+
+const onDragOver = (event: DragEvent) => {
+  event.preventDefault()
+}
+
+const onDrop = (index: number) => {
+  const draggedImageId = draggedGalleryImageId.value
+  if (!draggedImageId) return
+
+  const nextGalleryImages = [...galleryImages.value]
+  const draggedIndex = nextGalleryImages.findIndex((image) => image.id === draggedImageId)
+
+  if (draggedIndex === -1) return
+
+  const [movedImage] = nextGalleryImages.splice(draggedIndex, 1)
+  if (!movedImage) return
+
+  nextGalleryImages.splice(index, 0, movedImage)
+  rebuildImages(coverImage.value, nextGalleryImages)
+  draggedGalleryImageId.value = null
+}
+
+const openLightbox = (image: ListingImage) => {
+  lightboxImage.value = image
+}
+
+const closeLightbox = () => {
+  lightboxImage.value = null
+}
 
 const toggleCategory = (cat: ItemCategory) => {
   const idx = form.categories.indexOf(cat)
@@ -127,11 +490,18 @@ const removeTag = (tag: string) => {
   form.tags = form.tags.filter((t) => t !== tag)
 }
 
+const handleFormEnterKeydown = (event: KeyboardEvent) => {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return
+  if (target instanceof HTMLTextAreaElement) return
+  if (target instanceof HTMLButtonElement) return
+  event.preventDefault()
+}
+
 const buildPayload = () => {
-  const photos = form.photoUrls
-    .split("\n")
-    .map((u) => u.trim())
-    .filter(Boolean)
+  const orderedImages = [...(coverImage.value ? [coverImage.value] : []), ...galleryImages.value]
+  const photos = orderedImages.map((image) => image.url)
+  const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
 
   const availability = availabilityRanges.value
     .filter((r) => r.startDate)
@@ -156,7 +526,7 @@ const buildPayload = () => {
     whatIsIncluded: form.whatIsIncluded || undefined,
     knownIssues: form.knownIssues || undefined,
     usageLimitations: form.usageLimitations || undefined,
-    thumbnailImage: (photos[0] ?? form.thumbnailImage) || undefined,
+    thumbnailImage,
     photos,
     availability,
     status: "AVAILABLE",
@@ -166,28 +536,67 @@ const buildPayload = () => {
 const handleSubmit = () => {
   fieldErrors.value = {}
   availabilityErrors.value = []
+  imageUploadError.value = null
+
+  if (isUploadingImages.value) {
+    imageUploadError.value = "Please wait for image uploads to finish."
+    return
+  }
+
   const payload = buildPayload()
 
-  const schema = updateItemSchema
-  const result = schema.safeParse(payload)
+  if (!form.name.trim()) {
+    fieldErrors.value.name = "Item name is required."
+  }
+  if (!form.condition) {
+    fieldErrors.value.condition = "Condition is required."
+  }
+  if (form.categories.length === 0) {
+    fieldErrors.value.categories = "Select at least one category."
+  }
 
-  if (!result.success) {
-    const flat = result.error.flatten()
-    Object.entries(flat.fieldErrors).forEach(([key, msgs]) => {
-      fieldErrors.value[key] = (msgs as string[])[0] ?? ""
-    })
-    if (flat.fieldErrors["availability"]) {
-      availabilityErrors.value = flat.fieldErrors["availability"] as string[]
-    }
+  const invalidAvailability = availabilityRanges.value.some(
+    (range) =>
+      range.startDate &&
+      !range.noEndDate &&
+      range.endDate &&
+      range.endDate.getTime() <= range.startDate.getTime(),
+  )
+
+  if (invalidAvailability) {
+    availabilityErrors.value.push("Availability end dates must be later than start dates.")
+  }
+
+  if (Object.keys(fieldErrors.value).length > 0 || availabilityErrors.value.length > 0) {
     return
   }
 
   emit("submit", payload as Record<string, unknown>)
 }
+
+const cleanupSessionUploadsOnExit = () => {
+  if (props.isSubmitting) return
+  abortPendingUploads()
+  void cleanupUploadedImages(Array.from(sessionUploadedImageUrls), { keepalive: true })
+}
+
+const handleCancel = () => {
+  cleanupSessionUploadsOnExit()
+  emit("cancel")
+}
+
+onMounted(() => {
+  window.addEventListener("pagehide", cleanupSessionUploadsOnExit)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener("pagehide", cleanupSessionUploadsOnExit)
+  cleanupSessionUploadsOnExit()
+})
 </script>
 
 <template>
-  <form class="space-y-6" @submit.prevent="handleSubmit">
+  <form class="space-y-6" @submit.prevent="handleSubmit" @keydown.enter="handleFormEnterKeydown">
     <!-- Header -->
     <div>
       <NuxtLink
@@ -209,50 +618,180 @@ const handleSubmit = () => {
     </div>
 
     <!-- Images Section -->
-    <section class="bg-orange-50 rounded-[20px] border border-red-300 p-4 sm:p-6 space-y-4">
-      <div>
-        <h2 class="text-neutral-800 text-xl font-semibold font-geist">Images</h2>
-        <p class="text-neutral-800/80 text-base font-normal font-geist tracking-wide">
-          Upload photos of your item. Add image URLs below (one per line, up to 10).
-        </p>
-        <p class="text-neutral-800/60 text-xs font-geist mt-1">
-          Drag to reorder — the first URL becomes the cover image.
-        </p>
-      </div>
-      <div>
-        <label class="block text-neutral-400 text-xs font-geist mb-1">
-          Add Images ({{ form.photoUrls.split("\n").filter(Boolean).length }}/10)
-        </label>
-        <textarea
-          v-model="form.photoUrls"
-          rows="4"
-          placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg"
-          class="w-full bg-white rounded-[5px] border border-red-300/50 px-3 py-2 text-sm font-geist text-neutral-800 placeholder:text-neutral-800/50 focus:outline-none focus:border-orange-500 transition-colors resize-none"
+    <section
+      class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
+    >
+      <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
+      <p class="mt-1 text-[14px] text-noble-black/50">
+        Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
+        review.
+      </p>
+      <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
+        {{ imageUploadError }}
+      </p>
+
+      <div class="mt-8 flex flex-wrap gap-4">
+        <input
+          ref="coverInput"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="handleCoverSelect"
         />
-        <!-- Preview -->
-        <div
-          v-if="form.photoUrls.split('\n').filter(Boolean).length > 0"
-          class="flex flex-wrap gap-2 mt-2"
-        >
+        <input
+          ref="galleryInput"
+          type="file"
+          accept="image/*"
+          multiple
+          class="hidden"
+          @change="handleGallerySelect"
+        />
+
+        <div class="relative group">
           <div
-            v-for="(url, i) in form.photoUrls.split('\n').filter(Boolean).slice(0, 10)"
-            :key="i"
-            class="relative"
+            v-if="coverImage"
+            class="relative aspect-square w-32 overflow-hidden rounded-[18px] border border-cinnamon-ice/30 cursor-pointer"
+            @click="openLightbox(coverImage)"
           >
-            <img
-              :src="url"
-              :alt="`Photo ${i + 1}`"
-              class="w-16 h-16 object-cover rounded-lg border border-red-300/30"
-              @error="($event.target as HTMLImageElement).src = 'https://placehold.co/64x64'"
-            />
-            <span
-              v-if="i === 0"
-              class="absolute -bottom-1 left-0 right-0 text-center text-white text-[9px] bg-orange-500 rounded-b-lg"
-              >Cover</span
+            <img :src="coverImage.url" class="h-full w-full object-cover" />
+            <button
+              type="button"
+              class="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-noble-black/60 text-white backdrop-blur-sm transition-all hover:bg-cinnabar-red opacity-0 group-hover:opacity-100"
+              @click.stop="removeCover"
             >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div
+              class="absolute bottom-0 left-0 right-0 bg-noble-black/40 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-[2px]"
+            >
+              Cover
+            </div>
+          </div>
+          <div
+            v-else
+            class="border-dashed-long-md flex aspect-square w-32 cursor-pointer flex-col items-center justify-center rounded-[18px] bg-white transition-colors hover:bg-white/80"
+            @click="triggerCoverUpload"
+          >
+            <div
+              class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <span class="mt-2 text-center text-[12px] font-medium text-noble-black/40">
+              Select Cover
+            </span>
           </div>
         </div>
+
+        <div
+          v-for="(img, index) in galleryImages"
+          :key="img.id"
+          class="relative group"
+          draggable="true"
+          @dragstart="onDragStart(index)"
+          @dragover="onDragOver"
+          @drop="onDrop(index)"
+        >
+          <div
+            class="aspect-square w-32 overflow-hidden rounded-[18px] border border-cinnamon-ice/30 bg-white cursor-grab active:cursor-grabbing"
+            @click="openLightbox(img)"
+          >
+            <img :src="img.url" class="h-full w-full object-cover pointer-events-none" />
+            <button
+              type="button"
+              class="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-noble-black/60 text-white backdrop-blur-sm transition-all hover:bg-cinnabar-red opacity-0 group-hover:opacity-100"
+              @click.stop="removeGalleryImage(index)"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-for="upload in pendingUploads"
+          :key="upload.id"
+          class="flex aspect-square w-32 flex-col justify-between rounded-[18px] border border-cinnamon-ice/30 bg-white p-3"
+        >
+          <div
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <p class="truncate text-[12px] font-medium text-noble-black/50">
+              {{ upload.name }}
+            </p>
+            <p class="mt-1 text-[12px] font-semibold text-blue-estate">{{ upload.progress }}%</p>
+            <div class="mt-2 h-2 overflow-hidden rounded-full bg-cinnamon-ice/20">
+              <div
+                class="h-full bg-blue-estate transition-[width] duration-150"
+                :style="{ width: `${upload.progress}%` }"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="galleryImages.length < MAX_GALLERY_IMAGE_COUNT"
+          class="border-dashed-long-md flex aspect-square w-32 cursor-pointer flex-col items-center justify-center rounded-[18px] bg-white transition-colors hover:bg-white/80"
+          @click="triggerGalleryUpload"
+        >
+          <div
+            class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <span class="mt-2 text-center text-[12px] font-medium text-noble-black/40">
+            Add Images ({{ galleryImages.length }}/{{ MAX_GALLERY_IMAGE_COUNT }})
+          </span>
+        </div>
       </div>
+      <p class="mt-4 text-[12px] text-noble-black/30">Drag to reorder</p>
     </section>
 
     <!-- Basic Information -->
@@ -617,26 +1156,58 @@ const handleSubmit = () => {
       <div class="flex flex-col sm:flex-row gap-3">
         <button
           type="submit"
-          :disabled="isSubmitting"
+          :disabled="isSubmitting || isUploadingImages"
           class="sm:flex-1 lg:flex-none px-8 py-3 bg-orange-500 text-white rounded-[30px] text-base font-medium font-geist hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {{
-            isSubmitting
-              ? props.mode === "new"
-                ? "Publishing..."
-                : "Saving..."
-              : props.mode === "new"
-                ? "Publish Item"
-                : "Save Changes"
+            isUploadingImages
+              ? "Uploading Images..."
+              : isSubmitting
+                ? props.mode === "new"
+                  ? "Publishing..."
+                  : "Saving..."
+                : props.mode === "new"
+                  ? "Publish Item"
+                  : "Save Changes"
           }}
         </button>
         <button
           type="button"
           class="sm:flex-1 lg:flex-none px-8 py-3 border border-neutral-300 text-neutral-800 rounded-[30px] text-base font-normal font-geist hover:bg-neutral-50 transition-colors"
-          @click="emit('cancel')"
+          @click="handleCancel"
         >
           Cancel
         </button>
+      </div>
+    </div>
+
+    <div
+      v-if="lightboxImage"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-noble-black/70 p-6"
+      @click.self="closeLightbox"
+    >
+      <div class="relative max-w-3xl">
+        <button
+          type="button"
+          class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-noble-black/60 text-white"
+          @click="closeLightbox"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <img
+          :src="lightboxImage.url"
+          :alt="lightboxImage.name"
+          class="max-h-[80vh] rounded-[20px] object-contain shadow-2xl"
+        />
       </div>
     </div>
   </form>

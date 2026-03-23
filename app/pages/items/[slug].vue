@@ -40,7 +40,12 @@ const itemId = computed(() => extractItemIdFromSlug(slugParam.value))
 const backNavigationPath = "/dashboard"
 const backNavigationLabel = "Back to listings"
 
-const { data, pending, error } = await useAsyncData(
+const {
+  data,
+  pending,
+  error,
+  refresh: refreshItem,
+} = await useAsyncData(
   () => `item:${itemId.value ?? "missing"}`,
   async () => {
     if (!itemId.value) {
@@ -73,6 +78,9 @@ const isMobileModalOpen = ref(false)
 const isCalendarExpanded = ref(false)
 const isSaved = ref(false)
 const shareFeedback = ref("")
+const isSubmittingBooking = ref(false)
+const bookingErrorMessage = ref("")
+const bookingSuccessMessage = ref("")
 
 const viewMonth = ref(today.getMonth())
 const viewYear = ref(today.getFullYear())
@@ -140,7 +148,8 @@ const splitDetailList = (value?: string | null) =>
 const imageGallery = computed(() => {
   if (!item.value) return []
 
-  const images = [...item.value.photos]
+  const imagesFromRelation = item.value.images.map((image) => image.path)
+  const images = imagesFromRelation.length ? [...imagesFromRelation] : [...item.value.photos]
   if (item.value.thumbnailImage && !images.includes(item.value.thumbnailImage)) {
     images.unshift(item.value.thumbnailImage)
   }
@@ -231,6 +240,7 @@ const statusLabel = computed(() => (item.value ? humanizeEnum(item.value.status)
 const formattedCondition = computed(() => (item.value ? humanizeEnum(item.value.condition) : ""))
 const formattedCategories = computed(() => item.value?.categories.map(humanizeEnum) ?? [])
 const typeLabel = computed(() => (item.value?.freeToBorrow ? "Borrow" : "Rent"))
+const isItemAvailableForBooking = computed(() => item.value?.status === "AVAILABLE")
 const ownerName = computed(() => item.value?.ownerName ?? "TakeUP member")
 const ownerInitials = computed(() => {
   const parts = ownerName.value.split(/\s+/).filter(Boolean)
@@ -533,6 +543,60 @@ const hasBookingSelection = computed(() => {
   return timeToMinutes(startTime.value) !== timeToMinutes(endTime.value)
 })
 
+const selectedBookingWindow = computed(() => {
+  if (!item.value || !startDate.value || !displayEndDate.value) return null
+
+  const bookingStart = createDateTime(startDate.value, startTime.value)
+  const bookingEnd = createDateTime(displayEndDate.value, endTime.value)
+
+  if (bookingEnd <= bookingStart) {
+    return null
+  }
+
+  return {
+    startDate: bookingStart,
+    endDate: bookingEnd,
+  }
+})
+
+const canSubmitBooking = computed(
+  () =>
+    isItemAvailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isSubmittingBooking.value,
+)
+
+const bookingFeedbackMessage = computed(() => {
+  if (item.value && !isItemAvailableForBooking.value) {
+    return `This item is currently marked as ${statusLabel.value.toLowerCase()} and cannot be booked.`
+  }
+
+  if (bookingErrorMessage.value) return bookingErrorMessage.value
+  if (bookingSuccessMessage.value) return bookingSuccessMessage.value
+  return "You won't be charged yet."
+})
+
+const bookingFeedbackClass = computed(() => {
+  if (item.value && !isItemAvailableForBooking.value) {
+    return "text-cinnabar-red"
+  }
+
+  if (bookingErrorMessage.value) {
+    return "text-cinnabar-red"
+  }
+
+  if (bookingSuccessMessage.value) {
+    return "text-burning-orange"
+  }
+
+  return "text-noble-black/40"
+})
+
+const requestBookingButtonLabel = computed(() =>
+  isSubmittingBooking.value ? "Requesting Booking..." : "Request Booking",
+)
+
 const totalUnits = computed(() => {
   if (!item.value || !startDate.value || !displayEndDate.value) return 1
 
@@ -596,27 +660,23 @@ const { addToBag: addItemToBag, hasItemWithWindow } = useBag()
 const bagFeedbackMessage = ref("")
 const bagFeedbackTone = ref<"success" | "error">("success")
 
-const selectedBagWindow = computed(() => {
-  if (!item.value || !startDate.value || !displayEndDate.value) {
-    return null
-  }
-
-  return {
-    itemId: item.value.id,
-    startAt: createDateTime(startDate.value, startTime.value),
-    endAt: createDateTime(displayEndDate.value, endTime.value),
-  }
-})
-
 const isInBag = computed(() => {
-  if (!selectedBagWindow.value) return false
+  if (!item.value || !selectedBookingWindow.value) return false
 
   return hasItemWithWindow(
-    selectedBagWindow.value.itemId,
-    selectedBagWindow.value.startAt,
-    selectedBagWindow.value.endAt,
+    item.value.id,
+    selectedBookingWindow.value.startDate,
+    selectedBookingWindow.value.endDate,
   )
 })
+
+const canAddToBag = computed(
+  () =>
+    isItemAvailableForBooking.value &&
+    hasBookingSelection.value &&
+    selectedBookingWindow.value !== null &&
+    !isInBag.value,
+)
 
 const showBagFeedback = (message: string, tone: "success" | "error") => {
   bagFeedbackMessage.value = message
@@ -630,13 +690,13 @@ const showBagFeedback = (message: string, tone: "success" | "error") => {
 }
 
 const handleAddToBag = async () => {
-  if (!selectedBagWindow.value || !hasBookingSelection.value) return
+  if (!item.value || !selectedBookingWindow.value || !canAddToBag.value) return
 
   try {
     await addItemToBag({
-      itemId: selectedBagWindow.value.itemId,
-      startAt: selectedBagWindow.value.startAt,
-      endAt: selectedBagWindow.value.endAt,
+      itemId: item.value.id,
+      startAt: selectedBookingWindow.value.startDate,
+      endAt: selectedBookingWindow.value.endDate,
     })
 
     showBagFeedback("Added to Bag.", "success")
@@ -718,6 +778,73 @@ const shareItem = async () => {
   window.setTimeout(() => {
     shareFeedback.value = ""
   }, 1800)
+}
+
+const resolveBookingErrorMessage = (error: unknown) => {
+  const fetchError = error as {
+    data?: {
+      statusMessage?: string
+      error?: { message?: string }
+      data?: { error?: { message?: string } }
+    }
+    statusCode?: number
+    statusMessage?: string
+    message?: string
+  }
+
+  return (
+    fetchError.data?.statusMessage ??
+    fetchError.data?.error?.message ??
+    fetchError.data?.data?.error?.message ??
+    fetchError.statusMessage ??
+    (fetchError.statusCode === 500
+      ? "Booking failed on the server. Check that the booking and transaction schema is applied to this database."
+      : undefined) ??
+    fetchError.message ??
+    "Unable to submit your booking request."
+  )
+}
+
+const submitBookingRequest = async () => {
+  if (
+    !item.value ||
+    !isItemAvailableForBooking.value ||
+    !selectedBookingWindow.value ||
+    isSubmittingBooking.value
+  ) {
+    return
+  }
+
+  bookingErrorMessage.value = ""
+  bookingSuccessMessage.value = ""
+  isSubmittingBooking.value = true
+
+  try {
+    await $fetch("/api/bookings", {
+      method: "POST",
+      body: {
+        itemId: item.value.id,
+        startDate: selectedBookingWindow.value.startDate.toISOString(),
+        endDate: selectedBookingWindow.value.endDate.toISOString(),
+      },
+    })
+
+    bookingSuccessMessage.value = "Booking request sent to the lender."
+    startDate.value = null
+    endDate.value = null
+    closeBookingModal()
+    await refreshItem().catch(() => undefined)
+  } catch (error: unknown) {
+    const statusCode = (error as { statusCode?: number })?.statusCode
+    if (statusCode === 401) {
+      await navigateTo("/")
+      return
+    }
+
+    bookingErrorMessage.value = resolveBookingErrorMessage(error)
+  } finally {
+    isSubmittingBooking.value = false
+  }
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
@@ -1321,7 +1448,7 @@ onUnmounted(() => {
                           ? 'bg-noble-black hover:bg-noble-black/90'
                           : 'bg-burning-orange hover:bg-blue-estate'
                       "
-                      :disabled="!hasBookingSelection || isInBag"
+                      :disabled="!canAddToBag"
                       @click="handleAddToBag"
                     >
                       <svg
@@ -1351,6 +1478,16 @@ onUnmounted(() => {
                       "
                     >
                       {{ bagFeedbackMessage || "You won't be charged yet." }}
+                    </p>
+                    <button
+                      class="w-full py-3 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
+                      :disabled="!canSubmitBooking"
+                      @click="submitBookingRequest"
+                    >
+                      {{ requestBookingButtonLabel }}
+                    </button>
+                    <p class="text-center text-[11px] font-normal" :class="bookingFeedbackClass">
+                      {{ bookingFeedbackMessage }}
                     </p>
                   </div>
                   <div>
@@ -1712,7 +1849,7 @@ onUnmounted(() => {
                         ? 'bg-noble-black hover:bg-noble-black/90'
                         : 'bg-burning-orange hover:bg-blue-estate'
                     "
-                    :disabled="!hasBookingSelection || isInBag"
+                    :disabled="!canAddToBag"
                     @click="handleAddToBag"
                   >
                     <svg
@@ -1742,6 +1879,16 @@ onUnmounted(() => {
                     "
                   >
                     {{ bagFeedbackMessage || "You won't be charged yet." }}
+                  </p>
+                  <button
+                    class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
+                    :disabled="!canSubmitBooking"
+                    @click="submitBookingRequest"
+                  >
+                    {{ requestBookingButtonLabel }}
+                  </button>
+                  <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
+                    {{ bookingFeedbackMessage }}
                   </p>
                   <div class="h-px bg-cinnamon-ice/30 mb-4" />
                   <div class="space-y-2 mb-4">
@@ -2266,7 +2413,7 @@ onUnmounted(() => {
                     ? 'bg-noble-black hover:bg-noble-black/90'
                     : 'bg-burning-orange hover:bg-blue-estate'
                 "
-                :disabled="!hasBookingSelection || isInBag"
+                :disabled="!canAddToBag"
                 @click="handleAddToBag"
               >
                 <svg
@@ -2296,6 +2443,16 @@ onUnmounted(() => {
                 "
               >
                 {{ bagFeedbackMessage || "You won't be charged yet." }}
+              </p>
+              <button
+                class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
+                :disabled="!canSubmitBooking"
+                @click="submitBookingRequest"
+              >
+                {{ requestBookingButtonLabel }}
+              </button>
+              <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
+                {{ bookingFeedbackMessage }}
               </p>
               <div class="h-px bg-cinnamon-ice/30 mb-4" />
               <div class="space-y-2 mb-4">
@@ -2362,8 +2519,23 @@ onUnmounted(() => {
         </div>
         <button
           class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
-          :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
-          @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
+          :class="
+            isInBag
+              ? 'bg-noble-black'
+              : isItemAvailableForBooking
+                ? 'bg-burning-orange'
+                : 'bg-noble-black/40'
+          "
+          :disabled="!isInBag && !isItemAvailableForBooking"
+          @click="
+            isInBag
+              ? null
+              : !isItemAvailableForBooking
+                ? null
+                : hasBookingSelection
+                  ? handleAddToBag()
+                  : openBookingModal()
+          "
         >
           <svg
             v-if="isInBag"
@@ -2380,7 +2552,13 @@ onUnmounted(() => {
             <polyline points="20 6 9 17 4 12" />
           </svg>
           {{
-            isInBag ? "Added to Bag" : hasBookingSelection ? "Add to Bag" : "Check Availability"
+            isInBag
+              ? "Added to Bag"
+              : !isItemAvailableForBooking
+                ? "Unavailable"
+                : hasBookingSelection
+                  ? "Add to Bag"
+                  : "Check Availability"
           }}
         </button>
       </div>

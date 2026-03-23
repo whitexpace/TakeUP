@@ -31,7 +31,9 @@ const getDurationUnits = (item: BagItem) => {
   const end = new Date(item.endAt)
   const diffHours = Math.max(0.5, (end.getTime() - start.getTime()) / (1000 * 60 * 60))
 
-  return item.priceUnit === "hour" ? Math.max(1, Math.ceil(diffHours)) : Math.max(1, Math.ceil(diffHours / 24))
+  return item.priceUnit === "hour"
+    ? Math.max(1, Math.ceil(diffHours))
+    : Math.max(1, Math.ceil(diffHours / 24))
 }
 
 const getItemTotal = (item: BagItem) => {
@@ -48,7 +50,7 @@ const removeItem = async (id: string) => {
   try {
     await removeFromBag(id)
   } catch {
-    // loadBag sets the shared error state on the next fetch; keep the page stable here.
+    // Keep the page stable and rely on shared state for any follow-up recovery.
   }
 }
 </script>
@@ -61,7 +63,9 @@ const removeItem = async (id: string) => {
       <div class="mb-8 flex items-end justify-between gap-4">
         <div>
           <p class="font-geist text-sm uppercase tracking-[0.2em] text-burning-orange">Bag</p>
-          <h1 class="mt-2 font-geist text-3xl font-bold text-noble-black">Your saved booking drafts</h1>
+          <h1 class="mt-2 font-geist text-3xl font-bold text-noble-black">
+            Your saved booking drafts
+          </h1>
           <p class="mt-2 max-w-2xl font-geist text-sm text-noble-black/60">
             Items added here stay in your bag after refresh so you can come back and book them later.
           </p>
@@ -161,7 +165,8 @@ const removeItem = async (id: string) => {
                 {{ bagItem.listingType === "Borrow" ? "Free" : formatPesoAmount(getItemTotal(bagItem)) }}
               </p>
               <p class="font-geist text-xs text-noble-black/50">
-                {{ getDurationUnits(bagItem) }} {{ bagItem.priceUnit }}{{ getDurationUnits(bagItem) > 1 ? "s" : "" }}
+                {{ getDurationUnits(bagItem) }} {{ bagItem.priceUnit
+                }}{{ getDurationUnits(bagItem) > 1 ? "s" : "" }}
               </p>
             </div>
 

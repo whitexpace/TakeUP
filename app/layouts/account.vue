@@ -5,17 +5,21 @@ const route = useRoute()
 const showMobileSidebar = ref(false)
 const showLogoutModal = ref(false)
 
-const links = [
+type AccountLink = {
+  label: string
+  to: string
+}
+
+const links: AccountLink[] = [
   { label: "Account Information", to: "/account" },
-  { label: "My Wallet", to: null },
+  { label: "My Wallet", to: "/account/wallet" },
   { label: "My Transactions", to: "/account/transactions" },
   { label: "My Listings", to: "/account/listings" },
-  { label: "My Listing Analytics", to: null },
-  { label: "My Rewards", to: null },
+  { label: "My Listing Analytics", to: "/account/analytics" },
+  { label: "My Rewards", to: "/account/rewards" },
 ]
 
-const isActive = (link: { label: string; to: string | null }) => {
-  if (!link.to) return false
+const isActive = (link: AccountLink) => {
   if (link.to === "/account") return route.path === "/account"
   return route.path.startsWith(link.to)
 }
@@ -77,9 +81,15 @@ const confirmLogout = async () => {
         />
       </Transition>
 
+      <!-- Left panel background strip (connects sidebar + logout visually) -->
+      <div
+        class="fixed top-0 bottom-0 left-0 z-[35] w-[300px] lg:w-[360px] bg-cream transition-transform duration-300 pointer-events-none"
+        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      />
+
       <!-- Left Sidebar -->
       <aside
-        class="fixed lg:static top-0 left-0 z-40 h-full w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0 transition-transform duration-300"
+        class="fixed lg:static top-0 left-0 z-40 h-full w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0 transition-transform duration-300 relative"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
         <!-- Mobile close button -->
@@ -106,61 +116,55 @@ const confirmLogout = async () => {
         </div>
 
         <!-- Navigation Links -->
-        <nav class="flex-1 flex flex-col">
-          <template v-for="link in links" :key="link.label">
-            <NuxtLink
-              v-if="link.to"
-              :to="link.to"
-              class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
-              :class="
-                isActive(link)
-                  ? 'bg-burning-orange text-white font-medium'
-                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere'
-              "
-              @click="showMobileSidebar = false"
-            >
-              {{ link.label }}
-            </NuxtLink>
-            <a
-              v-else
-              href="#"
-              class="block w-full px-8 py-3 text-[18px] transition-all duration-200 text-noble-black bg-cream font-normal hover:bg-pale-cashmere"
-              @click.prevent
-            >
-              {{ link.label }}
-            </a>
-          </template>
-        </nav>
-
-        <!-- Logout Section -->
-        <div class="mt-auto border-t border-cinnamon-ice bg-cream">
-          <button
-            class="flex items-center gap-3 w-full px-8 py-5 group transition-all duration-200 text-noble-black"
-            @click="openLogoutModal"
+        <nav class="flex-1 flex flex-col overflow-y-auto pb-24">
+          <NuxtLink
+            v-for="link in links"
+            :key="link.label"
+            :to="link.to"
+            class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
+            :class="
+              isActive(link)
+                ? 'bg-burning-orange text-white font-medium'
+                : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere'
+            "
+            @click="showMobileSidebar = false"
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-colors duration-200 group-hover:text-burning-orange"
-            >
-              <path
-                d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-                stroke="currentColor"
-                stroke-width="1"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <span
-              class="font-normal text-[18px] transition-colors duration-200 group-hover:text-burning-orange"
-              >Log Out</span
-            >
-          </button>
-        </div>
+            {{ link.label }}
+          </NuxtLink>
+        </nav>
       </aside>
+
+      <!-- Logout Section (Pinned to bottom-left of screen) -->
+      <div
+        class="fixed bottom-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream transition-transform duration-300"
+        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      >
+        <button
+          class="flex items-center gap-3 w-full px-8 py-5 group transition-all duration-200 text-noble-black"
+          @click="openLogoutModal"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            class="transition-colors duration-200 group-hover:text-burning-orange"
+          >
+            <path
+              d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
+              stroke="currentColor"
+              stroke-width="1"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span
+            class="font-normal text-[18px] transition-colors duration-200 group-hover:text-burning-orange"
+            >Log Out</span
+          >
+        </button>
+      </div>
 
       <!-- Page Content Slot -->
       <main class="flex-1 bg-white overflow-y-auto p-4 sm:p-6 lg:p-8 min-w-0">
@@ -260,7 +264,7 @@ const confirmLogout = async () => {
 <style scoped>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s;
 }
 .fade-enter-from,
 .fade-leave-to {

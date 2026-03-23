@@ -24,11 +24,11 @@ const { bagCount } = useBag()
     <div class="flex-1 flex justify-center overflow-hidden px-2">
       <nav class="hidden lg:flex items-center gap-8 whitespace-nowrap px-4">
         <NuxtLink
-          to="/dashboard"
+          to="/feed"
           class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
           active-class="text-burning-orange"
         >
-          Feed
+          Requests
         </NuxtLink>
         <NuxtLink
           to="/account/listings/new"
@@ -109,8 +109,8 @@ const { bagCount } = useBag()
       <NuxtLink
         to="/bag"
         class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1 relative"
-        title="Bag"
         active-class="text-burning-orange"
+        title="Bag"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
