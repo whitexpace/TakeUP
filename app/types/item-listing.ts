@@ -11,6 +11,12 @@ export interface ItemPaginationCursor {
   createdAt: string | Date
 }
 
+export interface ListedItemImage {
+  path: string
+  isPrimary: boolean
+  sortOrder: number
+}
+
 export interface ListedItem {
   id: string
   name: string
@@ -27,6 +33,7 @@ export interface ListedItem {
   whatIsIncluded: string | null
   knownIssues: string | null
   usageLimitations: string | null
+  images: ListedItemImage[]
   thumbnailImage: string | null
   photos: string[]
   isTrending: boolean

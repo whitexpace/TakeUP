@@ -243,7 +243,10 @@ const currentUserId = computed(() => {
   return (
     asNonEmptyString(authUserRecord?.id) ||
     asNonEmptyString(authUserRecord?.email) ||
-    currentUserName.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") ||
+    currentUserName.value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") ||
     "user"
   )
 })
@@ -576,8 +579,7 @@ const existingOfferForCurrentUser = computed(() => {
   return (
     selectedRequestForOffer.value?.offers.find(
       (offer) => offer.lender.id === sessionCommunityUserId.value,
-    ) ??
-    null
+    ) ?? null
   )
 })
 

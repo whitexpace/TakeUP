@@ -171,7 +171,10 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <div v-if="notifications.length > 0" class="flex max-h-[360px] flex-col gap-2 overflow-y-auto pr-1">
+            <div
+              v-if="notifications.length > 0"
+              class="flex max-h-[360px] flex-col gap-2 overflow-y-auto pr-1"
+            >
               <button
                 v-for="notification in notifications"
                 :key="notification.id"

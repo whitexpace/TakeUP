@@ -74,7 +74,11 @@
               </button>
 
               <p v-else class="px-4 py-3 text-[13px] leading-relaxed text-noble-black/45">
-                {{ isOwner ? "Offers will appear here once lenders respond." : "Send an offer directly to the requester." }}
+                {{
+                  isOwner
+                    ? "Offers will appear here once lenders respond."
+                    : "Send an offer directly to the requester."
+                }}
               </p>
             </div>
           </transition>

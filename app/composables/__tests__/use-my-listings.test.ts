@@ -11,6 +11,7 @@ const ITEM_ID = "11111111-1111-1111-1111-111111111111"
 const makeItem = (id = ITEM_ID) =>
   ({
     id,
+    numericId: 1,
     name: "Test Item",
     status: "AVAILABLE",
     lenderId: "owner-1",
@@ -18,6 +19,7 @@ const makeItem = (id = ITEM_ID) =>
     rateOption: "PER_DAY",
     rentalFee: 100,
     replacementCost: null,
+    images: [],
     thumbnailImage: null,
     photos: [],
     categories: ["ELECTRONICS"],

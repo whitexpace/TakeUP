@@ -18,8 +18,8 @@
                 {{ requestTitle }}
               </h2>
               <p class="text-[14px] leading-relaxed text-noble-black/55">
-                Share the item you can lend, your rental terms, and confirm it is available for
-                the requester.
+                Share the item you can lend, your rental terms, and confirm it is available for the
+                requester.
               </p>
             </div>
 
@@ -142,7 +142,11 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
-import type { CommunityOffer, CommunityOfferCondition, CommunityOfferFormInput } from "~/types/community-requests"
+import type {
+  CommunityOffer,
+  CommunityOfferCondition,
+  CommunityOfferFormInput,
+} from "~/types/community-requests"
 import { communityOfferConditions } from "~/types/community-requests"
 
 const props = withDefaults(
