@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
-import type { z } from "zod"
-import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
 import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
