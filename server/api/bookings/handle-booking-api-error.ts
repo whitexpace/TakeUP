@@ -13,6 +13,11 @@ const createBookingApiError = (statusCode: number, statusMessage: string) =>
     },
   })
 
+const appendDevErrorMessage = (statusMessage: string, error: Error) =>
+  process.env.NODE_ENV !== "production" && error.message
+    ? `${statusMessage} Debug: ${error.message}`
+    : statusMessage
+
 const toPrismaErrorMessage = (error: Prisma.PrismaClientKnownRequestError) => {
   switch (error.code) {
     case "P1001":
@@ -90,7 +95,10 @@ const toUnknownError = (error: Error, action: string) => {
 
   return createBookingApiError(
     500,
-    `Unable to ${action} booking because of an unexpected server error.`,
+    appendDevErrorMessage(
+      `Unable to ${action} booking because of an unexpected server error.`,
+      error,
+    ),
   )
 }
 
