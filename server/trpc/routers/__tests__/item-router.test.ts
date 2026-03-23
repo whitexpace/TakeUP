@@ -159,6 +159,7 @@ describe("itemRouter", () => {
             status: "AVAILABLE",
           },
         ],
+        images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
         categories: [{ category: "ELECTRONICS" }],
         tags: [{ tag: { name: "photo" } }],
       },
@@ -201,6 +202,11 @@ describe("itemRouter", () => {
         status: "AVAILABLE",
       },
     ])
+    expect(result[0]?.images).toEqual([
+      { path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 },
+    ])
+    expect(result[0]?.thumbnailImage).toBe("https://example.com/camera.jpg")
+    expect(result[0]?.photos).toEqual(["https://example.com/camera.jpg"])
   })
 
   it("update throws NOT_FOUND when item does not exist", async () => {
@@ -254,6 +260,7 @@ describe("itemRouter", () => {
         },
       },
       availability: [],
+      images: [],
       categories: [{ category: "ELECTRONICS" }],
       tags: [{ tag: { name: "photo" } }],
     })
@@ -370,6 +377,7 @@ describe("itemRouter", () => {
         },
       },
       availability: [],
+      images: [],
       categories: [{ category: "ELECTRONICS" }],
       tags: [{ tag: { name: "photo" } }],
     })
@@ -461,6 +469,7 @@ describe("itemRouter", () => {
           replacementCost: null,
           freeToBorrow: false,
           rateOption: "PER_DAY",
+          images: [],
           thumbnailImage: null,
           photos: [],
           whatItemOffers: null,
@@ -483,6 +492,7 @@ describe("itemRouter", () => {
           replacementCost: null,
           freeToBorrow: false,
           rateOption: "PER_DAY",
+          images: [],
           thumbnailImage: null,
           photos: [],
           whatItemOffers: null,
