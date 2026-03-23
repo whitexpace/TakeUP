@@ -10,10 +10,24 @@ export interface BagItem {
   endDate: Date | null
   startTime: string
   endTime: string
+  lenderId: string
+  lenderName: string
+  lenderAvatarUrl?: string | null
+  listingType: "Rent" | "Borrow"
 }
 
 export const useBag = () => {
   const bagItems = useState<BagItem[]>("bag-items", () => [])
+
+  const normalizeBagItem = (item: BagItem): BagItem => ({
+    ...item,
+    startDate: item.startDate ? new Date(item.startDate) : null,
+    endDate: item.endDate
+      ? new Date(item.endDate)
+      : item.startDate
+        ? new Date(item.startDate)
+        : null,
+  })
 
   // Initialize from localStorage on client side
   onMounted(() => {
@@ -21,12 +35,7 @@ export const useBag = () => {
     if (savedBag) {
       try {
         const parsed = JSON.parse(savedBag) as BagItem[]
-        // Convert date strings back to Date objects
-        bagItems.value = parsed.map((item) => ({
-          ...item,
-          startDate: item.startDate ? new Date(item.startDate) : null,
-          endDate: item.endDate ? new Date(item.endDate) : null,
-        }))
+        bagItems.value = parsed.map(normalizeBagItem)
       } catch (e) {
         console.error("Failed to parse bag from localStorage", e)
       }
@@ -45,7 +54,7 @@ export const useBag = () => {
   const addToBag = (item: BagItem) => {
     const exists = bagItems.value.some((i) => i.id === item.id)
     if (!exists) {
-      bagItems.value.push(item)
+      bagItems.value.push(normalizeBagItem(item))
     }
   }
 
