@@ -346,7 +346,7 @@ model User {
   transactionStatusLogsChanged TransactionStatusLog[]
   borrowedTransactions         RentalTransaction[]    @relation("transactions_borrower_user_idToUser")
   lentTransactions             RentalTransaction[]    @relation("transactions_lender_user_idToUser")
-  requestPosts RequestPost[]
+  requestPosts                 RequestPost[]
 }
 
 model Like {

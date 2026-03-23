@@ -437,13 +437,28 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
               </div>
             </div>
 
-            <div class="mt-6 flex items-start gap-3 rounded-xl border border-orange-200 bg-white px-4 py-3">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="mt-0.5 shrink-0 text-orange-500">
-                <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            <div
+              class="mt-6 flex items-start gap-3 rounded-xl border border-orange-200 bg-white px-4 py-3"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                class="mt-0.5 shrink-0 text-orange-500"
+              >
+                <path
+                  d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
               <p class="text-xs tracking-tight text-neutral-800">
                 <span class="font-bold">Safety Reminder:</span>
-                Always meet in public places on campus. Verify the requester&apos;s UP ID before handing over items.
+                Always meet in public places on campus. Verify the requester&apos;s UP ID before
+                handing over items.
               </p>
             </div>
           </section>
