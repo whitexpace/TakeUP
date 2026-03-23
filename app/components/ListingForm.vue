@@ -59,7 +59,8 @@ const runtimeConfig = useRuntimeConfig()
 const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
-const MAX_GALLERY_IMAGE_COUNT = 10
+const MAX_IMAGE_COUNT = 10
+const isCreateMode = computed(() => props.mode !== "edit")
 
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
@@ -206,13 +207,9 @@ watch(
   },
 )
 
-const coverImage = computed(
-  () => images.value.find((image) => image.id === primaryImageId.value) ?? null,
-)
+const imageCountLabel = computed(() => `${images.value.length}/${MAX_IMAGE_COUNT}`)
 
-const galleryImages = computed(() =>
-  images.value.filter((image) => image.id !== primaryImageId.value),
-)
+const canAddMoreImages = computed(() => images.value.length < MAX_IMAGE_COUNT)
 
 const getSafeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -386,13 +383,9 @@ const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) =
     return
   }
 
-  if (options.asCover && files.length > 1) {
-    imageUploadError.value = "Please select only one cover image."
-    return
-  }
-
-  if (!options.asCover && galleryImages.value.length + files.length > MAX_GALLERY_IMAGE_COUNT) {
-    imageUploadError.value = `You can upload up to ${MAX_GALLERY_IMAGE_COUNT} gallery images.`
+  if (images.value.length + files.length > MAX_IMAGE_COUNT) {
+    imageUploadError.value = `You can upload up to ${MAX_IMAGE_COUNT} images per listing.`
+    if (input) input.value = ""
     return
   }
 
@@ -407,14 +400,10 @@ const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) =
 
     const uploadedImages = await Promise.all(files.map((file) => uploadFileWithProgress(file)))
 
-    if (options.asCover) {
-      const nextCoverImage = uploadedImages[0] ?? null
-      rebuildImages(nextCoverImage, [
-        ...(coverImage.value ? [coverImage.value] : []),
-        ...galleryImages.value,
-      ])
-    } else {
-      rebuildImages(coverImage.value, [...galleryImages.value, ...uploadedImages])
+    images.value = [...images.value, ...uploadedImages]
+
+    if (!primaryImageId.value) {
+      primaryImageId.value = uploadedImages[0]?.id ?? null
     }
   } catch (error) {
     imageUploadError.value =
@@ -530,9 +519,9 @@ const handleFormEnterKeydown = (event: KeyboardEvent) => {
 }
 
 const buildPayload = () => {
-  const orderedImages = [...(coverImage.value ? [coverImage.value] : []), ...galleryImages.value]
-  const photos = orderedImages.map((image) => image.url)
-  const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
+  const photos = images.value.map((image) => image.url)
+  const thumbnailImage =
+    images.value.find((image) => image.id === primaryImageId.value)?.url ?? photos[0] ?? undefined
 
   const availability = availabilityRanges.value
     .filter((r) => r.startDate)

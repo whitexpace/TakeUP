@@ -796,7 +796,22 @@ const handleAddToBag = async () => {
       endAt: selectedBagWindow.value.endAt,
     })
 
-    showBagFeedback("Added to Bag.", "success")
+  addItemToBag({
+    id: item.value.id,
+    name: item.value.name,
+    price: item.value.rentalFee,
+    priceUnit: item.value.rateOption === "PER_HOUR" ? "hour" : "day",
+    image:
+      item.value.images.find((image) => image.isPrimary)?.path ||
+      item.value.images[0]?.path ||
+      item.value.thumbnailImage ||
+      item.value.photos[0] ||
+      "",
+    startDate: startDate.value,
+    endDate: endDate.value,
+    startTime: startTime.value,
+    endTime: endTime.value,
+  })
 
     if (isMobileModalOpen.value) {
       closeBookingModal()

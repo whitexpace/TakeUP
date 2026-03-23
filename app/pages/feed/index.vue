@@ -930,6 +930,189 @@ watch(
     void refreshFeed()
   },
 )
+
+const currentUserNotifications = computed(() => {
+  return [...notifications.value]
+    .filter((notification) => notification.recipientId === sessionCommunityUserId.value)
+    .sort((left, right) => right.createdAt - left.createdAt)
+})
+
+const selectedRequestForOffer = computed(() => {
+  return requests.value.find((request) => request.id === activeOfferRequestId.value) ?? null
+})
+
+const existingOfferForCurrentUser = computed(() => {
+  return (
+    selectedRequestForOffer.value?.offers.find(
+      (offer) => offer.lender.id === sessionCommunityUserId.value,
+    ) ?? null
+  )
+})
+
+const sortedRequests = computed(() => {
+  const reqs = [...requests.value]
+  if (activeFilter.value === "Newest") {
+    return [...reqs].sort((left, right) => right.createdAt - left.createdAt)
+  }
+  if (activeFilter.value === "Top Voted") return [...reqs].sort((a, b) => b.upvotes - a.upvotes)
+  if (activeFilter.value === "Unanswered") {
+    return reqs.filter((request) => request.repliesCount === 0 && request.offers.length === 0)
+  }
+  return reqs
+})
+
+const handleNewPost = (post: { title: string; description: string; flair: string }) => {
+  const createdAt = Date.now()
+  const newRequest: CommunityRequest = {
+    id: createdAt.toString(),
+    createdAt,
+    user: viewer.value,
+    timeAgo: "Just now",
+    flair: post.flair,
+    title: post.title,
+    description: post.description,
+    upvotes: 0,
+    repliesCount: 0,
+    replies: [],
+    offers: [],
+  }
+  requests.value.unshift(newRequest)
+  userActivity.value.postsMade++
+  activeFilter.value = "Newest"
+  feedMainRef.value?.scrollTo({ top: 0, behavior: "smooth" })
+}
+
+const handleUpvotePost = (postId: string) => {
+  const post = requests.value.find((r) => r.id === postId)
+  if (post) {
+    userActivity.value.upvotesReceived++
+  }
+}
+
+const handleUpvoteReply = ({
+  postId: _postId,
+  replyId: _replyId,
+}: {
+  postId: string
+  replyId: string
+}) => {
+  userActivity.value.upvotesReceived++
+}
+
+const findReplyRecursive = (replies: Reply[], targetId: string): Reply | null => {
+  for (const reply of replies) {
+    if (reply.id === targetId) return reply
+    if (reply.replies && reply.replies.length > 0) {
+      const found = findReplyRecursive(reply.replies, targetId)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+const handleAddReply = (data: {
+  postId: string
+  parentReplyId?: string | null
+  text: string
+  userName: string
+  userAvatar?: string | null
+}) => {
+  const post = requests.value.find((r) => r.id === data.postId)
+  if (!post) return
+
+  const newReply: Reply = {
+    id: Date.now().toString(),
+    user: { name: data.userName, avatar: data.userAvatar || "" },
+    text: data.text,
+    upvotes: 0,
+    replies: [],
+  }
+
+  if (data.parentReplyId) {
+    const parentReply = findReplyRecursive(post.replies, data.parentReplyId)
+    if (parentReply) {
+      if (!parentReply.replies) parentReply.replies = []
+      parentReply.replies.push(newReply)
+    } else {
+      post.replies.push(newReply)
+    }
+  } else {
+    post.replies.push(newReply)
+  }
+
+  post.repliesCount++
+  userActivity.value.replies++
+}
+
+const openOfferComposer = (requestId: string) => {
+  const request = requests.value.find((entry) => entry.id === requestId)
+  if (!request || request.user.id === sessionCommunityUserId.value) return
+
+  activeOfferRequestId.value = requestId
+  isOfferComposerOpen.value = true
+}
+
+const handleOfferComposerVisibility = (isVisible: boolean) => {
+  isOfferComposerOpen.value = isVisible
+  if (!isVisible) {
+    activeOfferRequestId.value = null
+  }
+}
+
+const submitOffer = (offerInput: CommunityOfferFormInput) => {
+  const request = selectedRequestForOffer.value
+  if (!request || request.user.id === sessionCommunityUserId.value) return
+
+  const submittedAt = Date.now()
+  const offer: CommunityOffer = {
+    id: existingOfferForCurrentUser.value?.id ?? `offer-${submittedAt}`,
+    itemName: offerInput.itemName,
+    lender: viewer.value,
+    rentalTerms: offerInput.rentalTerms,
+    fee: offerInput.fee,
+    condition: offerInput.condition,
+    availabilityConfirmed: offerInput.availabilityConfirmed,
+    createdAt: submittedAt,
+  }
+
+  const existingOfferIndex = request.offers.findIndex(
+    (existingOffer) => existingOffer.lender.id === sessionCommunityUserId.value,
+  )
+
+  if (existingOfferIndex >= 0) {
+    request.offers.splice(existingOfferIndex, 1, offer)
+  } else {
+    request.offers.unshift(offer)
+  }
+
+  notifications.value.unshift({
+    id: `notif-${submittedAt}`,
+    requestId: request.id,
+    requestTitle: request.title,
+    recipientId: request.user.id,
+    actorName: viewer.value.name,
+    itemName: offer.itemName,
+    fee: offer.fee,
+    createdAt: submittedAt,
+    read: false,
+  })
+
+  handleOfferComposerVisibility(false)
+}
+
+const markNotificationRead = (notificationId: string) => {
+  const notification = notifications.value.find((entry) => entry.id === notificationId)
+  if (!notification) return
+  notification.read = true
+}
+
+const markAllNotificationsRead = () => {
+  notifications.value.forEach((notification) => {
+    if (notification.recipientId === sessionCommunityUserId.value) {
+      notification.read = true
+    }
+  })
+}
 </script>
 
 <style scoped>
