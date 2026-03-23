@@ -81,6 +81,7 @@ const shareFeedback = ref("")
 const isSubmittingBooking = ref(false)
 const bookingErrorMessage = ref("")
 const bookingSuccessMessage = ref("")
+const hasRequestedBooking = ref(false)
 
 const viewMonth = ref(today.getMonth())
 const viewYear = ref(today.getFullYear())
@@ -563,6 +564,7 @@ const canSubmitBooking = computed(
     isItemAvailableForBooking.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
+    !hasRequestedBooking.value &&
     !isSubmittingBooking.value,
 )
 
@@ -593,7 +595,11 @@ const bookingFeedbackClass = computed(() => {
 })
 
 const requestBookingButtonLabel = computed(() =>
-  isSubmittingBooking.value ? "Requesting Booking..." : "Request Booking",
+  hasRequestedBooking.value
+    ? "Booking Requested"
+    : isSubmittingBooking.value
+      ? "Requesting Booking..."
+      : "Request Booking",
 )
 
 const totalUnits = computed(() => {
@@ -637,6 +643,12 @@ watch(
   },
   { immediate: true },
 )
+
+watch(itemId, () => {
+  hasRequestedBooking.value = false
+  bookingErrorMessage.value = ""
+  bookingSuccessMessage.value = ""
+})
 
 const openLightbox = () => {
   if (!import.meta.client || !currentImage.value) return
@@ -799,6 +811,7 @@ const submitBookingRequest = async () => {
     })
 
     bookingSuccessMessage.value = "Booking request sent to the lender."
+    hasRequestedBooking.value = true
     startDate.value = null
     endDate.value = null
     closeBookingModal()
