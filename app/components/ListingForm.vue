@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue"
 import type { z } from "zod"
-import type { itemCategorySchema, itemConditionSchema } from "../../shared/schemas/item"
-import { updateItemSchema } from "../../shared/schemas/item"
+import type { itemCategorySchema, itemConditionSchema } from "~~/shared/schemas/item"
+import { updateItemSchema } from "~~/shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
 type ItemCategory = z.infer<typeof itemCategorySchema>
