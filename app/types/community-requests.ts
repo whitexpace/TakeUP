@@ -107,13 +107,13 @@ export interface CommunityOfferNotification {
 }
 
 export interface CommunityOfferNotification {
-  id: string
-  requestId: string
+  id: number
+  requestId: number
   requestTitle: string
-  recipientId: string
+  recipientId: number
   actorName: string
   itemName: string
   fee: number
-  createdAt: number
+  createdAt: Date
   read: boolean
 }

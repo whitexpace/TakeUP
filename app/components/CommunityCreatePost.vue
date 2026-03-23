@@ -343,6 +343,40 @@ const resetForm = () => {
   resetTouchedFields()
 }
 
+const parsedMinimumPrice = computed(() => Number(minimumPrice.value))
+const parsedMaximumPrice = computed(() => Number(maximumPrice.value))
+
+const validationMessage = computed(() => {
+  if (!itemNeeded.value.trim()) return "Item needed is required."
+  if (!description.value.trim()) return "Description is required."
+  if (!startDate.value) return "Start date is required."
+  if (!endDate.value) return "End date is required."
+  if (endDate.value < startDate.value) return "End date must be on or after the start date."
+  if (!minimumPrice.value.trim()) return "Minimum budget is required."
+  if (!maximumPrice.value.trim()) return "Maximum budget is required."
+  if (!Number.isFinite(parsedMinimumPrice.value) || parsedMinimumPrice.value < 0) {
+    return "Minimum budget must be 0 or higher."
+  }
+  if (!Number.isFinite(parsedMaximumPrice.value) || parsedMaximumPrice.value < 0) {
+    return "Maximum budget must be 0 or higher."
+  }
+  if (parsedMinimumPrice.value > parsedMaximumPrice.value) {
+    return "Maximum budget must be greater than or equal to minimum budget."
+  }
+  return ""
+})
+
+const isFormValid = computed(() => validationMessage.value.length === 0)
+
+const resetForm = () => {
+  itemNeeded.value = ""
+  description.value = ""
+  startDate.value = ""
+  endDate.value = ""
+  minimumPrice.value = ""
+  maximumPrice.value = ""
+}
+
 const triggerHighlight = () => {
   isHighlighted.value = true
   containerRef.value?.scrollIntoView({ behavior: "smooth", block: "center" })
