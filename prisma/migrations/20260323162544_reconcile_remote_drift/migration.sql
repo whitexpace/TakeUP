@@ -1,0 +1,2 @@
+-- Reconciles remote migration drift recorded in the shared database.
+-- No schema changes are applied here because the drifted structures already existed outside this repo history.
