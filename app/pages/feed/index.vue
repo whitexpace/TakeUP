@@ -59,7 +59,8 @@
                     </h2>
                     <p class="mt-2 max-w-[560px] text-[14px] leading-relaxed text-noble-black/60">
                       Post what you need, when you need it, and the target budget. Public visitors
-                      cannot see your borrower name, and no personal details are exposed on the card.
+                      cannot see your borrower name, and no personal details are exposed on the
+                      card.
                     </p>
                   </div>
 
@@ -70,8 +71,13 @@
                   </span>
                 </div>
 
-                <div v-if="!isSignedIn" class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4">
-                  <p class="text-[15px] font-semibold text-noble-black">Sign in to post a request</p>
+                <div
+                  v-if="!isSignedIn"
+                  class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4"
+                >
+                  <p class="text-[15px] font-semibold text-noble-black">
+                    Sign in to post a request
+                  </p>
                   <p class="mt-2 text-[14px] leading-relaxed text-noble-black/60">
                     Browsing stays public, but posting requires a signed-in borrower account.
                   </p>
@@ -207,10 +213,7 @@
                           placeholder="200"
                         />
                       </div>
-                      <span
-                        v-if="fieldErrors.minTargetPrice"
-                        class="text-[12px] text-cinnabar-red"
-                      >
+                      <span v-if="fieldErrors.minTargetPrice" class="text-[12px] text-cinnabar-red">
                         {{ fieldErrors.minTargetPrice }}
                       </span>
                     </label>
@@ -238,10 +241,7 @@
                           placeholder="450"
                         />
                       </div>
-                      <span
-                        v-if="fieldErrors.maxTargetPrice"
-                        class="text-[12px] text-cinnabar-red"
-                      >
+                      <span v-if="fieldErrors.maxTargetPrice" class="text-[12px] text-cinnabar-red">
                         {{ fieldErrors.maxTargetPrice }}
                       </span>
                     </label>
@@ -267,10 +267,12 @@
                     </span>
                   </label>
 
-                  <div class="flex flex-col gap-3 border-t border-cinnamon-ice/20 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    class="flex flex-col gap-3 border-t border-cinnamon-ice/20 pt-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <p class="text-[13px] leading-relaxed text-noble-black/55">
-                      Your request will appear in the active feed immediately and expire automatically
-                      after the requested end date passes.
+                      Your request will appear in the active feed immediately and expire
+                      automatically after the requested end date passes.
                     </p>
                     <button
                       type="submit"
