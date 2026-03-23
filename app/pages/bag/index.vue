@@ -44,7 +44,9 @@ const getItemTotal = (item: BagItem) => {
 const formatPesoAmount = (value: number) =>
   `₱${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
 
-const totalAmount = computed(() => bagItems.value.reduce((sum, item) => sum + getItemTotal(item), 0))
+const totalAmount = computed(() =>
+  bagItems.value.reduce((sum, item) => sum + getItemTotal(item), 0),
+)
 
 const removeItem = async (id: string) => {
   try {
@@ -67,7 +69,8 @@ const removeItem = async (id: string) => {
             Your saved booking drafts
           </h1>
           <p class="mt-2 max-w-2xl font-geist text-sm text-noble-black/60">
-            Items added here stay in your bag after refresh so you can come back and book them later.
+            Items added here stay in your bag after refresh so you can come back and book them
+            later.
           </p>
         </div>
         <div class="rounded-2xl border border-cinnamon-ice bg-white px-4 py-3 text-right shadow-sm">
@@ -144,13 +147,17 @@ const removeItem = async (id: string) => {
 
             <div class="mt-4 grid gap-3 text-sm text-noble-black/70 sm:grid-cols-2">
               <div>
-                <p class="font-geist text-[11px] uppercase tracking-[0.16em] text-noble-black/40">Start</p>
+                <p class="font-geist text-[11px] uppercase tracking-[0.16em] text-noble-black/40">
+                  Start
+                </p>
                 <p class="mt-1 font-geist font-medium text-noble-black">
                   {{ createDateLabel(bagItem.startAt) }} · {{ createTimeLabel(bagItem.startAt) }}
                 </p>
               </div>
               <div>
-                <p class="font-geist text-[11px] uppercase tracking-[0.16em] text-noble-black/40">End</p>
+                <p class="font-geist text-[11px] uppercase tracking-[0.16em] text-noble-black/40">
+                  End
+                </p>
                 <p class="mt-1 font-geist font-medium text-noble-black">
                   {{ createDateLabel(bagItem.endAt) }} · {{ createTimeLabel(bagItem.endAt) }}
                 </p>
@@ -160,9 +167,15 @@ const removeItem = async (id: string) => {
 
           <div class="flex flex-col items-start gap-3 md:items-end">
             <div class="text-left md:text-right">
-              <p class="font-geist text-xs uppercase tracking-[0.18em] text-noble-black/40">Estimate</p>
+              <p class="font-geist text-xs uppercase tracking-[0.18em] text-noble-black/40">
+                Estimate
+              </p>
               <p class="mt-1 font-geist text-2xl font-bold text-burning-orange">
-                {{ bagItem.listingType === "Borrow" ? "Free" : formatPesoAmount(getItemTotal(bagItem)) }}
+                {{
+                  bagItem.listingType === "Borrow"
+                    ? "Free"
+                    : formatPesoAmount(getItemTotal(bagItem))
+                }}
               </p>
               <p class="font-geist text-xs text-noble-black/50">
                 {{ getDurationUnits(bagItem) }} {{ bagItem.priceUnit

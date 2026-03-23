@@ -143,29 +143,29 @@ enum UserStatus {
 }
 
 model Item {
-  id               String        @id @default(uuid())
-  name             String
-  description      String?
-  condition        ItemCondition
-  status           ItemStatus    @default(AVAILABLE)
-  rateOption       RateOption    @default(PER_DAY)
-  createdAt        DateTime      @default(now())
-  rentalFee        Int
-  replacementCost  Int?
-  freeToBorrow     Boolean
-  whatItemOffers   String?
-  whatIsIncluded   String?
-  knownIssues      String?
-  usageLimitations String?
-  isTrending       Boolean       @default(false)
-  viewCount        Int           @default(0)
-  bookingCount     Int           @default(0)
-  likeCount        Int           @default(0)
-  rating           Float         @default(0)
-  lenderId         String
-  borrowerId       String?
-  thumbnailImage String?
-  photos         String[]
+  id                 String               @id @default(uuid())
+  name               String
+  description        String?
+  condition          ItemCondition
+  status             ItemStatus           @default(AVAILABLE)
+  rateOption         RateOption           @default(PER_DAY)
+  createdAt          DateTime             @default(now())
+  rentalFee          Int
+  replacementCost    Int?
+  freeToBorrow       Boolean
+  whatItemOffers     String?
+  whatIsIncluded     String?
+  knownIssues        String?
+  usageLimitations   String?
+  isTrending         Boolean              @default(false)
+  viewCount          Int                  @default(0)
+  bookingCount       Int                  @default(0)
+  likeCount          Int                  @default(0)
+  rating             Float                @default(0)
+  lenderId           String
+  borrowerId         String?
+  thumbnailImage     String?
+  photos             String[]
   borrower           Borrower?            @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
   lender             Lender               @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
   availability       ItemAvailability[]

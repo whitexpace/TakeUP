@@ -62,7 +62,9 @@ const mapCartEntry = (entry: CartEntryWithItem) => ({
   createdAt: entry.createdAt,
 })
 
-const requireBorrowerAccount = async (ctx: Pick<Context, "prisma" | "user"> & { user: { id: string } }) => {
+const requireBorrowerAccount = async (
+  ctx: Pick<Context, "prisma" | "user"> & { user: { id: string } },
+) => {
   const userRecord = await ctx.prisma.user.findUnique({
     where: { id: ctx.user.id },
     select: { accountType: true },
