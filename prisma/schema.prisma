@@ -157,7 +157,8 @@ model User {
 
   points Int @default(0)
 
-  likes Like[]
+  likes        Like[]
+  requestPosts RequestPost[]
 
   lender   Lender?
   borrower Borrower?
@@ -241,4 +242,23 @@ model RentalTransaction {
   @@index([status])
   @@index([createdAt])
   @@map("transactions")
+}
+
+model RequestPost {
+  id             String   @id @default(uuid())
+  requesterId    String
+  itemNeeded     String
+  description    String
+  requestedFrom  DateTime
+  requestedTo    DateTime
+  minTargetPrice Int
+  maxTargetPrice Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  requester User @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([requestedTo])
+  @@index([createdAt])
 }

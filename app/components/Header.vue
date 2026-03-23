@@ -24,7 +24,7 @@ defineOptions({
           class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
           active-class="text-burning-orange"
         >
-          Feed
+          Requests
         </NuxtLink>
         <NuxtLink
           to="/account/listings/new"

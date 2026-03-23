@@ -1,75 +1,127 @@
 <template>
-  <div class="flex flex-col h-screen font-geist bg-white overflow-hidden">
-    <!-- Fixed Header -->
+  <div class="flex h-screen flex-col overflow-hidden bg-white font-geist">
     <Header />
 
-    <!-- Main Scrollable Area -->
-    <main class="flex-1 overflow-y-auto custom-main-scrollbar bg-white">
-      <div class="container mx-auto px-4 py-8 pt-10 max-w-[1440px]">
-        <div class="flex flex-col lg:flex-row gap-10">
-          <!-- Left Column: YOUR ACTIVITY -->
-          <aside class="hidden lg:block lg:w-[240px] xl:w-[280px] shrink-0">
-            <div class="sticky top-6">
-              <CommunityActivitySidebar
-                :posts-made="userActivity.postsMade"
-                :upvotes-received="userActivity.upvotesReceived"
-                :replies="userActivity.replies"
-              />
+    <main class="custom-main-scrollbar flex-1 overflow-y-auto bg-white">
+      <div class="container mx-auto max-w-[1440px] px-4 py-8 pt-10">
+        <div class="flex flex-col gap-10 lg:flex-row">
+          <aside class="hidden w-[240px] shrink-0 lg:block xl:w-[280px]">
+            <div class="sticky top-6 space-y-4">
+              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
+                  Request Board
+                </p>
+                <h2 class="mt-3 text-[22px] font-bold leading-tight text-noble-black">
+                  Browse active community requests
+                </h2>
+                <p class="mt-3 text-[14px] leading-relaxed text-noble-black/60">
+                  The board now shows live request posts only. Creating and replying to requests
+                  will stay in this layout, but those actions are out of scope for this story.
+                </p>
+              </section>
+
+              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-white p-6">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40">
+                  Feed Rules
+                </p>
+                <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
+                  <li>Newest requests appear first.</li>
+                  <li>Only active requests are shown.</li>
+                  <li>Each card shows dates, budget, and requester.</li>
+                </ul>
+              </section>
             </div>
           </aside>
 
-          <!-- Middle Column: Main Feed -->
-          <div class="flex-1 min-w-0 flex flex-col gap-8">
+          <section class="flex min-w-0 flex-1 flex-col gap-8">
             <div class="flex flex-col gap-1">
-              <h1 class="font-rewon text-[42px] text-noble-black leading-tight">Community Feed</h1>
-              <p class="font-geist font-normal text-[18px] text-noble-black/60">
-                Post what you need — the UPC community will help
+              <h1 class="font-rewon text-[42px] leading-tight text-noble-black">Requests</h1>
+              <p class="text-[18px] font-normal text-noble-black/60">
+                Community item requests, ordered by recency
               </p>
             </div>
 
-            <CommunityCreatePost
-              ref="createPostRef"
-              :user-avatar="currentUserAvatar"
-              :user-name="currentUserName"
-              @post="handleNewPost"
-            />
+            <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
+                    Post a request
+                  </p>
+                  <h2 class="mt-2 text-[22px] font-bold text-noble-black">Coming soon</h2>
+                  <p class="mt-2 max-w-[560px] text-[14px] leading-relaxed text-noble-black/60">
+                    This page now serves live request posts from the backend. Creating a new
+                    request stays visually present in the layout, but the write flow is not part
+                    of this branch.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled
+                  class="rounded-full bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white opacity-35 grayscale"
+                >
+                  Post Request
+                </button>
+              </div>
+            </section>
 
             <div class="flex flex-wrap items-center gap-3">
-              <button
-                v-for="filter in filters"
-                :key="filter"
-                class="px-6 py-2 rounded-full text-[14px] font-bold transition-all duration-300 border ease-in-out"
-                :class="
-                  activeFilter === filter
-                    ? 'bg-blue-estate text-white shadow-md transform scale-105 border-blue-estate'
-                    : 'bg-cream text-noble-black/40 hover:bg-white hover:text-noble-black/70 border-transparent hover:border-cinnamon-ice/30 hover:shadow-sm'
-                "
-                @click="activeFilter = filter"
+              <span
+                class="rounded-full border border-blue-estate/10 bg-blue-estate/5 px-6 py-2 text-[14px] font-bold text-blue-estate"
               >
-                {{ filter }}
+                Active requests
+              </span>
+              <span
+                class="rounded-full border border-cinnamon-ice/30 bg-cream px-6 py-2 text-[14px] font-bold text-noble-black/60"
+              >
+                Newest first
+              </span>
+            </div>
+
+            <div v-if="isLoading" class="flex flex-col gap-6">
+              <div
+                v-for="placeholder in 3"
+                :key="placeholder"
+                class="animate-pulse rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6"
+              >
+                <div class="h-4 w-28 rounded bg-white/80" />
+                <div class="mt-4 h-8 w-2/3 rounded bg-white/80" />
+                <div class="mt-4 h-4 w-full rounded bg-white/80" />
+                <div class="mt-2 h-4 w-5/6 rounded bg-white/80" />
+                <div class="mt-6 grid gap-3 sm:grid-cols-3">
+                  <div
+                    v-for="metric in 3"
+                    :key="metric"
+                    class="h-20 rounded-[18px] bg-white/80"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-else-if="errorMessage"
+              class="rounded-[24px] border border-red-200 bg-red-50 p-6 text-red-700"
+            >
+              <p class="text-[16px] font-semibold">Unable to load requests</p>
+              <p class="mt-2 text-[14px]">{{ errorMessage }}</p>
+              <button
+                class="mt-4 rounded-full bg-noble-black px-5 py-2 text-[14px] font-semibold text-white"
+                @click="refresh"
+              >
+                Try again
               </button>
             </div>
 
-            <div v-if="sortedRequests.length > 0" class="flex flex-col gap-6">
-              <CommunityPostCard
-                v-for="request in sortedRequests"
-                :key="request.id"
-                :request="request"
-                :current-user-avatar="currentUserAvatar"
-                :current-user-name="currentUserName"
-                @upvote-post="handleUpvotePost"
-                @upvote-reply="handleUpvoteReply"
-                @add-reply="handleAddReply"
-              />
+            <div v-else-if="posts.length > 0" class="flex flex-col gap-6">
+              <RequestFeedCard v-for="post in posts" :key="post.id" :post="post" />
             </div>
 
-            <!-- Empty State -->
             <div
               v-else
-              class="flex flex-col items-center justify-center py-32 px-6 text-center bg-white rounded-[32px] border border-dashed border-cinnamon-ice/30"
+              class="flex flex-col items-center justify-center rounded-[32px] border border-dashed border-cinnamon-ice/30 bg-white px-6 py-32 text-center"
             >
               <div
-                class="w-20 h-20 bg-cream rounded-full flex items-center justify-center mb-8 text-burning-orange/30"
+                class="mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-cream text-burning-orange/30"
               >
                 <svg
                   width="32"
@@ -86,25 +138,38 @@
                   />
                 </svg>
               </div>
-              <h3 class="text-[22px] font-bold text-noble-black mb-2">
-                Silence is golden, but sharing is better
-              </h3>
-              <p class="text-[15px] text-noble-black/40 max-w-[320px] leading-relaxed mb-8">
-                We couldn't find any requests here. Why not be the first to start a conversation?
+              <h3 class="mb-2 text-[22px] font-bold text-noble-black">No active requests right now</h3>
+              <p class="max-w-[360px] text-[15px] leading-relaxed text-noble-black/40">
+                Check back later for new community requests. Expired requests are removed from the
+                active board automatically.
               </p>
-              <button
-                class="px-8 py-2.5 bg-burning-orange text-white rounded-full font-bold text-[14px] hover:bg-blue-estate transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-                @click="triggerCreatePost"
-              >
-                Create Post
-              </button>
             </div>
-          </div>
+          </section>
 
-          <!-- Right Column: TRENDING NOW -->
-          <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
-            <div class="sticky top-6">
-              <CommunityTrendingSidebar :trending-items="trendingItems" />
+          <aside class="hidden w-[280px] shrink-0 lg:block xl:w-[320px]">
+            <div class="sticky top-6 space-y-4">
+              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-white p-6">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
+                  What each card shows
+                </p>
+                <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
+                  <li>Requested item</li>
+                  <li>Requester username</li>
+                  <li>Requested dates</li>
+                  <li>Target price range</li>
+                  <li>Description and expiry info</li>
+                </ul>
+              </section>
+
+              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40">
+                  Status
+                </p>
+                <p class="mt-3 text-[14px] leading-relaxed text-noble-black/65">
+                  This feed intentionally shows active requests only. Expired requests are excluded
+                  on the backend and won’t appear as active posts.
+                </p>
+              </section>
             </div>
           </aside>
         </div>
@@ -114,307 +179,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue"
-import type {
-  CommunityRequest,
-  UserActivity,
-  TrendingRequest,
-  Reply,
-} from "~/types/community-requests"
-import CommunityCreatePost from "~/components/CommunityCreatePost.vue"
+import { onMounted } from "vue"
+import RequestFeedCard from "../../components/RequestFeedCard.vue"
+import { useRequestFeed } from "../../composables/use-request-feed"
 
 definePageMeta({ layout: false })
 
-const createPostRef = ref<InstanceType<typeof CommunityCreatePost> | null>(null)
+const { posts, isLoading, errorMessage, refresh } = useRequestFeed()
 
-const triggerCreatePost = () => {
-  createPostRef.value?.triggerHighlight()
-}
-
-// Auth State
-const user = useSupabaseUser()
-const asNonEmptyString = (value: unknown) => {
-  if (typeof value !== "string") return undefined
-  const trimmedValue = value.trim()
-  return trimmedValue ? trimmedValue : undefined
-}
-
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== "object" || value === null) return null
-  return value as Record<string, unknown>
-}
-
-const getIdentityMetadata = (authUser: unknown) => {
-  const authUserRecord = asRecord(authUser)
-  const identities = authUserRecord?.identities
-
-  if (!Array.isArray(identities)) return []
-
-  return identities
-    .map((identity) => {
-      const identityRecord = asRecord(identity)
-      return asRecord(identityRecord?.identity_data) ?? asRecord(identityRecord?.provider_metadata)
-    })
-    .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
-}
-
-const buildNameFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return undefined
-
-  const directName =
-    asNonEmptyString(source.full_name) ||
-    asNonEmptyString(source.name) ||
-    asNonEmptyString(source.display_name)
-
-  if (directName) return directName
-
-  const firstName =
-    asNonEmptyString(source.given_name) ||
-    asNonEmptyString(source.first_name) ||
-    asNonEmptyString(source.firstName)
-  const lastName =
-    asNonEmptyString(source.family_name) ||
-    asNonEmptyString(source.last_name) ||
-    asNonEmptyString(source.lastName)
-
-  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
-  return fullName || undefined
-}
-
-const getAvatarFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return undefined
-
-  return (
-    asNonEmptyString(source.picture) ||
-    asNonEmptyString(source.avatar_url) ||
-    asNonEmptyString(source.photo_url) ||
-    asNonEmptyString(source.profile_image) ||
-    asNonEmptyString(source.image)
-  )
-}
-
-const currentUserProfile = computed(() => {
-  const authUser = user.value
-  const authUserRecord = asRecord(authUser)
-  const metadataSources = [
-    asRecord(authUserRecord?.user_metadata),
-    asRecord(authUserRecord?.app_metadata),
-    ...getIdentityMetadata(authUser),
-  ]
-
-  const name =
-    metadataSources.map(buildNameFromSource).find(Boolean) ||
-    asNonEmptyString(authUserRecord?.email) ||
-    "User"
-  const avatar = metadataSources.map(getAvatarFromSource).find(Boolean)
-
-  return { name, avatar }
-})
-
-const currentUserName = computed(() => {
-  return currentUserProfile.value.name
-})
-const currentUserAvatar = computed(() => {
-  return currentUserProfile.value.avatar
-})
-
-const filters = ["Trending", "Newest", "Top Voted", "Unanswered"]
-const activeFilter = ref("Trending")
-
-const userActivity = ref<UserActivity>({ postsMade: 12, upvotesReceived: 450, replies: 28 })
-
-const trendingItems = ref<TrendingRequest[]>([
-  { id: "1", title: "High-end DSLR Camera for weekend", upvotes: 156 },
-  { id: "2", title: "Heavy duty pressure washer", upvotes: 142 },
-  { id: "3", title: "Projector for outdoor movie night", upvotes: 98 },
-  { id: "4", title: "Camping tent (4-person)", upvotes: 87 },
-  { id: "5", title: "Nintendo Switch with Ring Fit", upvotes: 64 },
-])
-
-const now = Date.now()
-
-const requests = ref<CommunityRequest[]>([
-  {
-    id: "101",
-    createdAt: now - 2 * 60 * 60 * 1000,
-    user: { name: "Sarah Jenkins", avatar: "" },
-    timeAgo: "2h ago",
-    flair: "Electronics",
-    title: "Looking for a professional drone for a wedding shoot",
-    description:
-      "My drone crashed during practice and I have a wedding to shoot this weekend in Tagaytay. If anyone has a DJI Mavic 3 or similar that I can rent, please let me know!",
-    upvotes: 42,
-    repliesCount: 8,
-    replies: [
-      {
-        id: "r1",
-        user: { name: "Mike Ross", avatar: "" },
-        text: "I have a Mavic Air 2S if that works for you?",
-        upvotes: 12,
-        replies: [],
-      },
-      {
-        id: "r2",
-        user: { name: "Elena Gilbert", avatar: "" },
-        text: "Check with David, he usually rents out his pro gear.",
-        upvotes: 3,
-        replies: [],
-      },
-      {
-        id: "r3",
-        user: { name: "Harvey Specter", avatar: "" },
-        text: "I can vouch for David, his equipment is top notch.",
-        upvotes: 5,
-        replies: [],
-      },
-      {
-        id: "r4",
-        user: { name: "Rachel Zane", avatar: "" },
-        text: "Is the wedding on Saturday or Sunday?",
-        upvotes: 1,
-        replies: [],
-      },
-      {
-        id: "r5",
-        user: { name: "Louis Litt", avatar: "" },
-        text: "You should definitely get insurance for the rental.",
-        upvotes: 8,
-        replies: [],
-      },
-      {
-        id: "r6",
-        user: { name: "Donna Paulsen", avatar: "" },
-        text: "I know someone who might have a Mavic 3.",
-        upvotes: 4,
-        replies: [],
-      },
-      {
-        id: "r7",
-        user: { name: "Jessica Pearson", avatar: "" },
-        text: "Good luck with the shoot!",
-        upvotes: 2,
-        replies: [],
-      },
-      {
-        id: "r8",
-        user: { name: "Robert Zane", avatar: "" },
-        text: "I have some spare batteries if you need them.",
-        upvotes: 0,
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: "102",
-    createdAt: now - 5 * 60 * 60 * 1000,
-    user: { name: "James Wilson", avatar: "" },
-    timeAgo: "5h ago",
-    flair: "Tools",
-    title: "Need a concrete drill for some DIY home repairs",
-    description:
-      "Just moved into a new place and need to mount some heavy shelves on a concrete wall. Does anyone have a hammer drill I could borrow for a few hours?",
-    upvotes: 15,
-    repliesCount: 1,
-    replies: [
-      {
-        id: "r9",
-        user: { name: "Kevin Hart", avatar: "" },
-        text: "I have one you can use. I live near the central park area.",
-        upvotes: 5,
-        replies: [],
-      },
-    ],
-  },
-])
-
-const sortedRequests = computed(() => {
-  const reqs = [...requests.value]
-  if (activeFilter.value === "Newest") {
-    return [...reqs].sort((left, right) => right.createdAt - left.createdAt)
-  }
-  if (activeFilter.value === "Top Voted") return [...reqs].sort((a, b) => b.upvotes - a.upvotes)
-  if (activeFilter.value === "Unanswered") return reqs.filter((r) => r.repliesCount === 0)
-  return reqs
-})
-
-const handleNewPost = (post: { title: string; description: string; flair: string }) => {
-  const newRequest: CommunityRequest = {
-    id: Date.now().toString(),
-    createdAt: Date.now(),
-    user: { name: currentUserName.value, avatar: currentUserAvatar.value || "" },
-    timeAgo: "Just now",
-    flair: post.flair,
-    title: post.title,
-    description: post.description,
-    upvotes: 0,
-    repliesCount: 0,
-    replies: [],
-  }
-  requests.value.unshift(newRequest)
-  userActivity.value.postsMade++
-}
-
-const handleUpvotePost = (postId: string) => {
-  const post = requests.value.find((r) => r.id === postId)
-  if (post) {
-    userActivity.value.upvotesReceived++
-  }
-}
-
-const handleUpvoteReply = ({
-  postId: _postId,
-  replyId: _replyId,
-}: {
-  postId: string
-  replyId: string
-}) => {
-  userActivity.value.upvotesReceived++
-}
-
-const findReplyRecursive = (replies: Reply[], targetId: string): Reply | null => {
-  for (const reply of replies) {
-    if (reply.id === targetId) return reply
-    if (reply.replies && reply.replies.length > 0) {
-      const found = findReplyRecursive(reply.replies, targetId)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-const handleAddReply = (data: {
-  postId: string
-  parentReplyId?: string | null
-  text: string
-  userName: string
-  userAvatar?: string | null
-}) => {
-  const post = requests.value.find((r) => r.id === data.postId)
-  if (!post) return
-
-  const newReply: Reply = {
-    id: Date.now().toString(),
-    user: { name: data.userName, avatar: data.userAvatar || "" },
-    text: data.text,
-    upvotes: 0,
-    replies: [],
-  }
-
-  if (data.parentReplyId) {
-    const parentReply = findReplyRecursive(post.replies, data.parentReplyId)
-    if (parentReply) {
-      if (!parentReply.replies) parentReply.replies = []
-      parentReply.replies.push(newReply)
-    } else {
-      post.replies.push(newReply)
-    }
-  } else {
-    post.replies.push(newReply)
-  }
-
-  post.repliesCount++
-  userActivity.value.replies++
-}
+onMounted(refresh)
 </script>
 
 <style scoped>
