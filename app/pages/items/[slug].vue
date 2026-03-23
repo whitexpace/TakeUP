@@ -803,9 +803,9 @@ const handleAddToBag = async () => {
     }
   } catch (error: unknown) {
     const statusCode = (error as { statusCode?: number })?.statusCode
-    const statusMessage = (error as { data?: { statusMessage?: string }; statusMessage?: string })
-      ?.data?.statusMessage
-      ?? (error as { statusMessage?: string })?.statusMessage
+    const statusMessage =
+      (error as { data?: { statusMessage?: string }; statusMessage?: string })?.data
+        ?.statusMessage ?? (error as { statusMessage?: string })?.statusMessage
 
     if (statusCode === 401) {
       showBagFeedback("Sign in to add items to your bag.", "error")

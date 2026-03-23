@@ -69,7 +69,10 @@ describe("useBag", () => {
   })
 
   it("adds a new bag item through the backend and updates local state", async () => {
-    vi.stubGlobal("$fetch", vi.fn().mockResolvedValueOnce({ items: [] }).mockResolvedValueOnce(makeBagItem()))
+    vi.stubGlobal(
+      "$fetch",
+      vi.fn().mockResolvedValueOnce({ items: [] }).mockResolvedValueOnce(makeBagItem()),
+    )
     const { useBag } = await import("../use-bag")
 
     const { bagItems, addToBag } = useBag()
