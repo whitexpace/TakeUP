@@ -1,0 +1,2 @@
+-- Reconciles remote-only item request and request offer structures already present in the shared database.
+-- The underlying schema was applied outside this branch history; this local stub restores Prisma migration continuity.

@@ -334,6 +334,7 @@ model User {
   transactionStatusLogsChanged TransactionStatusLog[]
   borrowedTransactions         RentalTransaction[]    @relation("transactions_borrower_user_idToUser")
   lentTransactions             RentalTransaction[]    @relation("transactions_lender_user_idToUser")
+  requestPosts                 RequestPost[]
 }
 
 model Like {
@@ -455,4 +456,23 @@ model TransactionStatusLog {
 
   @@index([transactionId, createdAt(sort: Desc)], map: "idx_status_logs_txn_created")
   @@map("transaction_status_logs")
+}
+
+model RequestPost {
+  id             String   @id @default(uuid())
+  requesterId    String
+  itemNeeded     String
+  description    String
+  requestedFrom  DateTime
+  requestedTo    DateTime
+  minTargetPrice Int
+  maxTargetPrice Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  requester User @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([requestedTo])
+  @@index([createdAt])
 }
