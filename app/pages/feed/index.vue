@@ -1004,9 +1004,13 @@ const userActivity = computed<UserActivity>(() => {
     return { postsMade: 0, offersSent: 0, offersReceived: 0 }
   }
 
-  const myRequests = requests.value.filter((request) => request.borrower.userId === currentDbUserId.value)
+  const myRequests = requests.value.filter(
+    (request) => request.borrower.userId === currentDbUserId.value,
+  )
   const offersSent = requests.value.reduce((count, request) => {
-    return count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
+    return (
+      count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
+    )
   }, 0)
   const offersReceived = myRequests.reduce((count, request) => count + request.offersCount, 0)
 
@@ -1051,7 +1055,9 @@ const sortedRequests = computed(() => {
     })
   }
 
-  return filteredRequests.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+  return filteredRequests.sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  )
 })
 
 const ensureAuthenticatedHeaders = async () => {
@@ -1066,11 +1072,15 @@ const ensureAuthenticatedHeaders = async () => {
 }
 
 const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    requestComposerError.value = "You need to sign in before posting a request."
+    return
+  }
 
   isCreatingRequest.value = true
   feedError.value = null
+  requestComposerError.value = null
 
   try {
     await $fetch("/api/item-requests", {
@@ -1090,7 +1100,10 @@ const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
     feedMainRef.value?.scrollTo({ top: 0, behavior: "smooth" })
   } catch (error) {
     console.error("Failed to create item request", error)
-    feedError.value = "Unable to post your request right now."
+    requestComposerError.value = extractApiErrorMessage(
+      error,
+      "Unable to post your request right now.",
+    )
   } finally {
     isCreatingRequest.value = false
   }
@@ -1106,6 +1119,7 @@ const openOfferComposer = (requestId: number) => {
   }
   if (request.borrower.userId === currentDbUserId.value || request.status !== "OPEN") return
 
+  offerComposerError.value = null
   activeOfferRequestId.value = requestId
   isOfferComposerOpen.value = true
 }
@@ -1115,16 +1129,22 @@ const handleOfferComposerVisibility = (isVisible: boolean) => {
 
   if (!isVisible) {
     activeOfferRequestId.value = null
+    offerComposerError.value = null
   }
 }
 
 const submitOffer = async (offerInput: CommunityOfferFormInput) => {
   const request = selectedRequestForOffer.value
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers || !request) return
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    offerComposerError.value = "You need to sign in before sending an offer."
+    return
+  }
+  if (!request) return
 
   isSubmittingOffer.value = true
   feedError.value = null
+  offerComposerError.value = null
 
   try {
     if (existingOfferForCurrentUser.value) {
@@ -1149,7 +1169,7 @@ const submitOffer = async (offerInput: CommunityOfferFormInput) => {
     handleOfferComposerVisibility(false)
   } catch (error) {
     console.error("Failed to submit offer", error)
-    feedError.value = "Unable to save this offer right now."
+    offerComposerError.value = extractApiErrorMessage(error, "Unable to save this offer right now.")
   } finally {
     isSubmittingOffer.value = false
   }
@@ -1161,6 +1181,7 @@ const cancelOffer = async (offerId: number) => {
 
   isSubmittingOffer.value = true
   feedError.value = null
+  offerComposerError.value = null
 
   try {
     await $fetch(`/api/request-offers/${offerId}`, {
@@ -1175,7 +1196,10 @@ const cancelOffer = async (offerId: number) => {
     handleOfferComposerVisibility(false)
   } catch (error) {
     console.error("Failed to cancel offer", error)
-    feedError.value = "Unable to cancel this offer right now."
+    offerComposerError.value = extractApiErrorMessage(
+      error,
+      "Unable to cancel this offer right now.",
+    )
   } finally {
     isSubmittingOffer.value = false
   }
