@@ -54,7 +54,10 @@ export const handleRequestApiError = (error: unknown): never => {
       console.error("[request api] failed to create request", error)
     }
 
-    throw createRequestApiError(500, "Unable to post request because of an unexpected server error.")
+    throw createRequestApiError(
+      500,
+      "Unable to post request because of an unexpected server error.",
+    )
   }
 
   throw createRequestApiError(500, "Unable to post request because of an unexpected server error.")

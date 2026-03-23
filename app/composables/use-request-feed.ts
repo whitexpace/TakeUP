@@ -1,9 +1,5 @@
 import { ref } from "vue"
-import type {
-  RequestFeedPost,
-  RequestFeedResponse,
-  RequestFormFields,
-} from "../types/request-feed"
+import type { RequestFeedPost, RequestFeedResponse, RequestFormFields } from "../types/request-feed"
 import { validateRequestForm, type RequestFormErrors } from "../utils/request-form"
 
 export const useRequestFeed = () => {

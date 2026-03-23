@@ -44,7 +44,9 @@ describe("request-form validation", () => {
     if (!result.success) {
       expect(result.errors.itemNeeded).toBe("Item name is required.")
       expect(result.errors.description).toBe("Description is required.")
-      expect(result.errors.requestedTo).toBe("Required end date must be on or after the start date.")
+      expect(result.errors.requestedTo).toBe(
+        "Required end date must be on or after the start date.",
+      )
       expect(result.errors.maxTargetPrice).toBe(
         "Maximum target price must be greater than or equal to the minimum target price.",
       )
