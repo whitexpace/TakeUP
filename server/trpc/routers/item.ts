@@ -15,13 +15,26 @@ import {
   KNOWN_SIDEBAR_DB_CATEGORIES,
   UI_OTHERS_SENTINEL,
 } from "../../../shared/schemas/item"
+import { removeItemImagesFromStorage } from "../../utils/item-image-storage"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
+const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+]
 
 const itemWithTaxonomy = {
+  images: {
+    select: {
+      path: true,
+      isPrimary: true,
+      sortOrder: true,
+    },
+    orderBy: itemImageOrderBy,
+  },
   availability: {
     select: {
       id: true,
@@ -54,7 +67,7 @@ const itemWithTaxonomy = {
       },
     },
   },
-} as const
+} satisfies Prisma.ItemInclude
 
 type ItemWithTaxonomy = Prisma.ItemGetPayload<{
   include: typeof itemWithTaxonomy
@@ -258,19 +271,42 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
   return ranked.map((entry) => entry.item)
 }
 
-const mapItemTaxonomy = (item: ItemWithUserLike) => {
-  const { availability, categories, tags, lender, likes, ...rest } = item
+const mapItemTaxonomy = (
+  item: ItemWithUserLike & {
+    images?: Array<{ path: string; isPrimary?: boolean; sortOrder?: number }>
+    thumbnailImage?: string | null
+    photos?: string[]
+  },
+) => {
+  const { availability, categories, tags, lender, likes, images, ...rest } = item
   const lenderUser = lender.user
   const ownerName =
     lenderUser.username ||
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
     lenderUser.email ||
     item.lenderId
+  const orderedPhotos =
+    images?.map((entry) => entry.path) ??
+    item.photos ??
+    (item.thumbnailImage ? [item.thumbnailImage] : [])
+  const thumbnailImage =
+    images?.find((entry) => entry.isPrimary)?.path ??
+    item.thumbnailImage ??
+    orderedPhotos[0] ??
+    null
 
   return {
     ...rest,
     ownerName,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
+    images:
+      images?.map((entry, index) => ({
+        path: entry.path,
+        isPrimary: Boolean(entry.isPrimary),
+        sortOrder: entry.sortOrder ?? index,
+      })) ?? [],
+    thumbnailImage,
+    photos: orderedPhotos,
     availability: availability.map((entry) => ({
       id: entry.id,
       startDate: entry.startDate,
@@ -279,6 +315,66 @@ const mapItemTaxonomy = (item: ItemWithUserLike) => {
     })),
     categories: categories.map((entry) => entry.category),
     tags: tags.map((entry) => entry.tag.name),
+  }
+}
+
+const buildOrderedImagePaths = (thumbnailImage?: string | null, photos?: string[]) => {
+  if (thumbnailImage === undefined && photos === undefined) {
+    return undefined
+  }
+
+  const seenPaths = new Set<string>()
+  return [...(photos ?? []), ...(thumbnailImage ? [thumbnailImage] : [])].filter((path) => {
+    if (!path || seenPaths.has(path)) return false
+    seenPaths.add(path)
+    return true
+  })
+}
+
+const buildCreateImageWrites = (
+  thumbnailImage?: string | null,
+  photos?: string[],
+): Prisma.ItemImageCreateNestedManyWithoutItemInput | undefined => {
+  const orderedPaths = buildOrderedImagePaths(thumbnailImage, photos)
+  if (!orderedPaths || orderedPaths.length === 0) {
+    return undefined
+  }
+
+  const primaryPath =
+    thumbnailImage && orderedPaths.includes(thumbnailImage) ? thumbnailImage : orderedPaths[0]!
+
+  return {
+    create: orderedPaths.map((path, index) => ({
+      path,
+      sortOrder: index,
+      isPrimary: path === primaryPath,
+    })),
+  }
+}
+
+const buildUpdateImageWrites = (
+  thumbnailImage?: string | null,
+  photos?: string[],
+): Prisma.ItemImageUpdateManyWithoutItemNestedInput | undefined => {
+  const orderedPaths = buildOrderedImagePaths(thumbnailImage, photos)
+  if (!orderedPaths) {
+    return undefined
+  }
+
+  if (orderedPaths.length === 0) {
+    return { deleteMany: {} }
+  }
+
+  const primaryPath =
+    thumbnailImage && orderedPaths.includes(thumbnailImage) ? thumbnailImage : orderedPaths[0]!
+
+  return {
+    deleteMany: {},
+    create: orderedPaths.map((path, index) => ({
+      path,
+      sortOrder: index,
+      isPrimary: path === primaryPath,
+    })),
   }
 }
 
@@ -452,12 +548,10 @@ const buildPaginationWhereFromCursor = (cursor: {
 const buildItemInclude = (userId: string | null) =>
   ({
     ...itemWithTaxonomy,
-    likes: userId
-      ? {
-          where: { userId },
-          select: { id: true },
-        }
-      : false,
+    likes: {
+      where: { userId: userId ?? "__anonymous_user__" },
+      select: { id: true },
+    },
   }) satisfies Prisma.ItemInclude
 
 export const itemRouter = router({
@@ -631,12 +725,27 @@ export const itemRouter = router({
   }),
 
   create: protectedProcedure.input(createItemSchema).mutation(async ({ ctx, input }) => {
+    const existingUser = await ctx.prisma.user.findUnique({
+      where: { id: ctx.user.id },
+      select: { id: true },
+    })
+
+    if (!existingUser) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Your account is missing from the database. Sign out and sign in again before publishing an item.",
+      })
+    }
+
     // Ensure Lender profile exists for this user
     await ctx.prisma.lender.upsert({
       where: { userId: ctx.user.id },
       create: { userId: ctx.user.id, lenderRating: 0 },
       update: {},
     })
+
+    const imageWrites = buildCreateImageWrites(input.thumbnailImage, input.photos)
 
     return ctx.prisma.item
       .create({
@@ -660,13 +769,12 @@ export const itemRouter = router({
           whatIsIncluded: input.whatIsIncluded ?? null,
           knownIssues: input.knownIssues ?? null,
           usageLimitations: input.usageLimitations ?? null,
-          thumbnailImage: input.thumbnailImage ?? null,
           isTrending: input.isTrending ?? false,
           viewCount: input.viewCount ?? 0,
           bookingCount: input.bookingCount ?? 0,
           likeCount: input.likeCount ?? 0,
-          photos: input.photos,
           lenderId: ctx.user.id,
+          ...(imageWrites ? { images: imageWrites } : {}),
           categories: {
             create: input.categories.map((category) => ({ category })),
           },
@@ -698,7 +806,14 @@ export const itemRouter = router({
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
     const existing = await ctx.prisma.item.findUnique({
       where: { id: input.id },
-      select: { lenderId: true },
+      select: {
+        lenderId: true,
+        images: {
+          select: {
+            path: true,
+          },
+        },
+      },
     })
 
     if (!existing) {
@@ -709,9 +824,14 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
     }
 
-    const { id, availability, categories, tags, ...data } = input
+    const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
+    const imageWrites = buildUpdateImageWrites(thumbnailImage, photos)
+    const nextImageUrls = new Set(buildOrderedImagePaths(thumbnailImage, photos) ?? [])
+    const removedImageUrls = existing.images
+      .map((image) => image.path)
+      .filter((path) => !nextImageUrls.has(path))
 
-    return ctx.prisma.item
+    const updatedItem = await ctx.prisma.item
       .update({
         where: { id },
         data: {
@@ -751,10 +871,19 @@ export const itemRouter = router({
                 },
               }
             : {}),
+          ...(imageWrites ? { images: imageWrites } : {}),
         },
         include: itemWithTaxonomy,
       })
       .then(mapItemTaxonomy)
+
+    void removeItemImagesFromStorage(removedImageUrls, {
+      bucket: useRuntimeConfig(ctx.event).public.itemImageBucket,
+      supabaseUrl: useRuntimeConfig(ctx.event).public.supabase.url,
+      serviceRoleKey: useRuntimeConfig(ctx.event).supabaseServiceRoleKey,
+    })
+
+    return updatedItem
   }),
 
   delete: protectedProcedure.input(deleteItemSchema).mutation(async ({ ctx, input }) => {

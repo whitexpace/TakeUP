@@ -1,0 +1,12 @@
+table_name,row_count
+_prisma_migrations,13
+Admin,0
+Borrower,12
+Item,101
+ItemAvailability,500
+ItemCategoryOnItem,197
+ItemTagOnItem,296
+Lender,16
+Like,1
+Tag,15
+User,24

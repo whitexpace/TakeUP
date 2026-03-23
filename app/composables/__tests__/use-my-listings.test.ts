@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { MyListingItem } from "../use-my-listings"
 import { useMyListings } from "../use-my-listings"
+import * as paginatedItemsModule from "../use-paginated-items"
+import * as filteredResultsCountModule from "../use-filtered-results-count"
 
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -16,6 +18,7 @@ const makeItem = (id = ITEM_ID) =>
     rateOption: "PER_DAY",
     rentalFee: 100,
     replacementCost: null,
+    images: [],
     thumbnailImage: null,
     photos: [],
     categories: ["ELECTRONICS"],
@@ -121,6 +124,38 @@ describe("useMyListings", () => {
     )
   })
 
+  it("createListing invalidates item search caches after creating an item", async () => {
+    const resetPaginatedItemsCache = vi.spyOn(paginatedItemsModule, "resetPaginatedItemsCache")
+    const resetFilteredResultsCountCache = vi.spyOn(
+      filteredResultsCountModule,
+      "resetFilteredResultsCountCache",
+    )
+    fetchMock = vi.fn().mockResolvedValue(makeItem())
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { createListing } = useMyListings()
+    await createListing({ name: "New Item" })
+
+    expect(resetPaginatedItemsCache).toHaveBeenCalledTimes(1)
+    expect(resetFilteredResultsCountCache).toHaveBeenCalledTimes(1)
+  })
+
+  it("toggleStatus invalidates item search caches after updating an item", async () => {
+    const resetPaginatedItemsCache = vi.spyOn(paginatedItemsModule, "resetPaginatedItemsCache")
+    const resetFilteredResultsCountCache = vi.spyOn(
+      filteredResultsCountModule,
+      "resetFilteredResultsCountCache",
+    )
+    fetchMock = vi.fn().mockResolvedValue({ ...makeItem(), status: "DEACTIVATED" })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { toggleStatus } = useMyListings()
+    await toggleStatus(ITEM_ID, "DEACTIVATED")
+
+    expect(resetPaginatedItemsCache).toHaveBeenCalledTimes(1)
+    expect(resetFilteredResultsCountCache).toHaveBeenCalledTimes(1)
+  })
+
   it("toggleStatus calls status endpoint and updates listing in place", async () => {
     const deactivated = { ...makeItem(), status: "DEACTIVATED" }
     fetchMock = vi.fn().mockResolvedValue(deactivated)
@@ -136,5 +171,59 @@ describe("useMyListings", () => {
       `/api/items/${ITEM_ID}/status`,
       expect.objectContaining({ method: "PATCH", body: { status: "DEACTIVATED" } }),
     )
+  })
+
+  it("refresh marks the initial fetch as loaded after completing", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { hasFetched, refresh } = useMyListings()
+
+    expect(hasFetched.value).toBe(false)
+
+    await refresh()
+
+    expect(hasFetched.value).toBe(true)
+  })
+
+  it("ignores stale responses from older refresh calls", async () => {
+    let resolveFirst: ((value: { items: MyListingItem[]; nextCursor: null }) => void) | undefined
+    let resolveSecond: ((value: { items: MyListingItem[]; nextCursor: null }) => void) | undefined
+
+    fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          }),
+      )
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { listings, refresh } = useMyListings()
+
+    const firstRefresh = refresh()
+    const secondRefresh = refresh()
+
+    resolveFirst?.({
+      items: [makeItem("33333333-3333-3333-3333-333333333333")],
+      nextCursor: null,
+    })
+    await firstRefresh
+
+    resolveSecond?.({
+      items: [makeItem("44444444-4444-4444-4444-444444444444")],
+      nextCursor: null,
+    })
+    await secondRefresh
+
+    expect(listings.value).toHaveLength(1)
+    expect(listings.value[0]!.id).toBe("44444444-4444-4444-4444-444444444444")
   })
 })

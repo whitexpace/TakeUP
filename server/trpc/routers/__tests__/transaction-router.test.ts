@@ -30,7 +30,27 @@ const makeTx = (id: string, overrides: Record<string, unknown> = {}) => ({
 
 const makeContext = (user = mockUser, findMany = vi.fn().mockResolvedValue([])) => ({
   event: { context: {} } as never,
-  prisma: { rentalTransaction: { findMany } } as never,
+  prisma: {
+    rentalTransaction: { findMany },
+    user: {
+      findMany: vi.fn().mockResolvedValue([
+        {
+          id: USER_ID,
+          username: "borrower1",
+          firstName: "Borrow",
+          middleName: null,
+          lastName: "Er",
+        },
+        {
+          id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+          username: "lender1",
+          firstName: "Lend",
+          middleName: null,
+          lastName: "Er",
+        },
+      ]),
+    },
+  } as never,
   user,
 })
 
@@ -96,7 +116,7 @@ describe("transactionRouter", () => {
       expect(findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([{ status: "COMPLETED" }]),
+            AND: expect.arrayContaining([{ status: { in: ["COMPLETED"] } }]),
           }),
         }),
       )

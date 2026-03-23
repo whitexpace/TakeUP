@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { useBag } from "../composables/use-bag"
+
 defineOptions({
   name: "AppHeader",
 })
+
+const { bagCount } = useBag()
 </script>
 
 <template>
@@ -102,9 +106,11 @@ defineOptions({
       </button>
 
       <!-- Cart Icon -->
-      <button
-        class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1"
-        title="Cart"
+      <NuxtLink
+        to="/bag"
+        class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1 relative"
+        active-class="text-burning-orange"
+        title="Bag"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -121,7 +127,13 @@ defineOptions({
           <path d="M3 6h18" />
           <path d="M16 10a4 4 0 0 1-8 0" />
         </svg>
-      </button>
+        <span
+          v-if="bagCount > 0"
+          class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-burning-orange text-white text-[10px] font-bold flex items-center justify-center border border-white rounded-full px-1 shadow-sm"
+        >
+          {{ bagCount }}
+        </span>
+      </NuxtLink>
 
       <!-- Profile Icon (Always Visible) -->
       <NuxtLink
