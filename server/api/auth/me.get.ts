@@ -1,8 +1,9 @@
 import { createError } from "h3"
-import type { SessionUser } from "../../utils/auth-session"
+import { createContext } from "../../trpc/context"
 
-export default defineEventHandler((event) => {
-  const user = event.context.authUser as SessionUser | undefined
+export default defineEventHandler(async (event) => {
+  const { user } = await createContext(event)
+
   if (!user) {
     throw createError({
       statusCode: 401,

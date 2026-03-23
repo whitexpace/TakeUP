@@ -1,33 +1,29 @@
 <template>
   <div class="flex flex-col h-screen font-geist bg-white overflow-hidden">
-    <!-- Fixed Header -->
     <Header
       :notifications="currentUserNotifications"
       @mark-notification-read="markNotificationRead"
       @mark-all-notifications-read="markAllNotificationsRead"
     />
 
-    <!-- Main Scrollable Area -->
     <main ref="feedMainRef" class="flex-1 overflow-y-auto custom-main-scrollbar bg-white">
       <div class="container mx-auto px-4 py-8 pt-10 max-w-[1440px]">
         <div class="flex flex-col lg:flex-row gap-10">
-          <!-- Left Column: YOUR ACTIVITY -->
           <aside class="hidden lg:block lg:w-[240px] xl:w-[280px] shrink-0">
             <div class="sticky top-6">
               <CommunityActivitySidebar
                 :posts-made="userActivity.postsMade"
-                :upvotes-received="userActivity.upvotesReceived"
-                :replies="userActivity.replies"
+                :offers-sent="userActivity.offersSent"
+                :offers-received="userActivity.offersReceived"
               />
             </div>
           </aside>
 
-          <!-- Middle Column: Main Feed -->
           <div class="flex-1 min-w-0 flex flex-col gap-8">
             <div class="flex flex-col gap-1">
               <h1 class="font-rewon text-[42px] text-noble-black leading-tight">Community Feed</h1>
               <p class="font-geist font-normal text-[18px] text-noble-black/60">
-                Post what you need — the UPC community will help
+                Post what you need and receive offers directly from the UPC community
               </p>
             </div>
 
@@ -35,8 +31,24 @@
               ref="createPostRef"
               :user-avatar="currentUserAvatar"
               :user-name="currentUserName"
-              @post="handleNewPost"
+              :is-submitting="isCreatingRequest"
+              @post="handleCreateRequest"
             />
+
+            <div
+              v-if="feedError"
+              class="rounded-[20px] border border-burning-orange/20 bg-burning-orange/5 px-5 py-4 text-[14px] text-burning-orange"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>{{ feedError }}</span>
+                <button
+                  class="rounded-full border border-burning-orange/20 px-4 py-2 text-[12px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
+                  @click="refreshFeed"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
 
             <div class="flex flex-wrap items-center gap-3">
               <button
@@ -54,22 +66,26 @@
               </button>
             </div>
 
-            <div v-if="sortedRequests.length > 0" class="flex flex-col gap-6">
+            <div
+              v-if="isLoadingFeed"
+              class="rounded-[32px] border border-cinnamon-ice/20 bg-cream px-8 py-16 text-center text-[15px] text-noble-black/50"
+            >
+              Loading live community requests...
+            </div>
+
+            <div v-else-if="sortedRequests.length > 0" class="flex flex-col gap-6">
               <CommunityPostCard
                 v-for="request in sortedRequests"
                 :key="request.id"
                 :request="request"
-                :current-user-id="sessionCommunityUserId"
-                :current-user-avatar="currentUserAvatar"
-                :current-user-name="currentUserName"
-                @upvote-post="handleUpvotePost"
-                @upvote-reply="handleUpvoteReply"
-                @add-reply="handleAddReply"
+                :current-user-id="currentDbUserId"
                 @offer-item="openOfferComposer"
+                @update-request-status="handleUpdateRequestStatus"
+                @delete-request="handleDeleteRequest"
+                @update-offer-status="handleUpdateOfferStatus"
               />
             </div>
 
-            <!-- Empty State -->
             <div
               v-else
               class="flex flex-col items-center justify-center py-32 px-6 text-center bg-white rounded-[32px] border border-dashed border-cinnamon-ice/30"
@@ -93,21 +109,20 @@
                 </svg>
               </div>
               <h3 class="text-[22px] font-bold text-noble-black mb-2">
-                Silence is golden, but sharing is better
+                No live requests yet
               </h3>
-              <p class="text-[15px] text-noble-black/40 max-w-[320px] leading-relaxed mb-8">
-                We couldn't find any requests here. Why not be the first to start a conversation?
+              <p class="text-[15px] text-noble-black/40 max-w-[360px] leading-relaxed mb-8">
+                The feed is now reading directly from the database. Create the first request to get it started.
               </p>
               <button
                 class="px-8 py-2.5 bg-burning-orange text-white rounded-full font-bold text-[14px] hover:bg-blue-estate transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                 @click="triggerCreatePost"
               >
-                Create Post
+                Create Request
               </button>
             </div>
           </div>
 
-          <!-- Right Column: TRENDING NOW -->
           <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
             <div class="sticky top-6">
               <CommunityTrendingSidebar :trending-items="trendingItems" />
@@ -119,10 +134,13 @@
 
     <CommunityOfferModal
       :model-value="isOfferComposerOpen"
-      :request-title="selectedRequestForOffer?.title ?? ''"
+      :request-title="selectedRequestForOffer?.itemNeeded ?? ''"
+      :items="offerableItems"
       :existing-offer="existingOfferForCurrentUser"
+      :is-submitting="isSubmittingOffer"
       @update:model-value="handleOfferComposerVisibility"
       @submit="submitOffer"
+      @cancel-offer="cancelOffer"
     />
   </div>
 </template>
@@ -134,16 +152,80 @@ import type {
   CommunityOffer,
   CommunityOfferFormInput,
   CommunityOfferNotification,
+  CommunityOfferStatus,
+  CommunityOfferableItem,
   CommunityRequest,
-  UserActivity,
+  CommunityRequestComposerInput,
+  CommunityRequestStatus,
   TrendingRequest,
-  Reply,
+  UserActivity,
 } from "~/types/community-requests"
 import CommunityCreatePost from "~/components/CommunityCreatePost.vue"
 
 definePageMeta({ layout: false })
 
-const COMMUNITY_FEED_STORAGE_KEY = "takeup-community-feed-v1"
+type ApiCommunityMember = {
+  profileId: number
+  userId: string
+  name: string
+  avatar: string
+}
+
+type ApiCommunityOffer = {
+  id: number
+  lenderID: number
+  requestID: number
+  itemID: number
+  itemName: string
+  rentalFee: number
+  availability: boolean
+  condition: string
+  rentalTerms: string
+  status: string
+  borrowerReadAt: string | Date | null
+  createdAt: string | Date
+  updatedAt: string | Date
+  lender: ApiCommunityMember
+}
+
+type ApiCommunityRequest = {
+  id: number
+  borrowerID: number
+  itemNeeded: string
+  requestedDates: Array<string | Date>
+  priceRange: number[]
+  description: string
+  status: string
+  createdAt: string | Date
+  updatedAt: string | Date
+  offersCount: number
+  borrower: ApiCommunityMember
+  offers: ApiCommunityOffer[]
+}
+
+type ApiCommunityNotification = {
+  id: number
+  requestId: number
+  requestTitle: string
+  recipientId: number
+  actorName: string
+  itemName: string
+  fee: number
+  createdAt: string | Date
+  read: boolean
+}
+
+type ApiOfferableItem = {
+  id: string
+  numericId: number
+  name: string
+  condition: string
+  rentalFee: number
+  freeToBorrow: boolean
+  status: string
+  rateOption: string
+  createdAt: string | Date
+}
 
 const createPostRef = ref<InstanceType<typeof CommunityCreatePost> | null>(null)
 const feedMainRef = ref<HTMLElement | null>(null)
@@ -152,8 +234,9 @@ const triggerCreatePost = () => {
   createPostRef.value?.triggerHighlight()
 }
 
-// Auth State
+const supabase = useSupabaseClient()
 const user = useSupabaseUser()
+
 const asNonEmptyString = (value: unknown) => {
   if (typeof value !== "string") return undefined
   const trimmedValue = value.trim()
@@ -232,344 +315,173 @@ const currentUserProfile = computed(() => {
   return { name, avatar }
 })
 
-const currentUserName = computed(() => {
-  return currentUserProfile.value.name
-})
-const currentUserAvatar = computed(() => {
-  return currentUserProfile.value.avatar
-})
-const currentUserId = computed(() => {
-  const authUserRecord = asRecord(user.value)
-  return (
-    asNonEmptyString(authUserRecord?.id) ||
-    asNonEmptyString(authUserRecord?.email) ||
-    currentUserName.value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "") ||
-    "user"
-  )
-})
-const sessionCommunityUserId = ref(currentUserId.value)
+const currentUserName = computed(() => currentUserProfile.value.name)
+const currentUserAvatar = computed(() => currentUserProfile.value.avatar)
 
-const filters = ["Trending", "Newest", "Top Voted", "Unanswered"]
-const activeFilter = ref("Trending")
+const filters = ["Newest", "Most Offers", "Open", "My Requests"] as const
+const activeFilter = ref<(typeof filters)[number]>("Newest")
 
-const userActivity = ref<UserActivity>({ postsMade: 13, upvotesReceived: 450, replies: 29 })
+const requests = ref<CommunityRequest[]>([])
+const notifications = ref<CommunityOfferNotification[]>([])
+const offerableItems = ref<CommunityOfferableItem[]>([])
+const currentDbUserId = ref("")
+const isLoadingFeed = ref(true)
+const isCreatingRequest = ref(false)
+const isSubmittingOffer = ref(false)
+const feedError = ref<string | null>(null)
+const isOfferComposerOpen = ref(false)
+const activeOfferRequestId = ref<number | null>(null)
+const feedHydrated = ref(false)
 
-const trendingItems = ref<TrendingRequest[]>([
-  { id: "1", title: "High-end DSLR Camera for weekend", upvotes: 156 },
-  { id: "2", title: "Heavy duty pressure washer", upvotes: 142 },
-  { id: "3", title: "Projector for outdoor movie night", upvotes: 98 },
-  { id: "4", title: "Camping tent (4-person)", upvotes: 87 },
-  { id: "5", title: "Nintendo Switch with Ring Fit", upvotes: 64 },
-])
-
-const now = Date.now()
-
-const createMember = (id: string, name: string, avatar = ""): CommunityMember => ({
-  id,
-  name,
-  avatar,
-})
-
-const toCommunityId = (value: string, fallback = "user") => {
-  const normalized = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-
-  return normalized || fallback
+const toDate = (value: string | Date | null | undefined) => {
+  if (!value) return null
+  return value instanceof Date ? value : new Date(value)
 }
 
-const normalizeMember = (
-  member: Partial<CommunityMember> | null | undefined,
-  fallbackName = "User",
-): CommunityMember => {
-  const name = asNonEmptyString(member?.name) || fallbackName
-  return {
-    id: asNonEmptyString(member?.id) || toCommunityId(name),
-    name,
-    avatar: asNonEmptyString(member?.avatar) || "",
-  }
-}
-
-const normalizeReply = (reply: Reply): Reply => ({
-  id: asNonEmptyString(reply.id) || Date.now().toString(),
-  user: {
-    name: asNonEmptyString(reply.user?.name) || "User",
-    avatar: asNonEmptyString(reply.user?.avatar) || "",
-  },
-  text: asNonEmptyString(reply.text) || "",
-  upvotes: typeof reply.upvotes === "number" ? reply.upvotes : 0,
-  replies: Array.isArray(reply.replies) ? reply.replies.map(normalizeReply) : [],
+const normalizeMember = (member: ApiCommunityMember): CommunityMember => ({
+  profileId: Number(member.profileId),
+  userId: member.userId,
+  name: member.name,
+  avatar: member.avatar || "",
 })
 
-const normalizeOffer = (offer: CommunityOffer): CommunityOffer => ({
-  id: asNonEmptyString(offer.id) || `offer-${Date.now()}`,
-  itemName: asNonEmptyString(offer.itemName) || "Untitled item",
-  lender: normalizeMember(offer.lender, "Lender"),
-  rentalTerms: asNonEmptyString(offer.rentalTerms) || "",
-  fee: typeof offer.fee === "number" && Number.isFinite(offer.fee) ? offer.fee : 0,
-  condition: offer.condition || "Good",
-  availabilityConfirmed: Boolean(offer.availabilityConfirmed),
-  createdAt:
-    typeof offer.createdAt === "number" && Number.isFinite(offer.createdAt)
-      ? offer.createdAt
-      : Date.now(),
+const normalizeOffer = (offer: ApiCommunityOffer): CommunityOffer => ({
+  id: Number(offer.id),
+  lenderID: Number(offer.lenderID),
+  requestID: Number(offer.requestID),
+  itemID: Number(offer.itemID),
+  itemName: offer.itemName,
+  rentalFee: Number(offer.rentalFee),
+  availability: Boolean(offer.availability),
+  condition: offer.condition as CommunityOffer["condition"],
+  rentalTerms: offer.rentalTerms ?? "",
+  status: offer.status as CommunityOfferStatus,
+  borrowerReadAt: toDate(offer.borrowerReadAt),
+  createdAt: toDate(offer.createdAt) ?? new Date(),
+  updatedAt: toDate(offer.updatedAt) ?? new Date(),
+  lender: normalizeMember(offer.lender),
 })
 
-const normalizeRequest = (request: CommunityRequest): CommunityRequest => ({
-  id: asNonEmptyString(request.id) || Date.now().toString(),
-  createdAt:
-    typeof request.createdAt === "number" && Number.isFinite(request.createdAt)
-      ? request.createdAt
-      : Date.now(),
-  user: normalizeMember(request.user, "User"),
-  timeAgo: asNonEmptyString(request.timeAgo) || "Just now",
-  flair: asNonEmptyString(request.flair) || "General",
-  title: asNonEmptyString(request.title) || "Untitled request",
-  description: asNonEmptyString(request.description) || "",
-  upvotes: typeof request.upvotes === "number" ? request.upvotes : 0,
-  repliesCount: typeof request.repliesCount === "number" ? request.repliesCount : 0,
-  replies: Array.isArray(request.replies) ? request.replies.map(normalizeReply) : [],
-  offers: Array.isArray(request.offers) ? request.offers.map(normalizeOffer) : [],
+const normalizeRequest = (request: ApiCommunityRequest): CommunityRequest => ({
+  id: Number(request.id),
+  borrowerID: Number(request.borrowerID),
+  itemNeeded: request.itemNeeded,
+  requestedDates: request.requestedDates
+    .map((value) => toDate(value))
+    .filter((value): value is Date => Boolean(value)),
+  priceRange: [Number(request.priceRange[0] ?? 0), Number(request.priceRange[1] ?? 0)],
+  description: request.description,
+  status: request.status as CommunityRequestStatus,
+  createdAt: toDate(request.createdAt) ?? new Date(),
+  updatedAt: toDate(request.updatedAt) ?? new Date(),
+  offersCount: Number(request.offersCount ?? 0),
+  borrower: normalizeMember(request.borrower),
+  offers: request.offers.map(normalizeOffer),
 })
 
 const normalizeNotification = (
-  notification: CommunityOfferNotification,
+  notification: ApiCommunityNotification,
 ): CommunityOfferNotification => ({
-  id: asNonEmptyString(notification.id) || `notif-${Date.now()}`,
-  requestId: asNonEmptyString(notification.requestId) || "",
-  requestTitle: asNonEmptyString(notification.requestTitle) || "Request",
-  recipientId: asNonEmptyString(notification.recipientId) || "",
-  actorName: asNonEmptyString(notification.actorName) || "User",
-  itemName: asNonEmptyString(notification.itemName) || "Item",
-  fee:
-    typeof notification.fee === "number" && Number.isFinite(notification.fee)
-      ? notification.fee
-      : 0,
-  createdAt:
-    typeof notification.createdAt === "number" && Number.isFinite(notification.createdAt)
-      ? notification.createdAt
-      : Date.now(),
+  id: Number(notification.id),
+  requestId: Number(notification.requestId),
+  requestTitle: notification.requestTitle,
+  recipientId: Number(notification.recipientId),
+  actorName: notification.actorName,
+  itemName: notification.itemName,
+  fee: Number(notification.fee),
+  createdAt: toDate(notification.createdAt) ?? new Date(),
   read: Boolean(notification.read),
 })
 
-const createSeedRequests = (viewer: CommunityMember): CommunityRequest[] => [
-  {
-    id: "100",
-    createdAt: now - 60 * 60 * 1000,
-    user: viewer,
-    timeAgo: "1h ago",
-    flair: "Presentation Gear",
-    title: "Need a projector setup for our thesis defense this Friday",
-    description:
-      "Looking for a projector with HDMI and enough brightness for a classroom presentation. We only need it for one afternoon and can meet on campus for pickup.",
-    upvotes: 19,
-    repliesCount: 2,
-    replies: [
-      {
-        id: "r0-1",
-        user: { name: "Lara Cruz", avatar: "" },
-        text: "Try asking in the architecture org chat too. They usually have one.",
-        upvotes: 6,
-        replies: [],
-      },
-      {
-        id: "r0-2",
-        user: { name: "Paolo Lim", avatar: "" },
-        text: "Do you need a screen as well or projector only?",
-        upvotes: 2,
-        replies: [],
-      },
-    ],
-    offers: [
-      {
-        id: "offer-seed-1",
-        itemName: "Epson EB-X06 Projector",
-        lender: createMember("ava-mendoza", "Ava Mendoza"),
-        rentalTerms:
-          "Available Friday until 7 PM. Includes HDMI cable and carrying sleeve. Please return to Sunken Garden after the defense.",
-        fee: 500,
-        condition: "Like New",
-        availabilityConfirmed: true,
-        createdAt: now - 15 * 60 * 1000,
-      },
-    ],
-  },
-  {
-    id: "101",
-    createdAt: now - 2 * 60 * 60 * 1000,
-    user: createMember("sarah-jenkins", "Sarah Jenkins"),
-    timeAgo: "2h ago",
-    flair: "Electronics",
-    title: "Looking for a professional drone for a wedding shoot",
-    description:
-      "My drone crashed during practice and I have a wedding to shoot this weekend in Tagaytay. If anyone has a DJI Mavic 3 or similar that I can rent, please let me know!",
-    upvotes: 42,
-    repliesCount: 8,
-    replies: [
-      {
-        id: "r1",
-        user: { name: "Mike Ross", avatar: "" },
-        text: "I have a Mavic Air 2S if that works for you?",
-        upvotes: 12,
-        replies: [],
-      },
-      {
-        id: "r2",
-        user: { name: "Elena Gilbert", avatar: "" },
-        text: "Check with David, he usually rents out his pro gear.",
-        upvotes: 3,
-        replies: [],
-      },
-      {
-        id: "r3",
-        user: { name: "Harvey Specter", avatar: "" },
-        text: "I can vouch for David, his equipment is top notch.",
-        upvotes: 5,
-        replies: [],
-      },
-      {
-        id: "r4",
-        user: { name: "Rachel Zane", avatar: "" },
-        text: "Is the wedding on Saturday or Sunday?",
-        upvotes: 1,
-        replies: [],
-      },
-      {
-        id: "r5",
-        user: { name: "Louis Litt", avatar: "" },
-        text: "You should definitely get insurance for the rental.",
-        upvotes: 8,
-        replies: [],
-      },
-      {
-        id: "r6",
-        user: { name: "Donna Paulsen", avatar: "" },
-        text: "I know someone who might have a Mavic 3.",
-        upvotes: 4,
-        replies: [],
-      },
-      {
-        id: "r7",
-        user: { name: "Jessica Pearson", avatar: "" },
-        text: "Good luck with the shoot!",
-        upvotes: 2,
-        replies: [],
-      },
-      {
-        id: "r8",
-        user: { name: "Robert Zane", avatar: "" },
-        text: "I have some spare batteries if you need them.",
-        upvotes: 0,
-        replies: [],
-      },
-    ],
-    offers: [],
-  },
-  {
-    id: "102",
-    createdAt: now - 5 * 60 * 60 * 1000,
-    user: createMember("james-wilson", "James Wilson"),
-    timeAgo: "5h ago",
-    flair: "Tools",
-    title: "Need a concrete drill for some DIY home repairs",
-    description:
-      "Just moved into a new place and need to mount some heavy shelves on a concrete wall. Does anyone have a hammer drill I could borrow for a few hours?",
-    upvotes: 15,
-    repliesCount: 1,
-    replies: [
-      {
-        id: "r9",
-        user: { name: "Kevin Hart", avatar: "" },
-        text: "I have one you can use. I live near the central park area.",
-        upvotes: 5,
-        replies: [],
-      },
-    ],
-    offers: [],
-  },
-]
-
-const createSeedNotifications = (viewer: CommunityMember): CommunityOfferNotification[] => [
-  {
-    id: "notif-seed-1",
-    requestId: "100",
-    requestTitle: "Need a projector setup for our thesis defense this Friday",
-    recipientId: viewer.id,
-    actorName: "Ava Mendoza",
-    itemName: "Epson EB-X06 Projector",
-    fee: 500,
-    createdAt: now - 15 * 60 * 1000,
-    read: false,
-  },
-]
-
-const viewer = computed<CommunityMember>(() => {
-  return createMember(
-    sessionCommunityUserId.value,
-    currentUserName.value,
-    currentUserAvatar.value || "",
-  )
+const normalizeOfferableItem = (item: ApiOfferableItem): CommunityOfferableItem => ({
+  id: item.id,
+  numericId: Number(item.numericId),
+  name: item.name,
+  condition: item.condition as CommunityOfferableItem["condition"],
+  rentalFee: Number(item.rentalFee),
+  freeToBorrow: Boolean(item.freeToBorrow),
+  status: item.status,
+  rateOption: item.rateOption,
+  createdAt: toDate(item.createdAt) ?? new Date(),
 })
 
-const requests = ref<CommunityRequest[]>(createSeedRequests(viewer.value))
-const notifications = ref<CommunityOfferNotification[]>(createSeedNotifications(viewer.value))
-const isOfferComposerOpen = ref(false)
-const activeOfferRequestId = ref<string | null>(null)
-const feedStorageHydrated = ref(false)
+const getAccessToken = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-onMounted(() => {
-  const savedFeed = localStorage.getItem(COMMUNITY_FEED_STORAGE_KEY)
+  return session?.access_token
+}
 
-  if (!savedFeed) {
-    feedStorageHydrated.value = true
-    return
+const getAuthHeaders = async () => {
+  const accessToken = await getAccessToken()
+  if (!accessToken) return undefined
+
+  return {
+    authorization: `Bearer ${accessToken}`,
   }
+}
+
+const enumerateRequestedDates = (startDate: string, endDate: string) => {
+  const dates: string[] = []
+  const cursor = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T00:00:00`)
+
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(new Date(cursor).toISOString())
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return dates
+}
+
+const refreshFeed = async () => {
+  if (feedHydrated.value) {
+    isLoadingFeed.value = false
+  } else {
+    isLoadingFeed.value = true
+  }
+
+  feedError.value = null
 
   try {
-    const parsed = JSON.parse(savedFeed) as Partial<{
-      requests: CommunityRequest[]
-      notifications: CommunityOfferNotification[]
-    }>
+    const headers = await getAuthHeaders()
 
-    if (Array.isArray(parsed.requests)) {
-      requests.value = parsed.requests.map(normalizeRequest)
+    if (headers) {
+      try {
+        const authResponse = await $fetch<{ user: { id: string } }>("/api/auth/me", { headers })
+        currentDbUserId.value = authResponse.user.id
+      } catch {
+        currentDbUserId.value = ""
+      }
+    } else {
+      currentDbUserId.value = ""
     }
 
-    if (Array.isArray(parsed.notifications)) {
-      notifications.value = parsed.notifications.map(normalizeNotification)
-    }
-  } catch (error) {
-    console.error("Failed to parse community feed state", error)
-  } finally {
-    feedStorageHydrated.value = true
-  }
-})
-
-watch(
-  [requests, notifications],
-  ([nextRequests, nextNotifications]) => {
-    if (!feedStorageHydrated.value) return
-
-    localStorage.setItem(
-      COMMUNITY_FEED_STORAGE_KEY,
-      JSON.stringify({
-        requests: nextRequests,
-        notifications: nextNotifications,
+    const [requestResponse, notificationResponse, offerableItemResponse] = await Promise.all([
+      $fetch<ApiCommunityRequest[]>("/api/item-requests", {
+        query: { includeCancelledOffers: true },
+        ...(headers ? { headers } : {}),
       }),
-    )
-  },
-  { deep: true },
-)
+      headers
+        ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", { headers })
+        : Promise.resolve([]),
+      headers
+        ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
+        : Promise.resolve([]),
+    ])
 
-const currentUserNotifications = computed(() => {
-  return [...notifications.value]
-    .filter((notification) => notification.recipientId === sessionCommunityUserId.value)
-    .sort((left, right) => right.createdAt - left.createdAt)
-})
+    requests.value = requestResponse.map(normalizeRequest)
+    notifications.value = notificationResponse.map(normalizeNotification)
+    offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
+  } catch (error) {
+    console.error("Failed to load community feed", error)
+    feedError.value = "Unable to load the live community feed right now."
+  } finally {
+    isLoadingFeed.value = false
+    feedHydrated.value = true
+  }
+}
 
 const selectedRequestForOffer = computed(() => {
   return requests.value.find((request) => request.id === activeOfferRequestId.value) ?? null
@@ -578,109 +490,123 @@ const selectedRequestForOffer = computed(() => {
 const existingOfferForCurrentUser = computed(() => {
   return (
     selectedRequestForOffer.value?.offers.find(
-      (offer) => offer.lender.id === sessionCommunityUserId.value,
+      (offer) => offer.lender.userId === currentDbUserId.value,
     ) ?? null
   )
 })
 
-const sortedRequests = computed(() => {
-  const reqs = [...requests.value]
-  if (activeFilter.value === "Newest") {
-    return [...reqs].sort((left, right) => right.createdAt - left.createdAt)
-  }
-  if (activeFilter.value === "Top Voted") return [...reqs].sort((a, b) => b.upvotes - a.upvotes)
-  if (activeFilter.value === "Unanswered") {
-    return reqs.filter((request) => request.repliesCount === 0 && request.offers.length === 0)
-  }
-  return reqs
+const currentUserNotifications = computed(() => {
+  return [...notifications.value].sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  )
 })
 
-const handleNewPost = (post: { title: string; description: string; flair: string }) => {
-  const createdAt = Date.now()
-  const newRequest: CommunityRequest = {
-    id: createdAt.toString(),
-    createdAt,
-    user: viewer.value,
-    timeAgo: "Just now",
-    flair: post.flair,
-    title: post.title,
-    description: post.description,
-    upvotes: 0,
-    repliesCount: 0,
-    replies: [],
-    offers: [],
-  }
-  requests.value.unshift(newRequest)
-  userActivity.value.postsMade++
-  activeFilter.value = "Newest"
-  feedMainRef.value?.scrollTo({ top: 0, behavior: "smooth" })
-}
-
-const handleUpvotePost = (postId: string) => {
-  const post = requests.value.find((r) => r.id === postId)
-  if (post) {
-    userActivity.value.upvotesReceived++
-  }
-}
-
-const handleUpvoteReply = ({
-  postId: _postId,
-  replyId: _replyId,
-}: {
-  postId: string
-  replyId: string
-}) => {
-  userActivity.value.upvotesReceived++
-}
-
-const findReplyRecursive = (replies: Reply[], targetId: string): Reply | null => {
-  for (const reply of replies) {
-    if (reply.id === targetId) return reply
-    if (reply.replies && reply.replies.length > 0) {
-      const found = findReplyRecursive(reply.replies, targetId)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-const handleAddReply = (data: {
-  postId: string
-  parentReplyId?: string | null
-  text: string
-  userName: string
-  userAvatar?: string | null
-}) => {
-  const post = requests.value.find((r) => r.id === data.postId)
-  if (!post) return
-
-  const newReply: Reply = {
-    id: Date.now().toString(),
-    user: { name: data.userName, avatar: data.userAvatar || "" },
-    text: data.text,
-    upvotes: 0,
-    replies: [],
+const userActivity = computed<UserActivity>(() => {
+  if (!currentDbUserId.value) {
+    return { postsMade: 0, offersSent: 0, offersReceived: 0 }
   }
 
-  if (data.parentReplyId) {
-    const parentReply = findReplyRecursive(post.replies, data.parentReplyId)
-    if (parentReply) {
-      if (!parentReply.replies) parentReply.replies = []
-      parentReply.replies.push(newReply)
-    } else {
-      post.replies.push(newReply)
-    }
-  } else {
-    post.replies.push(newReply)
+  const myRequests = requests.value.filter((request) => request.borrower.userId === currentDbUserId.value)
+  const offersSent = requests.value.reduce((count, request) => {
+    return count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
+  }, 0)
+  const offersReceived = myRequests.reduce((count, request) => count + request.offersCount, 0)
+
+  return {
+    postsMade: myRequests.length,
+    offersSent,
+    offersReceived,
+  }
+})
+
+const trendingItems = computed<TrendingRequest[]>(() => {
+  return [...requests.value]
+    .sort((left, right) => {
+      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
+      return right.createdAt.getTime() - left.createdAt.getTime()
+    })
+    .slice(0, 5)
+    .map((request) => ({
+      id: request.id,
+      title: request.itemNeeded,
+      offersCount: request.offersCount,
+    }))
+})
+
+const sortedRequests = computed(() => {
+  let filteredRequests = [...requests.value]
+
+  if (activeFilter.value === "Open") {
+    filteredRequests = filteredRequests.filter((request) => request.status === "OPEN")
   }
 
-  post.repliesCount++
-  userActivity.value.replies++
+  if (activeFilter.value === "My Requests") {
+    filteredRequests = filteredRequests.filter(
+      (request) => request.borrower.userId === currentDbUserId.value,
+    )
+  }
+
+  if (activeFilter.value === "Most Offers") {
+    return filteredRequests.sort((left, right) => {
+      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
+      return right.createdAt.getTime() - left.createdAt.getTime()
+    })
+  }
+
+  return filteredRequests.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+})
+
+const ensureAuthenticatedHeaders = async () => {
+  const headers = await getAuthHeaders()
+
+  if (!headers) {
+    feedError.value = "You need to sign in before using request and offer actions."
+    return null
+  }
+
+  return headers
 }
 
-const openOfferComposer = (requestId: string) => {
+const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  isCreatingRequest.value = true
+  feedError.value = null
+
+  try {
+    await $fetch("/api/item-requests", {
+      method: "POST",
+      headers,
+      body: {
+        itemNeeded: payload.itemNeeded,
+        requestedDates: enumerateRequestedDates(payload.startDate, payload.endDate),
+        priceRange: [payload.minimumPrice, payload.maximumPrice],
+        description: payload.description,
+        status: "OPEN",
+      },
+    })
+
+    activeFilter.value = "Newest"
+    await refreshFeed()
+    feedMainRef.value?.scrollTo({ top: 0, behavior: "smooth" })
+  } catch (error) {
+    console.error("Failed to create item request", error)
+    feedError.value = "Unable to post your request right now."
+  } finally {
+    isCreatingRequest.value = false
+  }
+}
+
+const openOfferComposer = (requestId: number) => {
   const request = requests.value.find((entry) => entry.id === requestId)
-  if (!request || request.user.id === sessionCommunityUserId.value) return
+
+  if (!request) return
+  if (!currentDbUserId.value) {
+    feedError.value = "You need to sign in before sending an offer."
+    return
+  }
+  if (request.borrower.userId === currentDbUserId.value || request.status !== "OPEN") return
 
   activeOfferRequestId.value = requestId
   isOfferComposerOpen.value = true
@@ -688,65 +614,224 @@ const openOfferComposer = (requestId: string) => {
 
 const handleOfferComposerVisibility = (isVisible: boolean) => {
   isOfferComposerOpen.value = isVisible
+
   if (!isVisible) {
     activeOfferRequestId.value = null
   }
 }
 
-const submitOffer = (offerInput: CommunityOfferFormInput) => {
+const submitOffer = async (offerInput: CommunityOfferFormInput) => {
   const request = selectedRequestForOffer.value
-  if (!request || request.user.id === sessionCommunityUserId.value) return
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers || !request) return
 
-  const submittedAt = Date.now()
-  const offer: CommunityOffer = {
-    id: existingOfferForCurrentUser.value?.id ?? `offer-${submittedAt}`,
-    itemName: offerInput.itemName,
-    lender: viewer.value,
-    rentalTerms: offerInput.rentalTerms,
-    fee: offerInput.fee,
-    condition: offerInput.condition,
-    availabilityConfirmed: offerInput.availabilityConfirmed,
-    createdAt: submittedAt,
-  }
+  isSubmittingOffer.value = true
+  feedError.value = null
 
-  const existingOfferIndex = request.offers.findIndex(
-    (existingOffer) => existingOffer.lender.id === sessionCommunityUserId.value,
-  )
-
-  if (existingOfferIndex >= 0) {
-    request.offers.splice(existingOfferIndex, 1, offer)
-  } else {
-    request.offers.unshift(offer)
-  }
-
-  notifications.value.unshift({
-    id: `notif-${submittedAt}`,
-    requestId: request.id,
-    requestTitle: request.title,
-    recipientId: request.user.id,
-    actorName: viewer.value.name,
-    itemName: offer.itemName,
-    fee: offer.fee,
-    createdAt: submittedAt,
-    read: false,
-  })
-
-  handleOfferComposerVisibility(false)
-}
-
-const markNotificationRead = (notificationId: string) => {
-  const notification = notifications.value.find((entry) => entry.id === notificationId)
-  if (!notification) return
-  notification.read = true
-}
-
-const markAllNotificationsRead = () => {
-  notifications.value.forEach((notification) => {
-    if (notification.recipientId === sessionCommunityUserId.value) {
-      notification.read = true
+  try {
+    if (existingOfferForCurrentUser.value) {
+      await $fetch(`/api/request-offers/${existingOfferForCurrentUser.value.id}`, {
+        method: "PATCH",
+        headers,
+        body: offerInput,
+      })
+    } else {
+      await $fetch("/api/request-offers", {
+        method: "POST",
+        headers,
+        body: {
+          requestID: request.id,
+          ...offerInput,
+          status: "PENDING",
+        },
+      })
     }
-  })
+
+    await refreshFeed()
+    handleOfferComposerVisibility(false)
+  } catch (error) {
+    console.error("Failed to submit offer", error)
+    feedError.value = "Unable to save this offer right now."
+  } finally {
+    isSubmittingOffer.value = false
+  }
 }
+
+const cancelOffer = async (offerId: number) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  isSubmittingOffer.value = true
+  feedError.value = null
+
+  try {
+    await $fetch(`/api/request-offers/${offerId}`, {
+      method: "PATCH",
+      headers,
+      body: {
+        status: "CANCELLED",
+      },
+    })
+
+    await refreshFeed()
+    handleOfferComposerVisibility(false)
+  } catch (error) {
+    console.error("Failed to cancel offer", error)
+    feedError.value = "Unable to cancel this offer right now."
+  } finally {
+    isSubmittingOffer.value = false
+  }
+}
+
+const handleUpdateRequestStatus = async (payload: {
+  requestId: number
+  status: CommunityRequestStatus
+}) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  feedError.value = null
+
+  try {
+    await $fetch(`/api/item-requests/${payload.requestId}`, {
+      method: "PATCH",
+      headers,
+      body: {
+        status: payload.status,
+      },
+    })
+
+    await refreshFeed()
+  } catch (error) {
+    console.error("Failed to update request status", error)
+    feedError.value = "Unable to update this request right now."
+  }
+}
+
+const handleDeleteRequest = async (requestId: number) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  feedError.value = null
+
+  try {
+    await $fetch(`/api/item-requests/${requestId}`, {
+      method: "DELETE",
+      headers,
+    })
+
+    await refreshFeed()
+  } catch (error) {
+    console.error("Failed to delete request", error)
+    feedError.value = "Unable to delete this request right now."
+  }
+}
+
+const handleUpdateOfferStatus = async (payload: {
+  offerId: number
+  requestId: number
+  status: CommunityOfferStatus
+}) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  feedError.value = null
+
+  try {
+    await $fetch(`/api/request-offers/${payload.offerId}`, {
+      method: "PATCH",
+      headers,
+      body: {
+        status: payload.status,
+      },
+    })
+
+    if (payload.status === "ACCEPTED") {
+      const request = requests.value.find((entry) => entry.id === payload.requestId)
+
+      if (request) {
+        const remainingPendingOffers = request.offers.filter(
+          (offer) => offer.id !== payload.offerId && offer.status === "PENDING",
+        )
+
+        await Promise.all(
+          remainingPendingOffers.map((offer) =>
+            $fetch(`/api/request-offers/${offer.id}`, {
+              method: "PATCH",
+              headers,
+              body: {
+                status: "DECLINED",
+              },
+            }),
+          ),
+        )
+      }
+
+      await $fetch(`/api/item-requests/${payload.requestId}`, {
+        method: "PATCH",
+        headers,
+        body: {
+          status: "FULFILLED",
+        },
+      })
+    }
+
+    await refreshFeed()
+  } catch (error) {
+    console.error("Failed to update offer status", error)
+    feedError.value = "Unable to update this offer right now."
+  }
+}
+
+const markNotificationRead = async (notificationId: number) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  try {
+    await $fetch(`/api/request-offers/notifications/${notificationId}`, {
+      method: "PATCH",
+      headers,
+    })
+
+    notifications.value = notifications.value.map((notification) =>
+      notification.id === notificationId ? { ...notification, read: true } : notification,
+    )
+  } catch (error) {
+    console.error("Failed to mark notification as read", error)
+  }
+}
+
+const markAllNotificationsRead = async () => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  try {
+    await $fetch("/api/request-offers/notifications/read-all", {
+      method: "POST",
+      headers,
+    })
+
+    notifications.value = notifications.value.map((notification) => ({
+      ...notification,
+      read: true,
+    }))
+  } catch (error) {
+    console.error("Failed to mark notifications as read", error)
+  }
+}
+
+onMounted(() => {
+  void refreshFeed()
+})
+
+watch(
+  () => user.value?.id,
+  (nextUserId, previousUserId) => {
+    if (!feedHydrated.value) return
+    if (nextUserId === previousUserId) return
+    void refreshFeed()
+  },
+)
 </script>
 
 <style scoped>

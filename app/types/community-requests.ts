@@ -1,44 +1,77 @@
-export const communityOfferConditions = ["New", "Like New", "Good", "Fair", "Well Used"] as const
+export const communityOfferConditions = ["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"] as const
+export const communityRequestStatuses = ["OPEN", "FULFILLED", "CANCELLED"] as const
+export const communityOfferStatuses = ["PENDING", "ACCEPTED", "DECLINED", "CANCELLED"] as const
 
 export type CommunityOfferCondition = (typeof communityOfferConditions)[number]
+export type CommunityRequestStatus = (typeof communityRequestStatuses)[number]
+export type CommunityOfferStatus = (typeof communityOfferStatuses)[number]
 
 export interface CommunityMember {
-  id: string
+  profileId: number
+  userId: string
   name: string
   avatar: string
 }
 
-export interface CommunityOffer {
+export interface CommunityOfferableItem {
   id: string
-  itemName: string
-  lender: CommunityMember
-  rentalTerms: string
-  fee: number
+  numericId: number
+  name: string
   condition: CommunityOfferCondition
-  availabilityConfirmed: boolean
-  createdAt: number
+  rentalFee: number
+  freeToBorrow: boolean
+  status: string
+  rateOption: string
+  createdAt: Date
+}
+
+export interface CommunityOffer {
+  id: number
+  lenderID: number
+  requestID: number
+  itemID: number
+  itemName: string
+  rentalFee: number
+  availability: boolean
+  condition: CommunityOfferCondition
+  rentalTerms: string
+  status: CommunityOfferStatus
+  borrowerReadAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+  lender: CommunityMember
 }
 
 export interface CommunityOfferFormInput {
-  itemName: string
-  rentalTerms: string
-  fee: number
+  itemID: number
+  rentalFee: number
+  availability: boolean
   condition: CommunityOfferCondition
-  availabilityConfirmed: boolean
+  rentalTerms: string
 }
 
 export interface CommunityRequest {
-  id: string
-  createdAt: number
-  user: CommunityMember
-  timeAgo: string
-  flair: string
-  title: string
+  id: number
+  borrowerID: number
+  itemNeeded: string
+  requestedDates: Date[]
+  priceRange: [number, number]
   description: string
-  upvotes: number
-  repliesCount: number
-  replies: Reply[]
+  status: CommunityRequestStatus
+  createdAt: Date
+  updatedAt: Date
+  offersCount: number
+  borrower: CommunityMember
   offers: CommunityOffer[]
+}
+
+export interface CommunityRequestComposerInput {
+  itemNeeded: string
+  description: string
+  startDate: string
+  endDate: string
+  minimumPrice: number
+  maximumPrice: number
 }
 
 export interface Reply {
@@ -46,29 +79,29 @@ export interface Reply {
   user: Pick<CommunityMember, "name" | "avatar">
   text: string
   upvotes: number
-  replies?: Reply[] // For threading
+  replies?: Reply[]
 }
 
 export interface UserActivity {
   postsMade: number
-  upvotesReceived: number
-  replies: number
+  offersSent: number
+  offersReceived: number
 }
 
 export interface TrendingRequest {
-  id: string
+  id: number
   title: string
-  upvotes: number
+  offersCount: number
 }
 
 export interface CommunityOfferNotification {
-  id: string
-  requestId: string
+  id: number
+  requestId: number
   requestTitle: string
-  recipientId: string
+  recipientId: number
   actorName: string
   itemName: string
   fee: number
-  createdAt: number
+  createdAt: Date
   read: boolean
 }

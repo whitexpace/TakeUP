@@ -17,7 +17,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (event: "mark-notification-read", notificationId: string): void
+  (event: "mark-notification-read", notificationId: number): void
   (event: "mark-all-notifications-read"): void
 }>()
 
@@ -39,8 +39,8 @@ const formatFee = (fee: number) => {
   return fee === 0 ? "Free" : currencyFormatter.format(fee)
 }
 
-const formatRelativeTime = (timestamp: number) => {
-  const minutes = Math.max(1, Math.round((Date.now() - timestamp) / (60 * 1000)))
+const formatRelativeTime = (timestamp: Date) => {
+  const minutes = Math.max(1, Math.round((Date.now() - timestamp.getTime()) / (60 * 1000)))
 
   if (minutes < 60) return `${minutes}m ago`
 
@@ -55,7 +55,7 @@ const toggleNotifications = () => {
   showNotifications.value = !showNotifications.value
 }
 
-const handleNotificationClick = (notificationId: string) => {
+const handleNotificationClick = (notificationId: number) => {
   emit("mark-notification-read", notificationId)
 }
 
