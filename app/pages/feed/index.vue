@@ -89,10 +89,10 @@
 
             <div
               v-else
-              class="flex flex-col items-center justify-center py-32 px-6 text-center bg-white rounded-[32px] border border-dashed border-cinnamon-ice/30"
+              class="flex flex-col items-center justify-center rounded-[32px] border border-dashed border-cinnamon-ice/30 bg-white px-6 py-32 text-center"
             >
               <div
-                class="w-20 h-20 bg-cream rounded-full flex items-center justify-center mb-8 text-burning-orange/30"
+                class="mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-cream text-burning-orange/30"
               >
                 <svg
                   width="32"

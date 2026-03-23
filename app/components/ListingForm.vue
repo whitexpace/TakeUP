@@ -5,8 +5,23 @@ import type { itemCategorySchema, itemConditionSchema } from "../../shared/schem
 import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
-type ItemCategory = z.infer<typeof itemCategorySchema>
-type ItemCondition = z.infer<typeof itemConditionSchema>
+type ItemCategory =
+  | "ELECTRONICS"
+  | "BOOKS"
+  | "CLOTHING"
+  | "TOOLS"
+  | "HOME_APPLIANCES"
+  | "SPORTS_OUTDOORS"
+  | "MUSIC_AUDIO"
+  | "TOYS_GAMES"
+  | "FURNITURE"
+  | "VEHICLES_ACCESSORIES"
+  | "HEALTH_BEAUTY"
+  | "SCHOOL_SUPPLIES"
+  | "PET_SUPPLIES"
+  | "OTHER"
+
+type ItemCondition = "NEW" | "LIKE_NEW" | "GOOD" | "FAIR" | "POOR"
 
 type AvailabilityRange = {
   startDate: Date | null
@@ -537,14 +552,19 @@ const handleSubmit = () => {
   const schema = isCreateMode.value ? createItemSchema : updateItemSchema
   const result = schema.safeParse(payload)
 
-  if (!result.success) {
-    const flat = result.error.flatten()
-    Object.entries(flat.fieldErrors).forEach(([key, msgs]) => {
-      fieldErrors.value[key] = (msgs as string[])[0] ?? ""
-    })
-    if (flat.fieldErrors["availability"]) {
-      availabilityErrors.value = flat.fieldErrors["availability"] as string[]
-    }
+  const invalidAvailability = availabilityRanges.value.some(
+    (range) =>
+      range.startDate &&
+      !range.noEndDate &&
+      range.endDate &&
+      range.endDate.getTime() <= range.startDate.getTime(),
+  )
+
+  if (invalidAvailability) {
+    availabilityErrors.value.push("Availability end dates must be later than start dates.")
+  }
+
+  if (Object.keys(fieldErrors.value).length > 0 || availabilityErrors.value.length > 0) {
     return
   }
 
