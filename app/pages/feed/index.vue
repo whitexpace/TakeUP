@@ -305,40 +305,13 @@ const getIdentityMetadata = (authUser: unknown) => {
     .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
 }
 
-const buildNameFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return undefined
-
-  const directName =
-    asNonEmptyString(source.full_name) ||
-    asNonEmptyString(source.name) ||
-    asNonEmptyString(source.display_name)
-
-  if (directName) return directName
-
-  const firstName =
-    asNonEmptyString(source.given_name) ||
-    asNonEmptyString(source.first_name) ||
-    asNonEmptyString(source.firstName)
-  const lastName =
-    asNonEmptyString(source.family_name) ||
-    asNonEmptyString(source.last_name) ||
-    asNonEmptyString(source.lastName)
-
-  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
-  return fullName || undefined
+const resetForm = () => {
+  Object.assign(form, createInitialRequestForm())
 }
 
-const getAvatarFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return undefined
-
-  return (
-    asNonEmptyString(source.picture) ||
-    asNonEmptyString(source.avatar_url) ||
-    asNonEmptyString(source.photo_url) ||
-    asNonEmptyString(source.profile_image) ||
-    asNonEmptyString(source.image)
-  )
-}
+const syncViewerState = async () => {
+  const accessToken = await getAccessToken()
+  await refresh({ accessToken })
 
 const currentUserProfile = computed(() => {
   const authUser = user.value

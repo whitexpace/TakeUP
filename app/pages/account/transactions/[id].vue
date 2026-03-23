@@ -1,17 +1,14 @@
 <script setup lang="ts">
-<<<<<<< HEAD
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
-=======
 import { ref, computed, onMounted } from "vue"
 import type { TransactionListItem } from "../../../composables/use-transactions"
->>>>>>> 149da14 (feat(order-details): APP-43 order details page from my transactions nav)
+
 
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
-<<<<<<< HEAD
   hideAccountSidebar: true,
 })
 
@@ -447,7 +444,6 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
               class="mt-6 flex items-start gap-3 rounded-xl border border-orange-200 bg-white px-4 py-3"
             >
               <svg
-=======
 })
 
 const route = useRoute()
@@ -830,19 +826,17 @@ const formatPeso = (value: number) =>
             <div class="p-2 rounded-xl border border-white/20">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
->>>>>>> 149da14 (feat(order-details): APP-43 order details page from my transactions nav)
+
                 width="20"
                 height="20"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-<<<<<<< HEAD
                 class="mt-0.5 shrink-0 text-orange-500"
               >
                 <path
                   d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
                   stroke-width="1.5"
-=======
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -915,12 +909,10 @@ const formatPeso = (value: number) =>
                   d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
                   stroke="white"
                   stroke-width="2.5"
->>>>>>> 149da14 (feat(order-details): APP-43 order details page from my transactions nav)
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 />
               </svg>
-<<<<<<< HEAD
               <p class="text-xs tracking-tight text-neutral-800">
                 <span class="font-bold">Safety Reminder:</span>
                 Always meet in public places on campus. Verify the requester&apos;s UP ID before
@@ -982,7 +974,6 @@ const formatPeso = (value: number) =>
     </template>
   </div>
 </template>
-=======
             </button>
           </div>
         </section>
@@ -1167,4 +1158,4 @@ const formatPeso = (value: number) =>
   border-radius: 10px;
 }
 </style>
->>>>>>> 149da14 (feat(order-details): APP-43 order details page from my transactions nav)
+

@@ -1596,6 +1596,18 @@ onUnmounted(() => {
                       </svg>
                       {{ addToBagButtonLabel }}
                     </button>
+                    <p
+                      class="text-center text-[11px] font-normal"
+                      :class="
+                        bagFeedbackMessage
+                          ? bagFeedbackTone === 'success'
+                            ? 'text-blue-estate'
+                            : 'text-cinnabar-red'
+                          : 'text-noble-black/40'
+                      "
+                    >
+                      {{ bagFeedbackMessage || "You won't be charged yet." }}
+                    </p>
                     <button
                       class="w-full py-3 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
                       :disabled="!canSubmitBooking"
@@ -2006,6 +2018,18 @@ onUnmounted(() => {
                     </svg>
                     {{ addToBagButtonLabel }}
                   </button>
+                  <p
+                    class="text-center text-[11px] mb-4 font-normal"
+                    :class="
+                      bagFeedbackMessage
+                        ? bagFeedbackTone === 'success'
+                          ? 'text-blue-estate'
+                          : 'text-cinnabar-red'
+                        : 'text-noble-black/40'
+                    "
+                  >
+                    {{ bagFeedbackMessage || "You won't be charged yet." }}
+                  </p>
                   <button
                     class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
                     :disabled="!canSubmitBooking"
@@ -2581,6 +2605,18 @@ onUnmounted(() => {
                 </svg>
                 {{ addToBagButtonLabel }}
               </button>
+              <p
+                class="text-center text-[11px] mb-4 font-normal"
+                :class="
+                  bagFeedbackMessage
+                    ? bagFeedbackTone === 'success'
+                      ? 'text-blue-estate'
+                      : 'text-cinnabar-red'
+                    : 'text-noble-black/40'
+                "
+              >
+                {{ bagFeedbackMessage || "You won't be charged yet." }}
+              </p>
               <button
                 class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
                 :disabled="!canSubmitBooking"

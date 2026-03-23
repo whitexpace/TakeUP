@@ -183,6 +183,7 @@ model Item {
   lender             Lender               @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
   availability       ItemAvailability[]
   bookings           Booking[]
+  cartEntries        CartEntry[]
   categories         ItemCategoryOnItem[]
   images             ItemImage[]
   likes              Like[]
@@ -335,6 +336,7 @@ model User {
   points                       Int                    @default(0)
   admin                        Admin?
   borrower                     Borrower?
+  cartEntries                  CartEntry[]
   lender                       Lender?
   likes                        Like[]
   transactionDisputesAdmin     TransactionDispute[]   @relation("transaction_disputes_admin_idToUser")

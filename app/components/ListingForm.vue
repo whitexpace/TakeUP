@@ -575,8 +575,23 @@ const handleSubmit = () => {
 
   const payload = buildPayload()
 
-  const schema = props.mode === "edit" ? updateItemSchema : createItemSchema
-  const result = schema.safeParse(payload)
+  if (!form.name.trim()) {
+    fieldErrors.value.name = "Item name is required."
+  }
+  if (!form.condition) {
+    fieldErrors.value.condition = "Condition is required."
+  }
+  if (form.categories.length === 0) {
+    fieldErrors.value.categories = "Select at least one category."
+  }
+
+  const invalidAvailability = availabilityRanges.value.some(
+    (range) =>
+      range.startDate &&
+      !range.noEndDate &&
+      range.endDate &&
+      range.endDate.getTime() <= range.startDate.getTime(),
+  )
 
   if (!result.success) {
     const flat = result.error.flatten()
