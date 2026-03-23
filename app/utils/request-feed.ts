@@ -19,7 +19,10 @@ export const formatRequestPriceRange = (minTargetPrice: number, maxTargetPrice: 
   return `₱${pesoFormatter.format(minTargetPrice)} - ₱${pesoFormatter.format(maxTargetPrice)}`
 }
 
-export const formatRequestDateRange = (requestedFrom: string | Date, requestedTo: string | Date) => {
+export const formatRequestDateRange = (
+  requestedFrom: string | Date,
+  requestedTo: string | Date,
+) => {
   const fromDate = asDate(requestedFrom)
   const toDate = asDate(requestedTo)
 

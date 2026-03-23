@@ -8,7 +8,9 @@
           <aside class="hidden w-[240px] shrink-0 lg:block xl:w-[280px]">
             <div class="sticky top-6 space-y-4">
               <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
+                <p
+                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
+                >
                   Request Board
                 </p>
                 <h2 class="mt-3 text-[22px] font-bold leading-tight text-noble-black">
@@ -21,7 +23,9 @@
               </section>
 
               <section class="rounded-[24px] border border-cinnamon-ice/30 bg-white p-6">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40">
+                <p
+                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40"
+                >
                   Feed Rules
                 </p>
                 <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
@@ -44,14 +48,16 @@
             <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
+                  >
                     Post a request
                   </p>
                   <h2 class="mt-2 text-[22px] font-bold text-noble-black">Coming soon</h2>
                   <p class="mt-2 max-w-[560px] text-[14px] leading-relaxed text-noble-black/60">
-                    This page now serves live request posts from the backend. Creating a new
-                    request stays visually present in the layout, but the write flow is not part
-                    of this branch.
+                    This page now serves live request posts from the backend. Creating a new request
+                    stays visually present in the layout, but the write flow is not part of this
+                    branch.
                   </p>
                 </div>
 
@@ -89,11 +95,7 @@
                 <div class="mt-4 h-4 w-full rounded bg-white/80" />
                 <div class="mt-2 h-4 w-5/6 rounded bg-white/80" />
                 <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                  <div
-                    v-for="metric in 3"
-                    :key="metric"
-                    class="h-20 rounded-[18px] bg-white/80"
-                  />
+                  <div v-for="metric in 3" :key="metric" class="h-20 rounded-[18px] bg-white/80" />
                 </div>
               </div>
             </div>
@@ -138,7 +140,9 @@
                   />
                 </svg>
               </div>
-              <h3 class="mb-2 text-[22px] font-bold text-noble-black">No active requests right now</h3>
+              <h3 class="mb-2 text-[22px] font-bold text-noble-black">
+                No active requests right now
+              </h3>
               <p class="max-w-[360px] text-[15px] leading-relaxed text-noble-black/40">
                 Check back later for new community requests. Expired requests are removed from the
                 active board automatically.
@@ -149,7 +153,9 @@
           <aside class="hidden w-[280px] shrink-0 lg:block xl:w-[320px]">
             <div class="sticky top-6 space-y-4">
               <section class="rounded-[24px] border border-cinnamon-ice/30 bg-white p-6">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
+                <p
+                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
+                >
                   What each card shows
                 </p>
                 <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
@@ -162,7 +168,9 @@
               </section>
 
               <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40">
+                <p
+                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40"
+                >
                   Status
                 </p>
                 <p class="mt-3 text-[14px] leading-relaxed text-noble-black/65">

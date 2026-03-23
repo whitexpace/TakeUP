@@ -43,9 +43,7 @@
         <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40">
           Status
         </p>
-        <p class="mt-2 text-[14px] font-semibold text-burning-orange">
-          Open until {{ openUntil }}
-        </p>
+        <p class="mt-2 text-[14px] font-semibold text-burning-orange">Open until {{ openUntil }}</p>
       </div>
     </div>
   </article>
