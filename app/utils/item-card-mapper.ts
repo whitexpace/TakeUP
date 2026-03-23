@@ -12,6 +12,13 @@ type ItemCardMapOptions = {
   trendingItemIds?: Set<string>
 }
 
+const getPrimaryItemImage = (item: ListedItem) =>
+  item.images.find((entry) => entry.isPrimary)?.path ??
+  item.images[0]?.path ??
+  item.thumbnailImage ??
+  item.photos[0] ??
+  null
+
 const formatCategory = (category: string | undefined) => {
   if (!category) return "General"
   return category
@@ -27,8 +34,7 @@ export const mapListedItemToCard = (
   options: ItemCardMapOptions = {},
 ): ItemCardViewModel => {
   const fallbackImages = options.fallbackImages ?? FALLBACK_ITEM_IMAGES
-  const image =
-    item.thumbnailImage ?? item.photos[0] ?? fallbackImages[index % fallbackImages.length]!
+  const image = getPrimaryItemImage(item) ?? fallbackImages[index % fallbackImages.length]!
   const isTrending = options.trendingItemIds?.has(item.id) ?? false
 
   return {

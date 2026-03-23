@@ -28,7 +28,7 @@ const { bagCount } = useBag()
           class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
           active-class="text-burning-orange"
         >
-          Feed
+          Requests
         </NuxtLink>
         <NuxtLink
           to="/account/listings/new"
@@ -106,8 +106,10 @@ const { bagCount } = useBag()
       </button>
 
       <!-- Cart Icon -->
-      <button
+      <NuxtLink
+        to="/bag"
         class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1 relative"
+        active-class="text-burning-orange"
         title="Bag"
       >
         <svg
@@ -131,7 +133,7 @@ const { bagCount } = useBag()
         >
           {{ bagCount }}
         </span>
-      </button>
+      </NuxtLink>
 
       <!-- Profile Icon (Always Visible) -->
       <NuxtLink

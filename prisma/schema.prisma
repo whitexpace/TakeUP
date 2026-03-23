@@ -143,32 +143,34 @@ enum UserStatus {
 }
 
 model Item {
-  id               String        @id @default(uuid())
-  name             String
-  description      String?
-  condition        ItemCondition
-  status           ItemStatus    @default(AVAILABLE)
-  rateOption       RateOption    @default(PER_DAY)
-  createdAt        DateTime      @default(now())
-  rentalFee        Int
-  replacementCost  Int?
-  freeToBorrow     Boolean
-  whatItemOffers   String?
-  whatIsIncluded   String?
-  knownIssues      String?
-  usageLimitations String?
-  isTrending       Boolean       @default(false)
-  viewCount        Int           @default(0)
-  bookingCount     Int           @default(0)
-  likeCount        Int           @default(0)
-  rating           Float         @default(0)
-  lenderId         String
-  borrowerId       String?
-
+  id                 String               @id @default(uuid())
+  name               String
+  description        String?
+  condition          ItemCondition
+  status             ItemStatus           @default(AVAILABLE)
+  rateOption         RateOption           @default(PER_DAY)
+  createdAt          DateTime             @default(now())
+  rentalFee          Int
+  replacementCost    Int?
+  freeToBorrow       Boolean
+  whatItemOffers     String?
+  whatIsIncluded     String?
+  knownIssues        String?
+  usageLimitations   String?
+  isTrending         Boolean              @default(false)
+  viewCount          Int                  @default(0)
+  bookingCount       Int                  @default(0)
+  likeCount          Int                  @default(0)
+  rating             Float                @default(0)
+  lenderId           String
+  borrowerId         String?
+  thumbnailImage     String?
+  photos             String[]
   borrower           Borrower?            @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
   lender             Lender               @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
   availability       ItemAvailability[]
   bookings           Booking[]
+  cartEntries        CartEntry[]
   categories         ItemCategoryOnItem[]
   images             ItemImage[]
   likes              Like[]
@@ -323,6 +325,7 @@ model User {
   points                       Int                    @default(0)
   admin                        Admin?
   borrower                     Borrower?
+  cartEntries                  CartEntry[]
   lender                       Lender?
   likes                        Like[]
   transactionDisputesAdmin     TransactionDispute[]   @relation("transaction_disputes_admin_idToUser")
@@ -334,6 +337,24 @@ model User {
   transactionStatusLogsChanged TransactionStatusLog[]
   borrowedTransactions         RentalTransaction[]    @relation("transactions_borrower_user_idToUser")
   lentTransactions             RentalTransaction[]    @relation("transactions_lender_user_idToUser")
+  requestPosts                 RequestPost[]
+}
+
+model CartEntry {
+  id         String   @id @default(uuid())
+  borrowerId String
+  itemId     String
+  startAt    DateTime
+  endAt      DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  borrower User @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  item     Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([borrowerId, itemId, startAt, endAt])
+  @@index([borrowerId, createdAt])
+  @@index([itemId])
 }
 
 model Like {
@@ -455,4 +476,23 @@ model TransactionStatusLog {
 
   @@index([transactionId, createdAt(sort: Desc)], map: "idx_status_logs_txn_created")
   @@map("transaction_status_logs")
+}
+
+model RequestPost {
+  id             String   @id @default(uuid())
+  requesterId    String
+  itemNeeded     String
+  description    String
+  requestedFrom  DateTime
+  requestedTo    DateTime
+  minTargetPrice Int
+  maxTargetPrice Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  requester User @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([requestedTo])
+  @@index([createdAt])
 }
