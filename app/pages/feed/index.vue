@@ -75,11 +75,7 @@
                 <div class="mt-4 h-4 w-full rounded bg-white/80" />
                 <div class="mt-2 h-4 w-5/6 rounded bg-white/80" />
                 <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                  <div
-                    v-for="metric in 3"
-                    :key="metric"
-                    class="h-20 rounded-[18px] bg-white/80"
-                  />
+                  <div v-for="metric in 3" :key="metric" class="h-20 rounded-[18px] bg-white/80" />
                 </div>
               </div>
             </div>
