@@ -1,6 +1,6 @@
 export interface RequestFeedRequester {
-  id: string
-  username: string
+  id: string | null
+  username: string | null
 }
 
 export interface RequestFeedPost {
@@ -17,4 +17,22 @@ export interface RequestFeedPost {
 
 export interface RequestFeedResponse {
   posts: RequestFeedPost[]
+}
+
+export interface RequestCreateInput {
+  itemNeeded: string
+  description: string
+  requestedFrom: string
+  requestedTo: string
+  minTargetPrice: number
+  maxTargetPrice: number
+}
+
+export interface RequestFormFields {
+  itemNeeded: string
+  description: string
+  requestedFrom: string
+  requestedTo: string
+  minTargetPrice: string
+  maxTargetPrice: string
 }

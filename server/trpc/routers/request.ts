@@ -1,5 +1,7 @@
+import { TRPCError } from "@trpc/server"
+import { createRequestSchema } from "../../../shared/schemas/request"
 import { router } from "../init"
-import { publicProcedure } from "../procedures"
+import { protectedProcedure, publicProcedure } from "../procedures"
 
 type RequestPostRow = {
   id: string
@@ -14,7 +16,7 @@ type RequestPostRow = {
   requesterUsername: string
 }
 
-const mapRequestPost = (post: RequestPostRow) => ({
+const mapRequestPost = (post: RequestPostRow, showRequesterIdentity: boolean) => ({
   id: post.id,
   itemNeeded: post.itemNeeded,
   description: post.description,
@@ -24,8 +26,8 @@ const mapRequestPost = (post: RequestPostRow) => ({
   maxTargetPrice: post.maxTargetPrice,
   createdAt: post.createdAt,
   requester: {
-    id: post.requesterId,
-    username: post.requesterUsername,
+    id: showRequesterIdentity ? post.requesterId : null,
+    username: showRequesterIdentity ? post.requesterUsername : null,
   },
 })
 
@@ -50,7 +52,64 @@ export const requestRouter = router({
     `
 
     return {
-      posts: posts.map(mapRequestPost),
+      posts: posts.map((post) => mapRequestPost(post, Boolean(ctx.user))),
     }
+  }),
+
+  create: protectedProcedure.input(createRequestSchema).mutation(async ({ ctx, input }) => {
+    const existingUser = await ctx.prisma.user.findUnique({
+      where: { id: ctx.user.id },
+      select: {
+        id: true,
+        username: true,
+        accountType: true,
+      },
+    })
+
+    if (!existingUser) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Your account is missing from the database. Sign out and sign in again before posting a request.",
+      })
+    }
+
+    if (existingUser.accountType !== "BORROWER") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only borrower accounts can post requests.",
+      })
+    }
+
+    const post = await ctx.prisma.requestPost.create({
+      data: {
+        requesterId: ctx.user.id,
+        itemNeeded: input.itemNeeded,
+        description: input.description,
+        requestedFrom: input.requestedFrom,
+        requestedTo: input.requestedTo,
+        minTargetPrice: input.minTargetPrice,
+        maxTargetPrice: input.maxTargetPrice,
+      },
+      select: {
+        id: true,
+        itemNeeded: true,
+        description: true,
+        requestedFrom: true,
+        requestedTo: true,
+        minTargetPrice: true,
+        maxTargetPrice: true,
+        createdAt: true,
+      },
+    })
+
+    return mapRequestPost(
+      {
+        ...post,
+        requesterId: existingUser.id,
+        requesterUsername: existingUser.username,
+      },
+      true,
+    )
   }),
 })
