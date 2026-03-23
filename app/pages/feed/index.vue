@@ -17,8 +17,8 @@
                   Browse active community requests
                 </h2>
                 <p class="mt-3 text-[14px] leading-relaxed text-noble-black/60">
-                  The board now shows live request posts only. Creating and replying to requests
-                  will stay in this layout, but those actions are out of scope for this story.
+                  Borrowers can post what they need here, and lenders can browse active requests in
+                  one shared board ordered by recency.
                 </p>
               </section>
 
@@ -31,7 +31,7 @@
                 <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
                   <li>Newest requests appear first.</li>
                   <li>Only active requests are shown.</li>
-                  <li>Each card shows dates, budget, and requester.</li>
+                  <li>Each card shows dates, budget, and request details.</li>
                 </ul>
               </section>
             </div>
@@ -46,28 +46,243 @@
             </div>
 
             <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p
-                    class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
+              <div class="flex flex-col gap-6">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p
+                      class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
+                    >
+                      Post a request
+                    </p>
+                    <h2 class="mt-2 text-[22px] font-bold text-noble-black">
+                      Ask the community for an item
+                    </h2>
+                    <p class="mt-2 max-w-[560px] text-[14px] leading-relaxed text-noble-black/60">
+                      Post what you need, when you need it, and the target budget. Public visitors
+                      cannot see your borrower name, and no personal details are exposed on the
+                      card.
+                    </p>
+                  </div>
+
+                  <span
+                    class="rounded-full border border-cinnamon-ice/30 bg-white px-4 py-2 text-[12px] font-semibold text-noble-black/60"
                   >
-                    Post a request
+                    Borrowers only
+                  </span>
+                </div>
+
+                <div
+                  v-if="!isSignedIn"
+                  class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4"
+                >
+                  <p class="text-[15px] font-semibold text-noble-black">
+                    Sign in to post a request
                   </p>
-                  <h2 class="mt-2 text-[22px] font-bold text-noble-black">Coming soon</h2>
-                  <p class="mt-2 max-w-[560px] text-[14px] leading-relaxed text-noble-black/60">
-                    This page now serves live request posts from the backend. Creating a new request
-                    stays visually present in the layout, but the write flow is not part of this
-                    branch.
+                  <p class="mt-2 text-[14px] leading-relaxed text-noble-black/60">
+                    Browsing stays public, but posting requires a signed-in borrower account.
+                  </p>
+                  <button
+                    type="button"
+                    class="mt-4 rounded-full bg-burning-orange px-6 py-2.5 text-[14px] font-bold text-white transition hover:bg-[#ff6a1f]"
+                    @click="navigateTo('/')"
+                  >
+                    Sign in
+                  </button>
+                </div>
+
+                <div
+                  v-else-if="isViewerLoading"
+                  class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4"
+                >
+                  <p class="text-[15px] font-semibold text-noble-black">Checking borrower access</p>
+                  <p class="mt-2 text-[14px] leading-relaxed text-noble-black/60">
+                    One moment while we confirm whether this account can post requests.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  disabled
-                  class="rounded-full bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white opacity-35 grayscale"
+                <div
+                  v-else-if="!isBorrowerAccount"
+                  class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4"
                 >
-                  Post Request
-                </button>
+                  <p class="text-[15px] font-semibold text-noble-black">
+                    Only borrower accounts can post requests
+                  </p>
+                  <p class="mt-2 text-[14px] leading-relaxed text-noble-black/60">
+                    You can still browse active requests here, but posting is limited to borrower
+                    accounts.
+                  </p>
+                </div>
+
+                <form v-else class="grid gap-4" @submit.prevent="handleCreateRequest">
+                  <p class="text-[12px] font-medium text-noble-black/55">
+                    <span class="font-bold text-cinnabar-red" aria-hidden="true">*</span> Required
+                    fields
+                  </p>
+
+                  <div
+                    v-if="submitErrorMessage"
+                    class="rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700"
+                  >
+                    {{ submitErrorMessage }}
+                  </div>
+
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <label class="flex flex-col gap-2">
+                      <span class="text-[13px] font-semibold text-noble-black">
+                        Item name
+                        <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
+                      </span>
+                      <input
+                        v-model="form.itemNeeded"
+                        type="text"
+                        maxlength="120"
+                        required
+                        aria-required="true"
+                        :aria-invalid="fieldErrors.itemNeeded ? 'true' : 'false'"
+                        class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
+                        placeholder="Portable projector"
+                      />
+                      <span v-if="fieldErrors.itemNeeded" class="text-[12px] text-cinnabar-red">
+                        {{ fieldErrors.itemNeeded }}
+                      </span>
+                    </label>
+
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <label class="flex flex-col gap-2">
+                        <span class="text-[13px] font-semibold text-noble-black">
+                          Start date
+                          <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
+                        </span>
+                        <input
+                          v-model="form.requestedFrom"
+                          type="date"
+                          required
+                          aria-required="true"
+                          :aria-invalid="fieldErrors.requestedFrom ? 'true' : 'false'"
+                          class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
+                        />
+                        <span
+                          v-if="fieldErrors.requestedFrom"
+                          class="text-[12px] text-cinnabar-red"
+                        >
+                          {{ fieldErrors.requestedFrom }}
+                        </span>
+                      </label>
+
+                      <label class="flex flex-col gap-2">
+                        <span class="text-[13px] font-semibold text-noble-black">
+                          End date
+                          <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
+                        </span>
+                        <input
+                          v-model="form.requestedTo"
+                          type="date"
+                          required
+                          aria-required="true"
+                          :aria-invalid="fieldErrors.requestedTo ? 'true' : 'false'"
+                          class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
+                        />
+                        <span v-if="fieldErrors.requestedTo" class="text-[12px] text-cinnabar-red">
+                          {{ fieldErrors.requestedTo }}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <label class="flex flex-col gap-2">
+                      <span class="text-[13px] font-semibold text-noble-black">
+                        Minimum target price
+                        <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
+                      </span>
+                      <div class="relative">
+                        <span
+                          class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-noble-black/55"
+                        >
+                          ₱
+                        </span>
+                        <input
+                          v-model="form.minTargetPrice"
+                          type="number"
+                          min="0"
+                          inputmode="numeric"
+                          required
+                          aria-required="true"
+                          :aria-invalid="fieldErrors.minTargetPrice ? 'true' : 'false'"
+                          class="w-full rounded-[18px] border border-cinnamon-ice/40 bg-white py-3 pl-8 pr-4 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
+                          placeholder="200"
+                        />
+                      </div>
+                      <span v-if="fieldErrors.minTargetPrice" class="text-[12px] text-cinnabar-red">
+                        {{ fieldErrors.minTargetPrice }}
+                      </span>
+                    </label>
+
+                    <label class="flex flex-col gap-2">
+                      <span class="text-[13px] font-semibold text-noble-black">
+                        Maximum target price
+                        <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
+                      </span>
+                      <div class="relative">
+                        <span
+                          class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-noble-black/55"
+                        >
+                          ₱
+                        </span>
+                        <input
+                          v-model="form.maxTargetPrice"
+                          type="number"
+                          min="0"
+                          inputmode="numeric"
+                          required
+                          aria-required="true"
+                          :aria-invalid="fieldErrors.maxTargetPrice ? 'true' : 'false'"
+                          class="w-full rounded-[18px] border border-cinnamon-ice/40 bg-white py-3 pl-8 pr-4 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
+                          placeholder="450"
+                        />
+                      </div>
+                      <span v-if="fieldErrors.maxTargetPrice" class="text-[12px] text-cinnabar-red">
+                        {{ fieldErrors.maxTargetPrice }}
+                      </span>
+                    </label>
+                  </div>
+
+                  <label class="flex flex-col gap-2">
+                    <span class="text-[13px] font-semibold text-noble-black">
+                      Description
+                      <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
+                    </span>
+                    <textarea
+                      v-model="form.description"
+                      rows="4"
+                      maxlength="2000"
+                      required
+                      aria-required="true"
+                      :aria-invalid="fieldErrors.description ? 'true' : 'false'"
+                      class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
+                      placeholder="Describe the item, intended use, and any important details lenders should know."
+                    />
+                    <span v-if="fieldErrors.description" class="text-[12px] text-cinnabar-red">
+                      {{ fieldErrors.description }}
+                    </span>
+                  </label>
+
+                  <div
+                    class="flex flex-col gap-3 border-t border-cinnamon-ice/20 pt-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-[13px] leading-relaxed text-noble-black/55">
+                      Your request will appear in the active feed immediately and expire
+                      automatically after the requested end date passes.
+                    </p>
+                    <button
+                      type="submit"
+                      class="rounded-full bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white transition hover:bg-[#ff6a1f] disabled:cursor-not-allowed disabled:opacity-60"
+                      :disabled="isSubmitting"
+                    >
+                      {{ isSubmitting ? "Posting..." : "Post Request" }}
+                    </button>
+                  </div>
+                </form>
               </div>
             </section>
 
@@ -108,14 +323,19 @@
               <p class="mt-2 text-[14px]">{{ errorMessage }}</p>
               <button
                 class="mt-4 rounded-full bg-noble-black px-5 py-2 text-[14px] font-semibold text-white"
-                @click="refresh"
+                @click="() => refresh()"
               >
                 Try again
               </button>
             </div>
 
             <div v-else-if="posts.length > 0" class="flex flex-col gap-6">
-              <RequestFeedCard v-for="post in posts" :key="post.id" :post="post" />
+              <RequestFeedCard
+                v-for="post in posts"
+                :key="post.id"
+                :post="post"
+                :show-requester-identity="isSignedIn"
+              />
             </div>
 
             <div
@@ -160,7 +380,7 @@
                 </p>
                 <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
                   <li>Requested item</li>
-                  <li>Requester username</li>
+                  <li>Requester username for signed-in viewers</li>
                   <li>Requested dates</li>
                   <li>Target price range</li>
                   <li>Description and expiry info</li>
@@ -187,15 +407,88 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import RequestFeedCard from "../../components/RequestFeedCard.vue"
 import { useRequestFeed } from "../../composables/use-request-feed"
+import { createInitialRequestForm } from "../../utils/request-form"
 
 definePageMeta({ layout: false })
 
-const { posts, isLoading, errorMessage, refresh } = useRequestFeed()
+const user = useSupabaseUser()
+const supabase = useSupabaseClient()
+const form = reactive(createInitialRequestForm())
+const isSignedIn = computed(() => Boolean(user.value))
+const viewerAccountType = ref<"LENDER" | "BORROWER" | "ADMIN" | null>(null)
+const isViewerLoading = ref(false)
+const isBorrowerAccount = computed(() => viewerAccountType.value === "BORROWER")
+const {
+  posts,
+  isLoading,
+  errorMessage,
+  isSubmitting,
+  submitErrorMessage,
+  fieldErrors,
+  refresh,
+  createPost,
+} = useRequestFeed()
 
-onMounted(refresh)
+const getAccessToken = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  return session?.access_token ?? null
+}
+
+const resetForm = () => {
+  Object.assign(form, createInitialRequestForm())
+}
+
+const syncViewerState = async () => {
+  const accessToken = await getAccessToken()
+  await refresh({ accessToken })
+
+  if (!accessToken) {
+    viewerAccountType.value = null
+    isViewerLoading.value = false
+    return
+  }
+
+  isViewerLoading.value = true
+  try {
+    const response = await $fetch<{
+      user: {
+        accountType: "LENDER" | "BORROWER" | "ADMIN" | null
+      }
+    }>("/api/auth/me", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    viewerAccountType.value = response.user.accountType
+  } catch {
+    viewerAccountType.value = null
+  } finally {
+    isViewerLoading.value = false
+  }
+}
+
+const handleCreateRequest = async () => {
+  const accessToken = await getAccessToken()
+  const result = await createPost(form, { accessToken })
+
+  if (result.success) {
+    resetForm()
+  }
+}
+
+watch(
+  () => user.value?.id ?? null,
+  () => {
+    void syncViewerState()
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>

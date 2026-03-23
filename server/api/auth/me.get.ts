@@ -1,8 +1,9 @@
 import { createError } from "h3"
-import type { SessionUser } from "../../utils/auth-session"
+import { createContext } from "../../trpc/context"
 
-export default defineEventHandler((event) => {
-  const user = event.context.authUser as SessionUser | undefined
+export default defineEventHandler(async (event) => {
+  const ctx = await createContext(event)
+  const user = ctx.user
   if (!user) {
     throw createError({
       statusCode: 401,
@@ -16,5 +17,15 @@ export default defineEventHandler((event) => {
     })
   }
 
-  return { user }
+  const dbUser = await ctx.prisma.user.findUnique({
+    where: { id: user.id },
+    select: { accountType: true },
+  })
+
+  return {
+    user: {
+      ...user,
+      accountType: dbUser?.accountType ?? null,
+    },
+  }
 })
