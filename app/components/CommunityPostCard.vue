@@ -447,4 +447,17 @@ onBeforeUnmount(() => {
   opacity: 0;
   transform: translateY(-6px);
 }
+
+.menu-enter-active,
+.menu-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.menu-enter-from,
+.menu-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
 </style>

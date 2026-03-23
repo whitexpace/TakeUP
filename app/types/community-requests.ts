@@ -105,3 +105,15 @@ export interface CommunityOfferNotification {
   createdAt: Date
   read: boolean
 }
+
+export interface CommunityOfferNotification {
+  id: string
+  requestId: string
+  requestTitle: string
+  recipientId: string
+  actorName: string
+  itemName: string
+  fee: number
+  createdAt: number
+  read: boolean
+}
