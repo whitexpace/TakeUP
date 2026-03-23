@@ -17,5 +17,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return { user }
+  const dbUser = await ctx.prisma.user.findUnique({
+    where: { id: user.id },
+    select: { accountType: true },
+  })
+
+  return {
+    user: {
+      ...user,
+      accountType: dbUser?.accountType ?? null,
+    },
+  }
 })

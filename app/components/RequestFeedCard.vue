@@ -5,7 +5,7 @@
     <div class="flex items-start justify-between gap-4">
       <div class="min-w-0">
         <p class="text-[13px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
-          {{ post.requester.username }}
+          {{ requesterLabel }}
         </p>
         <h2 class="mt-2 text-[22px] font-bold leading-tight text-noble-black">
           {{ post.itemNeeded }}
@@ -60,8 +60,16 @@ import {
 
 const props = defineProps<{
   post: RequestFeedPost
+  showRequesterIdentity?: boolean
 }>()
 
+const requesterLabel = computed(() => {
+  if (props.showRequesterIdentity && props.post.requester.username) {
+    return props.post.requester.username
+  }
+
+  return "Borrower request"
+})
 const requestedDateRange = computed(() =>
   formatRequestDateRange(props.post.requestedFrom, props.post.requestedTo),
 )

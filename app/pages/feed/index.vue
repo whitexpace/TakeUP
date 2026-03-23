@@ -88,7 +88,7 @@
               <p class="mt-2 text-[14px]">{{ errorMessage }}</p>
               <button
                 class="mt-4 rounded-full bg-noble-black px-5 py-2 text-[14px] font-semibold text-white"
-                @click="refresh"
+                @click="() => refresh()"
               >
                 Try again
               </button>
