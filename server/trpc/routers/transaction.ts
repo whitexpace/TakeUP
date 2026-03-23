@@ -55,9 +55,10 @@ const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
     [PrismaTransactionStatus.PENDING],
   ),
   ACTIVE: getTransactionStatusGroup(
-    ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "RETURNED", "IN_DISPUTE", "APPEALED"],
+    ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "IN_DISPUTE", "APPEALED"],
     [PrismaTransactionStatus.PENDING],
   ),
+  RETURNED: getTransactionStatusGroup(["RETURNED"], [PrismaTransactionStatus.RETURNED]),
   COMPLETED: [PrismaTransactionStatus.COMPLETED],
   CANCELLED: getTransactionStatusGroup(
     ["CANCELLED", "REFUNDED", "FAILED"],
@@ -68,6 +69,7 @@ const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
 const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
   if (statusGroups.PENDING.includes(status)) return "PENDING"
   if (statusGroups.ACTIVE.includes(status)) return "ACTIVE"
+  if (statusGroups.RETURNED.includes(status)) return "RETURNED"
   if (statusGroups.COMPLETED.includes(status)) return "COMPLETED"
   if (statusGroups.CANCELLED.includes(status)) return "CANCELLED"
   return "PENDING"

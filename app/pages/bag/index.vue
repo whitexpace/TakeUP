@@ -239,7 +239,7 @@ const handleRequestBooking = async () => {
       await $fetch("/api/bookings", {
         method: "POST",
         body: {
-          itemId: item.id,
+          itemId: item.itemId,
           startDate: start.toISOString(),
           endDate: end.toISOString(),
         },

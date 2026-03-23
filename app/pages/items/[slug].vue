@@ -709,6 +709,17 @@ const { addToBag: addItemToBag, hasItemWithWindow } = useBag()
 const bagFeedbackMessage = ref("")
 const bagFeedbackTone = ref<"success" | "error">("success")
 
+const showBagFeedback = (message: string, tone: "success" | "error") => {
+  bagFeedbackMessage.value = message
+  bagFeedbackTone.value = tone
+
+  setTimeout(() => {
+    if (bagFeedbackMessage.value === message) {
+      bagFeedbackMessage.value = ""
+    }
+  }, 2400)
+}
+
 const selectedBagWindow = computed(() => {
   if (!item.value || !startDate.value || !displayEndDate.value) {
     return null
@@ -721,6 +732,18 @@ const selectedBagWindow = computed(() => {
   }
 })
 
+const isInBag = computed(() => {
+  if (!selectedBagWindow.value) {
+    return false
+  }
+
+  return hasItemWithWindow(
+    selectedBagWindow.value.itemId,
+    selectedBagWindow.value.startAt,
+    selectedBagWindow.value.endAt,
+  )
+})
+
 const canAddToBag = computed(
   () =>
     isItemAvailableForBooking.value &&
@@ -728,6 +751,7 @@ const canAddToBag = computed(
     selectedBookingWindow.value !== null &&
     !isInBag.value,
 )
+
 const addToBagButtonLabel = computed(() => {
   if (isItemUnavailableForBooking.value) {
     return `Currently ${unavailableItemLabel.value}`
@@ -743,51 +767,8 @@ const mobileBookingButtonLabel = computed(() => {
   return hasBookingSelection.value ? "Add to Bag" : "Check Availability"
 })
 
-const canAddToBag = computed(
-  () =>
-    isItemAvailableForBooking.value &&
-    hasBookingSelection.value &&
-    selectedBookingWindow.value !== null &&
-    !isInBag.value,
-)
-
-const handleAddToBag = () => {
-  if (!item.value || !canAddToBag.value || !startDate.value || !displayEndDate.value) return
-
-  addItemToBag({
-    id: item.value.id,
-    name: item.value.name,
-    price: item.value.rentalFee,
-    priceUnit: item.value.rateOption === "PER_HOUR" ? "hour" : "day",
-    image:
-      item.value.images.find((image) => image.isPrimary)?.path ||
-      item.value.images[0]?.path ||
-      item.value.thumbnailImage ||
-      item.value.photos[0] ||
-      "",
-    startDate: startDate.value,
-    endDate: displayEndDate.value,
-    startTime: startTime.value,
-    endTime: endTime.value,
-    lenderId: item.value.lenderId,
-    lenderName: item.value.ownerName,
-    lenderAvatarUrl: null, // As discussed, not yet in item schema, but we'll use name for initials
-    listingType: item.value.freeToBorrow ? "Borrow" : "Rent",
-  })
-
-const showBagFeedback = (message: string, tone: "success" | "error") => {
-  bagFeedbackMessage.value = message
-  bagFeedbackTone.value = tone
-
-  window.setTimeout(() => {
-    if (bagFeedbackMessage.value === message) {
-      bagFeedbackMessage.value = ""
-    }
-  }, 2400)
-}
-
 const handleAddToBag = async () => {
-  if (!selectedBagWindow.value || !hasBookingSelection.value) return
+  if (!selectedBagWindow.value || !hasBookingSelection.value || !canAddToBag.value) return
 
   try {
     await addItemToBag({
@@ -796,26 +777,7 @@ const handleAddToBag = async () => {
       endAt: selectedBagWindow.value.endAt,
     })
 
-  addItemToBag({
-    id: item.value.id,
-    name: item.value.name,
-    price: item.value.rentalFee,
-    priceUnit: item.value.rateOption === "PER_HOUR" ? "hour" : "day",
-    image:
-      item.value.images.find((image) => image.isPrimary)?.path ||
-      item.value.images[0]?.path ||
-      item.value.thumbnailImage ||
-      item.value.photos[0] ||
-      "",
-    startDate: startDate.value,
-    endDate: displayEndDate.value,
-    startTime: startTime.value,
-    endTime: endTime.value,
-    lenderId: item.value.lenderId,
-    lenderName: item.value.ownerName,
-    lenderAvatarUrl: null, // As discussed, not yet in item schema, but we'll use name for initials
-    listingType: item.value.freeToBorrow ? "Borrow" : "Rent",
-  })
+    showBagFeedback("Added to your bag.", "success")
 
     if (isMobileModalOpen.value) {
       closeBookingModal()

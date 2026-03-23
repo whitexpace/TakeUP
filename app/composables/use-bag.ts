@@ -1,13 +1,14 @@
-import type { inferRouterOutputs } from "@trpc/server"
 import { computed, onMounted } from "vue"
-import type { AppRouter } from "../../server/trpc/routers"
 
 export interface BagItem {
   id: string
+  itemId: string
   name: string
   price: number
-  priceUnit: string
+  priceUnit: "hour" | "day"
   image: string
+  startAt: Date
+  endAt: Date
   startDate: Date | null
   endDate: Date | null
   startTime: string
@@ -16,9 +17,54 @@ export interface BagItem {
   lenderName: string
   lenderAvatarUrl?: string | null
   listingType: "Rent" | "Borrow"
+  createdAt: Date
+}
+
+type AddToBagInput = {
+  itemId: string
+  startAt: Date
+  endAt: Date
+}
+
+type RawBagItem = Omit<
+  BagItem,
+  "startAt" | "endAt" | "startDate" | "endDate" | "startTime" | "endTime" | "createdAt"
+> & {
+  startAt: Date | string
+  endAt: Date | string
+  createdAt: Date | string
+}
+
+type CartListResponse = {
+  items: RawBagItem[]
 }
 
 let pendingLoad: Promise<void> | null = null
+
+const formatTimeLabel = (value: Date) =>
+  value.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  })
+
+const normalizeBagItem = (item: RawBagItem): BagItem => {
+  const startAt = item.startAt instanceof Date ? item.startAt : new Date(item.startAt)
+  const endAt = item.endAt instanceof Date ? item.endAt : new Date(item.endAt)
+  const createdAt = item.createdAt instanceof Date ? item.createdAt : new Date(item.createdAt)
+
+  return {
+    ...item,
+    startAt,
+    endAt,
+    startDate: startAt,
+    endDate: endAt,
+    startTime: formatTimeLabel(startAt),
+    endTime: formatTimeLabel(endAt),
+    lenderAvatarUrl: item.lenderAvatarUrl ?? null,
+    createdAt,
+  }
+}
 
 export const useBag = () => {
   const bagItems = useState<BagItem[]>("bag-items", () => [])
@@ -54,118 +100,10 @@ export const useBag = () => {
     pendingLoad = (async () => {
       isLoading.value = true
 
-  const normalizeBagItem = (item: BagItem): BagItem => ({
-    ...item,
-    startDate: item.startDate ? new Date(item.startDate) : null,
-    endDate: item.endDate
-      ? new Date(item.endDate)
-      : item.startDate
-        ? new Date(item.startDate)
-        : null,
-  })
-
-  const normalizeBagItem = (item: BagItem): BagItem => ({
-    ...item,
-    startDate: item.startDate ? new Date(item.startDate) : null,
-    endDate: item.endDate ? new Date(item.endDate) : item.startDate ? new Date(item.startDate) : null,
-  })
-
-  // Initialize from localStorage on client side
-  onMounted(() => {
-    const savedBag = localStorage.getItem("takeup-bag")
-    if (savedBag) {
-      try {
-        const parsed = JSON.parse(savedBag) as BagItem[]
-        bagItems.value = parsed.map(normalizeBagItem)
-      } catch (e) {
-        console.error("Failed to parse bag from localStorage", e)
-      }
-    })()
-
-    await pendingLoad
-  }
-
-  const addToBag = async (input: AddToBagInput) => {
-    const headers = await getAuthHeaders()
-    const entry = await $fetch<BagItem>("/api/cart", {
-      method: "POST",
-      body: {
-        itemId: input.itemId,
-        startAt: input.startAt.toISOString(),
-        endAt: input.endAt.toISOString(),
-      },
-      headers,
-    })
-
-    const existingIndex = bagItems.value.findIndex((item) => item.id === entry.id)
-    if (existingIndex === -1) {
-      bagItems.value = [entry, ...bagItems.value]
-    } else {
-      bagItems.value.splice(existingIndex, 1, entry)
-    }
-
-    hasLoaded.value = true
-    errorMessage.value = null
-
-    return entry
-  }
-
-  const removeFromBag = async (id: string) => {
-    const headers = await getAuthHeaders()
-
-    await $fetch(`/api/cart/${id}`, {
-      method: "DELETE",
-      headers,
-    })
-
-    bagItems.value = bagItems.value.filter((item) => item.id !== id)
-  }
-
-  const hasItemWithWindow = (itemId: string, startAt: Date, endAt: Date) =>
-    bagItems.value.some(
-      (item) =>
-        item.itemId === itemId &&
-        new Date(item.startAt).getTime() === startAt.getTime() &&
-        new Date(item.endAt).getTime() === endAt.getTime(),
-    )
-
-  onMounted(() => {
-    void loadBag()
-  })
-
-  // Persist to localStorage whenever bagItems changes
-  watch(
-    bagItems,
-    (newItems) => {
-      localStorage.setItem("takeup-bag", JSON.stringify(newItems))
-    },
-    { deep: true },
-  )
-
-  const addToBag = (item: BagItem) => {
-    const exists = bagItems.value.some((i) => i.id === item.id)
-    if (!exists) {
-      bagItems.value.push(normalizeBagItem(item))
-    }
-  }
-
-  const loadBag = async (options: { force?: boolean } = {}) => {
-    if (pendingLoad && !options.force) {
-      await pendingLoad
-      return
-    }
-
-    if (hasLoaded.value && !options.force) {
-      return
-    }
-
-    pendingLoad = (async () => {
-      isLoading.value = true
-
       try {
         const headers = await getAuthHeaders()
         const result = await $fetch<CartListResponse>("/api/cart", { headers })
-        bagItems.value = result.items
+        bagItems.value = result.items.map(normalizeBagItem)
         errorMessage.value = null
       } catch (error: unknown) {
         const statusCode = (error as { statusCode?: number })?.statusCode
@@ -195,7 +133,7 @@ export const useBag = () => {
 
   const addToBag = async (input: AddToBagInput) => {
     const headers = await getAuthHeaders()
-    const entry = await $fetch<BagItem>("/api/cart", {
+    const entry = await $fetch<RawBagItem>("/api/cart", {
       method: "POST",
       body: {
         itemId: input.itemId,
@@ -205,17 +143,19 @@ export const useBag = () => {
       headers,
     })
 
-    const existingIndex = bagItems.value.findIndex((item) => item.id === entry.id)
+    const normalizedEntry = normalizeBagItem(entry)
+    const existingIndex = bagItems.value.findIndex((item) => item.id === normalizedEntry.id)
+
     if (existingIndex === -1) {
-      bagItems.value = [entry, ...bagItems.value]
+      bagItems.value = [normalizedEntry, ...bagItems.value]
     } else {
-      bagItems.value.splice(existingIndex, 1, entry)
+      bagItems.value.splice(existingIndex, 1, normalizedEntry)
     }
 
     hasLoaded.value = true
     errorMessage.value = null
 
-    return entry
+    return normalizedEntry
   }
 
   const removeFromBag = async (id: string) => {
@@ -233,8 +173,8 @@ export const useBag = () => {
     bagItems.value.some(
       (item) =>
         item.itemId === itemId &&
-        new Date(item.startAt).getTime() === startAt.getTime() &&
-        new Date(item.endAt).getTime() === endAt.getTime(),
+        item.startAt.getTime() === startAt.getTime() &&
+        item.endAt.getTime() === endAt.getTime(),
     )
 
   onMounted(() => {

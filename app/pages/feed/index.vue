@@ -51,21 +51,6 @@
               </div>
             </div>
 
-            <div
-              v-if="feedError"
-              class="rounded-[20px] border border-burning-orange/20 bg-burning-orange/5 px-5 py-4 text-[14px] text-burning-orange"
-            >
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <span>{{ feedError }}</span>
-                <button
-                  class="rounded-full border border-burning-orange/20 px-4 py-2 text-[12px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
-                  @click="refreshFeed"
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-
             <div class="flex flex-wrap items-center gap-3">
               <span
                 class="rounded-full border border-blue-estate/10 bg-blue-estate/5 px-6 py-2 text-[14px] font-bold text-blue-estate"
@@ -77,36 +62,6 @@
               >
                 Newest first
               </span>
-            </div>
-
-            <div v-if="isLoading" class="flex flex-col gap-6">
-              <div
-                v-for="placeholder in 3"
-                :key="placeholder"
-                class="animate-pulse rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6"
-              >
-                <div class="h-4 w-28 rounded bg-white/80" />
-                <div class="mt-4 h-8 w-2/3 rounded bg-white/80" />
-                <div class="mt-4 h-4 w-full rounded bg-white/80" />
-                <div class="mt-2 h-4 w-5/6 rounded bg-white/80" />
-                <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                  <div v-for="metric in 3" :key="metric" class="h-20 rounded-[18px] bg-white/80" />
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-else-if="errorMessage"
-              class="rounded-[24px] border border-red-200 bg-red-50 p-6 text-red-700"
-            >
-              <p class="text-[16px] font-semibold">Unable to load requests</p>
-              <p class="mt-2 text-[14px]">{{ errorMessage }}</p>
-              <button
-                class="mt-4 rounded-full bg-noble-black px-5 py-2 text-[14px] font-semibold text-white"
-                @click="() => refresh()"
-              >
-                Try again
-              </button>
             </div>
 
             <div
@@ -163,7 +118,7 @@
                 Create Request
               </button>
             </div>
-          </section>
+          </div>
 
           <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
             <div class="sticky top-6">
@@ -305,13 +260,40 @@ const getIdentityMetadata = (authUser: unknown) => {
     .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
 }
 
-const resetForm = () => {
-  Object.assign(form, createInitialRequestForm())
+const buildNameFromSource = (source: Record<string, unknown> | null) => {
+  if (!source) return undefined
+
+  const directName =
+    asNonEmptyString(source.full_name) ||
+    asNonEmptyString(source.name) ||
+    asNonEmptyString(source.display_name)
+
+  if (directName) return directName
+
+  const firstName =
+    asNonEmptyString(source.given_name) ||
+    asNonEmptyString(source.first_name) ||
+    asNonEmptyString(source.firstName)
+  const lastName =
+    asNonEmptyString(source.family_name) ||
+    asNonEmptyString(source.last_name) ||
+    asNonEmptyString(source.lastName)
+
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
+  return fullName || undefined
 }
 
-const syncViewerState = async () => {
-  const accessToken = await getAccessToken()
-  await refresh({ accessToken })
+const getAvatarFromSource = (source: Record<string, unknown> | null) => {
+  if (!source) return undefined
+
+  return (
+    asNonEmptyString(source.picture) ||
+    asNonEmptyString(source.avatar_url) ||
+    asNonEmptyString(source.photo_url) ||
+    asNonEmptyString(source.profile_image) ||
+    asNonEmptyString(source.image)
+  )
+}
 
 const currentUserProfile = computed(() => {
   const authUser = user.value
@@ -334,8 +316,9 @@ const currentUserProfile = computed(() => {
 const currentUserName = computed(() => currentUserProfile.value.name)
 const currentUserAvatar = computed(() => currentUserProfile.value.avatar)
 
-const filters = ["Newest", "Most Offers", "Open", "My Requests"] as const
-const activeFilter = ref<(typeof filters)[number]>("Newest")
+type FeedFilter = "Newest" | "Most Offers" | "Open" | "My Requests"
+
+const activeFilter = ref<FeedFilter>("Newest")
 
 const requests = ref<CommunityRequest[]>([])
 const notifications = ref<CommunityOfferNotification[]>([])
@@ -532,415 +515,6 @@ const refreshFeed = async () => {
         ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
         : Promise.resolve([]),
     ])
-
-    requests.value = requestResponse.map(normalizeRequest)
-    notifications.value = notificationResponse.map(normalizeNotification)
-    offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
-  } catch (error) {
-    console.error("Failed to load community feed", error)
-    feedError.value = "Unable to load the live community feed right now."
-  } finally {
-    isLoadingFeed.value = false
-    feedHydrated.value = true
-  }
-}
-
-const selectedRequestForOffer = computed(() => {
-  return requests.value.find((request) => request.id === activeOfferRequestId.value) ?? null
-})
-
-const existingOfferForCurrentUser = computed(() => {
-  return (
-    selectedRequestForOffer.value?.offers.find(
-      (offer) => offer.lender.userId === currentDbUserId.value,
-    ) ?? null
-  )
-})
-
-const currentUserNotifications = computed(() => {
-  return [...notifications.value].sort(
-    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
-  )
-})
-
-const userActivity = computed<UserActivity>(() => {
-  if (!currentDbUserId.value) {
-    return { postsMade: 0, offersSent: 0, offersReceived: 0 }
-  }
-
-  const myRequests = requests.value.filter(
-    (request) => request.borrower.userId === currentDbUserId.value,
-  )
-  const offersSent = requests.value.reduce((count, request) => {
-    return (
-      count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
-    )
-  }, 0)
-  const offersReceived = myRequests.reduce((count, request) => count + request.offersCount, 0)
-
-  return {
-    postsMade: myRequests.length,
-    offersSent,
-    offersReceived,
-  }
-})
-
-const trendingItems = computed<TrendingRequest[]>(() => {
-  return [...requests.value]
-    .sort((left, right) => {
-      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
-      return right.createdAt.getTime() - left.createdAt.getTime()
-    })
-    .slice(0, 5)
-    .map((request) => ({
-      id: request.id,
-      title: request.itemNeeded,
-      offersCount: request.offersCount,
-    }))
-})
-
-const sortedRequests = computed(() => {
-  let filteredRequests = [...requests.value]
-
-  if (activeFilter.value === "Open") {
-    filteredRequests = filteredRequests.filter((request) => request.status === "OPEN")
-  }
-
-  if (activeFilter.value === "My Requests") {
-    filteredRequests = filteredRequests.filter(
-      (request) => request.borrower.userId === currentDbUserId.value,
-    )
-  }
-
-  if (activeFilter.value === "Most Offers") {
-    return filteredRequests.sort((left, right) => {
-      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
-      return right.createdAt.getTime() - left.createdAt.getTime()
-    })
-  }
-
-  return filteredRequests.sort(
-    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
-  )
-})
-
-const ensureAuthenticatedHeaders = async () => {
-  const headers = await getAuthHeaders()
-
-  if (!headers) {
-    feedError.value = "You need to sign in before using request and offer actions."
-    return null
-  }
-
-  return headers
-}
-
-const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
-  const headers = await getAuthHeaders()
-  if (!headers) {
-    requestComposerError.value = "You need to sign in before posting a request."
-    return
-  }
-}
-
-const enumerateRequestedDates = (startDate: string, endDate: string) => {
-  const dates: string[] = []
-  const cursor = new Date(`${startDate}T00:00:00`)
-  const end = new Date(`${endDate}T00:00:00`)
-
-  while (cursor.getTime() <= end.getTime()) {
-    dates.push(new Date(cursor).toISOString())
-    cursor.setDate(cursor.getDate() + 1)
-  }
-
-  return dates
-}
-
-const refreshFeed = async () => {
-  if (feedHydrated.value) {
-    isLoadingFeed.value = false
-  } else {
-    isLoadingFeed.value = true
-  }
-
-  feedError.value = null
-
-  isCreatingRequest.value = true
-  feedError.value = null
-  requestComposerError.value = null
-
-  try {
-    await $fetch("/api/item-requests", {
-      method: "POST",
-      headers,
-      body: {
-        itemNeeded: payload.itemNeeded,
-        requestedDates: enumerateRequestedDates(payload.startDate, payload.endDate),
-        priceRange: [payload.minimumPrice, payload.maximumPrice],
-        description: payload.description,
-        status: "OPEN",
-      },
-    })
-
-    activeFilter.value = "Newest"
-    await refreshFeed()
-    feedMainRef.value?.scrollTo({ top: 0, behavior: "smooth" })
-  } catch (error) {
-    console.error("Failed to create item request", error)
-    requestComposerError.value = extractApiErrorMessage(
-      error,
-      "Unable to post your request right now.",
-    )
-  } finally {
-    isCreatingRequest.value = false
-  }
-}
-
-const openOfferComposer = (requestId: number) => {
-  const request = requests.value.find((entry) => entry.id === requestId)
-
-  if (!request) return
-  if (!currentDbUserId.value) {
-    feedError.value = "You need to sign in before sending an offer."
-    return
-  }
-  if (request.borrower.userId === currentDbUserId.value || request.status !== "OPEN") return
-
-  offerComposerError.value = null
-  activeOfferRequestId.value = requestId
-  isOfferComposerOpen.value = true
-}
-
-const handleOfferComposerVisibility = (isVisible: boolean) => {
-  isOfferComposerOpen.value = isVisible
-
-  if (!isVisible) {
-    activeOfferRequestId.value = null
-    offerComposerError.value = null
-  }
-}
-
-const submitOffer = async (offerInput: CommunityOfferFormInput) => {
-  const request = selectedRequestForOffer.value
-  const headers = await getAuthHeaders()
-  if (!headers) {
-    offerComposerError.value = "You need to sign in before sending an offer."
-    return
-  }
-  if (!request) return
-
-  isSubmittingOffer.value = true
-  feedError.value = null
-  offerComposerError.value = null
-
-  try {
-    if (existingOfferForCurrentUser.value) {
-      await $fetch(`/api/request-offers/${existingOfferForCurrentUser.value.id}`, {
-        method: "PATCH",
-        headers,
-        body: offerInput,
-      })
-    } else {
-      await $fetch("/api/request-offers", {
-        method: "POST",
-        headers,
-        body: {
-          requestID: request.id,
-          ...offerInput,
-          status: "PENDING",
-        },
-      })
-    }
-
-    await refreshFeed()
-    handleOfferComposerVisibility(false)
-  } catch (error) {
-    console.error("Failed to submit offer", error)
-    offerComposerError.value = extractApiErrorMessage(error, "Unable to save this offer right now.")
-  } finally {
-    isSubmittingOffer.value = false
-  }
-}
-
-const cancelOffer = async (offerId: number) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
-  isSubmittingOffer.value = true
-  feedError.value = null
-  offerComposerError.value = null
-
-  try {
-    await $fetch(`/api/request-offers/${offerId}`, {
-      method: "PATCH",
-      headers,
-      body: {
-        status: "CANCELLED",
-      },
-    })
-
-    await refreshFeed()
-    handleOfferComposerVisibility(false)
-  } catch (error) {
-    console.error("Failed to cancel offer", error)
-    offerComposerError.value = extractApiErrorMessage(
-      error,
-      "Unable to cancel this offer right now.",
-    )
-  } finally {
-    isSubmittingOffer.value = false
-  }
-}
-
-const handleUpdateRequestStatus = async (payload: {
-  requestId: number
-  status: CommunityRequestStatus
-}) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
-  feedError.value = null
-
-  try {
-    await $fetch(`/api/item-requests/${payload.requestId}`, {
-      method: "PATCH",
-      headers,
-      body: {
-        status: payload.status,
-      },
-    })
-
-    await refreshFeed()
-  } catch (error) {
-    console.error("Failed to update request status", error)
-    feedError.value = "Unable to update this request right now."
-  }
-}
-
-const handleDeleteRequest = async (requestId: number) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
-  feedError.value = null
-
-  try {
-    await $fetch(`/api/item-requests/${requestId}`, {
-      method: "DELETE",
-      headers,
-    })
-
-    await refreshFeed()
-  } catch (error) {
-    console.error("Failed to delete request", error)
-    feedError.value = "Unable to delete this request right now."
-  }
-}
-
-const handleUpdateOfferStatus = async (payload: {
-  offerId: number
-  requestId: number
-  status: CommunityOfferStatus
-}) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
-  feedError.value = null
-
-  try {
-    await $fetch(`/api/request-offers/${payload.offerId}`, {
-      method: "PATCH",
-      headers,
-      body: {
-        status: payload.status,
-      },
-    })
-
-    if (payload.status === "ACCEPTED") {
-      const request = requests.value.find((entry) => entry.id === payload.requestId)
-
-      if (request) {
-        const remainingPendingOffers = request.offers.filter(
-          (offer) => offer.id !== payload.offerId && offer.status === "PENDING",
-        )
-
-        await Promise.all(
-          remainingPendingOffers.map((offer) =>
-            $fetch(`/api/request-offers/${offer.id}`, {
-              method: "PATCH",
-              headers,
-              body: {
-                status: "DECLINED",
-              },
-            }),
-          ),
-        )
-      }
-
-      await $fetch(`/api/item-requests/${payload.requestId}`, {
-        method: "PATCH",
-        headers,
-        body: {
-          status: "FULFILLED",
-        },
-      })
-    }
-
-    await refreshFeed()
-  } catch (error) {
-    console.error("Failed to update offer status", error)
-    feedError.value = "Unable to update this offer right now."
-  }
-}
-
-const markNotificationRead = async (notificationId: number) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
-  try {
-    await $fetch(`/api/request-offers/notifications/${notificationId}`, {
-      method: "PATCH",
-      headers,
-    })
-
-    notifications.value = notifications.value.map((notification) =>
-      notification.id === notificationId ? { ...notification, read: true } : notification,
-    )
-  } catch (error) {
-    console.error("Failed to mark notification as read", error)
-  }
-}
-
-const markAllNotificationsRead = async () => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
-  try {
-    await $fetch("/api/request-offers/notifications/read-all", {
-      method: "POST",
-      headers,
-    })
-
-    notifications.value = notifications.value.map((notification) => ({
-      ...notification,
-      read: true,
-    }))
-  } catch (error) {
-    console.error("Failed to mark notifications as read", error)
-  }
-}
-
-onMounted(() => {
-  void refreshFeed()
-})
-
-watch(
-  () => user.value?.id,
-  (nextUserId, previousUserId) => {
-    if (!feedHydrated.value) return
-    if (nextUserId === previousUserId) return
-    void refreshFeed()
-  },
-)
 
     requests.value = requestResponse.map(normalizeRequest)
     notifications.value = notificationResponse.map(normalizeNotification)

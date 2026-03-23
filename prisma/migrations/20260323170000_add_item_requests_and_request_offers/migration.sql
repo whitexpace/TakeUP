@@ -96,3 +96,4 @@ ALTER TABLE "RequestOffer" ADD CONSTRAINT "RequestOffer_lenderID_fkey" FOREIGN K
 
 -- AddForeignKey
 ALTER TABLE "RequestOffer" ADD CONSTRAINT "RequestOffer_requestID_fkey" FOREIGN KEY ("requestID") REFERENCES "ItemRequest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

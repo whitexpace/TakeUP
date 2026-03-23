@@ -2,7 +2,8 @@ import { createError } from "h3"
 import { createContext } from "../../trpc/context"
 
 export default defineEventHandler(async (event) => {
-  const { user } = await createContext(event)
+  const ctx = await createContext(event)
+  const { user } = ctx
 
   if (!user) {
     throw createError({

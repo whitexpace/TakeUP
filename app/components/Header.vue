@@ -261,7 +261,6 @@ onBeforeUnmount(() => {
         class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1 relative"
         active-class="text-burning-orange"
         title="Bag"
-        active-class="text-burning-orange"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

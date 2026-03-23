@@ -58,8 +58,6 @@ const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 const MAX_GALLERY_IMAGE_COUNT = 10
-const isCreateMode = computed(() => props.mode !== "edit")
-
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
   { value: "BOOKS", label: "Books" },
@@ -140,34 +138,6 @@ const buildInitialImages = (item?: MyListingItem | null): ListingImage[] => {
   const imageUrls = item.images.length
     ? item.images.map((image) => image.path)
     : (item.photos ?? [])
-
-  return imageUrls.map((url, index) => ({
-    id: `existing-${index}-${url}`,
-    url,
-    name: `Image ${index + 1}`,
-  }))
-}
-
-const syncImagesFromItem = (item?: MyListingItem | null) => {
-  images.value = buildInitialImages(item)
-  primaryImageId.value =
-    images.value.find(
-      (image) =>
-        image.url ===
-        (item?.images.find((entry) => entry.isPrimary)?.path ?? item?.thumbnailImage ?? null),
-    )?.id ??
-    images.value[0]?.id ??
-    null
-}
-
-syncImagesFromItem(props.item)
-
-const buildInitialImages = (item?: MyListingItem | null): ListingImage[] => {
-  if (!item) return []
-
-  const imageUrls = item.images.length
-    ? item.images.map((image) => image.path)
-    : item.photos ?? []
 
   return imageUrls.map((url, index) => ({
     id: `existing-${index}-${url}`,
@@ -574,6 +544,8 @@ const handleSubmit = () => {
   }
 
   const payload = buildPayload()
+  const schema = props.mode === "edit" ? updateItemSchema : createItemSchema
+  const result = schema.safeParse(payload)
 
   if (!form.name.trim()) {
     fieldErrors.value.name = "Item name is required."
@@ -607,29 +579,6 @@ const handleSubmit = () => {
       availabilityErrors.value = [...flat.fieldErrors.availability]
     }
   }
-
-  if (!result.success) {
-    const flat = result.error.flatten()
-
-    Object.entries(flat.fieldErrors).forEach(([key, messages]) => {
-      const firstMessage = messages?.[0]
-      if (firstMessage) {
-        fieldErrors.value[key] = firstMessage
-      }
-    })
-
-    if (flat.fieldErrors.availability) {
-      availabilityErrors.value = [...flat.fieldErrors.availability]
-    }
-  }
-
-  const invalidAvailability = availabilityRanges.value.some(
-    (range) =>
-      range.startDate &&
-      !range.noEndDate &&
-      range.endDate &&
-      range.endDate.getTime() <= range.startDate.getTime(),
-  )
 
   if (invalidAvailability) {
     availabilityErrors.value.push("Availability end dates must be later than start dates.")

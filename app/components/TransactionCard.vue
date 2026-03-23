@@ -65,7 +65,9 @@ const totalLabel = computed(() =>
 
 const isCompleted = computed(() => props.transaction.status === "COMPLETED")
 const detailPath = computed(() =>
-  props.transaction.bookingId ? `/account/transactions/${props.transaction.bookingId}` : null,
+  props.transaction.bookingId
+    ? `/account/transactions/${props.transaction.bookingId}`
+    : `/account/transactions/${props.transaction.id}`,
 )
 </script>
 
@@ -106,7 +108,7 @@ const detailPath = computed(() =>
 
     <!-- Bottom row -->
     <NuxtLink
-      :to="`/account/transactions/${transaction.id}`"
+      :to="detailPath"
       class="flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4 hover:bg-cream/50 transition-colors cursor-pointer block"
     >
       <!-- Thumbnail -->
