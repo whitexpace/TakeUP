@@ -1,4 +1,6 @@
-import { computed, onMounted, watch } from "vue"
+import type { inferRouterOutputs } from "@trpc/server"
+import { computed, onMounted } from "vue"
+import type { AppRouter } from "../../server/trpc/routers"
 
 export interface BagItem {
   id: string
@@ -16,8 +18,41 @@ export interface BagItem {
   listingType: "Rent" | "Borrow"
 }
 
+let pendingLoad: Promise<void> | null = null
+
 export const useBag = () => {
   const bagItems = useState<BagItem[]>("bag-items", () => [])
+  const isLoading = useState<boolean>("bag-loading", () => false)
+  const hasLoaded = useState<boolean>("bag-loaded", () => false)
+  const errorMessage = useState<string | null>("bag-error-message", () => null)
+
+  const getAuthHeaders = async () => {
+    const supabase = useSupabaseClient()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      return undefined
+    }
+
+    return {
+      Authorization: `Bearer ${session.access_token}`,
+    }
+  }
+
+  const loadBag = async (options: { force?: boolean } = {}) => {
+    if (pendingLoad && !options.force) {
+      await pendingLoad
+      return
+    }
+
+    if (hasLoaded.value && !options.force) {
+      return
+    }
+
+    pendingLoad = (async () => {
+      isLoading.value = true
 
   const normalizeBagItem = (item: BagItem): BagItem => ({
     ...item,
@@ -39,7 +74,57 @@ export const useBag = () => {
       } catch (e) {
         console.error("Failed to parse bag from localStorage", e)
       }
+    })()
+
+    await pendingLoad
+  }
+
+  const addToBag = async (input: AddToBagInput) => {
+    const headers = await getAuthHeaders()
+    const entry = await $fetch<BagItem>("/api/cart", {
+      method: "POST",
+      body: {
+        itemId: input.itemId,
+        startAt: input.startAt.toISOString(),
+        endAt: input.endAt.toISOString(),
+      },
+      headers,
+    })
+
+    const existingIndex = bagItems.value.findIndex((item) => item.id === entry.id)
+    if (existingIndex === -1) {
+      bagItems.value = [entry, ...bagItems.value]
+    } else {
+      bagItems.value.splice(existingIndex, 1, entry)
     }
+
+    hasLoaded.value = true
+    errorMessage.value = null
+
+    return entry
+  }
+
+  const removeFromBag = async (id: string) => {
+    const headers = await getAuthHeaders()
+
+    await $fetch(`/api/cart/${id}`, {
+      method: "DELETE",
+      headers,
+    })
+
+    bagItems.value = bagItems.value.filter((item) => item.id !== id)
+  }
+
+  const hasItemWithWindow = (itemId: string, startAt: Date, endAt: Date) =>
+    bagItems.value.some(
+      (item) =>
+        item.itemId === itemId &&
+        new Date(item.startAt).getTime() === startAt.getTime() &&
+        new Date(item.endAt).getTime() === endAt.getTime(),
+    )
+
+  onMounted(() => {
+    void loadBag()
   })
 
   // Persist to localStorage whenever bagItems changes
@@ -73,9 +158,12 @@ export const useBag = () => {
 
   return {
     bagItems,
+    isLoading,
+    errorMessage,
+    bagCount: computed(() => bagItems.value.length),
     addToBag,
     removeFromBag,
-    clearBag,
-    bagCount,
+    loadBag,
+    hasItemWithWindow,
   }
 }

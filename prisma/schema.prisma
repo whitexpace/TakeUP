@@ -349,6 +349,23 @@ model User {
   requestPosts                 RequestPost[]
 }
 
+model CartEntry {
+  id         String   @id @default(uuid())
+  borrowerId String
+  itemId     String
+  startAt    DateTime
+  endAt      DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  borrower User @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  item     Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([borrowerId, itemId, startAt, endAt])
+  @@index([borrowerId, createdAt])
+  @@index([itemId])
+}
+
 model Like {
   id        String   @id @default(uuid())
   userId    String
