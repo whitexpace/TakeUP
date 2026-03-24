@@ -167,6 +167,11 @@ type AvailabilityRangeRecord = {
   status: "AVAILABLE" | "RENTED"
 }
 
+type BookingTimeRange = {
+  startDate: Date
+  endDate: Date
+}
+
 const normalizeCalendarDate = (value: Date) =>
   new Date(value.getFullYear(), value.getMonth(), value.getDate())
 
@@ -202,6 +207,8 @@ const ensureBookingWindowMatchesAvailability = async (
     return
   }
 
+  const hasAvailableRanges = availabilityRanges.some((range) => range.status === "AVAILABLE")
+
   const startBoundary = normalizeCalendarDate(input.startDate)
   const endBoundary = normalizeCalendarDate(input.endDate)
 
@@ -218,7 +225,7 @@ const ensureBookingWindowMatchesAvailability = async (
       (range) => range.status !== "AVAILABLE" && isDateWithinAvailabilityRange(cursor, range),
     )
 
-    if (hasBlockedWindow || !hasAvailableWindow) {
+    if (hasBlockedWindow || (hasAvailableRanges && !hasAvailableWindow)) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "The selected dates are not fully available for this listing.",
@@ -245,16 +252,13 @@ const mapBookingRecord = (record: BookingRecord): BookingListItem => {
 
 const DEFAULT_PAYMENT_METHOD: PaymentMethod = paymentMethodSchema.enum.GCASH
 
-const BOOKING_ACTIVE_STATUSES = [
-  bookingStatusSchema.enum.PENDING,
-  bookingStatusSchema.enum.CONFIRMED,
-  bookingStatusSchema.enum.IN_DISPUTE,
-] as const
-
 const ITEM_BLOCKING_BOOKING_STATUSES = [
   bookingStatusSchema.enum.CONFIRMED,
   bookingStatusSchema.enum.IN_DISPUTE,
 ] as const
+
+const OVERLAPPING_REQUEST_CANCELLATION_REASON =
+  "Cancelled because the lender approved another overlapping request."
 
 const assertParticipantAccess = (
   booking: Pick<BookingEditableRecord, "borrowerId" | "lenderId">,
@@ -376,13 +380,14 @@ const ensureBookingWindowAvailable = async (
     startDate: Date
     endDate: Date
     excludeBookingId?: string
+    statuses?: readonly (keyof typeof bookingStatusSchema.enum)[]
   },
 ) => {
   const overlappingBooking = await bookingPrisma.booking.findFirst({
     where: {
       itemId: input.itemId,
       ...(input.excludeBookingId ? { id: { not: input.excludeBookingId } } : {}),
-      status: { in: [...BOOKING_ACTIVE_STATUSES] },
+      status: { in: [...(input.statuses ?? ITEM_BLOCKING_BOOKING_STATUSES)] },
       startDate: { lt: input.endDate },
       endDate: { gt: input.startDate },
     },
@@ -396,6 +401,9 @@ const ensureBookingWindowAvailable = async (
     })
   }
 }
+
+const doBookingWindowsOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
+  left.startDate < right.endDate && left.endDate > right.startDate
 
 const syncBookingTransaction = async (
   bookingPrisma: BookingMutationPrismaClient,
@@ -481,12 +489,13 @@ const syncItemStatusFromBookings = async (
   prisma: ItemStatusSyncPrismaClient,
   input: { itemId: string },
 ) => {
+  const now = new Date()
   const item = await prisma.item.findUnique({
     where: { id: input.itemId },
     select: { status: true },
   })
 
-  if (!item || item.status === "DELETED") {
+  if (!item || item.status === "DELETED" || item.status === "DEACTIVATED") {
     return
   }
 
@@ -494,6 +503,8 @@ const syncItemStatusFromBookings = async (
     where: {
       itemId: input.itemId,
       status: { in: [...ITEM_BLOCKING_BOOKING_STATUSES] },
+      startDate: { lte: now },
+      endDate: { gt: now },
     },
     select: { id: true },
   })
@@ -598,8 +609,11 @@ export const bookingRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "You cannot book your own item." })
       }
 
-      if (item.status !== "AVAILABLE") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not available for booking." })
+      if (item.status === "DEACTIVATED" || item.status === "DELETED") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Item is not accepting bookings right now.",
+        })
       }
 
       await ensureBookingWindowMatchesAvailability(tx, {
@@ -612,6 +626,7 @@ export const bookingRouter = router({
         itemId: input.itemId,
         startDate: input.startDate,
         endDate: input.endDate,
+        statuses: ITEM_BLOCKING_BOOKING_STATUSES,
       })
 
       const platformCommission = item.freeToBorrow ? 0 : input.platformCommission
@@ -706,6 +721,7 @@ export const bookingRouter = router({
         startDate,
         endDate,
         excludeBookingId: existing.id,
+        statuses: ITEM_BLOCKING_BOOKING_STATUSES,
       })
     }
 
@@ -717,6 +733,20 @@ export const bookingRouter = router({
 
     return ctx.prisma.$transaction(async (tx) => {
       const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+      const isConfirmingBooking =
+        input.status === bookingStatusSchema.enum.CONFIRMED &&
+        existing.status !== bookingStatusSchema.enum.CONFIRMED
+
+      if (isConfirmingBooking) {
+        await ensureBookingWindowAvailable(txBookingPrisma, {
+          itemId: existing.itemId,
+          startDate,
+          endDate,
+          excludeBookingId: existing.id,
+          statuses: ITEM_BLOCKING_BOOKING_STATUSES,
+        })
+      }
+
       const updatedBooking = await txBookingPrisma.booking.update({
         where: { id: input.id },
         data: {
@@ -739,6 +769,49 @@ export const bookingRouter = router({
         },
         include: bookingInclude,
       })
+
+      if (isConfirmingBooking) {
+        const overlappingPendingBookings = (await txBookingPrisma.booking.findMany({
+          where: {
+            itemId: existing.itemId,
+            id: { not: existing.id },
+            status: bookingStatusSchema.enum.PENDING,
+            startDate: { lt: endDate },
+            endDate: { gt: startDate },
+          },
+          include: bookingInclude,
+        })) as BookingRecord[]
+
+        for (const overlappingBooking of overlappingPendingBookings) {
+          if (
+            !doBookingWindowsOverlap(
+              { startDate, endDate },
+              {
+                startDate: overlappingBooking.startDate,
+                endDate: overlappingBooking.endDate,
+              },
+            )
+          ) {
+            continue
+          }
+
+          const cancelledBooking = await txBookingPrisma.booking.update({
+            where: { id: overlappingBooking.id },
+            data: {
+              status: bookingStatusSchema.enum.CANCELLED,
+              cancellationReason:
+                overlappingBooking.cancellationReason ?? OVERLAPPING_REQUEST_CANCELLATION_REASON,
+              cancelledAt: overlappingBooking.cancelledAt ?? new Date(),
+            },
+            include: bookingInclude,
+          })
+
+          await syncBookingTransaction(
+            tx as unknown as BookingMutationPrismaClient,
+            cancelledBooking,
+          )
+        }
+      }
 
       await syncBookingTransaction(tx as unknown as BookingMutationPrismaClient, updatedBooking)
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {

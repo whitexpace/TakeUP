@@ -229,7 +229,7 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
     await refresh()
     actionSuccessMessage.value =
       status === "CONFIRMED"
-        ? "Booking request approved. The listing status was updated."
+        ? "Booking request approved. Overlapping pending requests were cancelled and the calendar was updated."
         : "Booking request declined."
   } catch (err: unknown) {
     actionErrorMessage.value =

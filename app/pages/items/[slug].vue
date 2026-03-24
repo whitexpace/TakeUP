@@ -242,7 +242,7 @@ const formattedCategories = computed(() => item.value?.categories.map(humanizeEn
 const typeLabel = computed(() => (item.value?.freeToBorrow ? "Borrow" : "Rent"))
 const isItemRented = computed(() => item.value?.status === "RENTED")
 const isItemUnavailableForBooking = computed(() =>
-  Boolean(item.value && item.value.status !== "AVAILABLE"),
+  Boolean(item.value && (item.value.status === "DEACTIVATED" || item.value.status === "DELETED")),
 )
 const unavailableItemLabel = computed(() => {
   if (!item.value) return "Unavailable"
@@ -252,6 +252,13 @@ const unavailableItemLabel = computed(() => {
   return "Unavailable"
 })
 const availabilityBadge = computed(() => {
+  if (isItemRented.value) {
+    return {
+      label: unavailableItemLabel.value,
+      className: "bg-noble-black/90 text-white",
+    }
+  }
+
   if (isItemUnavailableForBooking.value) {
     return {
       label: unavailableItemLabel.value,
@@ -271,7 +278,7 @@ const bookingAvailabilityTitle = computed(() =>
 )
 const bookingAvailabilityMessage = computed(() => {
   if (isItemRented.value) {
-    return "This item already has an active rental. The calendar is locked until it is returned."
+    return "Some dates are already reserved. Choose another available date and time."
   }
 
   if (isItemUnavailableForBooking.value) {
@@ -280,7 +287,9 @@ const bookingAvailabilityMessage = computed(() => {
 
   return "Choose your dates and time to request this item."
 })
-const isItemAvailableForBooking = computed(() => item.value?.status === "AVAILABLE")
+const isItemAvailableForBooking = computed(() =>
+  Boolean(item.value && !isItemUnavailableForBooking.value),
+)
 const ownerName = computed(() => item.value?.ownerName ?? "TakeUP member")
 const ownerInitials = computed(() => {
   const parts = ownerName.value.split(/\s+/).filter(Boolean)
@@ -314,7 +323,7 @@ const knownIssuesList = computed(() => splitDetailList(item.value?.knownIssues))
 const usageLimitationsList = computed(() => splitDetailList(item.value?.usageLimitations))
 
 const availabilityRanges = computed(() =>
-  (item.value?.availability ?? []).map((slot) => ({
+  [...(item.value?.availability ?? []), ...(item.value?.bookingBlocks ?? [])].map((slot) => ({
     id: slot.id,
     startDate: normalizeDate(new Date(slot.startDate)),
     endDate: normalizeDate(new Date(slot.endDate)),
@@ -331,6 +340,8 @@ const isDateUnavailable = (date: Date | null) => {
 
   if (!availabilityRanges.value.length) return false
 
+  const hasAvailableRanges = availabilityRanges.value.some((range) => range.status === "AVAILABLE")
+
   const hasAvailableWindow = availabilityRanges.value.some(
     (range) =>
       range.status === "AVAILABLE" &&
@@ -346,7 +357,7 @@ const isDateUnavailable = (date: Date | null) => {
   )
 
   if (hasBlockedWindow) return true
-  return !hasAvailableWindow
+  return hasAvailableRanges ? !hasAvailableWindow : false
 }
 
 const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate()

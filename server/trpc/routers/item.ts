@@ -554,6 +554,8 @@ const buildItemInclude = (userId: string | null) =>
     },
   }) satisfies Prisma.ItemInclude
 
+const blockingBookingStatusFilter = ["CONFIRMED", "IN_DISPUTE"] as const
+
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
     const search = input?.search?.trim()
@@ -798,9 +800,40 @@ export const itemRouter = router({
     return ctx.prisma.item
       .findUnique({
         where: { id: input.id },
-        include: buildItemInclude(ctx.user?.id ?? null),
+        include: {
+          ...buildItemInclude(ctx.user?.id ?? null),
+          bookings: {
+            where: {
+              status: { in: [...blockingBookingStatusFilter] },
+            },
+            select: {
+              id: true,
+              startDate: true,
+              endDate: true,
+            },
+          },
+        },
       })
-      .then((item: ItemWithUserLike | null) => (item ? mapItemTaxonomy(item) : null))
+      .then(
+        (
+          item:
+            | (ItemWithUserLike & {
+                bookings: Array<{ id: string; startDate: Date; endDate: Date }>
+              })
+            | null,
+        ) =>
+          item
+            ? {
+                ...mapItemTaxonomy(item),
+                bookingBlocks: item.bookings.map((booking) => ({
+                  id: booking.id,
+                  startDate: booking.startDate,
+                  endDate: booking.endDate,
+                  status: "RENTED" as const,
+                })),
+              }
+            : null,
+      )
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
