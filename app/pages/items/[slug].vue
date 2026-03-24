@@ -659,6 +659,7 @@ const { addToBag: addItemToBag, hasItemWithWindow } = useBag()
 
 const bagFeedbackMessage = ref("")
 const bagFeedbackTone = ref<"success" | "error">("success")
+const isAddingToBag = ref(false)
 
 const isInBag = computed(() => {
   if (!item.value || !selectedBookingWindow.value) return false
@@ -690,9 +691,13 @@ const showBagFeedback = (message: string, tone: "success" | "error") => {
 }
 
 const handleAddToBag = async () => {
-  if (!item.value || !selectedBookingWindow.value || !canAddToBag.value) return
+  if (!item.value || !selectedBookingWindow.value || !canAddToBag.value || isAddingToBag.value) {
+    return
+  }
 
   try {
+    isAddingToBag.value = true
+
     await addItemToBag({
       itemId: item.value.id,
       startAt: selectedBookingWindow.value.startDate,
@@ -729,6 +734,8 @@ const handleAddToBag = async () => {
     }
 
     showBagFeedback("Unable to add this item to your bag right now.", "error")
+  } finally {
+    isAddingToBag.value = false
   }
 }
 

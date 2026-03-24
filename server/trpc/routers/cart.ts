@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server"
-import type { Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import type { Context } from "../context"
 import { router } from "../init"
 import { protectedProcedure } from "../procedures"
@@ -13,9 +13,15 @@ const cartEntryInclude = {
       rentalFee: true,
       rateOption: true,
       freeToBorrow: true,
-      thumbnailImage: true,
-      photos: true,
       lenderId: true,
+      images: {
+        select: {
+          path: true,
+          isPrimary: true,
+          sortOrder: true,
+        },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
       lender: {
         select: {
           user: {
@@ -47,20 +53,25 @@ const getOwnerName = (entry: CartEntryWithItem) => {
   )
 }
 
-const mapCartEntry = (entry: CartEntryWithItem) => ({
-  id: entry.id,
-  itemId: entry.itemId,
-  name: entry.item.name,
-  price: entry.item.rentalFee,
-  priceUnit: entry.item.rateOption === "PER_HOUR" ? "hour" : "day",
-  image: entry.item.thumbnailImage || entry.item.photos[0] || "",
-  startAt: entry.startAt,
-  endAt: entry.endAt,
-  lenderId: entry.item.lenderId,
-  lenderName: getOwnerName(entry),
-  listingType: entry.item.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
-  createdAt: entry.createdAt,
-})
+const mapCartEntry = (entry: CartEntryWithItem) => {
+  const primaryImage =
+    entry.item.images.find((image) => image.isPrimary)?.path ?? entry.item.images[0]?.path ?? ""
+
+  return {
+    id: entry.id,
+    itemId: entry.itemId,
+    name: entry.item.name,
+    price: entry.item.rentalFee,
+    priceUnit: entry.item.rateOption === "PER_HOUR" ? "hour" : "day",
+    image: primaryImage,
+    startAt: entry.startAt,
+    endAt: entry.endAt,
+    lenderId: entry.item.lenderId,
+    lenderName: getOwnerName(entry),
+    listingType: entry.item.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
+    createdAt: entry.createdAt,
+  }
+}
 
 const requireBorrowerAccount = async (
   ctx: Pick<Context, "prisma" | "user"> & { user: { id: string } },
@@ -172,15 +183,28 @@ export const cartRouter = router({
       })
     }
 
-    const entry = await ctx.prisma.cartEntry.create({
-      data: {
-        borrowerId: ctx.user.id,
-        itemId: input.itemId,
-        startAt: input.startAt,
-        endAt: input.endAt,
-      },
-      include: cartEntryInclude,
-    })
+    let entry: CartEntryWithItem
+
+    try {
+      entry = await ctx.prisma.cartEntry.create({
+        data: {
+          borrowerId: ctx.user.id,
+          itemId: input.itemId,
+          startAt: input.startAt,
+          endAt: input.endAt,
+        },
+        include: cartEntryInclude,
+      })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This item with the selected dates is already in your bag.",
+        })
+      }
+
+      throw error
+    }
 
     return mapCartEntry(entry)
   }),
