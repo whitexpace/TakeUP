@@ -96,7 +96,9 @@ export const requestRouter = router({
       })
     }
 
-    const post = await (ctx.prisma as typeof ctx.prisma & RequestPostCreatePrisma).requestPost.create({
+    const post = await (
+      ctx.prisma as typeof ctx.prisma & RequestPostCreatePrisma
+    ).requestPost.create({
       data: {
         requesterId: ctx.user.id,
         itemNeeded: input.itemNeeded,

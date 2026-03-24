@@ -1,4 +1,8 @@
-import type { BookingPaymentStatus as PrismaBookingPaymentStatus, BookingStatus as PrismaBookingStatus, Prisma } from "@prisma/client"
+import type {
+  BookingPaymentStatus as PrismaBookingPaymentStatus,
+  BookingStatus as PrismaBookingStatus,
+  Prisma,
+} from "@prisma/client"
 import {
   PaymentMethod as PrismaPaymentMethod,
   TransactionStatus as PrismaTransactionStatus,
