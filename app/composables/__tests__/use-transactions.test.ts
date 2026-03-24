@@ -10,6 +10,7 @@ const TX_ID_2 = "22222222-2222-2222-2222-222222222222"
 
 const makeTx = (id: string, overrides = {}) => ({
   id,
+  bookingId: "booking-1",
   itemId: "item-1",
   borrowerId: BORROWER_USER_ID,
   lenderId: LENDER_USER_ID,

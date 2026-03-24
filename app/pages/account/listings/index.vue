@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: "account", middleware: "account-auth" })
 
-const { listings, isLoading, error, hasMore, fetchListings, toggleStatus, loadMore, refresh } =
+const { listings, isLoading, error, hasFetched, hasMore, toggleStatus, loadMore, refresh } =
   useMyListings()
 
 const searchQuery = ref("")
@@ -28,7 +28,9 @@ const handleToggleStatus = async (id: string, status: "AVAILABLE" | "DEACTIVATED
   }
 }
 
-onMounted(() => fetchListings())
+onMounted(() => {
+  void refresh()
+})
 </script>
 
 <template>
@@ -93,7 +95,7 @@ onMounted(() => fetchListings())
 
     <!-- Loading state -->
     <div
-      v-if="isLoading && listings.length === 0"
+      v-if="(!hasFetched || isLoading) && listings.length === 0"
       class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
     >
       <div v-for="i in 4" :key="i" class="h-72 bg-orange-50 rounded-[20px] animate-pulse" />

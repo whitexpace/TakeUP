@@ -32,8 +32,8 @@ import { computed } from "vue"
 
 interface Props {
   postsMade: number
-  upvotesReceived: number
-  replies: number
+  offersSent: number
+  offersReceived: number
 }
 
 const props = defineProps<Props>()
@@ -44,12 +44,12 @@ const activityItems = computed(() => [
     value: props.postsMade,
   },
   {
-    label: "Upvotes received",
-    value: props.upvotesReceived,
+    label: "Offers sent",
+    value: props.offersSent,
   },
   {
-    label: "Replies",
-    value: props.replies,
+    label: "Offers received",
+    value: props.offersReceived,
   },
 ])
 </script>

@@ -9,13 +9,15 @@ const props = defineProps<{
 const label = computed(() => {
   switch (props.status) {
     case "PENDING":
-      return props.role === "BORROWER" ? "To Receive" : "To Deliver"
+      return props.role === "BORROWER" ? "To Receive" : "Ready for Approval"
     case "ACTIVE":
       return "In Use"
     case "COMPLETED":
       return "Completed"
     case "CANCELLED":
       return "Cancelled"
+    case "RETURNED":
+      return "Item Returned"
     default:
       return ""
   }
@@ -27,6 +29,7 @@ const badgeClass = computed(() => {
       return "bg-burning-orange"
     case "ACTIVE":
     case "COMPLETED":
+    case "RETURNED":
       return "bg-indigo-900"
     case "CANCELLED":
       return "bg-cinnabar-red"

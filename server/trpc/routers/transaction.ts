@@ -29,22 +29,6 @@ const transactionInclude = {
       freeToBorrow: true,
     },
   },
-  borrower: {
-    select: {
-      username: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
-    },
-  },
-  lender: {
-    select: {
-      username: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
-    },
-  },
 } satisfies Prisma.RentalTransactionInclude
 
 const getTransactionThumbnailImage = (item: {
@@ -52,51 +36,74 @@ const getTransactionThumbnailImage = (item: {
 }): string | null =>
   item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
 
+const prismaTransactionStatuses = PrismaTransactionStatus as Record<string, PrismaTransactionStatus>
+const getOptionalTransactionStatus = (name: string) => prismaTransactionStatuses[name]
+const getTransactionStatusGroup = (
+  names: string[],
+  fallback: PrismaTransactionStatus[],
+): PrismaTransactionStatus[] => {
+  const resolved = names
+    .map((name) => getOptionalTransactionStatus(name))
+    .filter((status): status is PrismaTransactionStatus => Boolean(status))
+
+  return resolved.length > 0 ? resolved : fallback
+}
+
 const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
-  PENDING: [PrismaTransactionStatus.PENDING, PrismaTransactionStatus.AWAITING_LENDER_APPROVAL],
-  ACTIVE: [
-    PrismaTransactionStatus.CONFIRMED,
-    PrismaTransactionStatus.PAID,
-    PrismaTransactionStatus.ONGOING,
-    PrismaTransactionStatus.RETURNED,
-    PrismaTransactionStatus.IN_DISPUTE,
-    PrismaTransactionStatus.APPEALED,
-  ],
+  PENDING: getTransactionStatusGroup(
+    ["PENDING", "AWAITING_LENDER_APPROVAL"],
+    [PrismaTransactionStatus.PENDING],
+  ),
+  ACTIVE: getTransactionStatusGroup(
+    ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "IN_DISPUTE", "APPEALED"],
+    [PrismaTransactionStatus.PENDING],
+  ),
+  RETURNED: getTransactionStatusGroup(["RETURNED"], [PrismaTransactionStatus.RETURNED]),
   COMPLETED: [PrismaTransactionStatus.COMPLETED],
-  CANCELLED: [
-    PrismaTransactionStatus.CANCELLED,
-    PrismaTransactionStatus.REFUNDED,
-    PrismaTransactionStatus.FAILED,
-  ],
+  CANCELLED: getTransactionStatusGroup(
+    ["CANCELLED", "REFUNDED", "FAILED"],
+    [PrismaTransactionStatus.CANCELLED],
+  ),
 }
 
 const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
-  switch (status) {
-    case PrismaTransactionStatus.PENDING:
-    case PrismaTransactionStatus.AWAITING_LENDER_APPROVAL:
-      return "PENDING"
-    case PrismaTransactionStatus.CONFIRMED:
-    case PrismaTransactionStatus.PAID:
-    case PrismaTransactionStatus.ONGOING:
-    case PrismaTransactionStatus.RETURNED:
-    case PrismaTransactionStatus.IN_DISPUTE:
-    case PrismaTransactionStatus.APPEALED:
-      return "ACTIVE"
-    case PrismaTransactionStatus.COMPLETED:
-      return "COMPLETED"
-    case PrismaTransactionStatus.CANCELLED:
-    case PrismaTransactionStatus.REFUNDED:
-    case PrismaTransactionStatus.FAILED:
-      return "CANCELLED"
-  }
+  if (statusGroups.PENDING.includes(status)) return "PENDING"
+  if (statusGroups.ACTIVE.includes(status)) return "ACTIVE"
+  if (statusGroups.RETURNED.includes(status)) return "RETURNED"
+  if (statusGroups.COMPLETED.includes(status)) return "COMPLETED"
+  if (statusGroups.CANCELLED.includes(status)) return "CANCELLED"
+  return "PENDING"
 }
 
-type TransactionRecord = Prisma.RentalTransactionGetPayload<{
-  include: typeof transactionInclude
-}>
+type TransactionRecord = {
+  id: string
+  bookingId: string | null
+  itemId: string | null
+  borrowerId: string | null
+  lenderId: string | null
+  startDate: Date | null
+  endDate: Date | null
+  totalAmount?: number | Prisma.Decimal | null
+  status: PrismaTransactionStatus
+  createdAt: Date
+  updatedAt: Date
+  item: {
+    id: string
+    name: string
+    rateOption: "PER_HOUR" | "PER_DAY"
+    rentalFee: number
+    freeToBorrow: boolean
+    images: Array<{
+      path: string
+      isPrimary: boolean
+      sortOrder: number
+    }>
+  } | null
+}
 
 type TransactionListItem = {
   id: string
+  bookingId: string | null
   itemId: string
   borrowerId: string
   lenderId: string
@@ -140,26 +147,32 @@ type TransactionListItem = {
 const normalizeTransaction = (record: TransactionRecord): TransactionListItem | null => {
   if (
     !record.item ||
-    !record.borrower ||
-    !record.lender ||
     !record.itemId ||
     !record.borrowerId ||
     !record.lenderId ||
     !record.startDate ||
-    !record.endDate ||
-    record.totalAmount === null
+    !record.endDate
   ) {
     return null
   }
 
+  const totalAmountValue =
+    record.totalAmount ??
+    Math.max(
+      0,
+      record.item.rentalFee *
+        Math.ceil((record.endDate.getTime() - record.startDate.getTime()) / (24 * 60 * 60 * 1000)),
+    )
+
   return {
     id: record.id,
+    bookingId: record.bookingId,
     itemId: record.itemId,
     borrowerId: record.borrowerId,
     lenderId: record.lenderId,
     startDate: record.startDate,
     endDate: record.endDate,
-    totalAmount: Number(record.totalAmount),
+    totalAmount: Number(totalAmountValue),
     status: toUiTransactionStatus(record.status),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -167,8 +180,22 @@ const normalizeTransaction = (record: TransactionRecord): TransactionListItem | 
       ...record.item,
       thumbnailImage: getTransactionThumbnailImage(record.item),
     },
-    borrower: { user: record.borrower },
-    lender: { user: record.lender },
+    borrower: {
+      user: {
+        username: "",
+        firstName: "",
+        middleName: null,
+        lastName: "",
+      },
+    },
+    lender: {
+      user: {
+        username: "",
+        firstName: "",
+        middleName: null,
+        lastName: "",
+      },
+    },
   }
 }
 
@@ -211,12 +238,12 @@ export const transactionRouter = router({
       AND: [roleWhere, statusWhere, dateWhere, cursorWhere],
     }
 
-    const records = await ctx.prisma.rentalTransaction.findMany({
+    const records = (await ctx.prisma.rentalTransaction.findMany({
       where: baseWhere,
       include: transactionInclude,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
-    })
+    })) as unknown as TransactionRecord[]
 
     const hasMore = records.length > limit
     const pageRecords = hasMore ? records.slice(0, limit) : records
@@ -224,12 +251,38 @@ export const transactionRouter = router({
       .filter(Boolean)
       .map(normalizeTransaction)
       .filter((record): record is TransactionListItem => record !== null)
+
+    const participantIds = [
+      ...new Set(
+        normalizedRecords.flatMap((record) => [record.borrowerId, record.lenderId]).filter(Boolean),
+      ),
+    ]
+
+    const users = participantIds.length
+      ? await ctx.prisma.user.findMany({
+          where: { id: { in: participantIds } },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+          },
+        })
+      : []
+
+    const userMap = new Map(users.map((user) => [user.id, user]))
+    const transactions = normalizedRecords.map((record) => ({
+      ...record,
+      borrower: { user: userMap.get(record.borrowerId) ?? record.borrower.user },
+      lender: { user: userMap.get(record.lenderId) ?? record.lender.user },
+    }))
     const lastRecord = pageRecords.at(-1)
     const nextCursor =
       hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
     return {
-      transactions: normalizedRecords,
+      transactions,
       nextCursor,
     }
   }),

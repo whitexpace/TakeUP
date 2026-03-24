@@ -142,8 +142,22 @@ enum UserStatus {
   PENDING
 }
 
+enum ItemRequestStatus {
+  OPEN
+  FULFILLED
+  CANCELLED
+}
+
+enum RequestOfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
 model Item {
   id               String        @id @default(uuid())
+  numericId        Int           @unique @default(autoincrement())
   name             String
   description      String?
   condition        ItemCondition
@@ -169,20 +183,18 @@ model Item {
   lender             Lender               @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
   availability       ItemAvailability[]
   bookings           Booking[]
+  cartEntries        CartEntry[]
   categories         ItemCategoryOnItem[]
   images             ItemImage[]
   likes              Like[]
+  requestOffers      RequestOffer[]
   tags               ItemTagOnItem[]
   transactionReviews TransactionReview[]
   transactions       RentalTransaction[]
 
   @@index([lenderId])
   @@index([borrowerId])
-  @@index([createdAt])
-  @@index([isTrending])
-  @@index([rateOption])
-  @@index([rating])
-  @@index([status])
+  @@index([numericId])
 }
 
 model Booking {
@@ -273,6 +285,7 @@ model ItemAvailability {
   startDate DateTime
   endDate   DateTime
   status    ItemAvailabilityStatus
+  createdAt DateTime               @default(now())
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -323,6 +336,7 @@ model User {
   points                       Int                    @default(0)
   admin                        Admin?
   borrower                     Borrower?
+  cartEntries                  CartEntry[]
   lender                       Lender?
   likes                        Like[]
   transactionDisputesAdmin     TransactionDispute[]   @relation("transaction_disputes_admin_idToUser")
@@ -334,6 +348,24 @@ model User {
   transactionStatusLogsChanged TransactionStatusLog[]
   borrowedTransactions         RentalTransaction[]    @relation("transactions_borrower_user_idToUser")
   lentTransactions             RentalTransaction[]    @relation("transactions_lender_user_idToUser")
+  requestPosts                 RequestPost[]
+}
+
+model CartEntry {
+  id         String   @id @default(uuid())
+  borrowerId String
+  itemId     String
+  startAt    DateTime
+  endAt      DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  borrower User @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  item     Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([borrowerId, itemId, startAt, endAt])
+  @@index([borrowerId, createdAt])
+  @@index([itemId])
 }
 
 model Like {
@@ -359,22 +391,71 @@ model Admin {
 }
 
 model Lender {
+  id           Int    @unique @default(autoincrement())
   userId       String @id
   lenderRating Int    @default(0)
 
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookings   Booking[]
-  listedItem Item[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  listedItem    Item[]
+  requestOffers RequestOffer[]
 }
 
 model Borrower {
+  id             Int    @unique @default(autoincrement())
   userId         String @id
   borrowStatus   String
   borrowerRating Int    @default(0)
 
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings      Booking[]
   borrowedItems Item[]
+  itemRequests  ItemRequest[]
+}
+
+model ItemRequest {
+  id             Int               @id @default(autoincrement())
+  borrowerID     Int
+  itemNeeded     String
+  requestedDates DateTime[]
+  priceRange     Int[]
+  description    String
+  status         ItemRequestStatus @default(OPEN)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  borrower Borrower       @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
+  offers   RequestOffer[]
+
+  @@index([borrowerID])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model RequestOffer {
+  id             Int                @id @default(autoincrement())
+  lenderID       Int
+  requestID      Int
+  itemID         Int
+  rentalFee      Int
+  availability   Boolean
+  condition      ItemCondition
+  rentalTerms    String?
+  status         RequestOfferStatus @default(PENDING)
+  borrowerReadAt DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  item    Item        @relation(fields: [itemID], references: [numericId], onDelete: Restrict)
+  lender  Lender      @relation(fields: [lenderID], references: [id], onDelete: Cascade)
+  request ItemRequest @relation(fields: [requestID], references: [id], onDelete: Cascade)
+
+  @@unique([lenderID, requestID])
+  @@index([requestID])
+  @@index([lenderID])
+  @@index([itemID])
+  @@index([status])
+  @@index([borrowerReadAt])
 }
 
 model TransactionDispute {
@@ -455,4 +536,23 @@ model TransactionStatusLog {
 
   @@index([transactionId, createdAt(sort: Desc)], map: "idx_status_logs_txn_created")
   @@map("transaction_status_logs")
+}
+
+model RequestPost {
+  id             String   @id @default(uuid())
+  requesterId    String
+  itemNeeded     String
+  description    String
+  requestedFrom  DateTime
+  requestedTo    DateTime
+  minTargetPrice Int
+  maxTargetPrice Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  requester User @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([requestedTo])
+  @@index([createdAt])
 }

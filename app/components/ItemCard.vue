@@ -10,9 +10,9 @@
       <!-- Type Tag -->
       <div
         class="absolute top-2 sm:top-4 left-2 sm:left-4 px-2 sm:px-4 py-1 sm:py-1.5 min-w-[50px] sm:min-w-[80px] h-[24px] sm:h-[32px] rounded-full font-geist text-[11px] sm:text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm whitespace-nowrap"
-        :class="type === 'Rent' ? 'bg-cinnamon-ice text-noble-black' : 'bg-blue-estate text-white'"
+        :class="topBadge.className"
       >
-        {{ type }}
+        {{ topBadge.label }}
       </div>
 
       <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2">
@@ -119,7 +119,7 @@
           >
           <span
             class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-70"
-            >/day</span
+            >/{{ displayPriceUnit }}</span
           >
         </div>
       </div>
@@ -165,6 +165,7 @@ import { resetPaginatedItemsCache } from "../composables/use-paginated-items"
 const props = defineProps<{
   id: string | number
   type: "Rent" | "Borrow"
+  status?: string
   isTrending?: boolean
   image: string
   category: string
@@ -172,6 +173,7 @@ const props = defineProps<{
   rating: number | string
   reviews: number | string
   price?: string | number
+  priceUnit?: "hour" | "day"
   owner: string
   isLiked?: boolean
   fromPage?: "likes" | "dashboard"
@@ -199,6 +201,31 @@ const itemDetailPath = computed(() =>
     name: props.name,
   }),
 )
+
+const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")
+const displayPriceUnit = computed(() => props.priceUnit ?? "day")
+
+const topBadge = computed(() => {
+  if (normalizedStatus.value === "RENTED") {
+    return {
+      label: props.type === "Borrow" ? "Borrowed" : "Rented",
+      className: "bg-noble-black/90 text-white",
+    }
+  }
+
+  if (normalizedStatus.value && normalizedStatus.value !== "AVAILABLE") {
+    return {
+      label: "Unavailable",
+      className: "bg-white/90 text-noble-black border border-noble-black/10",
+    }
+  }
+
+  return {
+    label: props.type,
+    className:
+      props.type === "Rent" ? "bg-cinnamon-ice text-noble-black" : "bg-blue-estate text-white",
+  }
+})
 
 const navigateToDetails = () => {
   if (props.fromPage) {

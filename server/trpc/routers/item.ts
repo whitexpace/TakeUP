@@ -15,6 +15,7 @@ import {
   KNOWN_SIDEBAR_DB_CATEGORIES,
   UI_OTHERS_SENTINEL,
 } from "../../../shared/schemas/item"
+import { removeItemImagesFromStorage } from "../../utils/item-image-storage"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 
@@ -272,7 +273,7 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
 
 const mapItemTaxonomy = (
   item: ItemWithUserLike & {
-    images?: Array<{ path: string; isPrimary?: boolean }>
+    images?: Array<{ path: string; isPrimary?: boolean; sortOrder?: number }>
     thumbnailImage?: string | null
     photos?: string[]
   },
@@ -298,6 +299,12 @@ const mapItemTaxonomy = (
     ...rest,
     ownerName,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
+    images:
+      images?.map((entry, index) => ({
+        path: entry.path,
+        isPrimary: Boolean(entry.isPrimary),
+        sortOrder: entry.sortOrder ?? index,
+      })) ?? [],
     thumbnailImage,
     photos: orderedPhotos,
     availability: availability.map((entry) => ({
@@ -547,6 +554,8 @@ const buildItemInclude = (userId: string | null) =>
     },
   }) satisfies Prisma.ItemInclude
 
+const blockingBookingStatusFilter = ["CONFIRMED", "IN_DISPUTE"] as const
+
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
     const search = input?.search?.trim()
@@ -791,15 +800,53 @@ export const itemRouter = router({
     return ctx.prisma.item
       .findUnique({
         where: { id: input.id },
-        include: buildItemInclude(ctx.user?.id ?? null),
+        include: {
+          ...buildItemInclude(ctx.user?.id ?? null),
+          bookings: {
+            where: {
+              status: { in: [...blockingBookingStatusFilter] },
+            },
+            select: {
+              id: true,
+              startDate: true,
+              endDate: true,
+            },
+          },
+        },
       })
-      .then((item: ItemWithUserLike | null) => (item ? mapItemTaxonomy(item) : null))
+      .then(
+        (
+          item:
+            | (ItemWithUserLike & {
+                bookings: Array<{ id: string; startDate: Date; endDate: Date }>
+              })
+            | null,
+        ) =>
+          item
+            ? {
+                ...mapItemTaxonomy(item),
+                bookingBlocks: item.bookings.map((booking) => ({
+                  id: booking.id,
+                  startDate: booking.startDate,
+                  endDate: booking.endDate,
+                  status: "RENTED" as const,
+                })),
+              }
+            : null,
+      )
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
     const existing = await ctx.prisma.item.findUnique({
       where: { id: input.id },
-      select: { lenderId: true },
+      select: {
+        lenderId: true,
+        images: {
+          select: {
+            path: true,
+          },
+        },
+      },
     })
 
     if (!existing) {
@@ -812,8 +859,12 @@ export const itemRouter = router({
 
     const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
     const imageWrites = buildUpdateImageWrites(thumbnailImage, photos)
+    const nextImageUrls = new Set(buildOrderedImagePaths(thumbnailImage, photos) ?? [])
+    const removedImageUrls = existing.images
+      .map((image) => image.path)
+      .filter((path) => !nextImageUrls.has(path))
 
-    return ctx.prisma.item
+    const updatedItem = await ctx.prisma.item
       .update({
         where: { id },
         data: {
@@ -858,6 +909,14 @@ export const itemRouter = router({
         include: itemWithTaxonomy,
       })
       .then(mapItemTaxonomy)
+
+    void removeItemImagesFromStorage(removedImageUrls, {
+      bucket: useRuntimeConfig(ctx.event).public.itemImageBucket,
+      supabaseUrl: useRuntimeConfig(ctx.event).public.supabase.url,
+      serviceRoleKey: useRuntimeConfig(ctx.event).supabaseServiceRoleKey,
+    })
+
+    return updatedItem
   }),
 
   delete: protectedProcedure.input(deleteItemSchema).mutation(async ({ ctx, input }) => {

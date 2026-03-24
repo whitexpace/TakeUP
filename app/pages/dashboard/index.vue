@@ -112,6 +112,7 @@
         :id="item.id"
         :key="item.id"
         :type="item.type"
+        :status="item.status"
         :is-trending="item.isTrending"
         :image="item.image"
         :category="item.category"
@@ -119,6 +120,7 @@
         :rating="item.rating"
         :reviews="item.reviews"
         :price="item.price"
+        :price-unit="item.priceUnit"
         :owner="item.owner"
         :is-liked="item.isLiked"
       />

@@ -93,6 +93,15 @@ const toUnknownError = (error: Error, action: string) => {
     )
   }
 
+  if (
+    /invalid transaction status transition|no-op transition is not allowed/i.test(error.message)
+  ) {
+    return createBookingApiError(
+      500,
+      "Booking update failed because the linked transaction is in a legacy status flow that the database rejected. Refresh and try again with the latest server code.",
+    )
+  }
+
   return createBookingApiError(
     500,
     appendDevErrorMessage(

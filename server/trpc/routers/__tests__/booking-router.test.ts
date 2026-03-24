@@ -104,7 +104,9 @@ const makeContext = () => {
       findMany: vi.fn().mockResolvedValue([]),
     },
     rentalTransaction: {
-      upsert: vi.fn().mockResolvedValue({ id: "txn-1" }),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: "txn-1" }),
+      update: vi.fn().mockResolvedValue({ id: "txn-1" }),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     booking,
@@ -157,6 +159,13 @@ describe("bookingRouter", () => {
           platformCommission: 50,
           status: "PENDING",
           paymentStatus: "PENDING",
+        }),
+      }),
+    )
+    expect(ctx.prisma.booking.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["CONFIRMED", "IN_DISPUTE"] },
         }),
       }),
     )
