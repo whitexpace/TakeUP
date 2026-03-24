@@ -29,11 +29,8 @@ const statusChips = [
   { label: "Completed", value: "COMPLETED" },
 ] satisfies Array<{ label: string; value: BookingStatus }>
 
-const formatUserName = (user: {
-  firstName: string
-  middleName: string | null
-  lastName: string
-}) => `${user.firstName} ${user.lastName}`
+const formatUserName = (user: { firstName: string; middleName: string | null; lastName: string }) =>
+  `${user.firstName} ${user.lastName}`
 
 const formatDateTime = (value: string | Date) =>
   new Date(value).toLocaleString("en-US", {
@@ -164,11 +161,7 @@ const handleBookingDecision = async (
       </p>
 
       <template v-if="isLoading && filteredBookings.length === 0">
-        <div
-          v-for="i in 3"
-          :key="i"
-          class="animate-pulse h-44 rounded-2xl bg-cinnamon-ice/40"
-        />
+        <div v-for="i in 3" :key="i" class="animate-pulse h-44 rounded-2xl bg-cinnamon-ice/40" />
       </template>
 
       <div
@@ -233,7 +226,11 @@ const handleBookingDecision = async (
                 </p>
                 <p class="text-sm text-neutral-800/70">
                   Total amount:
-                  {{ booking.item.freeToBorrow ? "Free to borrow" : formatPesoAmount(booking.totalFee) }}
+                  {{
+                    booking.item.freeToBorrow
+                      ? "Free to borrow"
+                      : formatPesoAmount(booking.totalFee)
+                  }}
                 </p>
                 <p class="text-xs text-neutral-800/50">Request ID: {{ booking.id }}</p>
               </div>

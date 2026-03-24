@@ -16,11 +16,8 @@ type UseBookingsOptions = {
   searchQuery: Ref<string>
 }
 
-const formatUserName = (user: {
-  firstName: string
-  middleName: string | null
-  lastName: string
-}) => `${user.firstName} ${user.lastName[0]}.`
+const formatUserName = (user: { firstName: string; middleName: string | null; lastName: string }) =>
+  `${user.firstName} ${user.lastName[0]}.`
 
 export const useBookings = ({ role, status, searchQuery }: UseBookingsOptions) => {
   const bookings = ref<BookingListItem[]>([])
