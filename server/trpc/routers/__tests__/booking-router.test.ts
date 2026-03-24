@@ -325,6 +325,12 @@ describe("bookingRouter", () => {
         status: "AVAILABLE",
       },
     })
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
     ctx.prisma.booking.update.mockResolvedValueOnce(
       makeBooking({
         status: "CONFIRMED",
@@ -353,7 +359,7 @@ describe("bookingRouter", () => {
           endDate: new Date("2026-04-03T00:00:00.000Z"),
           rentalFee: 400,
           platformFee: 50,
-          status: "PENDING",
+          status: "CONFIRMED",
         }),
       }),
     )
