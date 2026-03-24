@@ -86,6 +86,9 @@ const makeContext = () => {
     borrower: {
       upsert: vi.fn().mockResolvedValue({ userId: USER_ID }),
     },
+    lender: {
+      upsert: vi.fn().mockResolvedValue({ userId: LENDER_ID }),
+    },
     item: {
       findUnique: vi.fn().mockResolvedValue({
         id: ITEM_ID,
@@ -102,6 +105,7 @@ const makeContext = () => {
     },
     rentalTransaction: {
       findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({ id: "txn-1" }),
       create: vi.fn().mockResolvedValue({ id: "txn-1" }),
       update: vi.fn().mockResolvedValue({ id: "txn-1" }),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -134,19 +138,12 @@ describe("bookingRouter", () => {
     })
 
     expect(ctx.prisma.borrower.upsert).toHaveBeenCalled()
-    expect(ctx.prisma.rentalTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          bookingId: BOOKING_ID,
-          borrowerId: USER_ID,
-          lenderId: LENDER_ID,
-          itemId: ITEM_ID,
-          rentalFee: 400,
-          platformFee: 50,
-          status: "AWAITING_LENDER_APPROVAL",
-        }),
-      }),
-    )
+    expect(ctx.prisma.lender.upsert).toHaveBeenCalledWith({
+      where: { userId: LENDER_ID },
+      create: { userId: LENDER_ID, lenderRating: 0 },
+      update: {},
+    })
+    expect(ctx.prisma.rentalTransaction.create).not.toHaveBeenCalled()
     expect(ctx.prisma.item.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: ITEM_ID },
@@ -299,51 +296,7 @@ describe("bookingRouter", () => {
     })
   })
 
-  it("keeps the item available for other dates when a future booking is approved", async () => {
-    const ctx = makeContext()
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2026-03-24T00:00:00.000Z"))
-    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
-      id: BOOKING_ID,
-      borrowerId: USER_ID,
-      lenderId: LENDER_ID,
-      itemId: ITEM_ID,
-      startDate: new Date("2026-04-01T00:00:00.000Z"),
-      endDate: new Date("2026-04-03T00:00:00.000Z"),
-      totalFee: 450,
-      platformCommission: 50,
-      paymentMethod: "GCASH",
-      status: "PENDING",
-      paymentStatus: "PENDING",
-      cancellationReason: null,
-      confirmedAt: null,
-      cancelledAt: null,
-      completedAt: null,
-      disputeOpenedAt: null,
-      paymentProcessedAt: null,
-      item: {
-        id: ITEM_ID,
-        lenderId: LENDER_ID,
-        rateOption: "PER_DAY",
-        rentalFee: 200,
-        freeToBorrow: false,
-        status: "AVAILABLE",
-      },
-    })
-    ctx.prisma.booking.update.mockResolvedValueOnce(makeBooking({ status: "CONFIRMED" }))
-    ctx.prisma.booking.findFirst.mockResolvedValueOnce(null)
-
-    try {
-      const caller = bookingRouter.createCaller(ctx as never)
-      await caller.update({ id: BOOKING_ID, status: "CONFIRMED" })
-    } finally {
-      vi.useRealTimers()
-    }
-
-    expect(ctx.prisma.item.update).not.toHaveBeenCalled()
-  })
-
-  it("heals legacy pending transactions before confirming an approved booking", async () => {
+  it("creates a transaction only after the lender accepts the booking request", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce({
       id: BOOKING_ID,
@@ -372,157 +325,81 @@ describe("bookingRouter", () => {
         status: "AVAILABLE",
       },
     })
-    ctx.prisma.booking.update.mockResolvedValueOnce(makeBooking({ status: "CONFIRMED" }))
-    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
-      id: "txn-1",
-      status: "PENDING",
-    })
-    ctx.prisma.booking.findFirst.mockResolvedValueOnce(null)
-
-    const caller = bookingRouter.createCaller(ctx as never)
-    await caller.update({ id: BOOKING_ID, status: "CONFIRMED" })
-
-    expect(ctx.prisma.rentalTransaction.update).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        where: { bookingId: BOOKING_ID },
-        data: expect.objectContaining({
-          status: "AWAITING_LENDER_APPROVAL",
-        }),
-      }),
-    )
-    expect(ctx.prisma.rentalTransaction.update).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: { bookingId: BOOKING_ID },
-        data: expect.objectContaining({
-          status: "CONFIRMED",
-        }),
-      }),
-    )
-  })
-  it("marks the item as AVAILABLE again when a confirmed booking is cancelled", async () => {
-    const ctx = makeContext()
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2026-04-02T12:00:00.000Z"))
-    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
-      id: BOOKING_ID,
-      borrowerId: USER_ID,
-      lenderId: LENDER_ID,
-      itemId: ITEM_ID,
-      startDate: new Date("2026-04-01T00:00:00.000Z"),
-      endDate: new Date("2026-04-03T00:00:00.000Z"),
-      totalFee: 450,
-      platformCommission: 50,
-      paymentMethod: "GCASH",
-      status: "CONFIRMED",
-      paymentStatus: "PENDING",
-      cancellationReason: null,
-      confirmedAt: new Date("2026-03-20T00:00:00.000Z"),
-      cancelledAt: null,
-      completedAt: null,
-      disputeOpenedAt: null,
-      paymentProcessedAt: null,
-      item: {
-        id: ITEM_ID,
-        lenderId: LENDER_ID,
-        rateOption: "PER_DAY",
-        rentalFee: 200,
-        freeToBorrow: false,
-        status: "RENTED",
-      },
-    })
-    ctx.prisma.booking.update.mockResolvedValueOnce(makeBooking({ status: "CANCELLED" }))
-    ctx.prisma.item.findUnique.mockResolvedValueOnce({ status: "RENTED" })
-    ctx.prisma.booking.findFirst.mockResolvedValueOnce(null)
-
-    try {
-      const caller = bookingRouter.createCaller(ctx as never)
-      await caller.update({ id: BOOKING_ID, status: "CANCELLED" })
-    } finally {
-      vi.useRealTimers()
-    }
-
-    expect(ctx.prisma.item.update).toHaveBeenCalledWith({
-      where: { id: ITEM_ID },
-      data: { status: "AVAILABLE" },
-    })
-  })
-
-  it("cancels overlapping pending requests when a lender approves one booking", async () => {
-    const ctx = makeContext()
-    const overlappingBookingId = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
-    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
-      id: BOOKING_ID,
-      borrowerId: USER_ID,
-      lenderId: LENDER_ID,
-      itemId: ITEM_ID,
-      startDate: new Date("2026-04-01T00:00:00.000Z"),
-      endDate: new Date("2026-04-03T00:00:00.000Z"),
-      totalFee: 450,
-      platformCommission: 50,
-      paymentMethod: "GCASH",
-      status: "PENDING",
-      paymentStatus: "PENDING",
-      cancellationReason: null,
-      confirmedAt: null,
-      cancelledAt: null,
-      completedAt: null,
-      disputeOpenedAt: null,
-      paymentProcessedAt: null,
-      item: {
-        id: ITEM_ID,
-        lenderId: LENDER_ID,
-        rateOption: "PER_DAY",
-        rentalFee: 200,
-        freeToBorrow: false,
-        status: "AVAILABLE",
-      },
-    })
-    ctx.prisma.booking.findFirst.mockResolvedValueOnce(null)
-    ctx.prisma.booking.findMany.mockResolvedValueOnce([
+    ctx.prisma.booking.update.mockResolvedValueOnce(
       makeBooking({
-        id: overlappingBookingId,
-        borrowerId: "ffffffff-ffff-ffff-ffff-ffffffffffff",
-        startDate: new Date("2026-04-02T00:00:00.000Z"),
-        endDate: new Date("2026-04-04T00:00:00.000Z"),
-        status: "PENDING",
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
       }),
-    ])
-    ctx.prisma.booking.update
-      .mockResolvedValueOnce(makeBooking({ status: "CONFIRMED" }))
-      .mockResolvedValueOnce(
-        makeBooking({
-          id: overlappingBookingId,
-          borrowerId: "ffffffff-ffff-ffff-ffff-ffffffffffff",
-          startDate: new Date("2026-04-02T00:00:00.000Z"),
-          endDate: new Date("2026-04-04T00:00:00.000Z"),
-          status: "CANCELLED",
-          cancellationReason: "Cancelled because the lender approved another overlapping request.",
-          cancelledAt: new Date("2026-03-24T00:00:00.000Z"),
-        }),
-      )
+    )
 
-    const caller = bookingRouter.createCaller(ctx as never)
-    await caller.update({ id: BOOKING_ID, status: "CONFIRMED" })
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
 
-    expect(ctx.prisma.booking.findMany).toHaveBeenCalledWith(
+    await caller.update({
+      id: BOOKING_ID,
+      status: "CONFIRMED",
+    })
+
+    expect(ctx.prisma.rentalTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
+        data: expect.objectContaining({
+          bookingId: BOOKING_ID,
+          borrowerId: USER_ID,
+          lenderId: LENDER_ID,
           itemId: ITEM_ID,
+          startDate: new Date("2026-04-01T00:00:00.000Z"),
+          endDate: new Date("2026-04-03T00:00:00.000Z"),
+          rentalFee: 400,
+          platformFee: 50,
           status: "PENDING",
         }),
       }),
     )
-    expect(ctx.prisma.booking.update).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: { id: overlappingBookingId },
-        data: expect.objectContaining({
-          status: "CANCELLED",
-          cancellationReason: "Cancelled because the lender approved another overlapping request.",
-        }),
+  })
+
+  it("forbids borrowers from accepting booking requests", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
+      id: BOOKING_ID,
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-01T00:00:00.000Z"),
+      endDate: new Date("2026-04-03T00:00:00.000Z"),
+      totalFee: 450,
+      platformCommission: 50,
+      paymentMethod: "GCASH",
+      status: "PENDING",
+      paymentStatus: "PENDING",
+      cancellationReason: null,
+      confirmedAt: null,
+      cancelledAt: null,
+      completedAt: null,
+      disputeOpenedAt: null,
+      paymentProcessedAt: null,
+      item: {
+        id: ITEM_ID,
+        lenderId: LENDER_ID,
+        rateOption: "PER_DAY",
+        rentalFee: 200,
+        freeToBorrow: false,
+        status: "AVAILABLE",
+      },
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.update({
+        id: BOOKING_ID,
+        status: "CONFIRMED",
       }),
-    )
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Only the lender can accept this booking request.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
   })
 })

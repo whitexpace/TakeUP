@@ -252,6 +252,14 @@ const mapBookingRecord = (record: BookingRecord): BookingListItem => {
 
 const DEFAULT_PAYMENT_METHOD: PaymentMethod = paymentMethodSchema.enum.GCASH
 
+const prismaPaymentMethodByInput: Record<PaymentMethod, PrismaPaymentMethod> = {
+  CASH: PrismaPaymentMethod.CASH,
+  GCASH: PrismaPaymentMethod.GCASH,
+  CARD: PrismaPaymentMethod.CARD,
+  BANK_TRANSFER: PrismaPaymentMethod.BANK_TRANSFER,
+  WALLET: PrismaPaymentMethod.WALLET,
+}
+
 const ITEM_BLOCKING_BOOKING_STATUSES = [
   bookingStatusSchema.enum.CONFIRMED,
   bookingStatusSchema.enum.IN_DISPUTE,
@@ -290,7 +298,6 @@ const calculateRentalAmount = (totalFee: number, platformCommission: number) =>
   Math.max(0, totalFee - platformCommission)
 
 const prismaTransactionStatuses = PrismaTransactionStatus as Record<string, PrismaTransactionStatus>
-const prismaPaymentMethods = PrismaPaymentMethod as Record<string, string>
 
 const getPrismaTransactionStatus = (
   preferred: string,
@@ -312,8 +319,8 @@ const mapBookingToTransactionStatus = (
   switch (status) {
     case bookingStatusSchema.enum.CONFIRMED:
       return paymentStatus === bookingPaymentStatusSchema.enum.PAID
-        ? getPrismaTransactionStatus("PAID", PrismaTransactionStatus.PENDING)
-        : getPrismaTransactionStatus("CONFIRMED", PrismaTransactionStatus.PENDING)
+        ? PrismaTransactionStatus.PAID
+        : PrismaTransactionStatus.PENDING
     case bookingStatusSchema.enum.CANCELLED:
       return PrismaTransactionStatus.CANCELLED
     case bookingStatusSchema.enum.COMPLETED:
@@ -325,12 +332,6 @@ const mapBookingToTransactionStatus = (
       return PrismaTransactionStatus.AWAITING_LENDER_APPROVAL
   }
 }
-
-const toPrismaPaymentMethod = (method: PaymentMethod) =>
-  (prismaPaymentMethods[method] ??
-    prismaPaymentMethods[method.toLowerCase()] ??
-    prismaPaymentMethods.bank ??
-    method) as (typeof PrismaPaymentMethod)[keyof typeof PrismaPaymentMethod]
 
 const buildBookingTimestamps = (
   existing: Pick<
@@ -421,6 +422,10 @@ const syncBookingTransaction = async (
     | "paymentStatus"
   >,
 ) => {
+  if (booking.status === bookingStatusSchema.enum.PENDING) {
+    return
+  }
+
   const rentalFee = calculateRentalAmount(booking.totalFee, booking.platformCommission)
   const targetStatus = mapBookingToTransactionStatus(booking.status, booking.paymentStatus)
   const transactionData = {
@@ -579,96 +584,91 @@ export const bookingRouter = router({
   }),
 
   create: protectedProcedure.input(createBookingSchema).mutation(async ({ ctx, input }) => {
-    return ctx.prisma.$transaction(async (tx) => {
-      const bookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
-      const now = new Date()
+    const bookingPrisma = getBookingPrisma(ctx)
 
-      await tx.borrower.upsert({
-        where: { userId: ctx.user.id },
-        create: { userId: ctx.user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
-        update: {},
-      })
-
-      const item = await tx.item.findUnique({
-        where: { id: input.itemId },
-        select: {
-          id: true,
-          lenderId: true,
-          rateOption: true,
-          rentalFee: true,
-          freeToBorrow: true,
-          status: true,
-        },
-      })
-
-      if (!item) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Item not found." })
-      }
-
-      if (item.lenderId === ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "You cannot book your own item." })
-      }
-
-      if (item.status === "DEACTIVATED" || item.status === "DELETED") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Item is not accepting bookings right now.",
-        })
-      }
-
-      await ensureBookingWindowMatchesAvailability(tx, {
-        itemId: input.itemId,
-        startDate: input.startDate,
-        endDate: input.endDate,
-      })
-
-      await ensureBookingWindowAvailable(bookingPrisma, {
-        itemId: input.itemId,
-        startDate: input.startDate,
-        endDate: input.endDate,
-        statuses: ITEM_BLOCKING_BOOKING_STATUSES,
-      })
-
-      const platformCommission = item.freeToBorrow ? 0 : input.platformCommission
-      const totalFee = calculateBookingTotal(
-        item,
-        input.startDate,
-        input.endDate,
-        platformCommission,
-      )
-
-      const booking = await bookingPrisma.booking.create({
-        data: {
-          borrowerId: ctx.user.id,
-          lenderId: item.lenderId,
-          itemId: item.id,
-          startDate: input.startDate,
-          endDate: input.endDate,
-          totalFee,
-          platformCommission,
-          paymentMethod: toPrismaPaymentMethod(input.paymentMethod ?? DEFAULT_PAYMENT_METHOD),
-          status: bookingStatusSchema.enum.PENDING,
-          paymentStatus: item.freeToBorrow
-            ? bookingPaymentStatusSchema.enum.NOT_REQUIRED
-            : bookingPaymentStatusSchema.enum.PENDING,
-          cancellationReason: input.cancellationReason ?? null,
-          updatedAt: now,
-        },
-        include: bookingInclude,
-      })
-
-      await syncBookingTransaction(tx as unknown as BookingMutationPrismaClient, booking)
-      await tx.item.update({
-        where: { id: item.id },
-        data: {
-          bookingCount: {
-            increment: 1,
-          },
-        },
-      })
-
-      return mapBookingRecord(booking)
+    await ctx.prisma.borrower.upsert({
+      where: { userId: ctx.user.id },
+      create: { userId: ctx.user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
+      update: {},
     })
+
+    const item = await ctx.prisma.item.findUnique({
+      where: { id: input.itemId },
+      select: {
+        id: true,
+        lenderId: true,
+        rateOption: true,
+        rentalFee: true,
+        freeToBorrow: true,
+        status: true,
+      },
+    })
+
+    if (!item) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Item not found." })
+    }
+
+    if (item.lenderId === ctx.user.id) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "You cannot book your own item." })
+    }
+
+    if (item.status !== "AVAILABLE") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not available for booking." })
+    }
+
+    await ensureBookingWindowMatchesAvailability(ctx.prisma, {
+      itemId: input.itemId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    })
+
+    await ensureBookingWindowAvailable(bookingPrisma, {
+      itemId: input.itemId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    })
+
+    const platformCommission = item.freeToBorrow ? 0 : input.platformCommission
+    const totalFee = calculateBookingTotal(item, input.startDate, input.endDate, platformCommission)
+    const now = new Date()
+
+    await ctx.prisma.lender.upsert({
+      where: { userId: item.lenderId },
+      create: { userId: item.lenderId, lenderRating: 0 },
+      update: {},
+    })
+
+    const booking = await ctx.prisma.booking.create({
+      data: {
+        borrowerId: ctx.user.id,
+        lenderId: item.lenderId,
+        itemId: item.id,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        totalFee,
+        platformCommission,
+        paymentMethod: prismaPaymentMethodByInput[input.paymentMethod ?? DEFAULT_PAYMENT_METHOD],
+        status: bookingStatusSchema.enum.PENDING,
+        paymentStatus: item.freeToBorrow
+          ? bookingPaymentStatusSchema.enum.NOT_REQUIRED
+          : bookingPaymentStatusSchema.enum.PENDING,
+        cancellationReason: input.cancellationReason ?? null,
+        updatedAt: now,
+      },
+      include: bookingInclude,
+    })
+
+    await syncBookingTransaction(ctx.prisma as unknown as BookingMutationPrismaClient, booking)
+    await ctx.prisma.item.update({
+      where: { id: item.id },
+      data: {
+        bookingCount: {
+          increment: 1,
+        },
+      },
+    })
+
+    return mapBookingRecord(booking)
   }),
 
   byId: protectedProcedure.input(bookingIdSchema).query(async ({ ctx, input }) => {
@@ -698,6 +698,13 @@ export const bookingRouter = router({
     }
 
     assertParticipantAccess(existing, ctx.user.id)
+
+    if (input.status === bookingStatusSchema.enum.CONFIRMED && existing.lenderId !== ctx.user.id) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only the lender can accept this booking request.",
+      })
+    }
 
     const startDate = input.startDate ?? existing.startDate
     const endDate = input.endDate ?? existing.endDate
@@ -756,7 +763,7 @@ export const bookingRouter = router({
             ? { totalFee, platformCommission }
             : {}),
           ...(input.paymentMethod
-            ? { paymentMethod: toPrismaPaymentMethod(input.paymentMethod) }
+            ? { paymentMethod: prismaPaymentMethodByInput[input.paymentMethod] }
             : {}),
           ...(input.status ? { status: input.status } : {}),
           ...(input.paymentStatus ? { paymentStatus: input.paymentStatus } : {}),

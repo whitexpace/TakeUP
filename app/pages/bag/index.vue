@@ -194,9 +194,6 @@ const resolveBookingErrorMessage = (error: unknown) => {
     fetchError.data?.error?.message ??
     fetchError.data?.data?.error?.message ??
     fetchError.statusMessage ??
-    (fetchError.statusCode === 500
-      ? "Booking failed on the server. Check that the booking and transaction schema is applied to this database."
-      : undefined) ??
     fetchError.message ??
     "Unable to submit your booking request."
   )

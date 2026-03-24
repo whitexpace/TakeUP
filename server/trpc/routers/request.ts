@@ -31,6 +31,21 @@ const mapRequestPost = (post: RequestPostRow, showRequesterIdentity: boolean) =>
   },
 })
 
+type RequestPostCreatePrisma = {
+  requestPost: {
+    create(args: Record<string, unknown>): Promise<{
+      id: string
+      itemNeeded: string
+      description: string
+      requestedFrom: Date
+      requestedTo: Date
+      minTargetPrice: number
+      maxTargetPrice: number
+      createdAt: Date
+    }>
+  }
+}
+
 export const requestRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
     const posts = await ctx.prisma.$queryRaw<RequestPostRow[]>`
@@ -81,7 +96,9 @@ export const requestRouter = router({
       })
     }
 
-    const post = await ctx.prisma.requestPost.create({
+    const post = await (
+      ctx.prisma as typeof ctx.prisma & RequestPostCreatePrisma
+    ).requestPost.create({
       data: {
         requesterId: ctx.user.id,
         itemNeeded: input.itemNeeded,
