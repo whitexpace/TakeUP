@@ -34,7 +34,7 @@
                 <path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
               <span class="text-[11px] font-bold text-noble-black/40"
-                >{{ item.upvotes }} upvotes</span
+                >{{ item.offersCount }} {{ item.offersCount === 1 ? "offer" : "offers" }}</span
               >
             </div>
           </div>

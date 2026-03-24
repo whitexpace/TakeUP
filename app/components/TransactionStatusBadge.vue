@@ -9,7 +9,7 @@ const props = defineProps<{
 const label = computed(() => {
   switch (props.status) {
     case "PENDING":
-      return props.role === "BORROWER" ? "To Receive" : "To Deliver"
+      return props.role === "BORROWER" ? "To Receive" : "Ready for Approval"
     case "ACTIVE":
       return "In Use"
     case "COMPLETED":

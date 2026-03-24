@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { extractStoragePathFromPublicUrl, removeItemImagesFromStorage } from "../item-image-storage"
 
 describe("item-image-storage", () => {

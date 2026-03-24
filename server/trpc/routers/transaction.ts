@@ -58,12 +58,12 @@ const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
     ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "IN_DISPUTE", "APPEALED"],
     [PrismaTransactionStatus.PENDING],
   ),
+  RETURNED: getTransactionStatusGroup(["RETURNED"], [PrismaTransactionStatus.RETURNED]),
   COMPLETED: [PrismaTransactionStatus.COMPLETED],
   CANCELLED: getTransactionStatusGroup(
     ["CANCELLED", "REFUNDED", "FAILED"],
     [PrismaTransactionStatus.CANCELLED],
   ),
-  RETURNED: getTransactionStatusGroup(["RETURNED"], [PrismaTransactionStatus.RETURNED]),
 }
 
 const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
@@ -77,6 +77,7 @@ const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionSt
 
 type TransactionRecord = {
   id: string
+  bookingId: string | null
   itemId: string | null
   borrowerId: string | null
   lenderId: string | null
@@ -102,6 +103,7 @@ type TransactionRecord = {
 
 type TransactionListItem = {
   id: string
+  bookingId: string | null
   itemId: string
   borrowerId: string
   lenderId: string
@@ -164,6 +166,7 @@ const normalizeTransaction = (record: TransactionRecord): TransactionListItem | 
 
   return {
     id: record.id,
+    bookingId: record.bookingId,
     itemId: record.itemId,
     borrowerId: record.borrowerId,
     lenderId: record.lenderId,

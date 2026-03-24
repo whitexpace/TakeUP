@@ -11,6 +11,7 @@ const mockUser = { id: USER_ID, email: "user@up.edu.ph", name: "Test User" }
 
 const makeTx = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
+  bookingId: "booking-1",
   itemId: ITEM_ID,
   borrowerId: USER_ID,
   lenderId: "cccccccc-cccc-cccc-cccc-cccccccccccc",

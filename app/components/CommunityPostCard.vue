@@ -1,167 +1,253 @@
 <template>
   <div
-    class="bg-cream rounded-[24px] border border-cinnamon-ice/30 p-6 flex flex-col gap-4 shadow-sm hover:shadow-md transition-shadow duration-300"
+    ref="cardRef"
+    class="relative flex flex-col gap-5 rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6 shadow-sm transition-shadow duration-300 hover:shadow-md"
   >
-    <!-- Post Header -->
-    <div class="flex items-start justify-between">
-      <div class="flex items-center gap-3 flex-1">
-        <UserAvatar :avatar-url="request.user.avatar" :user-name="request.user.name" />
-        <div class="flex flex-col flex-1">
-          <div class="flex items-center justify-between w-full">
-            <div class="flex items-center gap-2">
-              <span class="text-[15px] font-bold text-noble-black">{{ request.user.name }}</span>
-              <span class="text-[12px] text-noble-black/40">{{ request.timeAgo }}</span>
-            </div>
-            <span
-              class="text-[10px] font-bold text-blue-estate tracking-[0.1em] uppercase px-2.5 py-1 bg-blue-estate/5 border border-blue-estate/10 rounded-full"
-            >
-              {{ request.flair }}
-            </span>
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <UserAvatar :avatar-url="request.borrower.avatar" :user-name="request.borrower.name" />
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="text-[15px] font-bold text-noble-black">{{ request.borrower.name }}</span>
+            <span class="text-[12px] text-noble-black/40">{{
+              formatRelativeTime(request.createdAt)
+            }}</span>
           </div>
+          <p class="text-[13px] text-noble-black/45">
+            Request status: {{ formatRequestStatus(request.status) }}
+          </p>
         </div>
       </div>
-      <button class="text-noble-black/20 hover:text-noble-black/40 transition-colors ml-4">
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
+
+      <div class="ml-4 flex items-start gap-3">
+        <span
+          class="rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em]"
+          :class="requestStatusClass"
         >
-          <circle cx="12" cy="12" r="1" />
-          <circle cx="12" cy="5" r="1" />
-          <circle cx="12" cy="19" r="1" />
-        </svg>
-      </button>
-    </div>
+          {{ formatRequestStatus(request.status) }}
+        </span>
 
-    <!-- Post Content -->
-    <div class="flex flex-col gap-2">
-      <h3 class="text-[18px] font-bold text-noble-black leading-tight">{{ request.title }}</h3>
-      <p class="text-[15px] text-noble-black/70 leading-relaxed">{{ request.description }}</p>
-    </div>
-
-    <!-- Post Actions -->
-    <div class="flex items-center gap-6 mt-2 pt-4 border-t border-cinnamon-ice/10">
-      <button
-        class="flex items-center gap-2 group transition-all duration-300"
-        :class="
-          isUpvoted
-            ? 'text-burning-orange scale-105'
-            : 'text-noble-black/40 hover:text-burning-orange'
-        "
-        @click="toggleUpvote"
-      >
-        <div class="p-2 rounded-full group-hover:bg-burning-orange/5 transition-colors">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            :class="{ 'fill-burning-orange/10': isUpvoted }"
+        <div class="relative">
+          <button
+            class="rounded-full p-1 text-noble-black/20 transition-colors hover:bg-white hover:text-noble-black/45"
+            aria-label="Request actions"
+            aria-haspopup="menu"
+            :aria-expanded="showMenu"
+            @click.stop="toggleMenu"
           >
-            <path d="M7 11l5-5 5 5M12 18V6" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </div>
-        <span class="text-[13px] font-bold tracking-tight">{{
-          request.upvotes + (isUpvoted ? 1 : 0)
-        }}</span>
-      </button>
-
-      <button
-        class="flex items-center gap-2 group transition-all duration-300"
-        :class="
-          showReplies ? 'text-blue-estate scale-105' : 'text-noble-black/40 hover:text-blue-estate'
-        "
-        @click="toggleReplies"
-      >
-        <div class="p-2 rounded-full group-hover:bg-blue-estate/5 transition-colors">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path
-              d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-            />
-          </svg>
-        </div>
-        <span class="text-[13px] font-bold tracking-tight">{{ request.repliesCount }} Replies</span>
-      </button>
-    </div>
-
-    <!-- Replies Section -->
-    <div v-if="showReplies" class="flex flex-col gap-4 mt-2">
-      <div class="flex flex-col gap-4 pl-4 border-l border-cinnamon-ice/15">
-        <CommunityReplyItem
-          v-for="reply in visibleReplies"
-          :key="reply.id"
-          :reply="reply"
-          @reply="(name, id) => focusReplyInput(name, id)"
-          @upvote-reply="(id) => $emit('upvote-reply', { postId: request.id, replyId: id })"
-        />
-
-        <button
-          v-if="hasMoreReplies"
-          class="text-[12px] font-bold text-burning-orange hover:text-blue-estate transition-all w-fit ml-11 mt-1 px-3 py-1.5 rounded-lg hover:bg-burning-orange/5"
-          @click="loadMoreReplies"
-        >
-          View more replies ({{ request.replies.length - visibleReplies.length }})
-        </button>
-      </div>
-
-      <!-- Reply Input Area -->
-      <div class="flex gap-3 mt-4 pl-4 items-start">
-        <UserAvatar :avatar-url="currentUserAvatar" :user-name="currentUserName" size="sm" />
-        <div class="flex-1 flex flex-col gap-2">
-          <transition name="fade">
-            <div
-              v-if="replyingTo"
-              class="bg-blue-estate border-blue-estate/20 flex w-fit items-center gap-2 rounded-lg border px-3 py-1.5 text-white shadow-sm"
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
             >
-              <span class="text-[10px] font-bold uppercase tracking-wider"
-                >Replying to {{ replyingTo }}</span
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="12" cy="5" r="1" />
+              <circle cx="12" cy="19" r="1" />
+            </svg>
+          </button>
+
+          <transition name="menu">
+            <div
+              v-if="showMenu"
+              class="absolute right-0 top-10 z-20 w-[230px] rounded-[18px] border border-cinnamon-ice/20 bg-white p-2 shadow-xl"
+              role="menu"
+            >
+              <button
+                v-if="!isOwner && request.status === 'OPEN'"
+                class="flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-[14px] font-semibold text-noble-black transition-colors hover:bg-cream"
+                role="menuitem"
+                @click="handleOfferAction"
               >
-              <button class="text-white/70 transition-colors hover:text-white" @click="cancelReply">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+                <span>{{ currentUserOffer ? "Update Offer" : "Offer Item" }}</span>
+                <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-blue-estate/60">
+                  {{ currentUserOffer ? "Edit" : "New" }}
+                </span>
               </button>
+
+              <button
+                v-if="isOwner && request.offers.length > 0"
+                class="flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-[14px] font-semibold text-noble-black transition-colors hover:bg-cream"
+                role="menuitem"
+                @click="toggleOffersFromMenu"
+              >
+                <span>{{ showOffers ? "Hide Offers" : "View Offers" }}</span>
+                <span class="text-[12px] text-noble-black/40">{{ request.offers.length }}</span>
+              </button>
+
+              <button
+                v-if="isOwner && request.status === 'OPEN'"
+                class="flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-[14px] font-semibold text-burning-orange transition-colors hover:bg-burning-orange/5"
+                role="menuitem"
+                @click="updateRequestStatus('CANCELLED')"
+              >
+                <span>Cancel Request</span>
+              </button>
+
+              <button
+                v-if="isOwner && request.status === 'CANCELLED'"
+                class="flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-[14px] font-semibold text-blue-estate transition-colors hover:bg-cream"
+                role="menuitem"
+                @click="updateRequestStatus('OPEN')"
+              >
+                <span>Reopen Request</span>
+              </button>
+
+              <button
+                v-if="isOwner"
+                class="flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-[14px] font-semibold text-noble-black/65 transition-colors hover:bg-cream"
+                role="menuitem"
+                @click="deleteRequest"
+              >
+                <span>Delete Request</span>
+              </button>
+
+              <p
+                v-if="!isOwner && request.status !== 'OPEN'"
+                class="px-4 py-3 text-[13px] leading-relaxed text-noble-black/45"
+              >
+                This request is no longer accepting offers.
+              </p>
+
+              <p
+                v-if="isOwner && request.offers.length === 0"
+                class="px-4 py-3 text-[13px] leading-relaxed text-noble-black/45"
+              >
+                Offers will appear here once lenders respond.
+              </p>
+
+              <p
+                v-else-if="!isOwner && request.status === 'OPEN'"
+                class="px-4 py-3 text-[13px] leading-relaxed text-noble-black/45"
+              >
+                Send an offer directly to the requester.
+              </p>
             </div>
           </transition>
+        </div>
+      </div>
+    </div>
 
-          <div
-            class="flex items-center gap-3 bg-white rounded-full border border-cinnamon-ice/20 px-4 py-2 focus-within:border-cinnamon-ice/40 transition-all duration-300"
-          >
-            <input
-              ref="replyInputRef"
-              v-model="newReplyText"
-              placeholder="Write a reply"
-              class="flex-1 bg-transparent border-none focus:ring-0 text-[14px] text-noble-black placeholder:text-noble-black/30 outline-none"
-              @keydown.enter="handleReply"
-            />
-            <button
-              class="text-[13px] font-bold text-burning-orange hover:text-blue-estate transition-colors disabled:opacity-20 disabled:grayscale transition-all duration-300"
-              :disabled="!newReplyText.trim()"
-              @click="handleReply"
+    <div class="flex flex-col gap-3">
+      <h3 class="text-[22px] font-bold text-noble-black leading-tight">{{ request.itemNeeded }}</h3>
+      <p class="text-[15px] text-noble-black/70 leading-relaxed">{{ request.description }}</p>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <span
+          class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1 text-[12px] font-semibold text-noble-black/65"
+        >
+          {{ formatDateRange(request.requestedDates) }}
+        </span>
+        <span
+          class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1 text-[12px] font-semibold text-noble-black/65"
+        >
+          Budget: {{ formatPriceRange(request.priceRange) }}
+        </span>
+        <span
+          v-if="request.offersCount > 0"
+          class="rounded-full border border-burning-orange/15 bg-burning-orange/5 px-3 py-1 text-[12px] font-bold text-burning-orange"
+        >
+          {{ request.offersCount }} {{ request.offersCount === 1 ? "offer" : "offers" }} received
+        </span>
+        <span
+          v-if="currentUserOffer && !isOwner"
+          class="rounded-full border border-blue-estate/10 bg-blue-estate/5 px-3 py-1 text-[12px] font-semibold text-blue-estate"
+        >
+          Your offer: {{ formatOfferStatus(currentUserOffer.status) }}
+        </span>
+      </div>
+    </div>
+
+    <div
+      v-if="isOwner && request.offers.length > 0 && showOffers"
+      class="rounded-[22px] border border-cinnamon-ice/25 bg-white/80 p-4"
+    >
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-noble-black/35">
+            Received Offers
+          </p>
+          <p class="mt-1 text-[14px] text-noble-black/55">
+            Review lender terms and accept or decline offers here.
+          </p>
+        </div>
+        <span class="rounded-full bg-blue-estate px-3 py-1 text-[12px] font-bold text-white">
+          {{ request.offers.length }}
+        </span>
+      </div>
+
+      <div class="mt-4 flex flex-col gap-3">
+        <div
+          v-for="offer in sortedOffers"
+          :key="offer.id"
+          class="rounded-[18px] border border-cinnamon-ice/20 bg-cream px-4 py-4"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <UserAvatar
+                :avatar-url="offer.lender.avatar"
+                :user-name="offer.lender.name"
+                size="sm"
+              />
+              <div class="flex flex-col gap-1">
+                <span class="text-[15px] font-bold text-noble-black">{{ offer.lender.name }}</span>
+                <span class="text-[13px] text-noble-black/60">{{ offer.itemName }}</span>
+              </div>
+            </div>
+            <span
+              class="rounded-full border border-blue-estate/10 bg-white px-3 py-1 text-[12px] font-bold text-blue-estate"
             >
-              Send
-            </button>
+              {{ formatFee(offer.rentalFee) }}
+            </span>
+          </div>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-noble-black/60"
+            >
+              {{ formatCondition(offer.condition) }}
+            </span>
+            <span
+              class="rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em]"
+              :class="offerStatusClass(offer.status)"
+            >
+              {{ formatOfferStatus(offer.status) }}
+            </span>
+            <span
+              class="rounded-full border border-burning-orange/15 bg-burning-orange/5 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-burning-orange"
+            >
+              {{ offer.availability ? "Available now" : "Availability not confirmed" }}
+            </span>
+          </div>
+
+          <p class="mt-3 text-[14px] leading-relaxed text-noble-black/70">
+            {{ offer.rentalTerms }}
+          </p>
+
+          <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-[12px] text-noble-black/35">
+              Submitted {{ formatRelativeTime(offer.createdAt) }}
+            </p>
+
+            <div
+              v-if="request.status === 'OPEN' && offer.status === 'PENDING'"
+              class="flex flex-col gap-2 sm:flex-row"
+            >
+              <button
+                class="rounded-full border border-cinnamon-ice/30 px-4 py-2 text-[12px] font-bold text-noble-black/65 transition-all hover:bg-white"
+                @click="updateOfferStatus(offer.id, 'DECLINED')"
+              >
+                Decline
+              </button>
+              <button
+                class="rounded-full bg-blue-estate px-4 py-2 text-[12px] font-bold text-white transition-all hover:bg-burning-orange"
+                @click="updateOfferStatus(offer.id, 'ACCEPTED')"
+              >
+                Accept Offer
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -170,88 +256,208 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue"
-import type { CommunityRequest } from "~/types/community-requests"
+import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import type {
+  CommunityOfferStatus,
+  CommunityRequest,
+  CommunityRequestStatus,
+} from "~/types/community-requests"
 
 const props = defineProps<{
   request: CommunityRequest
-  currentUserAvatar?: string | null
-  currentUserName: string
+  currentUserId: string
 }>()
 
-const emit = defineEmits(["upvote-post", "upvote-reply", "add-reply"])
+const emit = defineEmits<{
+  (event: "offer-item" | "delete-request", requestId: number): void
+  (
+    event: "update-request-status",
+    payload: { requestId: number; status: CommunityRequestStatus },
+  ): void
+  (
+    event: "update-offer-status",
+    payload: {
+      offerId: number
+      requestId: number
+      status: CommunityOfferStatus
+    },
+  ): void
+}>()
 
-const showReplies = ref(false)
-const isUpvoted = ref(false)
-const newReplyText = ref("")
-const visibleCount = ref(5)
-const replyInputRef = ref<HTMLInputElement | null>(null)
-const replyingTo = ref("")
-const replyingToId = ref<string | null>(null)
+const showOffers = ref(false)
+const showMenu = ref(false)
+const cardRef = ref<HTMLElement | null>(null)
 
-const visibleReplies = computed(() => {
-  return [...props.request.replies].slice(0, visibleCount.value)
+const isOwner = computed(() => {
+  return props.request.borrower.userId === props.currentUserId
 })
 
-const hasMoreReplies = computed(() => {
-  return props.request.replies.length > visibleCount.value
+const currentUserOffer = computed(() => {
+  return props.request.offers.find((offer) => offer.lender.userId === props.currentUserId) ?? null
 })
 
-const toggleReplies = () => {
-  showReplies.value = !showReplies.value
-}
+const sortedOffers = computed(() => {
+  return [...props.request.offers].sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  )
+})
 
-const toggleUpvote = () => {
-  isUpvoted.value = !isUpvoted.value
-  emit("upvote-post", props.request.id)
-}
-
-const loadMoreReplies = () => {
-  visibleCount.value += 5
-}
-
-const focusReplyInput = (userName?: string, replyId?: string) => {
-  showReplies.value = true
-  if (userName) {
-    replyingTo.value = userName
-    replyingToId.value = replyId || null
+const requestStatusClass = computed(() => {
+  if (props.request.status === "FULFILLED") {
+    return "border-blue-estate/10 bg-blue-estate/5 text-blue-estate"
   }
-  setTimeout(() => {
-    replyInputRef.value?.focus()
-  }, 0)
+
+  if (props.request.status === "CANCELLED") {
+    return "border-cinnamon-ice/25 bg-white text-noble-black/55"
+  }
+
+  return "border-burning-orange/15 bg-burning-orange/5 text-burning-orange"
+})
+
+const toggleMenu = () => {
+  showMenu.value = !showMenu.value
 }
 
-const cancelReply = () => {
-  replyingTo.value = ""
-  replyingToId.value = null
+const toggleOffers = () => {
+  showOffers.value = !showOffers.value
 }
 
-const handleReply = () => {
-  if (!newReplyText.value.trim()) return
-
-  emit("add-reply", {
-    postId: props.request.id,
-    parentReplyId: replyingToId.value,
-    text: newReplyText.value,
-    userName: props.currentUserName,
-    userAvatar: props.currentUserAvatar,
-  })
-
-  newReplyText.value = ""
-  cancelReply()
+const toggleOffersFromMenu = () => {
+  showMenu.value = false
+  toggleOffers()
 }
+
+const handleOfferAction = () => {
+  showMenu.value = false
+  emit("offer-item", props.request.id)
+}
+
+const updateRequestStatus = (status: CommunityRequestStatus) => {
+  showMenu.value = false
+  emit("update-request-status", { requestId: props.request.id, status })
+}
+
+const deleteRequest = () => {
+  showMenu.value = false
+  emit("delete-request", props.request.id)
+}
+
+const updateOfferStatus = (offerId: number, status: CommunityOfferStatus) => {
+  emit("update-offer-status", { offerId, requestId: props.request.id, status })
+}
+
+const currencyFormatter = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  maximumFractionDigits: 0,
+})
+
+const dateFormatter = new Intl.DateTimeFormat("en-PH", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+})
+
+const formatFee = (fee: number) => {
+  return fee === 0 ? "Free" : currencyFormatter.format(fee)
+}
+
+const formatCondition = (value: string) => {
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+const formatRequestStatus = (value: CommunityRequestStatus) => {
+  return value.charAt(0) + value.slice(1).toLowerCase()
+}
+
+const formatOfferStatus = (value: CommunityOfferStatus) => {
+  return value.charAt(0) + value.slice(1).toLowerCase()
+}
+
+const offerStatusClass = (status: CommunityOfferStatus) => {
+  if (status === "ACCEPTED") return "border-blue-estate/10 bg-blue-estate/5 text-blue-estate"
+  if (status === "DECLINED" || status === "CANCELLED") {
+    return "border-cinnamon-ice/25 bg-white text-noble-black/55"
+  }
+  return "border-burning-orange/15 bg-burning-orange/5 text-burning-orange"
+}
+
+const formatRelativeTime = (timestamp: Date) => {
+  const minutes = Math.max(1, Math.round((Date.now() - timestamp.getTime()) / (60 * 1000)))
+
+  if (minutes < 60) return `${minutes}m ago`
+
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+
+  const days = Math.round(hours / 24)
+  return `${days}d ago`
+}
+
+const formatDateRange = (dates: Date[]) => {
+  const sorted = [...dates].sort((left, right) => left.getTime() - right.getTime())
+  const start = sorted[0]
+  const end = sorted.at(-1)
+
+  if (!start || !end) return "Dates not set"
+  if (start.getTime() === end.getTime()) return `Needed on ${dateFormatter.format(start)}`
+
+  return `${dateFormatter.format(start)} to ${dateFormatter.format(end)}`
+}
+
+const formatPriceRange = (range: [number, number]) => {
+  const [minimum, maximum] = range
+
+  if (minimum === maximum) {
+    return formatFee(minimum)
+  }
+
+  return `${formatFee(minimum)} to ${formatFee(maximum)}`
+}
+
+const handlePointerDownOutside = (event: PointerEvent) => {
+  if (!showMenu.value) return
+  if (!(event.target instanceof Node)) return
+  if (cardRef.value?.contains(event.target)) return
+  showMenu.value = false
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", handlePointerDownOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handlePointerDownOutside)
+})
 </script>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
+.menu-enter-active,
+.menu-leave-active {
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+    opacity 0.16s ease,
+    transform 0.16s ease;
 }
-.fade-enter-from,
-.fade-leave-to {
+
+.menu-enter-from,
+.menu-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+}
+
+.menu-enter-active,
+.menu-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.menu-enter-from,
+.menu-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

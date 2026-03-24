@@ -57,6 +57,7 @@ export interface PaginatedItemsResponse {
 export interface ItemCardViewModel {
   id: string
   type: "Rent" | "Borrow"
+  status: string
   isTrending: boolean
   image: string
   category: string
@@ -64,6 +65,7 @@ export interface ItemCardViewModel {
   rating: number | string
   reviews: number | string
   price?: string | number
+  priceUnit?: "hour" | "day"
   owner: string
   isLiked?: boolean
 }

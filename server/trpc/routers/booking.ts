@@ -33,11 +33,17 @@ const bookingInclude = {
     select: {
       id: true,
       name: true,
+      description: true,
       lenderId: true,
       rateOption: true,
       rentalFee: true,
       freeToBorrow: true,
       status: true,
+      categories: {
+        select: {
+          category: true,
+        },
+      },
       images: {
         select: {
           path: true,
@@ -50,6 +56,12 @@ const bookingInclude = {
   },
   borrower: {
     select: {
+      borrowerRating: true,
+      _count: {
+        select: {
+          bookings: true,
+        },
+      },
       user: {
         select: {
           username: true,
@@ -135,7 +147,11 @@ type BookingPrismaClient = Context["prisma"] & {
 
 type BookingMutationPrismaClient = {
   rentalTransaction: {
-    upsert(args: Record<string, unknown>): Promise<unknown>
+    findUnique(
+      args: Record<string, unknown>,
+    ): Promise<{ id: string; status: PrismaTransactionStatus } | null>
+    create(args: Record<string, unknown>): Promise<unknown>
+    update(args: Record<string, unknown>): Promise<unknown>
     deleteMany(args: Record<string, unknown>): Promise<unknown>
   }
 }
@@ -235,6 +251,11 @@ const BOOKING_ACTIVE_STATUSES = [
   bookingStatusSchema.enum.IN_DISPUTE,
 ] as const
 
+const ITEM_BLOCKING_BOOKING_STATUSES = [
+  bookingStatusSchema.enum.CONFIRMED,
+  bookingStatusSchema.enum.IN_DISPUTE,
+] as const
+
 const assertParticipantAccess = (
   booking: Pick<BookingEditableRecord, "borrowerId" | "lenderId">,
   userId: string,
@@ -297,7 +318,7 @@ const mapBookingToTransactionStatus = (
       return getPrismaTransactionStatus("IN_DISPUTE", PrismaTransactionStatus.PENDING)
     case bookingStatusSchema.enum.PENDING:
     default:
-      return PrismaTransactionStatus.PENDING
+      return PrismaTransactionStatus.AWAITING_LENDER_APPROVAL
   }
 }
 
@@ -393,32 +414,106 @@ const syncBookingTransaction = async (
   >,
 ) => {
   const rentalFee = calculateRentalAmount(booking.totalFee, booking.platformCommission)
-  const status = mapBookingToTransactionStatus(booking.status, booking.paymentStatus)
+  const targetStatus = mapBookingToTransactionStatus(booking.status, booking.paymentStatus)
+  const transactionData = {
+    borrowerId: booking.borrowerId,
+    lenderId: booking.lenderId,
+    itemId: booking.itemId,
+    startDate: booking.startDate,
+    endDate: booking.endDate,
+    rentalFee,
+    platformFee: booking.platformCommission,
+  }
 
-  await bookingPrisma.rentalTransaction.upsert({
+  const existingTransaction = await bookingPrisma.rentalTransaction.findUnique({
     where: { bookingId: booking.id },
-    create: {
-      bookingId: booking.id,
-      borrowerId: booking.borrowerId,
-      lenderId: booking.lenderId,
-      itemId: booking.itemId,
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      rentalFee,
-      platformFee: booking.platformCommission,
-      status,
-    },
-    update: {
-      borrowerId: booking.borrowerId,
-      lenderId: booking.lenderId,
-      itemId: booking.itemId,
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      rentalFee,
-      platformFee: booking.platformCommission,
-      status,
+    select: {
+      id: true,
+      status: true,
     },
   })
+
+  if (!existingTransaction) {
+    await bookingPrisma.rentalTransaction.create({
+      data: {
+        bookingId: booking.id,
+        ...transactionData,
+        status: targetStatus,
+      },
+    })
+    return
+  }
+
+  const transitionSteps =
+    existingTransaction.status === PrismaTransactionStatus.PENDING &&
+    targetStatus === PrismaTransactionStatus.CONFIRMED
+      ? [PrismaTransactionStatus.AWAITING_LENDER_APPROVAL, PrismaTransactionStatus.CONFIRMED]
+      : existingTransaction.status === PrismaTransactionStatus.PENDING &&
+          targetStatus === PrismaTransactionStatus.PAID
+        ? [
+            PrismaTransactionStatus.AWAITING_LENDER_APPROVAL,
+            PrismaTransactionStatus.CONFIRMED,
+            PrismaTransactionStatus.PAID,
+          ]
+        : existingTransaction.status === PrismaTransactionStatus.AWAITING_LENDER_APPROVAL &&
+            targetStatus === PrismaTransactionStatus.PAID
+          ? [PrismaTransactionStatus.CONFIRMED, PrismaTransactionStatus.PAID]
+          : [targetStatus]
+
+  for (const status of transitionSteps) {
+    await bookingPrisma.rentalTransaction.update({
+      where: { bookingId: booking.id },
+      data: {
+        ...transactionData,
+        status,
+      },
+    })
+  }
+}
+
+type ItemStatusSyncPrismaClient = Pick<Context["prisma"], "item"> & {
+  booking: {
+    findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
+  }
+}
+
+const syncItemStatusFromBookings = async (
+  prisma: ItemStatusSyncPrismaClient,
+  input: { itemId: string },
+) => {
+  const item = await prisma.item.findUnique({
+    where: { id: input.itemId },
+    select: { status: true },
+  })
+
+  if (!item || item.status === "DELETED") {
+    return
+  }
+
+  const blockingBooking = await prisma.booking.findFirst({
+    where: {
+      itemId: input.itemId,
+      status: { in: [...ITEM_BLOCKING_BOOKING_STATUSES] },
+    },
+    select: { id: true },
+  })
+
+  if (blockingBooking) {
+    if (item.status !== "RENTED") {
+      await prisma.item.update({
+        where: { id: input.itemId },
+        data: { status: "RENTED" },
+      })
+    }
+    return
+  }
+
+  if (item.status === "RENTED") {
+    await prisma.item.update({
+      where: { id: input.itemId },
+      data: { status: "AVAILABLE" },
+    })
+  }
 }
 
 export const bookingRouter = router({
@@ -646,6 +741,9 @@ export const bookingRouter = router({
       })
 
       await syncBookingTransaction(tx as unknown as BookingMutationPrismaClient, updatedBooking)
+      await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
+        itemId: updatedBooking.itemId,
+      })
 
       return mapBookingRecord(updatedBooking)
     })
@@ -678,6 +776,9 @@ export const bookingRouter = router({
 
       await txBookingMutationPrisma.rentalTransaction.deleteMany({
         where: { bookingId: input.id },
+      })
+      await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
+        itemId: deletedBooking.itemId,
       })
 
       return mapBookingRecord(deletedBooking)

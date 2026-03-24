@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
+import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
 type ItemCategory =
@@ -57,7 +58,6 @@ const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 const MAX_GALLERY_IMAGE_COUNT = 10
-
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
   { value: "BOOKS", label: "Books" },
@@ -544,6 +544,8 @@ const handleSubmit = () => {
   }
 
   const payload = buildPayload()
+  const schema = props.mode === "edit" ? updateItemSchema : createItemSchema
+  const result = schema.safeParse(payload)
 
   if (!form.name.trim()) {
     fieldErrors.value.name = "Item name is required."
@@ -563,11 +565,30 @@ const handleSubmit = () => {
       range.endDate.getTime() <= range.startDate.getTime(),
   )
 
+  if (!result.success) {
+    const flat = result.error.flatten()
+
+    Object.entries(flat.fieldErrors).forEach(([key, messages]) => {
+      const firstMessage = messages?.[0]
+      if (firstMessage) {
+        fieldErrors.value[key] = firstMessage
+      }
+    })
+
+    if (flat.fieldErrors.availability) {
+      availabilityErrors.value = [...flat.fieldErrors.availability]
+    }
+  }
+
   if (invalidAvailability) {
     availabilityErrors.value.push("Availability end dates must be later than start dates.")
   }
 
-  if (Object.keys(fieldErrors.value).length > 0 || availabilityErrors.value.length > 0) {
+  if (
+    !result.success ||
+    Object.keys(fieldErrors.value).length > 0 ||
+    availabilityErrors.value.length > 0
+  ) {
     return
   }
 
@@ -646,7 +667,9 @@ onBeforeUnmount(() => {
           class="hidden"
           @change="handleGallerySelect"
         />
-
+        <div v-if="isUploadingImages" class="mt-2 text-sm font-geist text-neutral-800/70">
+          Uploading images...
+        </div>
         <div class="relative group">
           <div
             v-if="coverImage"
