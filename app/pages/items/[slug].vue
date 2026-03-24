@@ -287,7 +287,9 @@ const bookingAvailabilityMessage = computed(() => {
 
   return "Choose your dates and time to request this item."
 })
-const isItemAvailableForBooking = computed(() => Boolean(item.value && !isItemUnavailableForBooking.value))
+const isItemAvailableForBooking = computed(() =>
+  Boolean(item.value && !isItemUnavailableForBooking.value),
+)
 const ownerName = computed(() => item.value?.ownerName ?? "TakeUP member")
 const ownerInitials = computed(() => {
   const parts = ownerName.value.split(/\s+/).filter(Boolean)
