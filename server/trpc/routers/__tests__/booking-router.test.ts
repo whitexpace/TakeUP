@@ -143,7 +143,7 @@ describe("bookingRouter", () => {
       create: { userId: LENDER_ID, lenderRating: 0 },
       update: {},
     })
-    expect(ctx.prisma.rentalTransaction.upsert).not.toHaveBeenCalled()
+    expect(ctx.prisma.rentalTransaction.create).not.toHaveBeenCalled()
     expect(ctx.prisma.item.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: ITEM_ID },
@@ -342,13 +342,15 @@ describe("bookingRouter", () => {
       status: "CONFIRMED",
     })
 
-    expect(ctx.prisma.rentalTransaction.upsert).toHaveBeenCalledWith(
+    expect(ctx.prisma.rentalTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({
+        data: expect.objectContaining({
           bookingId: BOOKING_ID,
           borrowerId: USER_ID,
           lenderId: LENDER_ID,
           itemId: ITEM_ID,
+          startDate: new Date("2026-04-01T00:00:00.000Z"),
+          endDate: new Date("2026-04-03T00:00:00.000Z"),
           rentalFee: 400,
           platformFee: 50,
           status: "PENDING",
