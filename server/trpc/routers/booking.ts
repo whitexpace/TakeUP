@@ -132,6 +132,37 @@ type BookingEditableRecord = Prisma.BookingGetPayload<{
   select: typeof bookingEditableSelect
 }>
 
+const bookingTransactionSelect = {
+  id: true,
+  borrowerId: true,
+  lenderId: true,
+  itemId: true,
+  startDate: true,
+  endDate: true,
+  totalFee: true,
+  platformCommission: true,
+  status: true,
+  paymentStatus: true,
+  cancellationReason: true,
+  cancelledAt: true,
+} satisfies Prisma.BookingSelect
+
+type BookingTransactionRecord = Prisma.BookingGetPayload<{
+  select: typeof bookingTransactionSelect
+}>
+
+const overlappingPendingBookingSelect = {
+  id: true,
+  startDate: true,
+  endDate: true,
+  cancellationReason: true,
+  cancelledAt: true,
+} satisfies Prisma.BookingSelect
+
+type OverlappingPendingBookingRecord = Prisma.BookingGetPayload<{
+  select: typeof overlappingPendingBookingSelect
+}>
+
 type BookingDelegate = {
   findMany(args: Record<string, unknown>): Promise<BookingRecord[]>
   findUnique(args: Record<string, unknown>): Promise<BookingRecord | BookingEditableRecord | null>
@@ -265,6 +296,11 @@ const ITEM_BLOCKING_BOOKING_STATUSES = [
   bookingStatusSchema.enum.IN_DISPUTE,
 ] as const
 
+const BOOKING_MUTATION_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 15_000,
+} as const
+
 const OVERLAPPING_REQUEST_CANCELLATION_REASON =
   "Cancelled because the lender approved another overlapping request."
 
@@ -320,7 +356,7 @@ const mapBookingToTransactionStatus = (
     case bookingStatusSchema.enum.CONFIRMED:
       return paymentStatus === bookingPaymentStatusSchema.enum.PAID
         ? PrismaTransactionStatus.PAID
-        : PrismaTransactionStatus.PENDING
+        : PrismaTransactionStatus.CONFIRMED
     case bookingStatusSchema.enum.CANCELLED:
       return PrismaTransactionStatus.CANCELLED
     case bookingStatusSchema.enum.COMPLETED:
@@ -409,7 +445,7 @@ const doBookingWindowsOverlap = (left: BookingTimeRange, right: BookingTimeRange
 const syncBookingTransaction = async (
   bookingPrisma: BookingMutationPrismaClient,
   booking: Pick<
-    BookingListItem,
+    BookingTransactionRecord,
     | "id"
     | "borrowerId"
     | "lenderId"
@@ -738,7 +774,7 @@ export const bookingRouter = router({
     const totalFee = calculateBookingTotal(existing.item, startDate, endDate, platformCommission)
     const timestamps = buildBookingTimestamps(existing, input.status, input.paymentStatus)
 
-    return ctx.prisma.$transaction(async (tx) => {
+    const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
       const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
       const isConfirmingBooking =
         input.status === bookingStatusSchema.enum.CONFIRMED &&
@@ -774,7 +810,7 @@ export const bookingRouter = router({
             Object.entries(timestamps).filter(([, value]) => value !== undefined),
           ),
         },
-        include: bookingInclude,
+        select: bookingTransactionSelect,
       })
 
       if (isConfirmingBooking) {
@@ -786,8 +822,8 @@ export const bookingRouter = router({
             startDate: { lt: endDate },
             endDate: { gt: startDate },
           },
-          include: bookingInclude,
-        })) as BookingRecord[]
+          select: overlappingPendingBookingSelect,
+        })) as OverlappingPendingBookingRecord[]
 
         for (const overlappingBooking of overlappingPendingBookings) {
           if (
@@ -810,7 +846,7 @@ export const bookingRouter = router({
                 overlappingBooking.cancellationReason ?? OVERLAPPING_REQUEST_CANCELLATION_REASON,
               cancelledAt: overlappingBooking.cancelledAt ?? new Date(),
             },
-            include: bookingInclude,
+            select: bookingTransactionSelect,
           })
 
           await syncBookingTransaction(
@@ -825,8 +861,22 @@ export const bookingRouter = router({
         itemId: updatedBooking.itemId,
       })
 
-      return mapBookingRecord(updatedBooking)
-    })
+      return updatedBooking.id
+    }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
+
+    const updatedBooking = (await bookingPrisma.booking.findUnique({
+      where: { id: updatedBookingId },
+      include: bookingInclude,
+    })) as BookingRecord | null
+
+    if (!updatedBooking) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Booking was updated but could not be reloaded.",
+      })
+    }
+
+    return mapBookingRecord(updatedBooking)
   }),
 
   delete: protectedProcedure.input(deleteBookingSchema).mutation(async ({ ctx, input }) => {
