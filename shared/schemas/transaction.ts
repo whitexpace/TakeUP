@@ -1,6 +1,12 @@
 import { z } from "zod"
 
-export const transactionStatusSchema = z.enum(["PENDING", "ACTIVE", "COMPLETED", "CANCELLED"])
+export const transactionStatusSchema = z.enum([
+  "PENDING",
+  "ACTIVE",
+  "COMPLETED",
+  "CANCELLED",
+  "RETURNED",
+])
 
 export const transactionRoleSchema = z.enum(["LENDER", "BORROWER"])
 

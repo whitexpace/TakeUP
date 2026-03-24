@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { NuxtLink } from "#components"
 import type { TransactionListItem } from "../composables/use-transactions"
 
 const props = defineProps<{
@@ -63,6 +64,11 @@ const totalLabel = computed(() =>
 )
 
 const isCompleted = computed(() => props.transaction.status === "COMPLETED")
+const detailPath = computed(() =>
+  props.transaction.bookingId
+    ? `/account/transactions/${props.transaction.bookingId}`
+    : `/account/transactions/${props.transaction.id}`,
+)
 </script>
 
 <template>
@@ -89,11 +95,22 @@ const isCompleted = computed(() => props.transaction.status === "COMPLETED")
         </button>
       </div>
 
+      <NuxtLink
+        v-if="detailPath"
+        :to="detailPath"
+        class="text-orange-500 text-xs sm:text-sm font-medium hover:text-orange-600 transition-colors"
+      >
+        View details
+      </NuxtLink>
+
       <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
     </div>
 
     <!-- Bottom row -->
-    <div class="flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4">
+    <NuxtLink
+      :to="detailPath"
+      class="flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4 hover:bg-cream/50 transition-colors cursor-pointer block"
+    >
       <!-- Thumbnail -->
       <img
         v-if="transaction.item.thumbnailImage"
@@ -155,6 +172,6 @@ const isCompleted = computed(() => props.transaction.status === "COMPLETED")
           </p>
         </div>
       </div>
-    </div>
+    </NuxtLink>
   </div>
 </template>

@@ -45,6 +45,12 @@ onMounted(() => {
       </div>
       <div class="flex gap-3 shrink-0">
         <NuxtLink
+          to="/account/requests"
+          class="inline-flex items-center gap-2 px-5 py-2.5 border border-orange-500 text-orange-600 rounded-[30px] text-sm font-medium font-geist hover:bg-orange-50 transition-colors"
+        >
+          View Requests
+        </NuxtLink>
+        <NuxtLink
           to="/account/listings/new"
           class="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white rounded-[30px] text-sm font-medium font-geist hover:bg-orange-600 transition-colors"
         >

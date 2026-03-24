@@ -13,6 +13,11 @@ const createBookingApiError = (statusCode: number, statusMessage: string) =>
     },
   })
 
+const appendDevErrorMessage = (statusMessage: string, error: Error) =>
+  process.env.NODE_ENV !== "production" && error.message
+    ? `${statusMessage} Debug: ${error.message}`
+    : statusMessage
+
 const toPrismaErrorMessage = (error: Prisma.PrismaClientKnownRequestError) => {
   switch (error.code) {
     case "P1001":
@@ -88,9 +93,21 @@ const toUnknownError = (error: Error, action: string) => {
     )
   }
 
+  if (
+    /invalid transaction status transition|no-op transition is not allowed/i.test(error.message)
+  ) {
+    return createBookingApiError(
+      500,
+      "Booking update failed because the linked transaction is in a legacy status flow that the database rejected. Refresh and try again with the latest server code.",
+    )
+  }
+
   return createBookingApiError(
     500,
-    `Unable to ${action} booking because of an unexpected server error.`,
+    appendDevErrorMessage(
+      `Unable to ${action} booking because of an unexpected server error.`,
+      error,
+    ),
   )
 }
 

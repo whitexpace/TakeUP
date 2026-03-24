@@ -3,7 +3,8 @@ import { createContext } from "../../trpc/context"
 
 export default defineEventHandler(async (event) => {
   const ctx = await createContext(event)
-  const user = ctx.user
+  const { user } = ctx
+
   if (!user) {
     throw createError({
       statusCode: 401,

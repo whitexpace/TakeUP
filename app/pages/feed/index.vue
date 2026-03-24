@@ -1,290 +1,55 @@
 <template>
-  <div class="flex h-screen flex-col overflow-hidden bg-white font-geist">
-    <Header />
+  <div class="flex flex-col h-screen font-geist bg-white overflow-hidden">
+    <Header
+      :notifications="currentUserNotifications"
+      @mark-notification-read="markNotificationRead"
+      @mark-all-notifications-read="markAllNotificationsRead"
+    />
 
-    <main class="custom-main-scrollbar flex-1 overflow-y-auto bg-white">
-      <div class="container mx-auto max-w-[1440px] px-4 py-8 pt-10">
-        <div class="flex flex-col gap-10 lg:flex-row">
-          <aside class="hidden w-[240px] shrink-0 lg:block xl:w-[280px]">
-            <div class="sticky top-6 space-y-4">
-              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
-                <p
-                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
-                >
-                  Request Board
-                </p>
-                <h2 class="mt-3 text-[22px] font-bold leading-tight text-noble-black">
-                  Browse active community requests
-                </h2>
-                <p class="mt-3 text-[14px] leading-relaxed text-noble-black/60">
-                  Borrowers can post what they need here, and lenders can browse active requests in
-                  one shared board ordered by recency.
-                </p>
-              </section>
-
-              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-white p-6">
-                <p
-                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40"
-                >
-                  Feed Rules
-                </p>
-                <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
-                  <li>Newest requests appear first.</li>
-                  <li>Only active requests are shown.</li>
-                  <li>Each card shows dates, budget, and request details.</li>
-                </ul>
-              </section>
+    <main ref="feedMainRef" class="flex-1 overflow-y-auto custom-main-scrollbar bg-white">
+      <div class="container mx-auto px-4 py-8 pt-10 max-w-[1440px]">
+        <div class="flex flex-col lg:flex-row gap-10">
+          <aside class="hidden lg:block lg:w-[240px] xl:w-[280px] shrink-0">
+            <div class="sticky top-6">
+              <CommunityActivitySidebar
+                :posts-made="userActivity.postsMade"
+                :offers-sent="userActivity.offersSent"
+                :offers-received="userActivity.offersReceived"
+              />
             </div>
           </aside>
 
-          <section class="flex min-w-0 flex-1 flex-col gap-8">
+          <div class="flex-1 min-w-0 flex flex-col gap-8">
             <div class="flex flex-col gap-1">
-              <h1 class="font-rewon text-[42px] leading-tight text-noble-black">Requests</h1>
-              <p class="text-[18px] font-normal text-noble-black/60">
-                Community item requests, ordered by recency
+              <h1 class="font-rewon text-[42px] text-noble-black leading-tight">Community Feed</h1>
+              <p class="font-geist font-normal text-[18px] text-noble-black/60">
+                Post what you need and receive offers directly from the UPC community
               </p>
             </div>
 
-            <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
-              <div class="flex flex-col gap-6">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p
-                      class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
-                    >
-                      Post a request
-                    </p>
-                    <h2 class="mt-2 text-[22px] font-bold text-noble-black">
-                      Ask the community for an item
-                    </h2>
-                    <p class="mt-2 max-w-[560px] text-[14px] leading-relaxed text-noble-black/60">
-                      Post what you need, when you need it, and the target budget. Public visitors
-                      cannot see your borrower name, and no personal details are exposed on the
-                      card.
-                    </p>
-                  </div>
+            <CommunityCreatePost
+              ref="createPostRef"
+              :user-avatar="currentUserAvatar"
+              :user-name="currentUserName"
+              :is-submitting="isCreatingRequest"
+              :server-error="requestComposerError"
+              @post="handleCreateRequest"
+            />
 
-                  <span
-                    class="rounded-full border border-cinnamon-ice/30 bg-white px-4 py-2 text-[12px] font-semibold text-noble-black/60"
-                  >
-                    Borrowers only
-                  </span>
-                </div>
-
-                <div
-                  v-if="!isSignedIn"
-                  class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4"
+            <div
+              v-if="feedError"
+              class="rounded-[20px] border border-burning-orange/20 bg-burning-orange/5 px-5 py-4 text-[14px] text-burning-orange"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>{{ feedError }}</span>
+                <button
+                  class="rounded-full border border-burning-orange/20 px-4 py-2 text-[12px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
+                  @click="refreshFeed"
                 >
-                  <p class="text-[15px] font-semibold text-noble-black">
-                    Sign in to post a request
-                  </p>
-                  <p class="mt-2 text-[14px] leading-relaxed text-noble-black/60">
-                    Browsing stays public, but posting requires a signed-in borrower account.
-                  </p>
-                  <button
-                    type="button"
-                    class="mt-4 rounded-full bg-burning-orange px-6 py-2.5 text-[14px] font-bold text-white transition hover:bg-[#ff6a1f]"
-                    @click="navigateTo('/')"
-                  >
-                    Sign in
-                  </button>
-                </div>
-
-                <div
-                  v-else-if="isViewerLoading"
-                  class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4"
-                >
-                  <p class="text-[15px] font-semibold text-noble-black">Checking borrower access</p>
-                  <p class="mt-2 text-[14px] leading-relaxed text-noble-black/60">
-                    One moment while we confirm whether this account can post requests.
-                  </p>
-                </div>
-
-                <div
-                  v-else-if="!isBorrowerAccount"
-                  class="rounded-[20px] border border-cinnamon-ice/30 bg-white px-5 py-4"
-                >
-                  <p class="text-[15px] font-semibold text-noble-black">
-                    Only borrower accounts can post requests
-                  </p>
-                  <p class="mt-2 text-[14px] leading-relaxed text-noble-black/60">
-                    You can still browse active requests here, but posting is limited to borrower
-                    accounts.
-                  </p>
-                </div>
-
-                <form v-else class="grid gap-4" @submit.prevent="handleCreateRequest">
-                  <p class="text-[12px] font-medium text-noble-black/55">
-                    <span class="font-bold text-cinnabar-red" aria-hidden="true">*</span> Required
-                    fields
-                  </p>
-
-                  <div
-                    v-if="submitErrorMessage"
-                    class="rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700"
-                  >
-                    {{ submitErrorMessage }}
-                  </div>
-
-                  <div class="grid gap-4 md:grid-cols-2">
-                    <label class="flex flex-col gap-2">
-                      <span class="text-[13px] font-semibold text-noble-black">
-                        Item name
-                        <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
-                      </span>
-                      <input
-                        v-model="form.itemNeeded"
-                        type="text"
-                        maxlength="120"
-                        required
-                        aria-required="true"
-                        :aria-invalid="fieldErrors.itemNeeded ? 'true' : 'false'"
-                        class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
-                        placeholder="Portable projector"
-                      />
-                      <span v-if="fieldErrors.itemNeeded" class="text-[12px] text-cinnabar-red">
-                        {{ fieldErrors.itemNeeded }}
-                      </span>
-                    </label>
-
-                    <div class="grid gap-4 sm:grid-cols-2">
-                      <label class="flex flex-col gap-2">
-                        <span class="text-[13px] font-semibold text-noble-black">
-                          Start date
-                          <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
-                        </span>
-                        <input
-                          v-model="form.requestedFrom"
-                          type="date"
-                          required
-                          aria-required="true"
-                          :aria-invalid="fieldErrors.requestedFrom ? 'true' : 'false'"
-                          class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
-                        />
-                        <span
-                          v-if="fieldErrors.requestedFrom"
-                          class="text-[12px] text-cinnabar-red"
-                        >
-                          {{ fieldErrors.requestedFrom }}
-                        </span>
-                      </label>
-
-                      <label class="flex flex-col gap-2">
-                        <span class="text-[13px] font-semibold text-noble-black">
-                          End date
-                          <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
-                        </span>
-                        <input
-                          v-model="form.requestedTo"
-                          type="date"
-                          required
-                          aria-required="true"
-                          :aria-invalid="fieldErrors.requestedTo ? 'true' : 'false'"
-                          class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
-                        />
-                        <span v-if="fieldErrors.requestedTo" class="text-[12px] text-cinnabar-red">
-                          {{ fieldErrors.requestedTo }}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div class="grid gap-4 md:grid-cols-2">
-                    <label class="flex flex-col gap-2">
-                      <span class="text-[13px] font-semibold text-noble-black">
-                        Minimum target price
-                        <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
-                      </span>
-                      <div class="relative">
-                        <span
-                          class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-noble-black/55"
-                        >
-                          ₱
-                        </span>
-                        <input
-                          v-model="form.minTargetPrice"
-                          type="number"
-                          min="0"
-                          inputmode="numeric"
-                          required
-                          aria-required="true"
-                          :aria-invalid="fieldErrors.minTargetPrice ? 'true' : 'false'"
-                          class="w-full rounded-[18px] border border-cinnamon-ice/40 bg-white py-3 pl-8 pr-4 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
-                          placeholder="200"
-                        />
-                      </div>
-                      <span v-if="fieldErrors.minTargetPrice" class="text-[12px] text-cinnabar-red">
-                        {{ fieldErrors.minTargetPrice }}
-                      </span>
-                    </label>
-
-                    <label class="flex flex-col gap-2">
-                      <span class="text-[13px] font-semibold text-noble-black">
-                        Maximum target price
-                        <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
-                      </span>
-                      <div class="relative">
-                        <span
-                          class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-noble-black/55"
-                        >
-                          ₱
-                        </span>
-                        <input
-                          v-model="form.maxTargetPrice"
-                          type="number"
-                          min="0"
-                          inputmode="numeric"
-                          required
-                          aria-required="true"
-                          :aria-invalid="fieldErrors.maxTargetPrice ? 'true' : 'false'"
-                          class="w-full rounded-[18px] border border-cinnamon-ice/40 bg-white py-3 pl-8 pr-4 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
-                          placeholder="450"
-                        />
-                      </div>
-                      <span v-if="fieldErrors.maxTargetPrice" class="text-[12px] text-cinnabar-red">
-                        {{ fieldErrors.maxTargetPrice }}
-                      </span>
-                    </label>
-                  </div>
-
-                  <label class="flex flex-col gap-2">
-                    <span class="text-[13px] font-semibold text-noble-black">
-                      Description
-                      <span class="ml-1 text-cinnabar-red" aria-hidden="true">*</span>
-                    </span>
-                    <textarea
-                      v-model="form.description"
-                      rows="4"
-                      maxlength="2000"
-                      required
-                      aria-required="true"
-                      :aria-invalid="fieldErrors.description ? 'true' : 'false'"
-                      class="rounded-[18px] border border-cinnamon-ice/40 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition focus:border-burning-orange"
-                      placeholder="Describe the item, intended use, and any important details lenders should know."
-                    />
-                    <span v-if="fieldErrors.description" class="text-[12px] text-cinnabar-red">
-                      {{ fieldErrors.description }}
-                    </span>
-                  </label>
-
-                  <div
-                    class="flex flex-col gap-3 border-t border-cinnamon-ice/20 pt-2 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <p class="text-[13px] leading-relaxed text-noble-black/55">
-                      Your request will appear in the active feed immediately and expire
-                      automatically after the requested end date passes.
-                    </p>
-                    <button
-                      type="submit"
-                      class="rounded-full bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white transition hover:bg-[#ff6a1f] disabled:cursor-not-allowed disabled:opacity-60"
-                      :disabled="isSubmitting"
-                    >
-                      {{ isSubmitting ? "Posting..." : "Post Request" }}
-                    </button>
-                  </div>
-                </form>
+                  Retry
+                </button>
               </div>
-            </section>
+            </div>
 
             <div class="flex flex-wrap items-center gap-3">
               <span
@@ -299,42 +64,23 @@
               </span>
             </div>
 
-            <div v-if="isLoading" class="flex flex-col gap-6">
-              <div
-                v-for="placeholder in 3"
-                :key="placeholder"
-                class="animate-pulse rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6"
-              >
-                <div class="h-4 w-28 rounded bg-white/80" />
-                <div class="mt-4 h-8 w-2/3 rounded bg-white/80" />
-                <div class="mt-4 h-4 w-full rounded bg-white/80" />
-                <div class="mt-2 h-4 w-5/6 rounded bg-white/80" />
-                <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                  <div v-for="metric in 3" :key="metric" class="h-20 rounded-[18px] bg-white/80" />
-                </div>
-              </div>
-            </div>
-
             <div
-              v-else-if="errorMessage"
-              class="rounded-[24px] border border-red-200 bg-red-50 p-6 text-red-700"
+              v-if="isLoadingFeed"
+              class="rounded-[32px] border border-cinnamon-ice/20 bg-cream px-8 py-16 text-center text-[15px] text-noble-black/50"
             >
-              <p class="text-[16px] font-semibold">Unable to load requests</p>
-              <p class="mt-2 text-[14px]">{{ errorMessage }}</p>
-              <button
-                class="mt-4 rounded-full bg-noble-black px-5 py-2 text-[14px] font-semibold text-white"
-                @click="() => refresh()"
-              >
-                Try again
-              </button>
+              Loading live community requests...
             </div>
 
-            <div v-else-if="posts.length > 0" class="flex flex-col gap-6">
-              <RequestFeedCard
-                v-for="post in posts"
-                :key="post.id"
-                :post="post"
-                :show-requester-identity="isSignedIn"
+            <div v-else-if="sortedRequests.length > 0" class="flex flex-col gap-6">
+              <CommunityPostCard
+                v-for="request in sortedRequests"
+                :key="request.id"
+                :request="request"
+                :current-user-id="currentDbUserId"
+                @offer-item="openOfferComposer"
+                @update-request-status="handleUpdateRequestStatus"
+                @delete-request="handleDeleteRequest"
+                @update-offer-status="handleUpdateOfferStatus"
               />
             </div>
 
@@ -360,134 +106,800 @@
                   />
                 </svg>
               </div>
-              <h3 class="mb-2 text-[22px] font-bold text-noble-black">
-                No active requests right now
-              </h3>
-              <p class="max-w-[360px] text-[15px] leading-relaxed text-noble-black/40">
-                Check back later for new community requests. Expired requests are removed from the
-                active board automatically.
+              <h3 class="text-[22px] font-bold text-noble-black mb-2">No live requests yet</h3>
+              <p class="text-[15px] text-noble-black/40 max-w-[360px] leading-relaxed mb-8">
+                The feed is now reading directly from the database. Create the first request to get
+                it started.
               </p>
+              <button
+                class="px-8 py-2.5 bg-burning-orange text-white rounded-full font-bold text-[14px] hover:bg-blue-estate transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                @click="triggerCreatePost"
+              >
+                Create Request
+              </button>
             </div>
-          </section>
+          </div>
 
-          <aside class="hidden w-[280px] shrink-0 lg:block xl:w-[320px]">
-            <div class="sticky top-6 space-y-4">
-              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-white p-6">
-                <p
-                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70"
-                >
-                  What each card shows
-                </p>
-                <ul class="mt-3 space-y-3 text-[14px] leading-relaxed text-noble-black/65">
-                  <li>Requested item</li>
-                  <li>Requester username for signed-in viewers</li>
-                  <li>Requested dates</li>
-                  <li>Target price range</li>
-                  <li>Description and expiry info</li>
-                </ul>
-              </section>
-
-              <section class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6">
-                <p
-                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-noble-black/40"
-                >
-                  Status
-                </p>
-                <p class="mt-3 text-[14px] leading-relaxed text-noble-black/65">
-                  This feed intentionally shows active requests only. Expired requests are excluded
-                  on the backend and won’t appear as active posts.
-                </p>
-              </section>
+          <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
+            <div class="sticky top-6">
+              <CommunityTrendingSidebar :trending-items="trendingItems" />
             </div>
           </aside>
         </div>
       </div>
     </main>
+
+    <CommunityOfferModal
+      :model-value="isOfferComposerOpen"
+      :request-title="selectedRequestForOffer?.itemNeeded ?? ''"
+      :items="offerableItems"
+      :existing-offer="existingOfferForCurrentUser"
+      :is-submitting="isSubmittingOffer"
+      :server-error="offerComposerError"
+      @update:model-value="handleOfferComposerVisibility"
+      @submit="submitOffer"
+      @cancel-offer="cancelOffer"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue"
-import RequestFeedCard from "../../components/RequestFeedCard.vue"
-import { useRequestFeed } from "../../composables/use-request-feed"
-import { createInitialRequestForm } from "../../utils/request-form"
+import { computed, onMounted, ref, watch } from "vue"
+import type {
+  CommunityMember,
+  CommunityOffer,
+  CommunityOfferFormInput,
+  CommunityOfferNotification,
+  CommunityOfferStatus,
+  CommunityOfferableItem,
+  CommunityRequest,
+  CommunityRequestComposerInput,
+  CommunityRequestStatus,
+  TrendingRequest,
+  UserActivity,
+} from "~/types/community-requests"
+import CommunityCreatePost from "~/components/CommunityCreatePost.vue"
 
 definePageMeta({ layout: false })
 
-const user = useSupabaseUser()
+type ApiCommunityMember = {
+  profileId: number
+  userId: string
+  name: string
+  avatar: string
+}
+
+type ApiCommunityOffer = {
+  id: number
+  lenderID: number
+  requestID: number
+  itemID: number
+  itemName: string
+  rentalFee: number
+  availability: boolean
+  condition: string
+  rentalTerms: string
+  status: string
+  borrowerReadAt: string | Date | null
+  createdAt: string | Date
+  updatedAt: string | Date
+  lender: ApiCommunityMember
+}
+
+type ApiCommunityRequest = {
+  id: number
+  borrowerID: number
+  itemNeeded: string
+  requestedDates: Array<string | Date>
+  priceRange: number[]
+  description: string
+  status: string
+  createdAt: string | Date
+  updatedAt: string | Date
+  offersCount: number
+  borrower: ApiCommunityMember
+  offers: ApiCommunityOffer[]
+}
+
+type ApiCommunityNotification = {
+  id: number
+  requestId: number
+  requestTitle: string
+  recipientId: number
+  actorName: string
+  itemName: string
+  fee: number
+  createdAt: string | Date
+  read: boolean
+}
+
+type ApiOfferableItem = {
+  id: string
+  numericId: number
+  name: string
+  condition: string
+  rentalFee: number
+  freeToBorrow: boolean
+  status: string
+  rateOption: string
+  createdAt: string | Date
+}
+
+const createPostRef = ref<InstanceType<typeof CommunityCreatePost> | null>(null)
+const feedMainRef = ref<HTMLElement | null>(null)
+
+const triggerCreatePost = () => {
+  createPostRef.value?.triggerHighlight()
+}
+
 const supabase = useSupabaseClient()
-const form = reactive(createInitialRequestForm())
-const isSignedIn = computed(() => Boolean(user.value))
-const viewerAccountType = ref<"LENDER" | "BORROWER" | "ADMIN" | null>(null)
-const isViewerLoading = ref(false)
-const isBorrowerAccount = computed(() => viewerAccountType.value === "BORROWER")
-const {
-  posts,
-  isLoading,
-  errorMessage,
-  isSubmitting,
-  submitErrorMessage,
-  fieldErrors,
-  refresh,
-  createPost,
-} = useRequestFeed()
+const user = useSupabaseUser()
+
+const asNonEmptyString = (value: unknown) => {
+  if (typeof value !== "string") return undefined
+  const trimmedValue = value.trim()
+  return trimmedValue ? trimmedValue : undefined
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value !== "object" || value === null) return null
+  return value as Record<string, unknown>
+}
+
+const getIdentityMetadata = (authUser: unknown) => {
+  const authUserRecord = asRecord(authUser)
+  const identities = authUserRecord?.identities
+
+  if (!Array.isArray(identities)) return []
+
+  return identities
+    .map((identity) => {
+      const identityRecord = asRecord(identity)
+      return asRecord(identityRecord?.identity_data) ?? asRecord(identityRecord?.provider_metadata)
+    })
+    .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
+}
+
+const buildNameFromSource = (source: Record<string, unknown> | null) => {
+  if (!source) return undefined
+
+  const directName =
+    asNonEmptyString(source.full_name) ||
+    asNonEmptyString(source.name) ||
+    asNonEmptyString(source.display_name)
+
+  if (directName) return directName
+
+  const firstName =
+    asNonEmptyString(source.given_name) ||
+    asNonEmptyString(source.first_name) ||
+    asNonEmptyString(source.firstName)
+  const lastName =
+    asNonEmptyString(source.family_name) ||
+    asNonEmptyString(source.last_name) ||
+    asNonEmptyString(source.lastName)
+
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
+  return fullName || undefined
+}
+
+const getAvatarFromSource = (source: Record<string, unknown> | null) => {
+  if (!source) return undefined
+
+  return (
+    asNonEmptyString(source.picture) ||
+    asNonEmptyString(source.avatar_url) ||
+    asNonEmptyString(source.photo_url) ||
+    asNonEmptyString(source.profile_image) ||
+    asNonEmptyString(source.image)
+  )
+}
+
+const currentUserProfile = computed(() => {
+  const authUser = user.value
+  const authUserRecord = asRecord(authUser)
+  const metadataSources = [
+    asRecord(authUserRecord?.user_metadata),
+    asRecord(authUserRecord?.app_metadata),
+    ...getIdentityMetadata(authUser),
+  ]
+
+  const name =
+    metadataSources.map(buildNameFromSource).find(Boolean) ||
+    asNonEmptyString(authUserRecord?.email) ||
+    "User"
+  const avatar = metadataSources.map(getAvatarFromSource).find(Boolean)
+
+  return { name, avatar }
+})
+
+const currentUserName = computed(() => currentUserProfile.value.name)
+const currentUserAvatar = computed(() => currentUserProfile.value.avatar)
+
+type FeedFilter = "Newest" | "Most Offers" | "Open" | "My Requests"
+
+const activeFilter = ref<FeedFilter>("Newest")
+
+const requests = ref<CommunityRequest[]>([])
+const notifications = ref<CommunityOfferNotification[]>([])
+const offerableItems = ref<CommunityOfferableItem[]>([])
+const currentDbUserId = ref("")
+const isLoadingFeed = ref(true)
+const isCreatingRequest = ref(false)
+const isSubmittingOffer = ref(false)
+const feedError = ref<string | null>(null)
+const requestComposerError = ref<string | null>(null)
+const offerComposerError = ref<string | null>(null)
+const isOfferComposerOpen = ref(false)
+const activeOfferRequestId = ref<number | null>(null)
+const feedHydrated = ref(false)
+
+const toDate = (value: string | Date | null | undefined) => {
+  if (!value) return null
+  return value instanceof Date ? value : new Date(value)
+}
+
+const getFirstFieldError = (value: unknown) => {
+  const record = asRecord(value)
+  if (!record) return undefined
+
+  for (const fieldValue of Object.values(record)) {
+    if (!Array.isArray(fieldValue)) continue
+    const message = fieldValue.find(
+      (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+    )
+    if (message) return message
+  }
+
+  return undefined
+}
+
+const getMeaningfulErrorMessage = (value: unknown) => {
+  if (typeof value !== "string") return undefined
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return undefined
+  if (trimmedValue.startsWith("[") || trimmedValue.toLowerCase().includes("fetch failed")) {
+    return undefined
+  }
+  return trimmedValue
+}
+
+const extractApiErrorMessage = (error: unknown, fallback: string) => {
+  const errorRecord = asRecord(error)
+  const data = asRecord(errorRecord?.data)
+  const nestedData = asRecord(data?.data)
+
+  return (
+    getFirstFieldError(data?.fieldErrors) ||
+    getFirstFieldError(nestedData?.fieldErrors) ||
+    getMeaningfulErrorMessage(data?.statusMessage) ||
+    getMeaningfulErrorMessage(data?.message) ||
+    getMeaningfulErrorMessage(asRecord(data?.error)?.message) ||
+    getMeaningfulErrorMessage(nestedData?.statusMessage) ||
+    getMeaningfulErrorMessage(nestedData?.message) ||
+    getMeaningfulErrorMessage(errorRecord?.statusMessage) ||
+    getMeaningfulErrorMessage(errorRecord?.message) ||
+    fallback
+  )
+}
+
+const normalizeMember = (member: ApiCommunityMember): CommunityMember => ({
+  profileId: Number(member.profileId),
+  userId: member.userId,
+  name: member.name,
+  avatar: member.avatar || "",
+})
+
+const normalizeOffer = (offer: ApiCommunityOffer): CommunityOffer => ({
+  id: Number(offer.id),
+  lenderID: Number(offer.lenderID),
+  requestID: Number(offer.requestID),
+  itemID: Number(offer.itemID),
+  itemName: offer.itemName,
+  rentalFee: Number(offer.rentalFee),
+  availability: Boolean(offer.availability),
+  condition: offer.condition as CommunityOffer["condition"],
+  rentalTerms: offer.rentalTerms ?? "",
+  status: offer.status as CommunityOfferStatus,
+  borrowerReadAt: toDate(offer.borrowerReadAt),
+  createdAt: toDate(offer.createdAt) ?? new Date(),
+  updatedAt: toDate(offer.updatedAt) ?? new Date(),
+  lender: normalizeMember(offer.lender),
+})
+
+const normalizeRequest = (request: ApiCommunityRequest): CommunityRequest => ({
+  id: Number(request.id),
+  borrowerID: Number(request.borrowerID),
+  itemNeeded: request.itemNeeded,
+  requestedDates: request.requestedDates
+    .map((value) => toDate(value))
+    .filter((value): value is Date => Boolean(value)),
+  priceRange: [Number(request.priceRange[0] ?? 0), Number(request.priceRange[1] ?? 0)],
+  description: request.description,
+  status: request.status as CommunityRequestStatus,
+  createdAt: toDate(request.createdAt) ?? new Date(),
+  updatedAt: toDate(request.updatedAt) ?? new Date(),
+  offersCount: Number(request.offersCount ?? 0),
+  borrower: normalizeMember(request.borrower),
+  offers: request.offers.map(normalizeOffer),
+})
+
+const normalizeNotification = (
+  notification: ApiCommunityNotification,
+): CommunityOfferNotification => ({
+  id: Number(notification.id),
+  requestId: Number(notification.requestId),
+  requestTitle: notification.requestTitle,
+  recipientId: Number(notification.recipientId),
+  actorName: notification.actorName,
+  itemName: notification.itemName,
+  fee: Number(notification.fee),
+  createdAt: toDate(notification.createdAt) ?? new Date(),
+  read: Boolean(notification.read),
+})
+
+const normalizeOfferableItem = (item: ApiOfferableItem): CommunityOfferableItem => ({
+  id: item.id,
+  numericId: Number(item.numericId),
+  name: item.name,
+  condition: item.condition as CommunityOfferableItem["condition"],
+  rentalFee: Number(item.rentalFee),
+  freeToBorrow: Boolean(item.freeToBorrow),
+  status: item.status,
+  rateOption: item.rateOption,
+  createdAt: toDate(item.createdAt) ?? new Date(),
+})
 
 const getAccessToken = async () => {
   const {
     data: { session },
   } = await supabase.auth.getSession()
 
-  return session?.access_token ?? null
+  return session?.access_token
 }
 
-const resetForm = () => {
-  Object.assign(form, createInitialRequestForm())
-}
-
-const syncViewerState = async () => {
+const getAuthHeaders = async () => {
   const accessToken = await getAccessToken()
-  await refresh({ accessToken })
+  if (!accessToken) return undefined
 
-  if (!accessToken) {
-    viewerAccountType.value = null
-    isViewerLoading.value = false
+  return {
+    authorization: `Bearer ${accessToken}`,
+  }
+}
+
+const enumerateRequestedDates = (startDate: string, endDate: string) => {
+  const dates: string[] = []
+  const cursor = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T00:00:00`)
+
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(new Date(cursor).toISOString())
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return dates
+}
+
+const refreshFeed = async () => {
+  if (feedHydrated.value) {
+    isLoadingFeed.value = false
+  } else {
+    isLoadingFeed.value = true
+  }
+
+  feedError.value = null
+
+  try {
+    const headers = await getAuthHeaders()
+
+    if (headers) {
+      try {
+        const authResponse = await $fetch<{ user: { id: string } }>("/api/auth/me", { headers })
+        currentDbUserId.value = authResponse.user.id
+      } catch {
+        currentDbUserId.value = ""
+      }
+    } else {
+      currentDbUserId.value = ""
+    }
+
+    const [requestResponse, notificationResponse, offerableItemResponse] = await Promise.all([
+      $fetch<ApiCommunityRequest[]>("/api/item-requests", {
+        query: { includeCancelledOffers: true },
+        ...(headers ? { headers } : {}),
+      }),
+      headers
+        ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", { headers })
+        : Promise.resolve([]),
+      headers
+        ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
+        : Promise.resolve([]),
+    ])
+
+    requests.value = requestResponse.map(normalizeRequest)
+    notifications.value = notificationResponse.map(normalizeNotification)
+    offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
+  } catch (error) {
+    console.error("Failed to load community feed", error)
+    feedError.value = "Unable to load the live community feed right now."
+  } finally {
+    isLoadingFeed.value = false
+    feedHydrated.value = true
+  }
+}
+
+const selectedRequestForOffer = computed(() => {
+  return requests.value.find((request) => request.id === activeOfferRequestId.value) ?? null
+})
+
+const existingOfferForCurrentUser = computed(() => {
+  return (
+    selectedRequestForOffer.value?.offers.find(
+      (offer) => offer.lender.userId === currentDbUserId.value,
+    ) ?? null
+  )
+})
+
+const currentUserNotifications = computed(() => {
+  return [...notifications.value].sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  )
+})
+
+const userActivity = computed<UserActivity>(() => {
+  if (!currentDbUserId.value) {
+    return { postsMade: 0, offersSent: 0, offersReceived: 0 }
+  }
+
+  const myRequests = requests.value.filter(
+    (request) => request.borrower.userId === currentDbUserId.value,
+  )
+  const offersSent = requests.value.reduce((count, request) => {
+    return (
+      count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
+    )
+  }, 0)
+  const offersReceived = myRequests.reduce((count, request) => count + request.offersCount, 0)
+
+  return {
+    postsMade: myRequests.length,
+    offersSent,
+    offersReceived,
+  }
+})
+
+const trendingItems = computed<TrendingRequest[]>(() => {
+  return [...requests.value]
+    .sort((left, right) => {
+      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
+      return right.createdAt.getTime() - left.createdAt.getTime()
+    })
+    .slice(0, 5)
+    .map((request) => ({
+      id: request.id,
+      title: request.itemNeeded,
+      offersCount: request.offersCount,
+    }))
+})
+
+const sortedRequests = computed(() => {
+  let filteredRequests = [...requests.value]
+
+  if (activeFilter.value === "Open") {
+    filteredRequests = filteredRequests.filter((request) => request.status === "OPEN")
+  }
+
+  if (activeFilter.value === "My Requests") {
+    filteredRequests = filteredRequests.filter(
+      (request) => request.borrower.userId === currentDbUserId.value,
+    )
+  }
+
+  if (activeFilter.value === "Most Offers") {
+    return filteredRequests.sort((left, right) => {
+      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
+      return right.createdAt.getTime() - left.createdAt.getTime()
+    })
+  }
+
+  return filteredRequests.sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  )
+})
+
+const ensureAuthenticatedHeaders = async () => {
+  const headers = await getAuthHeaders()
+
+  if (!headers) {
+    feedError.value = "You need to sign in before using request and offer actions."
+    return null
+  }
+
+  return headers
+}
+
+const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    requestComposerError.value = "You need to sign in before posting a request."
     return
   }
 
-  isViewerLoading.value = true
+  isCreatingRequest.value = true
+  feedError.value = null
+  requestComposerError.value = null
+
   try {
-    const response = await $fetch<{
-      user: {
-        accountType: "LENDER" | "BORROWER" | "ADMIN" | null
-      }
-    }>("/api/auth/me", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    await $fetch("/api/item-requests", {
+      method: "POST",
+      headers,
+      body: {
+        itemNeeded: payload.itemNeeded,
+        requestedDates: enumerateRequestedDates(payload.startDate, payload.endDate),
+        priceRange: [payload.minimumPrice, payload.maximumPrice],
+        description: payload.description,
+        status: "OPEN",
       },
     })
-    viewerAccountType.value = response.user.accountType
-  } catch {
-    viewerAccountType.value = null
+
+    activeFilter.value = "Newest"
+    await refreshFeed()
+    feedMainRef.value?.scrollTo({ top: 0, behavior: "smooth" })
+  } catch (error) {
+    console.error("Failed to create item request", error)
+    requestComposerError.value = extractApiErrorMessage(
+      error,
+      "Unable to post your request right now.",
+    )
   } finally {
-    isViewerLoading.value = false
+    isCreatingRequest.value = false
   }
 }
 
-const handleCreateRequest = async () => {
-  const accessToken = await getAccessToken()
-  const result = await createPost(form, { accessToken })
+const openOfferComposer = (requestId: number) => {
+  const request = requests.value.find((entry) => entry.id === requestId)
 
-  if (result.success) {
-    resetForm()
+  if (!request) return
+  if (!currentDbUserId.value) {
+    feedError.value = "You need to sign in before sending an offer."
+    return
+  }
+  if (request.borrower.userId === currentDbUserId.value || request.status !== "OPEN") return
+
+  offerComposerError.value = null
+  activeOfferRequestId.value = requestId
+  isOfferComposerOpen.value = true
+}
+
+const handleOfferComposerVisibility = (isVisible: boolean) => {
+  isOfferComposerOpen.value = isVisible
+
+  if (!isVisible) {
+    activeOfferRequestId.value = null
+    offerComposerError.value = null
   }
 }
+
+const submitOffer = async (offerInput: CommunityOfferFormInput) => {
+  const request = selectedRequestForOffer.value
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    offerComposerError.value = "You need to sign in before sending an offer."
+    return
+  }
+  if (!request) return
+
+  isSubmittingOffer.value = true
+  feedError.value = null
+  offerComposerError.value = null
+
+  try {
+    if (existingOfferForCurrentUser.value) {
+      await $fetch(`/api/request-offers/${existingOfferForCurrentUser.value.id}`, {
+        method: "PATCH",
+        headers,
+        body: offerInput,
+      })
+    } else {
+      await $fetch("/api/request-offers", {
+        method: "POST",
+        headers,
+        body: {
+          requestID: request.id,
+          ...offerInput,
+          status: "PENDING",
+        },
+      })
+    }
+
+    await refreshFeed()
+    handleOfferComposerVisibility(false)
+  } catch (error) {
+    console.error("Failed to submit offer", error)
+    offerComposerError.value = extractApiErrorMessage(error, "Unable to save this offer right now.")
+  } finally {
+    isSubmittingOffer.value = false
+  }
+}
+
+const cancelOffer = async (offerId: number) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  isSubmittingOffer.value = true
+  feedError.value = null
+  offerComposerError.value = null
+
+  try {
+    await $fetch(`/api/request-offers/${offerId}`, {
+      method: "PATCH",
+      headers,
+      body: {
+        status: "CANCELLED",
+      },
+    })
+
+    await refreshFeed()
+    handleOfferComposerVisibility(false)
+  } catch (error) {
+    console.error("Failed to cancel offer", error)
+    offerComposerError.value = extractApiErrorMessage(
+      error,
+      "Unable to cancel this offer right now.",
+    )
+  } finally {
+    isSubmittingOffer.value = false
+  }
+}
+
+const handleUpdateRequestStatus = async (payload: {
+  requestId: number
+  status: CommunityRequestStatus
+}) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  feedError.value = null
+
+  try {
+    await $fetch(`/api/item-requests/${payload.requestId}`, {
+      method: "PATCH",
+      headers,
+      body: {
+        status: payload.status,
+      },
+    })
+
+    await refreshFeed()
+  } catch (error) {
+    console.error("Failed to update request status", error)
+    feedError.value = "Unable to update this request right now."
+  }
+}
+
+const handleDeleteRequest = async (requestId: number) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  feedError.value = null
+
+  try {
+    await $fetch(`/api/item-requests/${requestId}`, {
+      method: "DELETE",
+      headers,
+    })
+
+    await refreshFeed()
+  } catch (error) {
+    console.error("Failed to delete request", error)
+    feedError.value = "Unable to delete this request right now."
+  }
+}
+
+const handleUpdateOfferStatus = async (payload: {
+  offerId: number
+  requestId: number
+  status: CommunityOfferStatus
+}) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  feedError.value = null
+
+  try {
+    await $fetch(`/api/request-offers/${payload.offerId}`, {
+      method: "PATCH",
+      headers,
+      body: {
+        status: payload.status,
+      },
+    })
+
+    if (payload.status === "ACCEPTED") {
+      const request = requests.value.find((entry) => entry.id === payload.requestId)
+
+      if (request) {
+        const remainingPendingOffers = request.offers.filter(
+          (offer) => offer.id !== payload.offerId && offer.status === "PENDING",
+        )
+
+        await Promise.all(
+          remainingPendingOffers.map((offer) =>
+            $fetch(`/api/request-offers/${offer.id}`, {
+              method: "PATCH",
+              headers,
+              body: {
+                status: "DECLINED",
+              },
+            }),
+          ),
+        )
+      }
+
+      await $fetch(`/api/item-requests/${payload.requestId}`, {
+        method: "PATCH",
+        headers,
+        body: {
+          status: "FULFILLED",
+        },
+      })
+    }
+
+    await refreshFeed()
+  } catch (error) {
+    console.error("Failed to update offer status", error)
+    feedError.value = "Unable to update this offer right now."
+  }
+}
+
+const markNotificationRead = async (notificationId: number) => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  try {
+    await $fetch(`/api/request-offers/notifications/${notificationId}`, {
+      method: "PATCH",
+      headers,
+    })
+
+    notifications.value = notifications.value.map((notification) =>
+      notification.id === notificationId ? { ...notification, read: true } : notification,
+    )
+  } catch (error) {
+    console.error("Failed to mark notification as read", error)
+  }
+}
+
+const markAllNotificationsRead = async () => {
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) return
+
+  try {
+    await $fetch("/api/request-offers/notifications/read-all", {
+      method: "POST",
+      headers,
+    })
+
+    notifications.value = notifications.value.map((notification) => ({
+      ...notification,
+      read: true,
+    }))
+  } catch (error) {
+    console.error("Failed to mark notifications as read", error)
+  }
+}
+
+onMounted(() => {
+  void refreshFeed()
+})
 
 watch(
-  () => user.value?.id ?? null,
-  () => {
-    void syncViewerState()
+  () => user.value?.id,
+  (nextUserId, previousUserId) => {
+    if (!feedHydrated.value) return
+    if (nextUserId === previousUserId) return
+    void refreshFeed()
   },
-  { immediate: true },
 )
 </script>
 

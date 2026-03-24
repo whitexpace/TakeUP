@@ -37,11 +37,69 @@ const cartEntryInclude = {
       },
     },
   },
-} as const satisfies Prisma.CartEntryInclude
+} as const
 
-type CartEntryWithItem = Prisma.CartEntryGetPayload<{
-  include: typeof cartEntryInclude
-}>
+type CartEntryWithItem = {
+  id: string
+  itemId: string
+  startAt: Date
+  endAt: Date
+  createdAt: Date
+  item: {
+    id: string
+    name: string
+    rentalFee: number
+    rateOption: "PER_HOUR" | "PER_DAY"
+    freeToBorrow: boolean
+    images: Array<{
+      path: string
+      isPrimary: boolean
+      sortOrder: number
+    }>
+    lenderId: string
+    lender: {
+      user: {
+        username: string | null
+        firstName: string | null
+        middleName: string | null
+        lastName: string | null
+        email: string | null
+      }
+    }
+  }
+}
+
+type CartEntryRow = {
+  id: string
+  itemId: string
+  startAt: Date
+  endAt: Date
+  createdAt: Date
+  itemName: string
+  rentalFee: number
+  rateOption: "PER_HOUR" | "PER_DAY"
+  freeToBorrow: boolean
+  thumbnailImage: string | null
+  photos: string[] | null
+  lenderId: string
+  lenderUsername: string | null
+  lenderFirstName: string | null
+  lenderMiddleName: string | null
+  lenderLastName: string | null
+  lenderEmail: string | null
+}
+
+type CartEntryDelegate = {
+  findMany(args: Record<string, unknown>): Promise<CartEntryWithItem[]>
+  findUnique(
+    args: Record<string, unknown>,
+  ): Promise<CartEntryWithItem | { borrowerId: string } | null>
+  create(args: Record<string, unknown>): Promise<CartEntryWithItem>
+  delete(args: Record<string, unknown>): Promise<unknown>
+}
+
+const getCartDelegate = (prisma: Context["prisma"]) =>
+  (prisma as Context["prisma"] & { cartEntry?: CartEntryDelegate }).cartEntry
 
 const getOwnerName = (entry: CartEntryWithItem) => {
   const lenderUser = entry.item.lender.user
@@ -72,6 +130,53 @@ const mapCartEntry = (entry: CartEntryWithItem) => {
     createdAt: entry.createdAt,
   }
 }
+
+const getOwnerNameFromRow = (row: CartEntryRow) =>
+  row.lenderUsername ||
+  [row.lenderFirstName, row.lenderMiddleName, row.lenderLastName].filter(Boolean).join(" ") ||
+  row.lenderEmail ||
+  row.lenderId
+
+const mapCartRow = (row: CartEntryRow) => ({
+  id: row.id,
+  itemId: row.itemId,
+  name: row.itemName,
+  price: Number(row.rentalFee),
+  priceUnit: row.rateOption === "PER_HOUR" ? "hour" : "day",
+  image: row.thumbnailImage || row.photos?.[0] || "",
+  startAt: row.startAt,
+  endAt: row.endAt,
+  lenderId: row.lenderId,
+  lenderName: getOwnerNameFromRow(row),
+  listingType: row.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
+  createdAt: row.createdAt,
+})
+
+const queryCartRows = async (prisma: Context["prisma"], clause: Prisma.Sql) =>
+  prisma.$queryRaw<CartEntryRow[]>(Prisma.sql`
+    SELECT
+      c."id",
+      c."itemId",
+      c."startAt",
+      c."endAt",
+      c."createdAt",
+      i."name" AS "itemName",
+      i."rentalFee",
+      i."rateOption",
+      i."freeToBorrow",
+      i."thumbnailImage",
+      i."photos",
+      i."lenderId",
+      u."username" AS "lenderUsername",
+      u."firstName" AS "lenderFirstName",
+      u."middleName" AS "lenderMiddleName",
+      u."lastName" AS "lenderLastName",
+      u."email" AS "lenderEmail"
+    FROM "CartEntry" c
+    INNER JOIN "Item" i ON i."id" = c."itemId"
+    LEFT JOIN "User" u ON u."id" = i."lenderId"
+    ${clause}
+  `)
 
 const requireBorrowerAccount = async (
   ctx: Pick<Context, "prisma" | "user"> & { user: { id: string } },
@@ -149,14 +254,27 @@ export const cartRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     await requireBorrowerAccount(ctx)
 
-    const entries = await ctx.prisma.cartEntry.findMany({
-      where: { borrowerId: ctx.user.id },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      include: cartEntryInclude,
-    })
+    const cartEntry = getCartDelegate(ctx.prisma)
+
+    if (cartEntry) {
+      const entries = await cartEntry.findMany({
+        where: { borrowerId: ctx.user.id },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        include: cartEntryInclude,
+      })
+
+      return {
+        items: entries.map(mapCartEntry),
+      }
+    }
+
+    const rows = await queryCartRows(
+      ctx.prisma,
+      Prisma.sql`WHERE c."borrowerId" = ${ctx.user.id} ORDER BY c."createdAt" DESC, c."id" DESC`,
+    )
 
     return {
-      items: entries.map(mapCartEntry),
+      items: rows.map(mapCartRow),
     }
   }),
 
@@ -164,58 +282,116 @@ export const cartRouter = router({
     await requireBorrowerAccount(ctx)
     await assertCartEligibility(ctx, input)
 
-    const existing = await ctx.prisma.cartEntry.findUnique({
-      where: {
-        borrowerId_itemId_startAt_endAt: {
-          borrowerId: ctx.user.id,
-          itemId: input.itemId,
-          startAt: input.startAt,
-          endAt: input.endAt,
-        },
-      },
-      include: cartEntryInclude,
-    })
+    const cartEntry = getCartDelegate(ctx.prisma)
 
-    if (existing) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: "This item with the selected dates is already in your bag.",
-      })
-    }
-
-    let entry: CartEntryWithItem
-
-    try {
-      entry = await ctx.prisma.cartEntry.create({
-        data: {
-          borrowerId: ctx.user.id,
-          itemId: input.itemId,
-          startAt: input.startAt,
-          endAt: input.endAt,
+    if (cartEntry) {
+      const existing = await cartEntry.findUnique({
+        where: {
+          borrowerId_itemId_startAt_endAt: {
+            borrowerId: ctx.user.id,
+            itemId: input.itemId,
+            startAt: input.startAt,
+            endAt: input.endAt,
+          },
         },
         include: cartEntryInclude,
       })
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+
+      if (existing) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "This item with the selected dates is already in your bag.",
         })
       }
 
-      throw error
+      let entry: CartEntryWithItem
+
+      try {
+        entry = await cartEntry.create({
+          data: {
+            borrowerId: ctx.user.id,
+            itemId: input.itemId,
+            startAt: input.startAt,
+            endAt: input.endAt,
+          },
+          include: cartEntryInclude,
+        })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This item with the selected dates is already in your bag.",
+          })
+        }
+
+        throw error
+      }
+
+      return mapCartEntry(entry)
     }
 
-    return mapCartEntry(entry)
+    const existing = await ctx.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
+      FROM "CartEntry"
+      WHERE "borrowerId" = ${ctx.user.id}
+        AND "itemId" = ${input.itemId}
+        AND "startAt" = ${input.startAt}
+        AND "endAt" = ${input.endAt}
+      LIMIT 1
+    `)
+
+    if (existing.length > 0) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "This item with the selected dates is already in your bag.",
+      })
+    }
+
+    const created = await ctx.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      INSERT INTO "CartEntry" ("borrowerId", "itemId", "startAt", "endAt")
+      VALUES (${ctx.user.id}, ${input.itemId}, ${input.startAt}, ${input.endAt})
+      ON CONFLICT ("borrowerId", "itemId", "startAt", "endAt") DO NOTHING
+      RETURNING "id"
+    `)
+
+    const createdId = created[0]?.id
+
+    if (!createdId) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "This item with the selected dates is already in your bag.",
+      })
+    }
+
+    const [entry] = await queryCartRows(ctx.prisma, Prisma.sql`WHERE c."id" = ${createdId} LIMIT 1`)
+
+    if (!entry) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Unable to load the created bag entry.",
+      })
+    }
+
+    return mapCartRow(entry)
   }),
 
   remove: protectedProcedure.input(cartEntryIdSchema).mutation(async ({ ctx, input }) => {
     await requireBorrowerAccount(ctx)
 
-    const existing = await ctx.prisma.cartEntry.findUnique({
-      where: { id: input.id },
-      select: { borrowerId: true },
-    })
+    const cartEntry = getCartDelegate(ctx.prisma)
+    const existing = cartEntry
+      ? ((await cartEntry.findUnique({
+          where: { id: input.id },
+          select: { borrowerId: true },
+        })) as { borrowerId: string } | null)
+      : (
+          await ctx.prisma.$queryRaw<Array<{ borrowerId: string }>>(Prisma.sql`
+            SELECT "borrowerId"
+            FROM "CartEntry"
+            WHERE "id" = ${input.id}
+            LIMIT 1
+          `)
+        )[0]
 
     if (!existing) {
       throw new TRPCError({
@@ -231,9 +407,16 @@ export const cartRouter = router({
       })
     }
 
-    await ctx.prisma.cartEntry.delete({
-      where: { id: input.id },
-    })
+    if (cartEntry) {
+      await cartEntry.delete({
+        where: { id: input.id },
+      })
+    } else {
+      await ctx.prisma.$executeRaw(Prisma.sql`
+        DELETE FROM "CartEntry"
+        WHERE "id" = ${input.id}
+      `)
+    }
 
     return { ok: true }
   }),
