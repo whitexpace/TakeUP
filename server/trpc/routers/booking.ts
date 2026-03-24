@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client"
+import type { BookingPaymentStatus as PrismaBookingPaymentStatus, BookingStatus as PrismaBookingStatus, Prisma } from "@prisma/client"
 import {
   PaymentMethod as PrismaPaymentMethod,
   TransactionStatus as PrismaTransactionStatus,
@@ -249,15 +249,14 @@ const mapBookingRecord = (record: BookingRecord): BookingListItem => {
 const DEFAULT_PAYMENT_METHOD: PaymentMethod = paymentMethodSchema.enum.GCASH
 
 const prismaPaymentMethodByInput: Record<PaymentMethod, PrismaPaymentMethod> = {
-  CASH: PrismaPaymentMethod.cash,
-  GCASH: PrismaPaymentMethod.gcash,
-  CARD: PrismaPaymentMethod.card,
-  BANK_TRANSFER: PrismaPaymentMethod.bank,
-  WALLET: PrismaPaymentMethod.wallet,
+  CASH: PrismaPaymentMethod.CASH,
+  GCASH: PrismaPaymentMethod.GCASH,
+  CARD: PrismaPaymentMethod.CARD,
+  BANK_TRANSFER: PrismaPaymentMethod.BANK_TRANSFER,
+  WALLET: PrismaPaymentMethod.WALLET,
 }
 
-const BOOKING_ACTIVE_STATUSES = [
-  bookingStatusSchema.enum.PENDING,
+const ITEM_BLOCKING_BOOKING_STATUSES = [
   bookingStatusSchema.enum.CONFIRMED,
   bookingStatusSchema.enum.IN_DISPUTE,
 ] as const
@@ -295,7 +294,6 @@ const calculateRentalAmount = (totalFee: number, platformCommission: number) =>
   Math.max(0, totalFee - platformCommission)
 
 const prismaTransactionStatuses = PrismaTransactionStatus as Record<string, PrismaTransactionStatus>
-const prismaPaymentMethods = PrismaPaymentMethod as Record<string, string>
 
 const getPrismaTransactionStatus = (
   preferred: string,
@@ -330,12 +328,6 @@ const mapBookingToTransactionStatus = (
       return PrismaTransactionStatus.AWAITING_LENDER_APPROVAL
   }
 }
-
-const toPrismaPaymentMethod = (method: PaymentMethod) =>
-  (prismaPaymentMethods[method] ??
-    prismaPaymentMethods[method.toLowerCase()] ??
-    prismaPaymentMethods.bank ??
-    method) as (typeof PrismaPaymentMethod)[keyof typeof PrismaPaymentMethod]
 
 const buildBookingTimestamps = (
   existing: Pick<
@@ -633,12 +625,7 @@ export const bookingRouter = router({
     })
 
     const platformCommission = item.freeToBorrow ? 0 : input.platformCommission
-    const totalFee = calculateBookingTotal(
-      item,
-      input.startDate,
-      input.endDate,
-      platformCommission,
-    )
+    const totalFee = calculateBookingTotal(item, input.startDate, input.endDate, platformCommission)
     const now = new Date()
 
     await ctx.prisma.lender.upsert({

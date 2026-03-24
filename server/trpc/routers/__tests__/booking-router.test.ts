@@ -105,6 +105,7 @@ const makeContext = () => {
     },
     rentalTransaction: {
       findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({ id: "txn-1" }),
       create: vi.fn().mockResolvedValue({ id: "txn-1" }),
       update: vi.fn().mockResolvedValue({ id: "txn-1" }),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
