@@ -59,6 +59,13 @@ const toPrismaErrorMessage = (error: Prisma.PrismaClientKnownRequestError) => {
 }
 
 const toValidationError = (error: Prisma.PrismaClientValidationError) => {
+  if (error.message.includes("returnedAt")) {
+    return createBookingApiError(
+      500,
+      "Booking return failed because the server is still using an older Prisma client that does not include the new return fields. Run Prisma generate, apply the latest migration, and restart the server.",
+    )
+  }
+
   if (error.message.includes("thumbnailImage") || error.message.includes("photos")) {
     return createBookingApiError(
       500,
@@ -79,6 +86,13 @@ const toUnknownError = (error: Error, action: string) => {
     return createBookingApiError(
       500,
       "Booking failed because the database no longer has the legacy item image columns expected by the server.",
+    )
+  }
+
+  if (/unknown field .*returnedAt|returnedAt.*does not exist/i.test(error.message)) {
+    return createBookingApiError(
+      500,
+      "Booking return failed because the app is not fully updated to the latest booking-return schema. Apply the latest Prisma migration, regenerate Prisma Client, and restart the server.",
     )
   }
 

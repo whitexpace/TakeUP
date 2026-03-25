@@ -70,6 +70,7 @@ enum TransactionStatus {
 enum BookingStatus {
   PENDING
   CONFIRMED
+  RETURNED
   CANCELLED
   COMPLETED
   IN_DISPUTE
@@ -128,6 +129,10 @@ enum DisputeStatus {
   APPEALED     @map("appealed")
 
   @@map("dispute_status_enum")
+}
+
+enum NotificationType {
+  BOOKING_RETURN_REQUESTED
 }
 
 enum AccountType {
@@ -208,6 +213,7 @@ model Booking {
   paymentStatus      BookingPaymentStatus @default(PENDING)
   requestedAt        DateTime             @default(now())
   confirmedAt        DateTime?
+  returnedAt         DateTime?
   completedAt        DateTime?
   cancelledAt        DateTime?
   disputeOpenedAt    DateTime?
@@ -230,6 +236,25 @@ model Booking {
   @@index([lenderId])
   @@index([paymentStatus])
   @@index([status])
+}
+
+model AppNotification {
+  id              String           @id @default(uuid())
+  recipientUserId String
+  actorUserId     String?
+  bookingId       String?
+  type            NotificationType
+  title           String
+  body            String
+  actionPath      String?
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
+
+  actorUser     User? @relation("app_notifications_actor_user_idToUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+  recipientUser User  @relation("app_notifications_recipient_user_idToUser", fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, readAt, createdAt(sort: Desc)])
+  @@index([bookingId])
 }
 
 model RentalTransaction {
@@ -335,6 +360,8 @@ model User {
   status                       UserStatus
   points                       Int                    @default(0)
   admin                        Admin?
+  appNotificationsReceived     AppNotification[]      @relation("app_notifications_recipient_user_idToUser")
+  appNotificationsSent         AppNotification[]      @relation("app_notifications_actor_user_idToUser")
   borrower                     Borrower?
   cartEntries                  CartEntry[]
   lender                       Lender?

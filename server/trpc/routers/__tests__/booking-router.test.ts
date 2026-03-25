@@ -23,6 +23,7 @@ const makeBooking = (overrides: Record<string, unknown> = {}) => ({
   cancellationReason: null,
   requestedAt: new Date("2026-03-20T00:00:00.000Z"),
   confirmedAt: null,
+  returnedAt: null,
   cancelledAt: null,
   completedAt: null,
   disputeOpenedAt: null,
@@ -109,6 +110,9 @@ const makeContext = () => {
       create: vi.fn().mockResolvedValue({ id: "txn-1" }),
       update: vi.fn().mockResolvedValue({ id: "txn-1" }),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    appNotification: {
+      create: vi.fn().mockResolvedValue({ id: "notif-1" }),
     },
     booking,
   }
@@ -253,6 +257,7 @@ describe("bookingRouter", () => {
       paymentStatus: "PENDING",
       cancellationReason: null,
       confirmedAt: null,
+      returnedAt: null,
       cancelledAt: null,
       completedAt: null,
       disputeOpenedAt: null,
@@ -312,6 +317,7 @@ describe("bookingRouter", () => {
       paymentStatus: "PENDING",
       cancellationReason: null,
       confirmedAt: null,
+      returnedAt: null,
       cancelledAt: null,
       completedAt: null,
       disputeOpenedAt: null,
@@ -381,6 +387,7 @@ describe("bookingRouter", () => {
       paymentStatus: "PENDING",
       cancellationReason: null,
       confirmedAt: null,
+      returnedAt: null,
       cancelledAt: null,
       completedAt: null,
       disputeOpenedAt: null,
@@ -407,5 +414,127 @@ describe("bookingRouter", () => {
     })
 
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
+  it("allows the borrower to mark a confirmed booking as returned", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "RETURNED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        returnedAt: new Date("2026-04-03T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.update.mockResolvedValueOnce(
+      makeBooking({
+        status: "RETURNED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        returnedAt: new Date("2026-04-03T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "CONFIRMED",
+    })
+
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    const returnedBooking = await caller.returnItem({ id: BOOKING_ID })
+
+    expect(ctx.prisma.booking.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BOOKING_ID },
+        data: expect.objectContaining({
+          status: "RETURNED",
+        }),
+      }),
+    )
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: LENDER_ID,
+          actorUserId: USER_ID,
+          bookingId: BOOKING_ID,
+          type: "BOOKING_RETURN_REQUESTED",
+        }),
+      }),
+    )
+    expect(returnedBooking.status).toBe("RETURNED")
+  })
+
+  it("rejects duplicate return submission", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "RETURNED",
+        returnedAt: new Date("2026-04-03T00:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(caller.returnItem({ id: BOOKING_ID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "This booking has already been marked as returned.",
+    })
+
+    expect(ctx.prisma.appNotification.create).not.toHaveBeenCalled()
+  })
+
+  it("rejects return initiation when another overlapping booking exists for the same item", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.findFirst.mockResolvedValueOnce({ id: "overlap-booking" })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(caller.returnItem({ id: BOOKING_ID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message:
+        "Return cannot be recorded because another overlapping booking exists for this item.",
+    })
+  })
+
+  it("allows only the lender to complete a returned booking", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "RETURNED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        returnedAt: new Date("2026-04-03T00:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.update({
+        id: BOOKING_ID,
+        status: "COMPLETED",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Only the lender can complete this booking after the item is returned.",
+    })
   })
 })

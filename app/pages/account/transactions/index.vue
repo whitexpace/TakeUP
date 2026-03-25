@@ -49,6 +49,7 @@ const statusChips = computed<StatusChip[]>(() => [
     value: "PENDING",
   },
   { label: "In Use", value: "ACTIVE" },
+  { label: "Returned", value: "RETURNED" },
   { label: "Completed", value: "COMPLETED" },
   { label: "Cancelled", value: "CANCELLED" },
 ])

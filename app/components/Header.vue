@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useBag } from "../composables/use-bag"
 import type { CommunityOfferNotification } from "~/types/community-requests"
+import type { AppHeaderNotification } from "../types/notifications"
 
 defineOptions({
   name: "AppHeader",
@@ -9,7 +10,7 @@ defineOptions({
 
 const props = withDefaults(
   defineProps<{
-    notifications?: CommunityOfferNotification[]
+    notifications?: Array<CommunityOfferNotification | AppHeaderNotification>
   }>(),
   {
     notifications: () => [],
@@ -17,7 +18,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (event: "mark-notification-read", notificationId: number): void
+  (event: "mark-notification-read", notificationId: string | number): void
   (event: "mark-all-notifications-read"): void
 }>()
 
@@ -55,8 +56,39 @@ const toggleNotifications = () => {
   showNotifications.value = !showNotifications.value
 }
 
-const handleNotificationClick = (notificationId: number) => {
-  emit("mark-notification-read", notificationId)
+const getNotificationTitle = (notification: CommunityOfferNotification | AppHeaderNotification) => {
+  if ("title" in notification) return notification.title
+  return `${notification.actorName} offered ${notification.itemName}`
+}
+
+const getNotificationBody = (notification: CommunityOfferNotification | AppHeaderNotification) => {
+  if ("body" in notification) return notification.body
+  return notification.requestTitle
+}
+
+const getNotificationAccent = (
+  notification: CommunityOfferNotification | AppHeaderNotification,
+) => {
+  if ("title" in notification) return null
+  return formatFee(notification.fee)
+}
+
+const getNotificationActionPath = (
+  notification: CommunityOfferNotification | AppHeaderNotification,
+) => {
+  if ("actionPath" in notification) return notification.actionPath ?? null
+  return null
+}
+
+const handleNotificationClick = async (
+  notification: CommunityOfferNotification | AppHeaderNotification,
+) => {
+  emit("mark-notification-read", notification.id)
+  const actionPath = getNotificationActionPath(notification)
+  if (actionPath) {
+    showNotifications.value = false
+    await navigateTo(actionPath)
+  }
 }
 
 const markAllNotificationsRead = () => {
@@ -184,17 +216,17 @@ onBeforeUnmount(() => {
                     ? 'border-cinnamon-ice/15 bg-cream/50'
                     : 'border-blue-estate/10 bg-blue-estate/5'
                 "
-                @click="handleNotificationClick(notification.id)"
+                @click="handleNotificationClick(notification)"
               >
                 <p class="text-[14px] font-semibold leading-snug text-noble-black">
-                  {{ notification.actorName }} offered {{ notification.itemName }}
+                  {{ getNotificationTitle(notification) }}
                 </p>
                 <p class="mt-1 text-[13px] leading-relaxed text-noble-black/55">
-                  {{ notification.requestTitle }}
+                  {{ getNotificationBody(notification) }}
                 </p>
                 <div class="mt-3 flex items-center justify-between gap-3">
                   <span class="text-[12px] font-bold text-burning-orange">
-                    {{ formatFee(notification.fee) }}
+                    {{ getNotificationAccent(notification) ?? "Open" }}
                   </span>
                   <span class="text-[12px] text-noble-black/35">
                     {{ formatRelativeTime(notification.createdAt) }}
