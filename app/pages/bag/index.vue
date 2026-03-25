@@ -406,7 +406,7 @@ const handleRequestBooking = async () => {
                 </div>
 
                 <!-- Items -->
-                <div class="divide-y divide-cinnamon-ice/40">
+                <div class="flex flex-col">
                   <div
                     v-for="item in group.items"
                     :key="item.id"

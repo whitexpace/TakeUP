@@ -22,8 +22,7 @@ const makeCartEntry = (overrides: Record<string, unknown> = {}) => ({
     rentalFee: 250,
     rateOption: "PER_DAY",
     freeToBorrow: false,
-    thumbnailImage: "https://example.com/camera.jpg",
-    photos: [],
+    images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
     lenderId: OTHER_USER_ID,
     lender: {
       user: {
@@ -49,6 +48,7 @@ type MockItem = {
   status: string
   lenderId: string
   availability: MockAvailabilityWindow[]
+  images?: Array<{ path: string; isPrimary: boolean; sortOrder: number }>
 }
 type MakeContextOptions = {
   accountType?: string
@@ -57,6 +57,7 @@ type MakeContextOptions = {
   createdCartEntry?: MockCartEntry
   listedCartEntries?: MockCartEntry[]
   removableEntry?: { borrowerId: string } | null
+  overlappingBooking?: { id: string } | null
 }
 
 const makeContext = ({
@@ -72,11 +73,13 @@ const makeContext = ({
         status: "AVAILABLE",
       },
     ],
+    images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
   },
   existingCartEntry = null,
   createdCartEntry = makeCartEntry(),
   listedCartEntries = [makeCartEntry()],
   removableEntry = { borrowerId: USER_ID },
+  overlappingBooking = null,
 }: MakeContextOptions = {}) => {
   const userFindUnique = vi.fn().mockResolvedValue({ accountType })
   const itemFindUnique = vi.fn().mockResolvedValue(item)
@@ -90,6 +93,14 @@ const makeContext = ({
 
     return Promise.resolve(removableEntry)
   })
+  const bookingFindFirst = vi.fn().mockResolvedValue(overlappingBooking)
+  const queryRaw = vi.fn().mockImplementation((query) => {
+    if (query.values && query.values.includes(ENTRY_ID)) {
+      return Promise.resolve(removableEntry ? [removableEntry] : [])
+    }
+    return Promise.resolve([])
+  })
+  const executeRaw = vi.fn().mockResolvedValue(1)
 
   return {
     event: { context: {} } as never,
@@ -102,6 +113,9 @@ const makeContext = ({
         findMany: cartFindMany,
         delete: cartDelete,
       },
+      booking: { findFirst: bookingFindFirst },
+      $queryRaw: queryRaw,
+      $executeRaw: executeRaw,
     } as never,
     user: mockUser,
     mocks: {
@@ -111,6 +125,9 @@ const makeContext = ({
       cartCreate,
       cartFindMany,
       cartDelete,
+      bookingFindFirst,
+      queryRaw,
+      executeRaw,
     },
   }
 }
@@ -257,6 +274,22 @@ describe("cartRouter", () => {
     const caller = cartRouter.createCaller(context)
 
     await expect(caller.remove({ id: ENTRY_ID })).rejects.toMatchObject({ code: "FORBIDDEN" })
+  })
+
+  it("rejects adding an item if it overlaps with an existing confirmed booking", async () => {
+    const context = makeContext({ overlappingBooking: { id: "existing-booking-id" } })
+    const caller = cartRouter.createCaller(context)
+
+    await expect(
+      caller.add({
+        itemId: ITEM_ID,
+        startAt: new Date("2026-04-02T09:00:00.000Z"),
+        endAt: new Date("2026-04-03T09:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "This item is already booked for the selected dates.",
+    })
   })
 
   it("requires authentication", async () => {
