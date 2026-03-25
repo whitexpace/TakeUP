@@ -1,7 +1,11 @@
 <template>
   <div class="flex flex-col h-screen font-geist bg-white relative overflow-hidden">
     <!-- Top Header -->
-    <Header>
+    <Header
+      :notifications="notifications"
+      @mark-notification-read="markNotificationRead"
+      @mark-all-notifications-read="markAllNotificationsRead"
+    >
       <template #left>
         <button
           v-if="!hideSidebar"
@@ -89,11 +93,14 @@
 import { computed, ref, onMounted, onUnmounted } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import { useDashboardFilters } from "../composables/use-dashboard-filters"
+import { useNotifications } from "../composables/use-notifications"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const hideSidebar = computed(() => Boolean(route.meta.hideDashboardSidebar))
+const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
+  useNotifications()
 
 const toggleSidebar = () => {
   if (hideSidebar.value) return
@@ -134,6 +141,7 @@ provide("dashboardFilters", filters)
 onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
+  await loadNotifications()
   if (!hideSidebar.value) {
     await fetchFilterMetadata()
   }

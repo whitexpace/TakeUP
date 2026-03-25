@@ -67,6 +67,7 @@ const currentUserId = computed(() => authData.value?.user.id ?? null)
 const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const userRole = computed(() => (isLender.value ? "LENDER" : "BORROWER"))
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
+const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
 
 const mappedStatus = computed(() => {
   switch (booking.value.status) {
@@ -74,6 +75,8 @@ const mappedStatus = computed(() => {
       return "PENDING"
     case "CONFIRMED":
       return "ACTIVE"
+    case "RETURNED":
+      return "RETURNED"
     case "CANCELLED":
       return "CANCELLED"
     case "COMPLETED":
@@ -151,7 +154,7 @@ const timeline = computed(() => {
       status:
         booking.value.status === "PENDING"
           ? "current"
-          : ["CONFIRMED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
+          : ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
             ? "completed"
             : "upcoming",
     },
@@ -159,24 +162,34 @@ const timeline = computed(() => {
       label: "Picked Up",
       description: "Item picked up at designated location",
       date: formatDate(booking.value.startDate),
-      status: ["CONFIRMED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-        ? "current"
+      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
+        ? "completed"
         : "upcoming",
     },
     {
       label: "In Use",
       description: "Rental period started",
       date: formatDate(booking.value.startDate),
-      status: booking.value.status === "COMPLETED" ? "completed" : "upcoming",
+      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
+        ? booking.value.status === "CONFIRMED"
+          ? "current"
+          : "completed"
+        : "upcoming",
     },
     {
       label: "Return Item",
-      description:
-        booking.value.status === "COMPLETED"
-          ? "Item returned successfully"
-          : "Return by the end of rental period",
-      date: formatDate(booking.value.endDate),
-      status: booking.value.status === "COMPLETED" ? "completed" : "upcoming",
+      description: ["RETURNED", "COMPLETED"].includes(booking.value.status)
+        ? "Item returned successfully"
+        : "Return by the end of rental period",
+      date: booking.value.returnedAt
+        ? formatDate(booking.value.returnedAt)
+        : formatDate(booking.value.endDate),
+      status:
+        booking.value.status === "RETURNED"
+          ? "current"
+          : booking.value.status === "COMPLETED"
+            ? "completed"
+            : "upcoming",
     },
     {
       label: "Completed",
@@ -193,23 +206,69 @@ const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
 
 const handleReturn = () => {
+  actionErrorMessage.value = ""
   isReturnModalOpen.value = true
 }
 
 const confirmReturn = async () => {
   isSubmittingReturn.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+  try {
+    await $fetch(`/api/bookings/${booking.value.id}/return`, {
+      method: "POST",
+    })
+    await refresh()
+    isReturnModalOpen.value = false
+    isSuccessModalOpen.value = true
+    actionSuccessMessage.value = "Return submitted. The lender was notified to confirm receipt."
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    actionErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to submit the return right now."
+  } finally {
+    isSubmittingReturn.value = false
+  }
+}
+
+const confirmReceipt = async () => {
+  isActing.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+
   try {
     await $fetch(`/api/bookings/${booking.value.id}`, {
       method: "PATCH",
       body: { status: "COMPLETED" },
     })
     await refresh()
-    isReturnModalOpen.value = false
-    isSuccessModalOpen.value = true
-  } catch (err) {
-    console.error("Failed to confirm return:", err)
+    actionSuccessMessage.value = "Return confirmed. The transaction is now complete."
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    actionErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to complete this booking right now."
   } finally {
-    isSubmittingReturn.value = false
+    isActing.value = false
   }
 }
 
@@ -427,6 +486,15 @@ const handleDispute = () => {
               @click="handleReturn"
             >
               Return Item
+            </button>
+
+            <button
+              v-else-if="canConfirmReceipt"
+              :disabled="isActing"
+              class="bg-blue-estate text-white px-6 py-2 rounded-xl font-bold hover:bg-burning-orange transition-colors disabled:opacity-50"
+              @click="confirmReceipt"
+            >
+              Confirm Receipt
             </button>
           </div>
 

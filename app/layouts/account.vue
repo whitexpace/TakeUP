@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, onMounted, ref } from "vue"
+import { useNotifications } from "../composables/use-notifications"
 
 const route = useRoute()
 const showMobileSidebar = ref(false)
 const showLogoutModal = ref(false)
 const hideSidebar = computed(() => Boolean(route.meta.hideAccountSidebar))
+const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
+  useNotifications()
 
 type AccountLink = {
   label: string
@@ -42,12 +45,20 @@ const confirmLogout = async () => {
   await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
   await navigateTo("/")
 }
+
+onMounted(() => {
+  void loadNotifications()
+})
 </script>
 
 <template>
   <div class="flex flex-col min-h-screen font-geist bg-white relative">
     <!-- Top Navbar -->
-    <Header>
+    <Header
+      :notifications="notifications"
+      @mark-notification-read="markNotificationRead"
+      @mark-all-notifications-read="markAllNotificationsRead"
+    >
       <template #mobile-menu>
         <button
           class="lg:hidden p-2 text-noble-black hover:text-burning-orange transition-colors"

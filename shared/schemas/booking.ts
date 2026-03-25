@@ -7,6 +7,7 @@ export const bookingIdSchema = z.object({
 export const bookingStatusSchema = z.enum([
   "PENDING",
   "CONFIRMED",
+  "RETURNED",
   "CANCELLED",
   "COMPLETED",
   "IN_DISPUTE",
@@ -66,6 +67,8 @@ export const updateBookingSchema = z
   )
 
 export const deleteBookingSchema = bookingIdSchema
+
+export const returnBookingSchema = bookingIdSchema
 
 export const bookingCursorSchema = z.object({
   id: z.string().uuid(),

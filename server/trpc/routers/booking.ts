@@ -1,9 +1,9 @@
 import type {
   BookingPaymentStatus as PrismaBookingPaymentStatus,
   BookingStatus as PrismaBookingStatus,
-  Prisma,
 } from "@prisma/client"
 import {
+  Prisma,
   PaymentMethod as PrismaPaymentMethod,
   TransactionStatus as PrismaTransactionStatus,
 } from "@prisma/client"
@@ -20,6 +20,7 @@ import {
   listBookingsSchema,
   type PaymentMethod,
   paymentMethodSchema,
+  returnBookingSchema,
   updateBookingSchema,
 } from "../../../shared/schemas/booking"
 
@@ -113,6 +114,7 @@ const bookingEditableSelect = {
   paymentStatus: true,
   cancellationReason: true,
   confirmedAt: true,
+  returnedAt: true,
   cancelledAt: true,
   completedAt: true,
   disputeOpenedAt: true,
@@ -144,6 +146,8 @@ const bookingTransactionSelect = {
   platformCommission: true,
   status: true,
   paymentStatus: true,
+  confirmedAt: true,
+  returnedAt: true,
   cancellationReason: true,
   cancelledAt: true,
 } satisfies Prisma.BookingSelect
@@ -297,6 +301,12 @@ const ITEM_BLOCKING_BOOKING_STATUSES = [
   bookingStatusSchema.enum.IN_DISPUTE,
 ] as const
 
+const RETURN_CONFLICT_BOOKING_STATUSES = [
+  bookingStatusSchema.enum.CONFIRMED,
+  bookingStatusSchema.enum.RETURNED,
+  bookingStatusSchema.enum.IN_DISPUTE,
+] as const
+
 const BOOKING_MUTATION_TRANSACTION_OPTIONS = {
   maxWait: 10_000,
   timeout: 15_000,
@@ -358,6 +368,8 @@ const mapBookingToTransactionStatus = (
       return paymentStatus === bookingPaymentStatusSchema.enum.PAID
         ? PrismaTransactionStatus.PAID
         : PrismaTransactionStatus.CONFIRMED
+    case bookingStatusSchema.enum.RETURNED:
+      return PrismaTransactionStatus.RETURNED
     case bookingStatusSchema.enum.CANCELLED:
       return PrismaTransactionStatus.CANCELLED
     case bookingStatusSchema.enum.COMPLETED:
@@ -374,6 +386,7 @@ const buildBookingTimestamps = (
   existing: Pick<
     BookingEditableRecord,
     | "confirmedAt"
+    | "returnedAt"
     | "cancelledAt"
     | "completedAt"
     | "disputeOpenedAt"
@@ -388,6 +401,10 @@ const buildBookingTimestamps = (
   return {
     confirmedAt:
       nextStatus === bookingStatusSchema.enum.CONFIRMED && existing.confirmedAt === null
+        ? now
+        : undefined,
+    returnedAt:
+      nextStatus === bookingStatusSchema.enum.RETURNED && existing.returnedAt === null
         ? now
         : undefined,
     cancelledAt:
@@ -419,6 +436,7 @@ const ensureBookingWindowAvailable = async (
     endDate: Date
     excludeBookingId?: string
     statuses?: readonly (keyof typeof bookingStatusSchema.enum)[]
+    errorMessage?: string
   },
 ) => {
   const overlappingBooking = await bookingPrisma.booking.findFirst({
@@ -435,7 +453,7 @@ const ensureBookingWindowAvailable = async (
   if (overlappingBooking) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "The requested booking window overlaps an existing booking.",
+      message: input.errorMessage ?? "The requested booking window overlaps an existing booking.",
     })
   }
 }
@@ -443,8 +461,127 @@ const ensureBookingWindowAvailable = async (
 const doBookingWindowsOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
   left.startDate < right.endDate && left.endDate > right.startDate
 
+type TransactionSyncActor = {
+  userId: string
+  role: "borrower" | "lender" | "system"
+  remarks?: string
+}
+
+type TransactionStatusRunnerPrismaClient = BookingMutationPrismaClient & {
+  $executeRaw?: (...args: unknown[]) => Promise<unknown>
+}
+
+const transactionTransitionGraph: Partial<
+  Record<PrismaTransactionStatus, PrismaTransactionStatus[]>
+> = {
+  [PrismaTransactionStatus.PENDING]: [
+    PrismaTransactionStatus.AWAITING_LENDER_APPROVAL,
+    PrismaTransactionStatus.CANCELLED,
+    PrismaTransactionStatus.FAILED,
+  ],
+  [PrismaTransactionStatus.AWAITING_LENDER_APPROVAL]: [
+    PrismaTransactionStatus.CONFIRMED,
+    PrismaTransactionStatus.CANCELLED,
+    PrismaTransactionStatus.FAILED,
+  ],
+  [PrismaTransactionStatus.CONFIRMED]: [
+    PrismaTransactionStatus.PAID,
+    PrismaTransactionStatus.CANCELLED,
+    PrismaTransactionStatus.FAILED,
+  ],
+  [PrismaTransactionStatus.PAID]: [
+    PrismaTransactionStatus.ONGOING,
+    PrismaTransactionStatus.IN_DISPUTE,
+    PrismaTransactionStatus.REFUNDED,
+    PrismaTransactionStatus.FAILED,
+  ],
+  [PrismaTransactionStatus.ONGOING]: [
+    PrismaTransactionStatus.RETURNED,
+    PrismaTransactionStatus.IN_DISPUTE,
+    PrismaTransactionStatus.FAILED,
+  ],
+  [PrismaTransactionStatus.RETURNED]: [
+    PrismaTransactionStatus.COMPLETED,
+    PrismaTransactionStatus.IN_DISPUTE,
+  ],
+  [PrismaTransactionStatus.IN_DISPUTE]: [
+    PrismaTransactionStatus.APPEALED,
+    PrismaTransactionStatus.COMPLETED,
+    PrismaTransactionStatus.CANCELLED,
+    PrismaTransactionStatus.REFUNDED,
+    PrismaTransactionStatus.FAILED,
+  ],
+  [PrismaTransactionStatus.APPEALED]: [
+    PrismaTransactionStatus.IN_DISPUTE,
+    PrismaTransactionStatus.COMPLETED,
+    PrismaTransactionStatus.CANCELLED,
+    PrismaTransactionStatus.REFUNDED,
+    PrismaTransactionStatus.FAILED,
+  ],
+}
+
+const getTransactionTransitionSteps = (
+  currentStatus: PrismaTransactionStatus,
+  targetStatus: PrismaTransactionStatus,
+) => {
+  if (currentStatus === targetStatus) {
+    return []
+  }
+
+  const queue: Array<{ status: PrismaTransactionStatus; path: PrismaTransactionStatus[] }> = [
+    { status: currentStatus, path: [] },
+  ]
+  const visited = new Set<PrismaTransactionStatus>([currentStatus])
+
+  while (queue.length > 0) {
+    const next = queue.shift()
+    if (!next) break
+
+    for (const candidate of transactionTransitionGraph[next.status] ?? []) {
+      if (visited.has(candidate)) continue
+
+      const path = [...next.path, candidate]
+      if (candidate === targetStatus) {
+        return path
+      }
+
+      visited.add(candidate)
+      queue.push({ status: candidate, path })
+    }
+  }
+
+  return [targetStatus]
+}
+
+const applyTransactionStatusStep = async (
+  bookingPrisma: TransactionStatusRunnerPrismaClient,
+  transactionId: string,
+  step: PrismaTransactionStatus,
+  actor: TransactionSyncActor,
+) => {
+  const transactionStatusValue = step.toLowerCase()
+
+  if (typeof bookingPrisma.$executeRaw === "function") {
+    await bookingPrisma.$executeRaw(
+      Prisma.sql`SELECT set_transaction_status(
+        CAST(${transactionId} AS text),
+        CAST(${transactionStatusValue} AS transaction_status_enum),
+        CAST(${actor.userId} AS text),
+        CAST(${actor.role} AS actor_role_enum),
+        CAST(${actor.remarks ?? null} AS text)
+      )`,
+    )
+    return
+  }
+
+  await bookingPrisma.rentalTransaction.update({
+    where: { id: transactionId },
+    data: { status: step },
+  })
+}
+
 const syncBookingTransaction = async (
-  bookingPrisma: BookingMutationPrismaClient,
+  bookingPrisma: TransactionStatusRunnerPrismaClient,
   booking: Pick<
     BookingTransactionRecord,
     | "id"
@@ -458,6 +595,7 @@ const syncBookingTransaction = async (
     | "status"
     | "paymentStatus"
   >,
+  actor: TransactionSyncActor,
 ) => {
   if (booking.status === bookingStatusSchema.enum.PENDING) {
     return
@@ -494,29 +632,21 @@ const syncBookingTransaction = async (
     return
   }
 
-  const transitionSteps =
-    existingTransaction.status === PrismaTransactionStatus.PENDING &&
-    targetStatus === PrismaTransactionStatus.CONFIRMED
-      ? [PrismaTransactionStatus.AWAITING_LENDER_APPROVAL, PrismaTransactionStatus.CONFIRMED]
-      : existingTransaction.status === PrismaTransactionStatus.PENDING &&
-          targetStatus === PrismaTransactionStatus.PAID
-        ? [
-            PrismaTransactionStatus.AWAITING_LENDER_APPROVAL,
-            PrismaTransactionStatus.CONFIRMED,
-            PrismaTransactionStatus.PAID,
-          ]
-        : existingTransaction.status === PrismaTransactionStatus.AWAITING_LENDER_APPROVAL &&
-            targetStatus === PrismaTransactionStatus.PAID
-          ? [PrismaTransactionStatus.CONFIRMED, PrismaTransactionStatus.PAID]
-          : [targetStatus]
+  await bookingPrisma.rentalTransaction.update({
+    where: { bookingId: booking.id },
+    data: transactionData,
+  })
+
+  const transitionSteps = getTransactionTransitionSteps(existingTransaction.status, targetStatus)
 
   for (const status of transitionSteps) {
+    if (status === existingTransaction.status) continue
+
+    await applyTransactionStatusStep(bookingPrisma, existingTransaction.id, status, actor)
+
     await bookingPrisma.rentalTransaction.update({
       where: { bookingId: booking.id },
-      data: {
-        ...transactionData,
-        status,
-      },
+      data: transactionData,
     })
   }
 }
@@ -568,6 +698,13 @@ const syncItemStatusFromBookings = async (
     })
   }
 }
+
+const buildReturnNotification = (bookingId: string) => ({
+  type: "BOOKING_RETURN_REQUESTED" as const,
+  title: "Item return requested",
+  body: "A borrower marked one of your items as returned. Review the booking and confirm receipt.",
+  actionPath: `/account/transactions/${bookingId}`,
+})
 
 export const bookingRouter = router({
   list: protectedProcedure.input(listBookingsSchema).query(async ({ ctx, input }) => {
@@ -695,7 +832,15 @@ export const bookingRouter = router({
       include: bookingInclude,
     })
 
-    await syncBookingTransaction(ctx.prisma as unknown as BookingMutationPrismaClient, booking)
+    await syncBookingTransaction(
+      ctx.prisma as unknown as TransactionStatusRunnerPrismaClient,
+      booking,
+      {
+        userId: ctx.user.id,
+        role: "borrower",
+        remarks: "Booking created.",
+      },
+    )
     await ctx.prisma.item.update({
       where: { id: item.id },
       data: {
@@ -741,6 +886,29 @@ export const bookingRouter = router({
         code: "FORBIDDEN",
         message: "Only the lender can accept this booking request.",
       })
+    }
+
+    if (input.status === bookingStatusSchema.enum.RETURNED) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Use the dedicated return action to mark this booking as returned.",
+      })
+    }
+
+    if (input.status === bookingStatusSchema.enum.COMPLETED) {
+      if (existing.lenderId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the lender can complete this booking after the item is returned.",
+        })
+      }
+
+      if (existing.status !== bookingStatusSchema.enum.RETURNED) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only returned bookings can be completed.",
+        })
+      }
     }
 
     const startDate = input.startDate ?? existing.startDate
@@ -851,13 +1019,26 @@ export const bookingRouter = router({
           })
 
           await syncBookingTransaction(
-            tx as unknown as BookingMutationPrismaClient,
+            tx as unknown as TransactionStatusRunnerPrismaClient,
             cancelledBooking,
+            {
+              userId: ctx.user.id,
+              role: "lender",
+              remarks: OVERLAPPING_REQUEST_CANCELLATION_REASON,
+            },
           )
         }
       }
 
-      await syncBookingTransaction(tx as unknown as BookingMutationPrismaClient, updatedBooking)
+      await syncBookingTransaction(
+        tx as unknown as TransactionStatusRunnerPrismaClient,
+        updatedBooking,
+        {
+          userId: ctx.user.id,
+          role: existing.lenderId === ctx.user.id ? "lender" : "borrower",
+          remarks: `Booking status updated to ${updatedBooking.status}.`,
+        },
+      )
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: updatedBooking.itemId,
       })
@@ -874,6 +1055,130 @@ export const bookingRouter = router({
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Booking was updated but could not be reloaded.",
+      })
+    }
+
+    return mapBookingRecord(updatedBooking)
+  }),
+
+  returnItem: protectedProcedure.input(returnBookingSchema).mutation(async ({ ctx, input }) => {
+    const bookingPrisma = getBookingPrisma(ctx)
+    const existing = (await bookingPrisma.booking.findUnique({
+      where: { id: input.id },
+      select: bookingEditableSelect,
+    })) as BookingEditableRecord | null
+
+    if (!existing) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
+    }
+
+    if (existing.borrowerId !== ctx.user.id) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only the borrower can initiate a return for this booking.",
+      })
+    }
+
+    if (existing.status === bookingStatusSchema.enum.RETURNED) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This booking has already been marked as returned.",
+      })
+    }
+
+    if (existing.status !== bookingStatusSchema.enum.CONFIRMED) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Only active confirmed bookings can be marked as returned.",
+      })
+    }
+
+    const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
+      const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+      const latestBooking = (await txBookingPrisma.booking.findUnique({
+        where: { id: input.id },
+        select: bookingEditableSelect,
+      })) as BookingEditableRecord | null
+
+      if (!latestBooking) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
+      }
+
+      if (latestBooking.borrowerId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the borrower can initiate a return for this booking.",
+        })
+      }
+
+      if (latestBooking.status === bookingStatusSchema.enum.RETURNED) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This booking has already been marked as returned.",
+        })
+      }
+
+      if (latestBooking.status !== bookingStatusSchema.enum.CONFIRMED) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only active confirmed bookings can be marked as returned.",
+        })
+      }
+
+      await ensureBookingWindowAvailable(txBookingPrisma, {
+        itemId: latestBooking.itemId,
+        startDate: latestBooking.startDate,
+        endDate: latestBooking.endDate,
+        excludeBookingId: latestBooking.id,
+        statuses: RETURN_CONFLICT_BOOKING_STATUSES,
+        errorMessage:
+          "Return cannot be recorded because another overlapping booking exists for this item.",
+      })
+
+      const returnedBooking = await txBookingPrisma.booking.update({
+        where: { id: input.id },
+        data: {
+          status: bookingStatusSchema.enum.RETURNED,
+          returnedAt: latestBooking.returnedAt ?? new Date(),
+        },
+        select: bookingTransactionSelect,
+      })
+
+      await syncBookingTransaction(
+        tx as unknown as TransactionStatusRunnerPrismaClient,
+        returnedBooking,
+        {
+          userId: ctx.user.id,
+          role: "borrower",
+          remarks: "Borrower initiated item return.",
+        },
+      )
+
+      await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
+        itemId: returnedBooking.itemId,
+      })
+
+      await (tx as Context["prisma"]).appNotification.create({
+        data: {
+          recipientUserId: latestBooking.lenderId,
+          actorUserId: ctx.user.id,
+          bookingId: latestBooking.id,
+          ...buildReturnNotification(latestBooking.id),
+        },
+      })
+
+      return returnedBooking.id
+    }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
+
+    const updatedBooking = (await bookingPrisma.booking.findUnique({
+      where: { id: updatedBookingId },
+      include: bookingInclude,
+    })) as BookingRecord | null
+
+    if (!updatedBooking) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Booking was returned but could not be reloaded.",
       })
     }
 

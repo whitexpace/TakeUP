@@ -977,7 +977,11 @@ const handleUpdateOfferStatus = async (payload: {
   }
 }
 
-const markNotificationRead = async (notificationId: number) => {
+const markNotificationRead = async (notificationId: string | number) => {
+  if (typeof notificationId !== "number") {
+    return
+  }
+
   const headers = await ensureAuthenticatedHeaders()
   if (!headers) return
 
