@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import { describe, expect, it, vi } from "vitest"
 import { cartRouter } from "../cart"
@@ -22,8 +23,14 @@ const makeCartEntry = (overrides: Record<string, unknown> = {}) => ({
     rentalFee: 250,
     rateOption: "PER_DAY",
     freeToBorrow: false,
-    images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
     lenderId: OTHER_USER_ID,
+    images: [
+      {
+        path: "https://example.com/camera.jpg",
+        isPrimary: true,
+        sortOrder: 0,
+      },
+    ],
     lender: {
       user: {
         username: "lender1",
@@ -198,6 +205,25 @@ describe("cartRouter", () => {
         endAt: new Date("2026-04-06T09:00:00.000Z"),
       }),
     ).resolves.toMatchObject({ itemId: ITEM_ID })
+  })
+
+  it("maps a duplicate create race to a conflict error", async () => {
+    const context = makeContext()
+    context.mocks.cartCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed.", {
+        code: "P2002",
+        clientVersion: "5.19.0",
+      }),
+    )
+    const caller = cartRouter.createCaller(context)
+
+    await expect(
+      caller.add({
+        itemId: ITEM_ID,
+        startAt: new Date("2026-04-02T09:00:00.000Z"),
+        endAt: new Date("2026-04-03T09:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" })
   })
 
   it("rejects non-borrower accounts", async () => {

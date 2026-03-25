@@ -729,6 +729,7 @@ const { addToBag: addItemToBag, hasItemWithWindow } = useBag()
 
 const bagFeedbackMessage = ref("")
 const bagFeedbackTone = ref<"success" | "error">("success")
+const isAddingToBag = ref(false)
 
 const showBagFeedback = (message: string, tone: "success" | "error") => {
   bagFeedbackMessage.value = message
@@ -789,9 +790,18 @@ const mobileBookingButtonLabel = computed(() => {
 })
 
 const handleAddToBag = async () => {
-  if (!selectedBagWindow.value || !hasBookingSelection.value || !canAddToBag.value) return
+  if (
+    !selectedBagWindow.value ||
+    !hasBookingSelection.value ||
+    !canAddToBag.value ||
+    isAddingToBag.value
+  ) {
+    return
+  }
 
   try {
+    isAddingToBag.value = true
+
     await addItemToBag({
       itemId: selectedBagWindow.value.itemId,
       startAt: selectedBagWindow.value.startAt,
@@ -828,6 +838,8 @@ const handleAddToBag = async () => {
     }
 
     showBagFeedback("Unable to add this item to your bag right now.", "error")
+  } finally {
+    isAddingToBag.value = false
   }
 }
 
