@@ -119,26 +119,6 @@ const getOwnerNameFromRow = (row: CartEntryRow) =>
   row.lenderEmail ||
   row.lenderId
 
-const mapCartEntry = (entry: CartEntryWithItem) => {
-  const thumbnailImage =
-    entry.item.images.find((img) => img.isPrimary)?.path || entry.item.images[0]?.path || ""
-
-  return {
-    id: entry.id,
-    itemId: entry.itemId,
-    name: entry.item.name,
-    price: entry.item.rentalFee,
-    priceUnit: entry.item.rateOption === "PER_HOUR" ? "hour" : "day",
-    image: thumbnailImage,
-    startAt: entry.startAt,
-    endAt: entry.endAt,
-    lenderId: entry.item.lenderId,
-    lenderName: getOwnerName(entry),
-    listingType: entry.item.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
-    createdAt: entry.createdAt,
-  }
-}
-
 const mapCartRow = (row: CartEntryRow & { image?: string }) => ({
   id: row.id,
   itemId: row.itemId,
@@ -435,18 +415,26 @@ export const cartRouter = router({
         })
       }
 
-      // Generate a UUID and timestamps for the raw insert
-      const id = crypto.randomUUID()
-      const now = new Date()
-    const created = await ctx.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      const created = await ctx.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       INSERT INTO "CartEntry" ("borrowerId", "itemId", "startAt", "endAt")
       VALUES (${ctx.user.id}, ${input.itemId}, ${input.startAt}, ${input.endAt})
       ON CONFLICT ("borrowerId", "itemId", "startAt", "endAt") DO NOTHING
       RETURNING "id"
     `)
 
+      const createdId = created[0]?.id
 
-      const [entry] = await queryCartRows(ctx.prisma, Prisma.sql`WHERE c."id" = ${id} LIMIT 1`)
+      if (!createdId) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This item with the selected dates is already in your bag.",
+        })
+      }
+
+      const [entry] = await queryCartRows(
+        ctx.prisma,
+        Prisma.sql`WHERE c."id" = ${createdId} LIMIT 1`,
+      )
 
       if (!entry) {
         throw new TRPCError({
