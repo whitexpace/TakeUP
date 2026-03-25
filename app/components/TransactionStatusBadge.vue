@@ -18,6 +18,8 @@ const label = computed(() => {
       return "Cancelled"
     case "RETURNED":
       return "Item Returned"
+    case "IN_DISPUTE":
+      return "In Dispute"
     default:
       return ""
   }
@@ -32,6 +34,7 @@ const badgeClass = computed(() => {
     case "RETURNED":
       return "bg-indigo-900"
     case "CANCELLED":
+    case "IN_DISPUTE":
       return "bg-cinnabar-red"
     default:
       return "bg-gray-400"

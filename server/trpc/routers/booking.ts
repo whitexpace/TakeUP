@@ -75,6 +75,7 @@ const bookingInclude = {
   },
   lender: {
     select: {
+      lenderRating: true,
       user: {
         select: {
           username: true,

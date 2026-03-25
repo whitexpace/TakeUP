@@ -10,7 +10,9 @@ definePageMeta({
 
 type ActiveRole = "BORROWER" | "LENDER"
 
-const activeRole = ref<ActiveRole>("BORROWER")
+const route = useRoute()
+const router = useRouter()
+const activeRole = ref<ActiveRole>((route.query.role as ActiveRole) || "BORROWER")
 const activeStatus = ref<TransactionStatus | null>(null)
 const searchQuery = ref("")
 
@@ -28,6 +30,7 @@ const setRole = (role: ActiveRole) => {
   activeRole.value = role
   activeStatus.value = null
   searchQuery.value = ""
+  router.replace({ query: { ...route.query, role } })
 }
 
 const setStatus = (status: TransactionStatus | null) => {
