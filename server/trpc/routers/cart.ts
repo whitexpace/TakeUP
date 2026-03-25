@@ -13,9 +13,15 @@ const cartEntryInclude = {
       rentalFee: true,
       rateOption: true,
       freeToBorrow: true,
-      thumbnailImage: true,
-      photos: true,
       lenderId: true,
+      images: {
+        select: {
+          path: true,
+          isPrimary: true,
+          sortOrder: true,
+        },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
       lender: {
         select: {
           user: {
@@ -45,8 +51,11 @@ type CartEntryWithItem = {
     rentalFee: number
     rateOption: "PER_HOUR" | "PER_DAY"
     freeToBorrow: boolean
-    thumbnailImage: string | null
-    photos: string[]
+    images: Array<{
+      path: string
+      isPrimary: boolean
+      sortOrder: number
+    }>
     lenderId: string
     lender: {
       user: {
@@ -102,26 +111,31 @@ const getOwnerName = (entry: CartEntryWithItem) => {
   )
 }
 
+const mapCartEntry = (entry: CartEntryWithItem) => {
+  const primaryImage =
+    entry.item.images.find((image) => image.isPrimary)?.path ?? entry.item.images[0]?.path ?? ""
+
+  return {
+    id: entry.id,
+    itemId: entry.itemId,
+    name: entry.item.name,
+    price: entry.item.rentalFee,
+    priceUnit: entry.item.rateOption === "PER_HOUR" ? "hour" : "day",
+    image: primaryImage,
+    startAt: entry.startAt,
+    endAt: entry.endAt,
+    lenderId: entry.item.lenderId,
+    lenderName: getOwnerName(entry),
+    listingType: entry.item.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
+    createdAt: entry.createdAt,
+  }
+}
+
 const getOwnerNameFromRow = (row: CartEntryRow) =>
   row.lenderUsername ||
   [row.lenderFirstName, row.lenderMiddleName, row.lenderLastName].filter(Boolean).join(" ") ||
   row.lenderEmail ||
   row.lenderId
-
-const mapCartEntry = (entry: CartEntryWithItem) => ({
-  id: entry.id,
-  itemId: entry.itemId,
-  name: entry.item.name,
-  price: entry.item.rentalFee,
-  priceUnit: entry.item.rateOption === "PER_HOUR" ? "hour" : "day",
-  image: entry.item.thumbnailImage || entry.item.photos[0] || "",
-  startAt: entry.startAt,
-  endAt: entry.endAt,
-  lenderId: entry.item.lenderId,
-  lenderName: getOwnerName(entry),
-  listingType: entry.item.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
-  createdAt: entry.createdAt,
-})
 
 const mapCartRow = (row: CartEntryRow) => ({
   id: row.id,
@@ -290,15 +304,28 @@ export const cartRouter = router({
         })
       }
 
-      const entry = await cartEntry.create({
-        data: {
-          borrowerId: ctx.user.id,
-          itemId: input.itemId,
-          startAt: input.startAt,
-          endAt: input.endAt,
-        },
-        include: cartEntryInclude,
-      })
+      let entry: CartEntryWithItem
+
+      try {
+        entry = await cartEntry.create({
+          data: {
+            borrowerId: ctx.user.id,
+            itemId: input.itemId,
+            startAt: input.startAt,
+            endAt: input.endAt,
+          },
+          include: cartEntryInclude,
+        })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This item with the selected dates is already in your bag.",
+          })
+        }
+
+        throw error
+      }
 
       return mapCartEntry(entry)
     }
@@ -323,6 +350,7 @@ export const cartRouter = router({
     const created = await ctx.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       INSERT INTO "CartEntry" ("borrowerId", "itemId", "startAt", "endAt")
       VALUES (${ctx.user.id}, ${input.itemId}, ${input.startAt}, ${input.endAt})
+      ON CONFLICT ("borrowerId", "itemId", "startAt", "endAt") DO NOTHING
       RETURNING "id"
     `)
 
@@ -330,8 +358,8 @@ export const cartRouter = router({
 
     if (!createdId) {
       throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Unable to create bag entry.",
+        code: "CONFLICT",
+        message: "This item with the selected dates is already in your bag.",
       })
     }
 
