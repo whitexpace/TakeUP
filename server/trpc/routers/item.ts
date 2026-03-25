@@ -1,5 +1,11 @@
 import { TRPCError } from "@trpc/server"
-import type { ItemCategory, ItemCondition, ItemStatus, Prisma } from "@prisma/client"
+import {
+  DisputeStatus as PrismaDisputeStatus,
+  type ItemCategory,
+  type ItemCondition,
+  type ItemStatus,
+  type Prisma,
+} from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -69,8 +75,38 @@ const itemWithTaxonomy = {
   },
 } satisfies Prisma.ItemInclude
 
+const ACTIVE_TRANSACTION_DISPUTE_STATUSES = [
+  PrismaDisputeStatus.OPEN,
+  PrismaDisputeStatus.UNDER_REVIEW,
+  PrismaDisputeStatus.APPEALED,
+] as const
+
+const myListingsWithDisputes = {
+  ...itemWithTaxonomy,
+  transactions: {
+    select: {
+      disputes: {
+        where: {
+          status: {
+            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+          },
+        },
+        select: {
+          id: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.ItemInclude
+
 type ItemWithTaxonomy = Prisma.ItemGetPayload<{
   include: typeof itemWithTaxonomy
+}>
+
+type MyListingFilterStatus = "ACTIVE" | "IN_USE" | "INACTIVE" | "DISPUTED"
+
+type ItemWithListingDisputes = Prisma.ItemGetPayload<{
+  include: typeof myListingsWithDisputes
 }>
 
 type ItemWithUserLike = ItemWithTaxonomy & {
@@ -317,6 +353,34 @@ const mapItemTaxonomy = (
     tags: tags.map((entry) => entry.tag.name),
   }
 }
+
+const itemHasActiveDispute = (item: Pick<ItemWithListingDisputes, "transactions">) =>
+  item.transactions.some((transaction) => transaction.disputes.length > 0)
+
+const getMyListingDisplayStatus = (
+  item: Pick<ItemWithListingDisputes, "status" | "transactions">,
+): MyListingFilterStatus => {
+  if (itemHasActiveDispute(item)) {
+    return "DISPUTED"
+  }
+
+  switch (item.status) {
+    case itemStatusSchema.enum.AVAILABLE:
+      return "ACTIVE"
+    case itemStatusSchema.enum.RENTED:
+      return "IN_USE"
+    case itemStatusSchema.enum.DEACTIVATED:
+      return "INACTIVE"
+    default:
+      return "INACTIVE"
+  }
+}
+
+const mapMyListing = (item: ItemWithListingDisputes) => ({
+  ...mapItemTaxonomy(item),
+  hasActiveDispute: itemHasActiveDispute(item),
+  displayStatus: getMyListingDisplayStatus(item),
+})
 
 const buildOrderedImagePaths = (thumbnailImage?: string | null, photos?: string[]) => {
   if (thumbnailImage === undefined && photos === undefined) {
@@ -943,12 +1007,75 @@ export const itemRouter = router({
   }),
 
   myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
-    const { search, status, limit, cursor } = input
+    const { search, statuses, categories, limit, cursor } = input
     const userId = ctx.user.id
+
+    const activeDisputeWhere: Prisma.RentalTransactionWhereInput = {
+      disputes: {
+        some: {
+          status: {
+            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+          },
+        },
+      },
+    }
+
+    const selectedStatuses = statuses ?? []
+    const includeDisputed = selectedStatuses.includes("DISPUTED")
+    const requestedBaseStatuses = selectedStatuses.filter(
+      (status): status is Exclude<MyListingFilterStatus, "DISPUTED"> => status !== "DISPUTED",
+    )
+
+    const baseStatusClauses: Prisma.ItemWhereInput[] = requestedBaseStatuses.map((status) => {
+      switch (status) {
+        case "ACTIVE":
+          return {
+            status: itemStatusSchema.enum.AVAILABLE,
+            NOT: { transactions: { some: activeDisputeWhere } },
+          }
+        case "IN_USE":
+          return {
+            status: itemStatusSchema.enum.RENTED,
+            NOT: { transactions: { some: activeDisputeWhere } },
+          }
+        case "INACTIVE":
+          return {
+            status: itemStatusSchema.enum.DEACTIVATED,
+            NOT: { transactions: { some: activeDisputeWhere } },
+          }
+      }
+    })
 
     const baseWhere: Prisma.ItemWhereInput = {
       lenderId: userId,
-      status: status ? status : { not: itemStatusSchema.enum.DELETED },
+      status: { not: itemStatusSchema.enum.DELETED },
+      ...(categories?.length
+        ? {
+            categories: {
+              some: {
+                category: {
+                  in: categories,
+                },
+              },
+            },
+          }
+        : {}),
+      ...(selectedStatuses.length
+        ? {
+            OR: [
+              ...baseStatusClauses,
+              ...(includeDisputed
+                ? [
+                    {
+                      transactions: {
+                        some: activeDisputeWhere,
+                      },
+                    } satisfies Prisma.ItemWhereInput,
+                  ]
+                : []),
+            ],
+          }
+        : {}),
     }
 
     const cursorWhere: Prisma.ItemWhereInput = cursor
@@ -962,7 +1089,7 @@ export const itemRouter = router({
 
     const records = await ctx.prisma.item.findMany({
       where: { AND: [baseWhere, cursorWhere] },
-      include: itemWithTaxonomy,
+      include: myListingsWithDisputes,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: search ? SEARCH_SCAN_LIMIT : limit + 1,
     })
@@ -975,7 +1102,7 @@ export const itemRouter = router({
     const lastRecord = pageRecords.at(-1)
 
     return {
-      items: pageRecords.map(mapItemTaxonomy),
+      items: pageRecords.map(mapMyListing),
       nextCursor:
         hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null,
     }

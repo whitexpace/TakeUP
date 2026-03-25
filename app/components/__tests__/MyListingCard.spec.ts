@@ -1,16 +1,18 @@
 import { describe, it, expect } from "vitest"
 
+type DisplayStatus = "ACTIVE" | "IN_USE" | "INACTIVE" | "DISPUTED"
 type ItemStatus = "AVAILABLE" | "RENTED" | "DEACTIVATED"
 type RateOption = "PER_HOUR" | "PER_DAY"
 
-const STATUS_LABELS: Record<ItemStatus, string> = {
-  AVAILABLE: "ACTIVE",
-  RENTED: "IN USE",
-  DEACTIVATED: "INACTIVE",
+const STATUS_LABELS: Record<DisplayStatus, string> = {
+  ACTIVE: "ACTIVE",
+  IN_USE: "IN USE",
+  INACTIVE: "INACTIVE",
+  DISPUTED: "DISPUTED",
 }
 
-function getStatusLabel(status: ItemStatus) {
-  return STATUS_LABELS[status]
+function getStatusLabel(displayStatus: DisplayStatus) {
+  return STATUS_LABELS[displayStatus]
 }
 
 function getTypeBadge(freeToBorrow: boolean) {
@@ -33,17 +35,30 @@ function formatPrice(freeToBorrow: boolean, rentalFee: number, rateOption: RateO
   return `₱${rentalFee}/${unit}`
 }
 
+function getStatusClass(hasActiveDispute: boolean) {
+  return hasActiveDispute ? "text-cinnabar-red" : "text-indigo-900"
+}
+
 describe("MyListingCard logic", () => {
-  it("maps AVAILABLE to ACTIVE label", () => {
-    expect(getStatusLabel("AVAILABLE")).toBe("ACTIVE")
+  it("renders ACTIVE from display status", () => {
+    expect(getStatusLabel("ACTIVE")).toBe("ACTIVE")
   })
 
-  it("maps RENTED to IN USE label", () => {
-    expect(getStatusLabel("RENTED")).toBe("IN USE")
+  it("renders IN USE from display status", () => {
+    expect(getStatusLabel("IN_USE")).toBe("IN USE")
   })
 
-  it("maps DEACTIVATED to INACTIVE label", () => {
-    expect(getStatusLabel("DEACTIVATED")).toBe("INACTIVE")
+  it("renders INACTIVE from display status", () => {
+    expect(getStatusLabel("INACTIVE")).toBe("INACTIVE")
+  })
+
+  it("renders DISPUTED from display status", () => {
+    expect(getStatusLabel("DISPUTED")).toBe("DISPUTED")
+  })
+
+  it("uses dispute styling when the listing has an active dispute", () => {
+    expect(getStatusClass(true)).toBe("text-cinnabar-red")
+    expect(getStatusClass(false)).toBe("text-indigo-900")
   })
 
   it("shows Borrow type badge when freeToBorrow is true", () => {

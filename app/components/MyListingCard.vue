@@ -16,15 +16,17 @@ const typeBadge = computed(() => {
 })
 
 const statusLabel = computed(() => {
-  switch (props.item.status) {
-    case "AVAILABLE":
+  switch (props.item.displayStatus) {
+    case "ACTIVE":
       return "ACTIVE"
-    case "RENTED":
+    case "IN_USE":
       return "IN USE"
-    case "DEACTIVATED":
+    case "INACTIVE":
       return "INACTIVE"
+    case "DISPUTED":
+      return "DISPUTED"
     default:
-      return props.item.status
+      return props.item.displayStatus
   }
 })
 
@@ -83,7 +85,12 @@ const coverImage = computed(
         <span class="text-orange-500 text-xs font-medium font-geist uppercase">{{
           formattedCategory
         }}</span>
-        <span class="text-indigo-900 text-xs font-medium font-geist">{{ statusLabel }}</span>
+        <span
+          class="text-xs font-medium font-geist"
+          :class="item.hasActiveDispute ? 'text-cinnabar-red' : 'text-indigo-900'"
+        >
+          {{ statusLabel }}
+        </span>
       </div>
 
       <!-- Item name -->
