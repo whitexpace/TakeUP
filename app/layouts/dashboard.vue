@@ -4,6 +4,7 @@
     <Header>
       <template #left>
         <button
+          v-if="!hideSidebar"
           class="flex items-center justify-center h-10 w-10 rounded-full text-noble-black transition-colors hover:bg-cream hover:text-burning-orange"
           aria-label="Toggle Sidebar"
           title="Toggle Sidebar"
@@ -31,13 +32,14 @@
     <div class="flex flex-1 overflow-hidden h-[calc(100vh-56px)] relative">
       <!-- Sidebar Overlay for Mobile -->
       <div
-        v-if="isSidebarOpen && isMobile"
+        v-if="!hideSidebar && isSidebarOpen && isMobile"
         class="fixed inset-0 bg-noble-black/50 z-40 lg:hidden transition-opacity duration-300"
         @click="isSidebarOpen = false"
       />
 
       <!-- Left Sidebar -->
       <aside
+        v-if="!hideSidebar"
         class="bg-cream flex-col shrink-0 border-r border-cinnamon-ice transition-all duration-300 ease-in-out z-50 overflow-y-auto custom-sidebar-scrollbar fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
         :class="[
           isSidebarOpen
@@ -84,18 +86,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue"
+import { computed, ref, onMounted, onUnmounted } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import { useDashboardFilters } from "../composables/use-dashboard-filters"
 
+const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
+const hideSidebar = computed(() => Boolean(route.meta.hideDashboardSidebar))
 
 const toggleSidebar = () => {
+  if (hideSidebar.value) return
   isSidebarOpen.value = !isSidebarOpen.value
 }
 
 const checkMobile = () => {
+  if (hideSidebar.value) {
+    isMobile.value = window.innerWidth < 1024
+    isSidebarOpen.value = false
+    return
+  }
+
   isMobile.value = window.innerWidth < 1024 // lg breakpoint
   if (isMobile.value) {
     isSidebarOpen.value = false
@@ -123,7 +134,9 @@ provide("dashboardFilters", filters)
 onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
-  await fetchFilterMetadata()
+  if (!hideSidebar.value) {
+    await fetchFilterMetadata()
+  }
 })
 
 onUnmounted(() => {
