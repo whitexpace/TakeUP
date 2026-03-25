@@ -253,12 +253,7 @@ export const myListingsCursorSchema = z.object({
   createdAt: z.coerce.date(),
 })
 
-export const myListingFilterStatusSchema = z.enum([
-  "ACTIVE",
-  "IN_USE",
-  "INACTIVE",
-  "DISPUTED",
-])
+export const myListingFilterStatusSchema = z.enum(["ACTIVE", "IN_USE", "INACTIVE", "DISPUTED"])
 
 export const myListingsSchema = z
   .object({

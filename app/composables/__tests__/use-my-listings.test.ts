@@ -139,8 +139,13 @@ describe("useMyListings", () => {
   })
 
   it("clearFilters resets search and selected filters", () => {
-    const { setSearchQuery, toggleStatusFilter, toggleCategoryFilter, clearFilters, hasActiveFilters } =
-      useMyListings()
+    const {
+      setSearchQuery,
+      toggleStatusFilter,
+      toggleCategoryFilter,
+      clearFilters,
+      hasActiveFilters,
+    } = useMyListings()
 
     setSearchQuery("camera")
     toggleStatusFilter("INACTIVE")
@@ -183,7 +188,10 @@ describe("useMyListings", () => {
       .fn()
       .mockResolvedValueOnce({ items: [makeItem()], nextCursor: null })
       .mockResolvedValueOnce({ ...makeItem(), status: "DEACTIVATED", displayStatus: "INACTIVE" })
-      .mockResolvedValueOnce({ items: [{ ...makeItem(), status: "DEACTIVATED", displayStatus: "INACTIVE" }], nextCursor: null })
+      .mockResolvedValueOnce({
+        items: [{ ...makeItem(), status: "DEACTIVATED", displayStatus: "INACTIVE" }],
+        nextCursor: null,
+      })
     vi.stubGlobal("$fetch", fetchMock)
 
     const { toggleStatus, refresh } = useMyListings()
@@ -218,5 +226,4 @@ describe("useMyListings", () => {
 
     expect(hasFetched.value).toBe(true)
   })
-
 })
