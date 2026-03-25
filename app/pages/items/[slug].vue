@@ -37,8 +37,26 @@ const slugParam = computed(() => {
 })
 
 const itemId = computed(() => extractItemIdFromSlug(slugParam.value))
-const backNavigationPath = "/dashboard"
-const backNavigationLabel = "Back to listings"
+const fromPage = computed(() => {
+  const from = route.query.from
+  return typeof from === "string" ? from : null
+})
+
+const backNavigationPath = computed(() => {
+  if (fromPage.value === "likes") {
+    return "/likes"
+  }
+
+  return "/dashboard"
+})
+
+const backNavigationLabel = computed(() => {
+  if (fromPage.value === "likes") {
+    return "Back to liked items"
+  }
+
+  return "Back to listings"
+})
 
 const {
   data,

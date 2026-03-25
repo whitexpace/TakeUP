@@ -5,6 +5,11 @@ import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
 
+definePageMeta({
+  layout: "dashboard",
+  hideDashboardSidebar: true,
+})
+
 const searchInput = ref("")
 const appliedSearch = ref("")
 let searchApplyTimeout: ReturnType<typeof setTimeout> | null = null
@@ -14,6 +19,28 @@ const highlightedSuggestionIndex = ref(-1)
 
 const selectedStatus = ref("ALL")
 const selectedCategory = ref("ALL")
+const availableCategoryValues = ref<string[]>([])
+
+const CATEGORY_OPTIONS = [
+  { value: "BOOKS", label: "Books" },
+  { value: "ELECTRONICS", label: "Electronics" },
+  { value: "CLOTHING", label: "Clothing" },
+  { value: "TOOLS", label: "Tools" },
+  { value: "HOME_APPLIANCES", label: "Home & Appliances" },
+  { value: "SPORTS_OUTDOORS", label: "Sports & Outdoors" },
+  { value: "MUSIC_AUDIO", label: "Music & Audio" },
+  { value: "TOYS_GAMES", label: "Toys & Games" },
+  { value: "FURNITURE", label: "Furniture" },
+  { value: "VEHICLES_ACCESSORIES", label: "Vehicles & Accessories" },
+  { value: "HEALTH_BEAUTY", label: "Health & Beauty" },
+  { value: "SCHOOL_SUPPLIES", label: "School Supplies" },
+  { value: "PET_SUPPLIES", label: "Pet Supplies" },
+  { value: "OTHER", label: "Other" },
+] as const
+
+const categoryOptions = computed(() =>
+  CATEGORY_OPTIONS.filter((category) => availableCategoryValues.value.includes(category.value)),
+)
 
 const clearSearch = () => {
   searchInput.value = ""
@@ -185,28 +212,51 @@ const formatEnumLabel = (value: string) =>
 
 const statusOptions = ["ALL", "AVAILABLE", "RENTED", "DEACTIVATED"] as const
 
-const categoryOptions = computed(() => {
-  const categories = new Set<string>()
-  for (const item of listedItems.value) {
-    for (const category of item.categories) {
-      categories.add(category)
-    }
-  }
-  return Array.from(categories).sort((a, b) => a.localeCompare(b))
-})
-
-watch(categoryOptions, (options) => {
-  if (selectedCategory.value !== "ALL" && !options.includes(selectedCategory.value)) {
-    selectedCategory.value = "ALL"
-  }
-})
-
 const clearFilters = () => {
   selectedStatus.value = "ALL"
   selectedCategory.value = "ALL"
 }
 
+const fetchLikedCategories = async () => {
+  try {
+    let accessToken: string | undefined
+    if (typeof useSupabaseClient === "function") {
+      const supabase = useSupabaseClient()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      accessToken = session?.access_token
+    }
+
+    return await $fetch<string[]>("/api/items/liked-categories", {
+      ...(accessToken
+        ? {
+            headers: {
+              authorization: `Bearer ${accessToken}`,
+            },
+          }
+        : {}),
+    })
+  } catch {
+    return []
+  }
+}
+
+const syncLikedCategories = async () => {
+  const categoryValues = await fetchLikedCategories()
+  availableCategoryValues.value = categoryValues
+
+  if (selectedCategory.value === "ALL") {
+    return
+  }
+
+  if (!categoryValues.includes(selectedCategory.value)) {
+    selectedCategory.value = "ALL"
+  }
+}
+
 const reload = async () => {
+  await syncLikedCategories()
   await refresh()
 }
 
@@ -392,8 +442,8 @@ watch(
           class="rounded-full border border-cinnamon-ice bg-white px-4 py-2 font-geist text-[14px] text-noble-black/75 focus:outline-none"
         >
           <option value="ALL">Category</option>
-          <option v-for="category in categoryOptions" :key="category" :value="category">
-            {{ formatEnumLabel(category) }}
+          <option v-for="category in categoryOptions" :key="category.value" :value="category.value">
+            {{ category.label }}
           </option>
         </select>
       </div>

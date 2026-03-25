@@ -87,7 +87,7 @@ onBeforeUnmount(() => {
     <!-- Left Section: Logo & App Name (Sidebar width on desktop) -->
     <div class="w-auto lg:w-80 flex items-center px-4 sm:px-6 shrink-0 gap-4">
       <slot name="left" />
-      <a href="/" class="flex items-center gap-3">
+      <a href="/dashboard" class="flex items-center gap-3">
         <img src="/images/logo.svg" alt="TakeUP Logo" class="h-8 w-auto" />
       </a>
     </div>
@@ -234,9 +234,12 @@ onBeforeUnmount(() => {
       </button>
 
       <!-- Heart Icon (Likes) -->
-      <button
+      <NuxtLink
+        to="/likes"
         class="hidden md:block text-noble-black hover:text-burning-orange transition-colors p-1"
+        active-class="text-burning-orange"
         title="Likes"
+        aria-label="Likes"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -253,7 +256,7 @@ onBeforeUnmount(() => {
             d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
           />
         </svg>
-      </button>
+      </NuxtLink>
 
       <!-- Cart Icon -->
       <NuxtLink
