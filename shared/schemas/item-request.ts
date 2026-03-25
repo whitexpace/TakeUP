@@ -63,6 +63,7 @@ export const createItemRequestSchema = z.object({
   requestedDates: requestedDatesSchema,
   priceRange: priceRangeSchema,
   description: requiredTextField("Description", 2000),
+  referenceImageUrl: z.string().url().nullable().optional(),
   status: itemRequestStatusSchema.default("OPEN"),
 })
 
@@ -73,6 +74,7 @@ export const updateItemRequestSchema = z
     requestedDates: requestedDatesSchema.optional(),
     priceRange: priceRangeSchema.optional(),
     description: requiredTextField("Description", 2000).optional(),
+    referenceImageUrl: z.string().url().nullable().optional(),
     status: itemRequestStatusSchema.optional(),
   })
   .refine(
@@ -81,6 +83,7 @@ export const updateItemRequestSchema = z
       payload.requestedDates !== undefined ||
       payload.priceRange !== undefined ||
       payload.description !== undefined ||
+      payload.referenceImageUrl !== undefined ||
       payload.status !== undefined,
     { message: "At least one field is required for update." },
   )

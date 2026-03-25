@@ -49,12 +49,28 @@
             <p class="mt-1 text-[13px] leading-relaxed text-noble-black/50">
               Create a listing first so you can attach a real item to this offer.
             </p>
+            <button
+              type="button"
+              class="mt-4 rounded-full bg-burning-orange px-5 py-2.5 text-[13px] font-bold text-white transition-all hover:bg-blue-estate"
+              @click="emit('create-item')"
+            >
+              Add new item
+            </button>
           </div>
 
           <div v-else class="mt-6 grid gap-4 md:grid-cols-2">
             <label class="flex flex-col gap-2 md:col-span-2">
-              <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-                Your item
+              <span class="flex items-center justify-between gap-3">
+                <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
+                  Your item
+                </span>
+                <button
+                  type="button"
+                  class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-blue-estate transition-all hover:border-blue-estate/20 hover:bg-blue-estate/5"
+                  @click="emit('create-item')"
+                >
+                  Add new item
+                </button>
               </span>
               <select
                 v-model="selectedItemIdInput"
@@ -75,6 +91,42 @@
                 {{ itemError }}
               </p>
             </label>
+
+            <div
+              v-if="selectedItem"
+              class="md:col-span-2 overflow-hidden rounded-[18px] border border-cinnamon-ice/20 bg-white"
+            >
+              <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+                <div class="h-28 w-full overflow-hidden rounded-[16px] bg-cream sm:w-36">
+                  <img
+                    v-if="selectedItem.thumbnailImage"
+                    :src="selectedItem.thumbnailImage"
+                    :alt="selectedItem.name"
+                    class="h-full w-full object-cover"
+                  />
+                  <div
+                    v-else
+                    class="flex h-full w-full items-center justify-center text-[12px] font-semibold uppercase tracking-[0.12em] text-noble-black/30"
+                  >
+                    No image
+                  </div>
+                </div>
+                <div class="flex flex-1 flex-col gap-1">
+                  <p class="text-[16px] font-semibold text-noble-black">{{ selectedItem.name }}</p>
+                  <p class="text-[13px] text-noble-black/55">
+                    {{ formatCondition(selectedItem.condition) }} ·
+                    {{
+                      selectedItem.freeToBorrow
+                        ? "Free to borrow"
+                        : formatFee(selectedItem.rentalFee)
+                    }}
+                  </p>
+                  <p class="text-[13px] text-noble-black/45">
+                    This image will be shown with your offer so the borrower can identify the item.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <label class="flex flex-col gap-2">
               <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
@@ -219,11 +271,13 @@ const props = withDefaults(
     modelValue: boolean
     requestTitle: string
     items: CommunityOfferableItem[]
+    preferredItemId?: number | null
     existingOffer?: CommunityOffer | null
     isSubmitting?: boolean
     serverError?: string | null
   }>(),
   {
+    preferredItemId: null,
     existingOffer: null,
     isSubmitting: false,
     serverError: null,
@@ -234,6 +288,7 @@ const emit = defineEmits<{
   (event: "update:modelValue", value: boolean): void
   (event: "submit", value: CommunityOfferFormInput): void
   (event: "cancel-offer", offerId: number): void
+  (event: "create-item"): void
 }>()
 
 const selectedItemIdInput = ref("")
@@ -289,7 +344,8 @@ const markTouched = (field: keyof typeof touchedFields) => {
 }
 
 const hydrateForm = () => {
-  const initialItemId = props.existingOffer?.itemID ?? props.items[0]?.numericId ?? null
+  const initialItemId =
+    props.preferredItemId ?? props.existingOffer?.itemID ?? props.items[0]?.numericId ?? null
   const initialItem =
     props.items.find((item) => item.numericId === initialItemId) ?? props.items[0] ?? null
 
@@ -307,12 +363,38 @@ const hydrateForm = () => {
 }
 
 watch(
-  () => [props.modelValue, props.existingOffer, props.items] as const,
+  () => [props.modelValue, props.existingOffer] as const,
   ([isOpen]) => {
     if (!isOpen) return
     hydrateForm()
   },
   { immediate: true },
+)
+
+watch(
+  () => props.items,
+  (items) => {
+    if (!props.modelValue || items.length === 0) return
+
+    if (props.preferredItemId && items.some((item) => item.numericId === props.preferredItemId)) {
+      selectedItemIdInput.value = String(props.preferredItemId)
+      return
+    }
+
+    if (!selectedItem.value) {
+      selectedItemIdInput.value = String(items[0]?.numericId ?? "")
+    }
+  },
+  { deep: true },
+)
+
+watch(
+  () => props.preferredItemId,
+  (preferredItemId) => {
+    if (!props.modelValue || !preferredItemId) return
+    if (!props.items.some((item) => item.numericId === preferredItemId)) return
+    selectedItemIdInput.value = String(preferredItemId)
+  },
 )
 
 watch(selectedItem, (item) => {

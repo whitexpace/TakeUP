@@ -42,6 +42,7 @@ type PendingUploadImage = {
 const props = defineProps<{
   mode?: "new" | "edit"
   item?: MyListingItem | null
+  embedded?: boolean
   isSubmitting?: boolean
   submitError?: string | null
 }>()
@@ -611,11 +612,18 @@ onBeforeUnmount(() => {
     <!-- Header -->
     <div>
       <NuxtLink
+        v-if="!props.embedded"
         to="/account/listings"
         class="inline-flex items-center gap-1 text-neutral-800/70 text-sm font-medium font-geist tracking-wide hover:text-neutral-800 transition-colors mb-4"
       >
         ← Back to My Listings
       </NuxtLink>
+      <p
+        v-else
+        class="mb-4 text-[12px] font-semibold uppercase tracking-[0.12em] text-noble-black/40"
+      >
+        New listing
+      </p>
       <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">
         {{ props.mode === "new" ? "Add New Item" : "Edit Item" }}
       </h1>
