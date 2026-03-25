@@ -52,16 +52,20 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
-              <span
-                class="rounded-full border border-blue-estate/10 bg-blue-estate/5 px-6 py-2 text-[14px] font-bold text-blue-estate"
+              <button
+                v-for="filter in availableFilters"
+                :key="filter.value"
+                type="button"
+                class="rounded-full px-6 py-2 text-[14px] font-bold transition-all"
+                :class="
+                  activeFilter === filter.value
+                    ? 'border border-blue-estate/10 bg-blue-estate/5 text-blue-estate'
+                    : 'border border-cinnamon-ice/30 bg-cream text-noble-black/60 hover:border-cinnamon-ice/45 hover:text-noble-black/80'
+                "
+                @click="activeFilter = filter.value"
               >
-                Active requests
-              </span>
-              <span
-                class="rounded-full border border-cinnamon-ice/30 bg-cream px-6 py-2 text-[14px] font-bold text-noble-black/60"
-              >
-                Newest first
-              </span>
+                {{ filter.label }}
+              </button>
             </div>
 
             <div
@@ -133,13 +137,68 @@
       :model-value="isOfferComposerOpen"
       :request-title="selectedRequestForOffer?.itemNeeded ?? ''"
       :items="offerableItems"
+      :preferred-item-id="preferredOfferItemId"
       :existing-offer="existingOfferForCurrentUser"
       :is-submitting="isSubmittingOffer"
       :server-error="offerComposerError"
       @update:model-value="handleOfferComposerVisibility"
+      @create-item="openNewItemComposer"
       @submit="submitOffer"
       @cancel-offer="cancelOffer"
     />
+
+    <Teleport to="body">
+      <transition name="offer-modal">
+        <div
+          v-if="isNewItemComposerOpen"
+          class="fixed inset-0 z-[2200] flex items-center justify-center bg-noble-black/60 p-4"
+          @click.self="closeNewItemComposer"
+        >
+          <div
+            class="max-h-[calc(100vh-2rem)] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-cinnamon-ice/30 bg-white p-6 shadow-2xl md:p-7"
+          >
+            <div class="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-estate/60">
+                  Add new item
+                </p>
+                <h2 class="mt-1 text-[28px] font-bold text-noble-black">
+                  Create a listing for this offer
+                </h2>
+                <p class="mt-2 text-[14px] leading-relaxed text-noble-black/55">
+                  Publish a listing, then return to the offer flow with the new item selected.
+                </p>
+              </div>
+              <button
+                class="rounded-full p-2 text-noble-black/40 transition-colors hover:bg-cream hover:text-noble-black"
+                aria-label="Close new listing form"
+                @click="closeNewItemComposer"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <ListingForm
+              embedded
+              mode="new"
+              :is-submitting="isSubmittingNewItem"
+              :submit-error="newItemComposerError"
+              @submit="handleCreateOfferableItem"
+              @cancel="closeNewItemComposer"
+            />
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -159,6 +218,7 @@ import type {
   UserActivity,
 } from "~/types/community-requests"
 import CommunityCreatePost from "~/components/CommunityCreatePost.vue"
+import ListingForm from "~/components/ListingForm.vue"
 
 definePageMeta({ layout: false })
 
@@ -184,12 +244,14 @@ type ApiCommunityOffer = {
   createdAt: string | Date
   updatedAt: string | Date
   lender: ApiCommunityMember
+  itemThumbnailImage: string | null
 }
 
 type ApiCommunityRequest = {
   id: number
   borrowerID: number
   itemNeeded: string
+  referenceImageUrl: string | null
   requestedDates: Array<string | Date>
   priceRange: number[]
   description: string
@@ -217,6 +279,7 @@ type ApiOfferableItem = {
   id: string
   numericId: number
   name: string
+  thumbnailImage: string | null
   condition: string
   rentalFee: number
   freeToBorrow: boolean
@@ -319,6 +382,19 @@ const currentUserAvatar = computed(() => currentUserProfile.value.avatar)
 type FeedFilter = "Newest" | "Most Offers" | "Open" | "My Requests"
 
 const activeFilter = ref<FeedFilter>("Newest")
+const availableFilters = computed(() => {
+  const filters: Array<{ label: string; value: FeedFilter }> = [
+    { label: "Newest", value: "Newest" },
+    { label: "Most Offers", value: "Most Offers" },
+    { label: "Open", value: "Open" },
+  ]
+
+  if (currentDbUserId.value) {
+    filters.push({ label: "My Requests", value: "My Requests" })
+  }
+
+  return filters
+})
 
 const requests = ref<CommunityRequest[]>([])
 const notifications = ref<CommunityOfferNotification[]>([])
@@ -332,7 +408,12 @@ const requestComposerError = ref<string | null>(null)
 const offerComposerError = ref<string | null>(null)
 const isOfferComposerOpen = ref(false)
 const activeOfferRequestId = ref<number | null>(null)
+const preferredOfferItemId = ref<number | null>(null)
+const isNewItemComposerOpen = ref(false)
+const isSubmittingNewItem = ref(false)
+const newItemComposerError = ref<string | null>(null)
 const feedHydrated = ref(false)
+const { createListing } = useMyListings()
 
 const toDate = (value: string | Date | null | undefined) => {
   if (!value) return null
@@ -396,6 +477,7 @@ const normalizeOffer = (offer: ApiCommunityOffer): CommunityOffer => ({
   requestID: Number(offer.requestID),
   itemID: Number(offer.itemID),
   itemName: offer.itemName,
+  itemThumbnailImage: offer.itemThumbnailImage,
   rentalFee: Number(offer.rentalFee),
   availability: Boolean(offer.availability),
   condition: offer.condition as CommunityOffer["condition"],
@@ -411,6 +493,7 @@ const normalizeRequest = (request: ApiCommunityRequest): CommunityRequest => ({
   id: Number(request.id),
   borrowerID: Number(request.borrowerID),
   itemNeeded: request.itemNeeded,
+  referenceImageUrl: request.referenceImageUrl,
   requestedDates: request.requestedDates
     .map((value) => toDate(value))
     .filter((value): value is Date => Boolean(value)),
@@ -442,6 +525,7 @@ const normalizeOfferableItem = (item: ApiOfferableItem): CommunityOfferableItem 
   id: item.id,
   numericId: Number(item.numericId),
   name: item.name,
+  thumbnailImage: item.thumbnailImage,
   condition: item.condition as CommunityOfferableItem["condition"],
   rentalFee: Number(item.rentalFee),
   freeToBorrow: Boolean(item.freeToBorrow),
@@ -635,6 +719,7 @@ const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
       headers,
       body: {
         itemNeeded: payload.itemNeeded,
+        referenceImageUrl: payload.referenceImageUrl ?? null,
         requestedDates: enumerateRequestedDates(payload.startDate, payload.endDate),
         priceRange: [payload.minimumPrice, payload.maximumPrice],
         description: payload.description,
@@ -667,6 +752,7 @@ const openOfferComposer = (requestId: number) => {
   if (request.borrower.userId === currentDbUserId.value || request.status !== "OPEN") return
 
   offerComposerError.value = null
+  preferredOfferItemId.value = null
   activeOfferRequestId.value = requestId
   isOfferComposerOpen.value = true
 }
@@ -676,7 +762,46 @@ const handleOfferComposerVisibility = (isVisible: boolean) => {
 
   if (!isVisible) {
     activeOfferRequestId.value = null
+    preferredOfferItemId.value = null
     offerComposerError.value = null
+  }
+}
+
+const openNewItemComposer = () => {
+  newItemComposerError.value = null
+  isNewItemComposerOpen.value = true
+}
+
+const closeNewItemComposer = () => {
+  if (isSubmittingNewItem.value) return
+  newItemComposerError.value = null
+  isNewItemComposerOpen.value = false
+}
+
+const handleCreateOfferableItem = async (data: Record<string, unknown>) => {
+  isSubmittingNewItem.value = true
+  newItemComposerError.value = null
+
+  try {
+    const createdListing = await createListing(data)
+    preferredOfferItemId.value = createdListing.numericId
+    await refreshFeed()
+    isNewItemComposerOpen.value = false
+  } catch (error: unknown) {
+    const fetchError = error as {
+      data?: { statusMessage?: string; error?: { message?: string } }
+      statusMessage?: string
+      message?: string
+    }
+
+    newItemComposerError.value =
+      fetchError.data?.error?.message ??
+      fetchError.data?.statusMessage ??
+      fetchError.statusMessage ??
+      fetchError.message ??
+      "Unable to create this listing right now."
+  } finally {
+    isSubmittingNewItem.value = false
   }
 }
 
@@ -901,6 +1026,12 @@ watch(
     void refreshFeed()
   },
 )
+
+watch(currentDbUserId, (userId) => {
+  if (!userId && activeFilter.value === "My Requests") {
+    activeFilter.value = "Newest"
+  }
+})
 </script>
 
 <style scoped>
@@ -923,5 +1054,28 @@ watch(
 }
 .container {
   scrollbar-gutter: stable;
+}
+
+.offer-modal-enter-active,
+.offer-modal-leave-active {
+  transition: opacity 0.22s ease;
+}
+
+.offer-modal-enter-active > div,
+.offer-modal-leave-active > div {
+  transition:
+    transform 0.22s ease,
+    opacity 0.22s ease;
+}
+
+.offer-modal-enter-from,
+.offer-modal-leave-to {
+  opacity: 0;
+}
+
+.offer-modal-enter-from > div,
+.offer-modal-leave-to > div {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
 }
 </style>

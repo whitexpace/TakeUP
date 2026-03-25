@@ -414,15 +414,16 @@ model Borrower {
 }
 
 model ItemRequest {
-  id             Int               @id @default(autoincrement())
-  borrowerID     Int
-  itemNeeded     String
-  requestedDates DateTime[]
-  priceRange     Int[]
-  description    String
-  status         ItemRequestStatus @default(OPEN)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                Int               @id @default(autoincrement())
+  borrowerID        Int
+  itemNeeded        String
+  referenceImageUrl String?
+  requestedDates    DateTime[]
+  priceRange        Int[]
+  description       String
+  status            ItemRequestStatus @default(OPEN)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   borrower Borrower       @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
   offers   RequestOffer[]

@@ -130,33 +130,56 @@
       </div>
     </div>
 
-    <div class="flex flex-col gap-3">
-      <h3 class="text-[22px] font-bold text-noble-black leading-tight">{{ request.itemNeeded }}</h3>
-      <p class="text-[15px] text-noble-black/70 leading-relaxed">{{ request.description }}</p>
+    <div
+      class="flex flex-col gap-4"
+      :class="request.referenceImageUrl ? 'lg:flex-row lg:items-start lg:justify-between' : ''"
+    >
+      <div class="flex-1 flex flex-col gap-3">
+        <h3 class="text-[22px] font-bold text-noble-black leading-tight">
+          {{ request.itemNeeded }}
+        </h3>
+        <p class="text-[15px] text-noble-black/70 leading-relaxed">{{ request.description }}</p>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <span
-          class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1 text-[12px] font-semibold text-noble-black/65"
+        <div class="flex flex-wrap items-center gap-2">
+          <span
+            class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1 text-[12px] font-semibold text-noble-black/65"
+          >
+            {{ formatDateRange(request.requestedDates) }}
+          </span>
+          <span
+            class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1 text-[12px] font-semibold text-noble-black/65"
+          >
+            Budget: {{ formatPriceRange(request.priceRange) }}
+          </span>
+          <span
+            v-if="request.offersCount > 0"
+            class="rounded-full border border-burning-orange/15 bg-burning-orange/5 px-3 py-1 text-[12px] font-bold text-burning-orange"
+          >
+            {{ request.offersCount }} {{ request.offersCount === 1 ? "offer" : "offers" }} received
+          </span>
+          <span
+            v-if="currentUserOffer && !isOwner"
+            class="rounded-full border border-blue-estate/10 bg-blue-estate/5 px-3 py-1 text-[12px] font-semibold text-blue-estate"
+          >
+            Your offer: {{ formatOfferStatus(currentUserOffer.status) }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-if="request.referenceImageUrl"
+        class="overflow-hidden rounded-[20px] border border-cinnamon-ice/20 bg-white lg:w-56 lg:shrink-0"
+      >
+        <img
+          :src="request.referenceImageUrl"
+          :alt="`${request.itemNeeded} reference image`"
+          class="h-48 w-full object-cover"
+        />
+        <div
+          class="px-4 py-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-noble-black/35"
         >
-          {{ formatDateRange(request.requestedDates) }}
-        </span>
-        <span
-          class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1 text-[12px] font-semibold text-noble-black/65"
-        >
-          Budget: {{ formatPriceRange(request.priceRange) }}
-        </span>
-        <span
-          v-if="request.offersCount > 0"
-          class="rounded-full border border-burning-orange/15 bg-burning-orange/5 px-3 py-1 text-[12px] font-bold text-burning-orange"
-        >
-          {{ request.offersCount }} {{ request.offersCount === 1 ? "offer" : "offers" }} received
-        </span>
-        <span
-          v-if="currentUserOffer && !isOwner"
-          class="rounded-full border border-blue-estate/10 bg-blue-estate/5 px-3 py-1 text-[12px] font-semibold text-blue-estate"
-        >
-          Your offer: {{ formatOfferStatus(currentUserOffer.status) }}
-        </span>
+          Reference image
+        </div>
       </div>
     </div>
 
@@ -186,11 +209,31 @@
         >
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-start gap-3">
-              <UserAvatar
-                :avatar-url="offer.lender.avatar"
-                :user-name="offer.lender.name"
-                size="sm"
-              />
+              <div class="relative">
+                <div
+                  class="h-14 w-14 overflow-hidden rounded-[16px] border border-cinnamon-ice/20 bg-white"
+                >
+                  <img
+                    v-if="offer.itemThumbnailImage"
+                    :src="offer.itemThumbnailImage"
+                    :alt="offer.itemName"
+                    class="h-full w-full object-cover"
+                  />
+                  <div
+                    v-else
+                    class="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-[0.12em] text-noble-black/30"
+                  >
+                    No image
+                  </div>
+                </div>
+                <div class="-mt-3 ml-8">
+                  <UserAvatar
+                    :avatar-url="offer.lender.avatar"
+                    :user-name="offer.lender.name"
+                    size="sm"
+                  />
+                </div>
+              </div>
               <div class="flex flex-col gap-1">
                 <span class="text-[15px] font-bold text-noble-black">{{ offer.lender.name }}</span>
                 <span class="text-[13px] text-noble-black/60">{{ offer.itemName }}</span>

@@ -17,6 +17,7 @@ export interface CommunityOfferableItem {
   id: string
   numericId: number
   name: string
+  thumbnailImage: string | null
   condition: CommunityOfferCondition
   rentalFee: number
   freeToBorrow: boolean
@@ -31,6 +32,7 @@ export interface CommunityOffer {
   requestID: number
   itemID: number
   itemName: string
+  itemThumbnailImage: string | null
   rentalFee: number
   availability: boolean
   condition: CommunityOfferCondition
@@ -54,6 +56,7 @@ export interface CommunityRequest {
   id: number
   borrowerID: number
   itemNeeded: string
+  referenceImageUrl: string | null
   requestedDates: Date[]
   priceRange: [number, number]
   description: string
@@ -68,6 +71,7 @@ export interface CommunityRequest {
 export interface CommunityRequestComposerInput {
   itemNeeded: string
   description: string
+  referenceImageUrl?: string | null
   startDate: string
   endDate: string
   minimumPrice: number

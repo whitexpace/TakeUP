@@ -29,6 +29,7 @@ type OfferableItemRow = {
   id: string
   numericId: number | bigint | string
   name: string
+  thumbnailImage: string | null
   condition: string
   rentalFee: number | bigint | string
   freeToBorrow: boolean
@@ -41,6 +42,7 @@ type RequestRow = {
   id: number
   borrowerID: number
   itemNeeded: string
+  referenceImageUrl: string | null
   requestedDates: Date[] | string[]
   priceRange: number[] | bigint[] | string[]
   description: string
@@ -71,6 +73,7 @@ type OfferRow = {
   createdAt: Date | string
   updatedAt: Date | string
   itemName: string
+  itemThumbnailImage: string | null
   lenderProfileId: number
   lenderUserId: string
   lenderUsername: string
@@ -132,6 +135,7 @@ const mapOffer = (offer: OfferRow) => ({
   requestID: offer.requestID,
   itemID: offer.itemID,
   itemName: offer.itemName,
+  itemThumbnailImage: offer.itemThumbnailImage,
   rentalFee: offer.rentalFee,
   availability: offer.availability,
   condition: offer.condition,
@@ -158,6 +162,7 @@ const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
   id: request.id,
   borrowerID: request.borrowerID,
   itemNeeded: request.itemNeeded,
+  referenceImageUrl: request.referenceImageUrl,
   requestedDates: normalizeRequestedDates(request.requestedDates),
   priceRange: normalizePriceRange(request.priceRange),
   description: request.description,
@@ -227,6 +232,7 @@ const fetchRequestRows = async (
       r."id",
       r."borrowerID",
       r."itemNeeded",
+      r."referenceImageUrl",
       r."requestedDates",
       r."priceRange",
       r."description",
@@ -328,6 +334,7 @@ const fetchOfferRows = async (
       o."createdAt",
       o."updatedAt",
       i."name" AS "itemName",
+      ii."path" AS "itemThumbnailImage",
       l."id" AS "lenderProfileId",
       l."userId" AS "lenderUserId",
       lu."username" AS "lenderUsername",
@@ -340,6 +347,13 @@ const fetchOfferRows = async (
       r."itemNeeded" AS "requestItemNeeded"
     FROM "RequestOffer" o
     INNER JOIN "Item" i ON i."numericId" = o."itemID"
+    LEFT JOIN LATERAL (
+      SELECT "path"
+      FROM "ItemImage"
+      WHERE "itemId" = i."id"
+      ORDER BY "isPrimary" DESC, "sortOrder" ASC, "createdAt" ASC
+      LIMIT 1
+    ) ii ON TRUE
     INNER JOIN "Lender" l ON l."id" = o."lenderID"
     INNER JOIN "User" lu ON lu."id" = l."userId"
     INNER JOIN "ItemRequest" r ON r."id" = o."requestID"
@@ -544,25 +558,34 @@ export const communityRouter = router({
   offerableItems: protectedProcedure.query(async ({ ctx }) => {
     const rows = await ctx.prisma.$queryRaw<OfferableItemRow[]>(Prisma.sql`
       SELECT
-        "id",
-        "numericId",
-        "name",
-        "condition"::text AS "condition",
-        "rentalFee",
-        "freeToBorrow",
-        "status"::text AS "status",
-        "rateOption"::text AS "rateOption",
-        "createdAt"
-      FROM "Item"
-      WHERE "lenderId" = ${ctx.user.id}
-        AND "status" = 'AVAILABLE'::"ItemStatus"
-      ORDER BY "createdAt" DESC
+        i."id",
+        i."numericId",
+        i."name",
+        ii."path" AS "thumbnailImage",
+        i."condition"::text AS "condition",
+        i."rentalFee",
+        i."freeToBorrow",
+        i."status"::text AS "status",
+        i."rateOption"::text AS "rateOption",
+        i."createdAt"
+      FROM "Item" i
+      LEFT JOIN LATERAL (
+        SELECT "path"
+        FROM "ItemImage"
+        WHERE "itemId" = i."id"
+        ORDER BY "isPrimary" DESC, "sortOrder" ASC, "createdAt" ASC
+        LIMIT 1
+      ) ii ON TRUE
+      WHERE i."lenderId" = ${ctx.user.id}
+        AND i."status" = 'AVAILABLE'::"ItemStatus"
+      ORDER BY i."createdAt" DESC
     `)
 
     return rows.map((item) => ({
       id: item.id,
       numericId: toNumber(item.numericId),
       name: item.name,
+      thumbnailImage: item.thumbnailImage,
       condition: item.condition,
       rentalFee: toNumber(item.rentalFee),
       freeToBorrow: item.freeToBorrow,
@@ -604,6 +627,7 @@ export const communityRouter = router({
         INSERT INTO "ItemRequest" (
           "borrowerID",
           "itemNeeded",
+          "referenceImageUrl",
           "requestedDates",
           "priceRange",
           "description",
@@ -613,6 +637,7 @@ export const communityRouter = router({
         VALUES (
           ${borrower.id},
           ${input.itemNeeded},
+          ${input.referenceImageUrl ?? null},
           ${sqlDateArray(input.requestedDates)},
           ${sqlIntArray(input.priceRange)},
           ${input.description},
@@ -660,6 +685,9 @@ export const communityRouter = router({
       }
       if (input.description !== undefined) {
         clauses.push(Prisma.sql`"description" = ${input.description}`)
+      }
+      if (input.referenceImageUrl !== undefined) {
+        clauses.push(Prisma.sql`"referenceImageUrl" = ${input.referenceImageUrl}`)
       }
       if (input.status !== undefined) {
         clauses.push(Prisma.sql`"status" = ${sqlItemRequestStatus(input.status)}`)
