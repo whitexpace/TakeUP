@@ -6,6 +6,7 @@ export const transactionStatusSchema = z.enum([
   "COMPLETED",
   "CANCELLED",
   "RETURNED",
+  "IN_DISPUTE",
 ])
 
 export const transactionRoleSchema = z.enum(["LENDER", "BORROWER"])

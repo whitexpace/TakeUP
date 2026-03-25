@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { NuxtLink } from "#components"
 import type { TransactionListItem } from "../composables/use-transactions"
 
 const props = defineProps<{
