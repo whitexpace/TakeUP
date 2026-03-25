@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
-import { createItemSchema, updateItemSchema } from "../../shared/schemas/item"
 import type { MyListingItem } from "../composables/use-my-listings"
 
 type ItemCategory =
@@ -544,17 +543,27 @@ const handleSubmit = () => {
   }
 
   const payload = buildPayload()
-  const schema = props.mode === "edit" ? updateItemSchema : createItemSchema
-  const result = schema.safeParse(payload)
 
   if (!form.name.trim()) {
     fieldErrors.value.name = "Item name is required."
+  }
+  if (!form.description.trim()) {
+    fieldErrors.value.description = "Description is required."
   }
   if (!form.condition) {
     fieldErrors.value.condition = "Condition is required."
   }
   if (form.categories.length === 0) {
     fieldErrors.value.categories = "Select at least one category."
+  }
+  if (!form.freeToBorrow && Number(form.rentalFee) <= 0) {
+    fieldErrors.value.rentalFee = "Rate must be greater than 0 for rental listings."
+  }
+  if (!form.whatItemOffers.trim()) {
+    fieldErrors.value.whatItemOffers = "What this item offers is required."
+  }
+  if (!form.whatIsIncluded.trim()) {
+    fieldErrors.value.whatIsIncluded = "What's included is required."
   }
 
   const invalidAvailability = availabilityRanges.value.some(
@@ -565,30 +574,11 @@ const handleSubmit = () => {
       range.endDate.getTime() <= range.startDate.getTime(),
   )
 
-  if (!result.success) {
-    const flat = result.error.flatten()
-
-    Object.entries(flat.fieldErrors).forEach(([key, messages]) => {
-      const firstMessage = messages?.[0]
-      if (firstMessage) {
-        fieldErrors.value[key] = firstMessage
-      }
-    })
-
-    if (flat.fieldErrors.availability) {
-      availabilityErrors.value = [...flat.fieldErrors.availability]
-    }
-  }
-
   if (invalidAvailability) {
     availabilityErrors.value.push("Availability end dates must be later than start dates.")
   }
 
-  if (
-    !result.success ||
-    Object.keys(fieldErrors.value).length > 0 ||
-    availabilityErrors.value.length > 0
-  ) {
+  if (Object.keys(fieldErrors.value).length > 0 || availabilityErrors.value.length > 0) {
     return
   }
 

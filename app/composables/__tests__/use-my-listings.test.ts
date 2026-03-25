@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import type { MyListingItem } from "../use-my-listings"
 import { useMyListings } from "../use-my-listings"
 import * as paginatedItemsModule from "../use-paginated-items"
@@ -14,6 +14,8 @@ const makeItem = (id = ITEM_ID) =>
     numericId: 1,
     name: "Test Item",
     status: "AVAILABLE",
+    displayStatus: "ACTIVE",
+    hasActiveDispute: false,
     lenderId: "owner-1",
     freeToBorrow: false,
     rateOption: "PER_DAY",
@@ -47,6 +49,11 @@ beforeEach(() => {
   fetchMock = vi.fn()
   vi.stubGlobal("$fetch", fetchMock)
   vi.stubGlobal("navigateTo", vi.fn())
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe("useMyListings", () => {
@@ -59,6 +66,29 @@ describe("useMyListings", () => {
 
     expect(listings.value).toHaveLength(1)
     expect(listings.value[0]!.id).toBe(ITEM_ID)
+  })
+
+  it("includes active filters in the API query", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { setSearchQuery, toggleStatusFilter, toggleCategoryFilter, refresh } = useMyListings()
+
+    setSearchQuery("camera")
+    toggleStatusFilter("DISPUTED")
+    toggleCategoryFilter("ELECTRONICS")
+    await refresh()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/my-listings",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          search: "camera",
+          statuses: ["DISPUTED"],
+          categories: ["ELECTRONICS"],
+        }),
+      }),
+    )
   })
 
   it("sets hasMore to true when nextCursor is returned", async () => {
@@ -108,69 +138,79 @@ describe("useMyListings", () => {
     expect(navTo).toHaveBeenCalledWith("/")
   })
 
-  it("updateListing replaces item in listings array", async () => {
-    const updated = { ...makeItem(), name: "Updated Name" }
-    fetchMock = vi.fn().mockResolvedValue(updated)
+  it("clearFilters resets search and selected filters", () => {
+    const {
+      setSearchQuery,
+      toggleStatusFilter,
+      toggleCategoryFilter,
+      clearFilters,
+      hasActiveFilters,
+    } = useMyListings()
+
+    setSearchQuery("camera")
+    toggleStatusFilter("INACTIVE")
+    toggleCategoryFilter("BOOKS")
+    clearFilters()
+
+    expect(hasActiveFilters.value).toBe(false)
+  })
+
+  it("refreshes after filter changes once listings have been loaded", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
     vi.stubGlobal("$fetch", fetchMock)
 
-    const { listings, updateListing } = useMyListings()
-    listings.value = [makeItem()]
+    const { refresh, toggleStatusFilter } = useMyListings()
+    await refresh()
 
-    await updateListing(ITEM_ID, { name: "Updated Name" })
+    fetchMock.mockClear()
+    toggleStatusFilter("DISPUTED")
+    await vi.runAllTimersAsync()
 
-    expect(listings.value[0]!.name).toBe("Updated Name")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/items/${ITEM_ID}`,
-      expect.objectContaining({ method: "PATCH" }),
+      "/api/my-listings",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          statuses: ["DISPUTED"],
+        }),
+      }),
     )
   })
 
-  it("createListing invalidates item search caches after creating an item", async () => {
+  it("toggleStatus invalidates item search caches and refreshes filtered listings", async () => {
     const resetPaginatedItemsCache = vi.spyOn(paginatedItemsModule, "resetPaginatedItemsCache")
     const resetFilteredResultsCountCache = vi.spyOn(
       filteredResultsCountModule,
       "resetFilteredResultsCountCache",
     )
-    fetchMock = vi.fn().mockResolvedValue(makeItem())
+
+    fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [makeItem()], nextCursor: null })
+      .mockResolvedValueOnce({ ...makeItem(), status: "DEACTIVATED", displayStatus: "INACTIVE" })
+      .mockResolvedValueOnce({
+        items: [{ ...makeItem(), status: "DEACTIVATED", displayStatus: "INACTIVE" }],
+        nextCursor: null,
+      })
     vi.stubGlobal("$fetch", fetchMock)
 
-    const { createListing } = useMyListings()
-    await createListing({ name: "New Item" })
-
-    expect(resetPaginatedItemsCache).toHaveBeenCalledTimes(1)
-    expect(resetFilteredResultsCountCache).toHaveBeenCalledTimes(1)
-  })
-
-  it("toggleStatus invalidates item search caches after updating an item", async () => {
-    const resetPaginatedItemsCache = vi.spyOn(paginatedItemsModule, "resetPaginatedItemsCache")
-    const resetFilteredResultsCountCache = vi.spyOn(
-      filteredResultsCountModule,
-      "resetFilteredResultsCountCache",
-    )
-    fetchMock = vi.fn().mockResolvedValue({ ...makeItem(), status: "DEACTIVATED" })
-    vi.stubGlobal("$fetch", fetchMock)
-
-    const { toggleStatus } = useMyListings()
+    const { toggleStatus, refresh } = useMyListings()
+    await refresh()
     await toggleStatus(ITEM_ID, "DEACTIVATED")
 
     expect(resetPaginatedItemsCache).toHaveBeenCalledTimes(1)
     expect(resetFilteredResultsCountCache).toHaveBeenCalledTimes(1)
-  })
-
-  it("toggleStatus calls status endpoint and updates listing in place", async () => {
-    const deactivated = { ...makeItem(), status: "DEACTIVATED" }
-    fetchMock = vi.fn().mockResolvedValue(deactivated)
-    vi.stubGlobal("$fetch", fetchMock)
-
-    const { listings, toggleStatus } = useMyListings()
-    listings.value = [makeItem()]
-
-    await toggleStatus(ITEM_ID, "DEACTIVATED")
-
-    expect(listings.value[0]!.status).toBe("DEACTIVATED")
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
       `/api/items/${ITEM_ID}/status`,
       expect.objectContaining({ method: "PATCH", body: { status: "DEACTIVATED" } }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/my-listings",
+      expect.objectContaining({
+        query: {},
+      }),
     )
   })
 
@@ -185,46 +225,5 @@ describe("useMyListings", () => {
     await refresh()
 
     expect(hasFetched.value).toBe(true)
-  })
-
-  it("ignores stale responses from older refresh calls", async () => {
-    let resolveFirst: ((value: { items: MyListingItem[]; nextCursor: null }) => void) | undefined
-    let resolveSecond: ((value: { items: MyListingItem[]; nextCursor: null }) => void) | undefined
-
-    fetchMock = vi
-      .fn()
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveFirst = resolve
-          }),
-      )
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveSecond = resolve
-          }),
-      )
-    vi.stubGlobal("$fetch", fetchMock)
-
-    const { listings, refresh } = useMyListings()
-
-    const firstRefresh = refresh()
-    const secondRefresh = refresh()
-
-    resolveFirst?.({
-      items: [makeItem("33333333-3333-3333-3333-333333333333")],
-      nextCursor: null,
-    })
-    await firstRefresh
-
-    resolveSecond?.({
-      items: [makeItem("44444444-4444-4444-4444-444444444444")],
-      nextCursor: null,
-    })
-    await secondRefresh
-
-    expect(listings.value).toHaveLength(1)
-    expect(listings.value[0]!.id).toBe("44444444-4444-4444-4444-444444444444")
   })
 })

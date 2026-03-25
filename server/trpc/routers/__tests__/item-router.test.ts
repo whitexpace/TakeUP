@@ -366,6 +366,25 @@ describe("itemRouter", () => {
       id,
       name: "Test Item",
       status,
+      createdAt: new Date("2026-03-15"),
+      updatedAt: new Date("2026-03-15"),
+      bookingCount: 0,
+      rating: 0,
+      viewCount: 0,
+      likeCount: 0,
+      isTrending: false,
+      description: null,
+      rentalFee: 0,
+      replacementCost: null,
+      freeToBorrow: false,
+      rateOption: "PER_DAY",
+      thumbnailImage: null,
+      photos: [],
+      whatItemOffers: null,
+      whatIsIncluded: null,
+      knownIssues: null,
+      usageLimitations: null,
+      borrowerId: null,
       lenderId,
       lender: {
         user: {
@@ -380,6 +399,7 @@ describe("itemRouter", () => {
       images: [],
       categories: [{ category: "ELECTRONICS" }],
       tags: [{ tag: { name: "photo" } }],
+      transactions: [],
     })
 
     it("returns only items belonging to the authenticated user", async () => {
@@ -422,7 +442,7 @@ describe("itemRouter", () => {
       )
     })
 
-    it("filters by specific status when provided", async () => {
+    it("filters by selected derived statuses and categories when provided", async () => {
       const findMany = vi.fn().mockResolvedValue([])
       const caller = itemRouter.createCaller({
         event: { context: {} } as never,
@@ -430,15 +450,54 @@ describe("itemRouter", () => {
         user: { id: VALID_UUID, email: "lender@up.edu.ph", name: "Lender" },
       })
 
-      await caller.myListings({ status: "DEACTIVATED" })
+      await caller.myListings({ statuses: ["INACTIVE"], categories: ["ELECTRONICS"] })
 
       expect(findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([expect.objectContaining({ status: "DEACTIVATED" })]),
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                OR: expect.arrayContaining([
+                  expect.objectContaining({
+                    status: "DEACTIVATED",
+                  }),
+                ]),
+                categories: {
+                  some: {
+                    category: {
+                      in: ["ELECTRONICS"],
+                    },
+                  },
+                },
+              }),
+            ]),
           }),
         }),
       )
+    })
+
+    it("maps active disputes into DISPUTED display status", async () => {
+      const disputedItem = {
+        ...makeItem(VALID_UUID, VALID_UUID, "RENTED"),
+        transactions: [
+          {
+            disputes: [{ id: "99999999-9999-9999-9999-999999999999" }],
+          },
+        ],
+      }
+      const findMany = vi.fn().mockResolvedValue([disputedItem])
+      const caller = itemRouter.createCaller({
+        event: { context: {} } as never,
+        prisma: { item: { findMany } } as never,
+        user: { id: VALID_UUID, email: "lender@up.edu.ph", name: "Lender" },
+      })
+
+      const result = await caller.myListings({})
+
+      expect(result.items[0]).toMatchObject({
+        hasActiveDispute: true,
+        displayStatus: "DISPUTED",
+      })
     })
 
     it("throws UNAUTHORIZED when the user is not authenticated", async () => {
@@ -455,51 +514,10 @@ describe("itemRouter", () => {
       const item1 = makeItem(VALID_UUID, VALID_UUID)
       const item2 = makeItem("33333333-3333-3333-3333-333333333333", VALID_UUID)
       const findMany = vi.fn().mockResolvedValue([
-        {
-          ...item1,
-          createdAt: new Date("2026-03-15"),
-          updatedAt: new Date(),
-          bookingCount: 0,
-          rating: 0,
-          viewCount: 0,
-          likeCount: 0,
-          isTrending: false,
-          description: null,
-          rentalFee: 0,
-          replacementCost: null,
-          freeToBorrow: false,
-          rateOption: "PER_DAY",
-          images: [],
-          thumbnailImage: null,
-          photos: [],
-          whatItemOffers: null,
-          whatIsIncluded: null,
-          knownIssues: null,
-          usageLimitations: null,
-          borrowerId: null,
-        },
+        item1,
         {
           ...item2,
           createdAt: new Date("2026-03-14"),
-          updatedAt: new Date(),
-          bookingCount: 0,
-          rating: 0,
-          viewCount: 0,
-          likeCount: 0,
-          isTrending: false,
-          description: null,
-          rentalFee: 0,
-          replacementCost: null,
-          freeToBorrow: false,
-          rateOption: "PER_DAY",
-          images: [],
-          thumbnailImage: null,
-          photos: [],
-          whatItemOffers: null,
-          whatIsIncluded: null,
-          knownIssues: null,
-          usageLimitations: null,
-          borrowerId: null,
         },
       ])
       const caller = itemRouter.createCaller({

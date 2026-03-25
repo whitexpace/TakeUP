@@ -7,6 +7,14 @@ import { createContext } from "../trpc/context"
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
 
+  const parseArrayParam = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value.filter((entry): entry is string => typeof entry === "string")
+    }
+
+    return typeof value === "string" ? [value] : undefined
+  }
+
   const cursorRaw = typeof query.cursor === "string" ? query.cursor : undefined
   let parsedCursor: unknown
   if (cursorRaw) {
@@ -19,7 +27,8 @@ export default defineEventHandler(async (event) => {
 
   const result = myListingsSchema.safeParse({
     search: typeof query.search === "string" ? query.search : undefined,
-    status: typeof query.status === "string" ? query.status : undefined,
+    statuses: parseArrayParam(query.statuses),
+    categories: parseArrayParam(query.categories),
     limit: typeof query.limit === "string" ? Number(query.limit) : undefined,
     cursor: parsedCursor,
   })

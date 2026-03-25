@@ -253,10 +253,17 @@ export const myListingsCursorSchema = z.object({
   createdAt: z.coerce.date(),
 })
 
+export const myListingFilterStatusSchema = z.enum(["ACTIVE", "IN_USE", "INACTIVE", "DISPUTED"])
+
 export const myListingsSchema = z
   .object({
     search: z.string().trim().optional(),
-    status: itemStatusSchema.optional(),
+    statuses: z.array(myListingFilterStatusSchema).min(1).optional(),
+    categories: z
+      .array(itemCategorySchema)
+      .min(1)
+      .transform((categories) => dedupe(categories))
+      .optional(),
     limit: z.number().int().min(1).max(48).default(24),
     cursor: myListingsCursorSchema.optional(),
   })
