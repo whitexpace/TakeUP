@@ -3,37 +3,45 @@
     <!-- Top Header -->
     <Header
       :notifications="notifications"
+      scroll-container-selector=".custom-main-scrollbar"
       @mark-notification-read="markNotificationRead"
       @mark-all-notifications-read="markAllNotificationsRead"
+      @visibility-change="(v) => (isHeaderVisible = v)"
     >
       <template #left>
-        <button
-          v-if="!hideSidebar"
-          class="flex items-center justify-center h-10 w-10 rounded-full text-noble-black transition-colors hover:bg-cream hover:text-burning-orange"
-          aria-label="Toggle Sidebar"
-          title="Toggle Sidebar"
-          @click="toggleSidebar"
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+        <div class="relative flex items-stretch group/tooltip h-full">
+          <button
+            v-if="!hideSidebar"
+            class="flex items-center justify-center px-2 text-noble-black transition-colors hover:text-burning-orange group"
+            aria-label="Toggle Sidebar"
+            @click="toggleSidebar"
           >
-            <path
-              d="M4 6H20M4 12H20M4 18H20"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            >
+              <path
+                d="M4 6H20M4 12H20M4 18H20"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <div class="custom-tooltip">
+            Toggle Sidebar
+            <div class="tooltip-arrow"></div>
+          </div>
+        </div>
       </template>
     </Header>
 
-    <div class="flex flex-1 overflow-hidden h-[calc(100vh-56px)] relative">
+    <div class="flex flex-1 overflow-hidden h-screen relative">
       <!-- Sidebar Overlay for Mobile -->
       <div
         v-if="!hideSidebar && isSidebarOpen && isMobile"
@@ -44,11 +52,12 @@
       <!-- Left Sidebar -->
       <aside
         v-if="!hideSidebar"
-        class="bg-cream flex-col shrink-0 border-r border-cinnamon-ice transition-all duration-300 ease-in-out z-50 overflow-y-auto custom-sidebar-scrollbar fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
+        class="bg-cream flex-col shrink-0 border-r border-cinnamon-ice transition-all duration-500 ease-in-out z-50 overflow-y-auto custom-sidebar-scrollbar fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
         :class="[
           isSidebarOpen
             ? 'translate-x-0 w-80'
             : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
+          isHeaderVisible ? 'pt-14' : 'pt-0',
         ]"
       >
         <!-- Sidebar Content Area -->
@@ -81,7 +90,8 @@
 
       <!-- Main Content Area -->
       <main
-        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-300 ease-in-out relative"
+        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative"
+        :class="isHeaderVisible ? 'pt-14' : 'pt-0'"
       >
         <slot />
       </main>
@@ -90,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue"
+import { computed, ref, onMounted, onUnmounted, provide } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import { useDashboardFilters } from "../composables/use-dashboard-filters"
 import { useNotifications } from "../composables/use-notifications"
@@ -98,6 +108,7 @@ import { useNotifications } from "../composables/use-notifications"
 const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
+const isHeaderVisible = ref(true)
 const hideSidebar = computed(() => Boolean(route.meta.hideDashboardSidebar))
 const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
   useNotifications()
@@ -153,6 +164,61 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Custom Tooltip Styling (Mirrored from Header.vue) */
+:deep(.custom-tooltip) {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+:deep(.tooltip-arrow) {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+:deep(.tooltip-arrow::after) {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover :deep(.custom-tooltip) {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+
 .custom-sidebar-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
