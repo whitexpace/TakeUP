@@ -59,7 +59,7 @@ export interface ItemCardViewModel {
   type: "Rent" | "Borrow"
   status: string
   isTrending: boolean
-  image: string
+  image: string | null
   category: string
   name: string
   rating: number | string

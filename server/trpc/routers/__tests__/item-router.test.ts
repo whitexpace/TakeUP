@@ -33,7 +33,8 @@ describe("itemRouter", () => {
         rateOption: "PER_DAY",
         whatItemOffers: "Sharp photos and reliable autofocus.",
         whatIsIncluded: "Camera body and charger.",
-        photos: [],
+        thumbnailImage: "https://example.com/camera.jpg",
+        photos: ["https://example.com/camera.jpg"],
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
