@@ -90,7 +90,7 @@ const rangeError = (range: AvailabilityRange): string | null => {
     <div
       v-for="(range, index) in ranges"
       :key="index"
-      class="bg-white rounded-[10px] border border-red-300/50 p-4 space-y-4"
+      class="bg-white rounded-[10px] border border-cinnamon-ice p-4 space-y-4"
     >
       <!-- Range header -->
       <div class="flex items-center justify-between">
@@ -134,7 +134,7 @@ const rangeError = (range: AvailabilityRange): string | null => {
             />
             <p
               v-else
-              class="text-neutral-800/70 text-base font-geist py-2 px-3 bg-orange-50 rounded-[10px]"
+              class="text-neutral-800/70 text-base font-geist py-2 px-3 bg-cream rounded-[10px]"
             >
               No end date
             </p>

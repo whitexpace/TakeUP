@@ -102,7 +102,7 @@ onMounted(() => {
       <div class="flex gap-3 shrink-0">
         <NuxtLink
           to="/account/requests"
-          class="inline-flex items-center gap-2 px-5 py-2.5 border border-orange-500 text-orange-600 rounded-[30px] text-sm font-medium font-geist hover:bg-orange-50 transition-colors"
+          class="inline-flex items-center gap-2 px-5 py-2.5 border border-orange-500 text-orange-600 rounded-[30px] text-sm font-medium font-geist hover:bg-cream transition-colors"
         >
           View Requests
         </NuxtLink>
@@ -125,10 +125,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="rounded-[24px] border border-red-300/30 bg-orange-50 px-4 py-4 sm:px-5">
+    <div class="rounded-[24px] border border-cinnamon-ice bg-cream px-4 py-4 sm:px-5">
       <div class="flex flex-col gap-4 xl:flex-row xl:items-center">
         <div
-          class="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] border border-red-300/20 bg-white px-4 py-3"
+          class="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] border border-cinnamon-ice bg-white px-4 py-3"
         >
           <svg
             width="20"
@@ -214,7 +214,7 @@ onMounted(() => {
                 <label
                   v-for="category in filteredCategoryOptions"
                   :key="category.value"
-                  class="flex cursor-pointer items-center justify-between rounded-[12px] px-3 py-2 hover:bg-orange-50"
+                  class="flex cursor-pointer items-center justify-between rounded-[12px] px-3 py-2 hover:bg-cream"
                 >
                   <span class="font-geist text-sm text-neutral-800">{{ category.label }}</span>
                   <input
@@ -277,7 +277,7 @@ onMounted(() => {
       v-if="(!hasFetched || isLoading) && listings.length === 0"
       class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
     >
-      <div v-for="i in 4" :key="i" class="h-72 rounded-[20px] bg-orange-50 animate-pulse" />
+      <div v-for="i in 4" :key="i" class="h-72 rounded-[20px] bg-cream animate-pulse" />
     </div>
 
     <div
@@ -295,7 +295,7 @@ onMounted(() => {
 
     <div
       v-else-if="!isLoading && listings.length === 0"
-      class="bg-orange-50 rounded-[20px] border border-red-300/30 p-10 text-center space-y-4"
+      class="bg-cream rounded-[20px] border border-cinnamon-ice p-10 text-center space-y-4"
     >
       <svg
         width="48"

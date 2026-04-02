@@ -53,9 +53,9 @@ const handleSubmit = async (data: Record<string, unknown>) => {
   <div>
     <!-- Loading -->
     <div v-if="isFetching" class="space-y-4 animate-pulse">
-      <div class="h-8 w-48 bg-orange-50 rounded" />
-      <div class="h-64 bg-orange-50 rounded-[20px]" />
-      <div class="h-64 bg-orange-50 rounded-[20px]" />
+      <div class="h-8 w-48 bg-cream rounded" />
+      <div class="h-64 bg-cream rounded-[20px]" />
+      <div class="h-64 bg-cream rounded-[20px]" />
     </div>
 
     <!-- Not found -->
