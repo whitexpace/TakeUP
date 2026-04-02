@@ -729,17 +729,23 @@ const handleSubmit = () => {
 
     <!-- Form Sections -->
     <div class="mt-12 flex flex-col gap-8">
-      <!-- Images Section -->
+      <!-- Section 1: Images -->
       <section
         class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
+        :class="{
+          'ring-2 ring-cinnabar-red/20 border-cinnabar-red/30': showErrors && formErrors.coverImage,
+        }"
       >
         <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
         <p class="mt-1 text-[14px] text-noble-black/50">
           Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
           review.
         </p>
-        <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
-          {{ imageUploadError }}
+        <p
+          v-if="showErrors && formErrors.coverImage"
+          class="mt-2 text-[13px] font-medium text-cinnabar-red"
+        >
+          {{ formErrors.coverImage }}
         </p>
 
         <div class="mt-8 flex flex-wrap gap-4">
