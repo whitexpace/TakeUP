@@ -119,14 +119,21 @@ onBeforeUnmount(() => {
     <!-- Left Section: Logo & App Name (Sidebar width on desktop) -->
     <div class="w-auto lg:w-80 flex items-center px-4 sm:px-6 shrink-0 gap-4">
       <slot name="left" />
-      <a href="/dashboard" class="flex items-center gap-3">
+      <NuxtLink to="/dashboard" class="flex items-center gap-3">
         <img src="/images/logo.svg" alt="TakeUP Logo" class="h-8 w-auto" />
-      </a>
+      </NuxtLink>
     </div>
 
     <!-- Middle Section: Navigation (Centered) -->
     <div class="flex-1 flex justify-center overflow-hidden px-2">
       <nav class="hidden lg:flex items-center gap-8 whitespace-nowrap px-4">
+        <NuxtLink
+          to="/dashboard"
+          class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
+          active-class="text-burning-orange"
+        >
+          Dashboard
+        </NuxtLink>
         <NuxtLink
           to="/feed"
           class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
