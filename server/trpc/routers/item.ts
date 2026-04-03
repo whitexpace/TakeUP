@@ -324,11 +324,11 @@ const mapItemTaxonomy = (
 ) => {
   const { availability, categories, tags, lender, likes, images, ...rest } = item
   const lenderUser = lender.user
-  const ownerName =
-    lenderUser.username ||
+  const lenderFullName =
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
-    lenderUser.email ||
-    item.lenderId
+    null
+  const lenderUsername = lenderUser.username || null
+  const ownerName = lenderUsername || lenderFullName || lenderUser.email || item.lenderId
   const orderedPhotos =
     images?.map((entry) => entry.path) ??
     item.photos ??
@@ -342,6 +342,8 @@ const mapItemTaxonomy = (
   return {
     ...rest,
     ownerName,
+    lenderUsername,
+    lenderFullName,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     images:
       images?.map((entry, index) => ({

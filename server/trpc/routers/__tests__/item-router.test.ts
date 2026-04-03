@@ -194,6 +194,8 @@ describe("itemRouter", () => {
     expect(result[0]?.categories).toEqual(["ELECTRONICS"])
     expect(result[0]?.tags).toEqual(["photo"])
     expect(result[0]?.ownerName).toBe("owner1")
+    expect(result[0]?.lenderUsername).toBe("owner1")
+    expect(result[0]?.lenderFullName).toBe("Owner One")
     expect(result[0]?.availability).toEqual([
       {
         id: "22222222-2222-2222-2222-222222222222",
@@ -281,6 +283,8 @@ describe("itemRouter", () => {
     )
     expect(result.status).toBe("DELETED")
     expect(result.ownerName).toBe("owner1")
+    expect(result.lenderUsername).toBe("owner1")
+    expect(result.lenderFullName).toBe("Owner One")
     expect(result.categories).toEqual(["ELECTRONICS"])
     expect(result.tags).toEqual(["photo"])
   })

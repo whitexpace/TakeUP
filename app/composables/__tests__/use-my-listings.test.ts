@@ -33,6 +33,8 @@ const makeItem = (id = ITEM_ID) =>
     likeCount: 0,
     isTrending: false,
     ownerName: "Test Lender",
+    lenderUsername: "test-lender",
+    lenderFullName: "Test Lender",
     isLiked: false,
     description: null,
     condition: "GOOD",

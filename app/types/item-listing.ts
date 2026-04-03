@@ -43,6 +43,8 @@ export interface ListedItem {
   rating: number
   lenderId: string
   ownerName: string
+  lenderUsername?: string | null
+  lenderFullName?: string | null
   borrowerId: string | null
   categories: string[]
   tags: string[]

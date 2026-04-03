@@ -8,24 +8,52 @@ const normalizeSearchText = (value: string) =>
 
 const tokenizeSearch = (value: string) => normalizeSearchText(value).split(/\s+/).filter(Boolean)
 
+const getFieldMatchScore = (
+  field: string,
+  query: string,
+  scores: { exact: number; prefix: number; partial: number },
+) => {
+  if (!field) {
+    return 0
+  }
+
+  if (field === query) return scores.exact
+  if (field.startsWith(query)) return scores.prefix
+  if (field.includes(query)) return scores.partial
+  return 0
+}
+
 const buildSearchFields = (item: ListedItem) => {
+  const lenderFields = [item.ownerName, item.lenderFullName ?? "", item.lenderUsername ?? ""]
+    .map(normalizeSearchText)
+    .filter(Boolean)
+  const detailFields = [
+    item.description ?? "",
+    item.whatItemOffers ?? "",
+    item.whatIsIncluded ?? "",
+    item.knownIssues ?? "",
+    item.usageLimitations ?? "",
+  ]
+    .map(normalizeSearchText)
+    .filter(Boolean)
   const text = normalizeSearchText(
     [
       item.name,
-      item.description ?? "",
       item.condition,
-      item.ownerName,
+      ...lenderFields,
       ...item.categories,
       ...item.tags,
+      ...detailFields,
     ].join(" "),
   )
 
   return {
     name: normalizeSearchText(item.name),
-    owner: normalizeSearchText(item.ownerName),
+    lenders: lenderFields,
     condition: normalizeSearchText(item.condition),
     categories: item.categories.map(normalizeSearchText),
     tags: item.tags.map(normalizeSearchText),
+    details: detailFields,
     text,
   }
 }
@@ -41,26 +69,48 @@ const getItemSearchScore = (item: ListedItem, query: string) => {
 
   let score = 0
 
-  if (fields.name === normalizedQuery) score += 120
-  else if (fields.name.startsWith(normalizedQuery)) score += 90
-  else if (fields.name.includes(normalizedQuery)) score += 70
+  score += getFieldMatchScore(fields.name, normalizedQuery, {
+    exact: 120,
+    prefix: 90,
+    partial: 70,
+  })
 
-  if (fields.owner === normalizedQuery) score += 80
-  else if (fields.owner.startsWith(normalizedQuery)) score += 50
-  else if (fields.owner.includes(normalizedQuery)) score += 35
+  for (const lender of fields.lenders) {
+    score += getFieldMatchScore(lender, normalizedQuery, {
+      exact: 80,
+      prefix: 50,
+      partial: 35,
+    })
+  }
 
-  if (fields.condition.includes(normalizedQuery)) score += 25
+  score += getFieldMatchScore(fields.condition, normalizedQuery, {
+    exact: 25,
+    prefix: 25,
+    partial: 18,
+  })
 
   for (const category of fields.categories) {
-    if (category === normalizedQuery) score += 45
-    else if (category.startsWith(normalizedQuery)) score += 30
-    else if (category.includes(normalizedQuery)) score += 20
+    score += getFieldMatchScore(category, normalizedQuery, {
+      exact: 45,
+      prefix: 30,
+      partial: 20,
+    })
   }
 
   for (const tag of fields.tags) {
-    if (tag === normalizedQuery) score += 40
-    else if (tag.startsWith(normalizedQuery)) score += 28
-    else if (tag.includes(normalizedQuery)) score += 18
+    score += getFieldMatchScore(tag, normalizedQuery, {
+      exact: 40,
+      prefix: 28,
+      partial: 18,
+    })
+  }
+
+  for (const detail of fields.details) {
+    score += getFieldMatchScore(detail, normalizedQuery, {
+      exact: 26,
+      prefix: 18,
+      partial: 14,
+    })
   }
 
   const allTokensMatch = tokens.every((token) => fields.text.includes(token))

@@ -28,6 +28,8 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   rating: 4,
   lenderId: "lender-1",
   ownerName: "Alice",
+  lenderUsername: "alice-lender",
+  lenderFullName: "Alice Lender",
   borrowerId: null,
   categories: ["ELECTRONICS"],
   tags: [],
@@ -61,6 +63,33 @@ describe("item-search utils", () => {
     expect(filterListedItemsBySearch([camera, guitar], "dslr")).toEqual([camera])
   })
 
+  it("matches lender identity, description, and offer details", () => {
+    const projector = makeItem("1", {
+      name: "Portable Projector",
+      ownerName: "Mia",
+      lenderUsername: "mia.rents",
+      lenderFullName: "Mia Santos",
+      description: "Compact projector for movie nights",
+      whatItemOffers: "Sharp 1080p projection with HDMI support",
+      whatIsIncluded: "Tripod stand and remote control",
+      knownIssues: "Minor scratch on the side panel",
+      usageLimitations: "Indoor use only",
+    })
+    const speaker = makeItem("2", {
+      name: "Bluetooth Speaker",
+      ownerName: "Noah",
+      lenderUsername: "noah.audio",
+      lenderFullName: "Noah Cruz",
+    })
+
+    expect(filterListedItemsBySearch([projector, speaker], "mia.rents")).toEqual([projector])
+    expect(filterListedItemsBySearch([projector, speaker], "santos")).toEqual([projector])
+    expect(filterListedItemsBySearch([projector, speaker], "movie nights")).toEqual([projector])
+    expect(filterListedItemsBySearch([projector, speaker], "hdmi")).toEqual([projector])
+    expect(filterListedItemsBySearch([projector, speaker], "tripod")).toEqual([projector])
+    expect(filterListedItemsBySearch([projector, speaker], "indoor")).toEqual([projector])
+  })
+
   it("prioritizes stronger name matches ahead of weaker matches", () => {
     const exact = makeItem("1", { name: "Camera" })
     const partial = makeItem("2", { name: "Camera Bag" })
@@ -71,5 +100,12 @@ describe("item-search utils", () => {
       partial,
       descriptionMatch,
     ])
+  })
+
+  it("returns an empty list when nothing matches", () => {
+    const camera = makeItem("1", { name: "Canon Camera" })
+    const guitar = makeItem("2", { name: "Acoustic Guitar" })
+
+    expect(filterListedItemsBySearch([camera, guitar], "microscope")).toEqual([])
   })
 })
