@@ -63,7 +63,7 @@ const {
   pending,
   error,
   refresh: refreshItem,
-} = await useAsyncData(
+} = useAsyncData(
   () => `item:${itemId.value ?? "missing"}`,
   async () => {
     if (!itemId.value) {
@@ -75,14 +75,17 @@ const {
 
     return await $fetch<ItemDetail>(`/api/items/${itemId.value}`)
   },
-  { watch: [itemId] },
+  {
+    watch: [itemId],
+    lazy: true,
+    default: () => null,
+  },
 )
 
-if (error.value) {
-  throw error.value
-}
-
 const item = computed(() => data.value)
+const itemLoadErrorMessage = computed(
+  () => error.value?.statusMessage ?? error.value?.message ?? "Unable to load item details.",
+)
 
 const currentDate = new Date()
 const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
@@ -1043,6 +1046,22 @@ onUnmounted(() => {
             <div class="h-72 animate-pulse rounded-[28px] bg-cream"></div>
           </div>
         </div>
+      </div>
+
+      <div
+        v-else-if="error"
+        class="rounded-[28px] border border-cinnamon-ice/50 bg-cream px-6 py-16 text-center"
+      >
+        <h2 class="text-2xl font-bold text-noble-black">Unable to load item</h2>
+        <p class="mx-auto mt-3 max-w-md text-sm text-noble-black/60">
+          {{ itemLoadErrorMessage }}
+        </p>
+        <button
+          class="mt-6 rounded-xl bg-burning-orange px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-estate"
+          @click="() => void refreshItem()"
+        >
+          Retry
+        </button>
       </div>
 
       <div v-else-if="item" class="pb-28 lg:pb-0">
