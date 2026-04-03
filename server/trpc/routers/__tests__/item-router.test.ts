@@ -244,7 +244,7 @@ describe("itemRouter", () => {
   })
 
   it("delete performs a soft delete by setting status to DELETED", async () => {
-    const findUnique = vi.fn().mockResolvedValue({ lenderId: "owner-1" })
+    const findUnique = vi.fn().mockResolvedValue({ lenderId: "owner-1", transactions: [] })
     const update = vi.fn().mockResolvedValue({
       id: VALID_UUID,
       name: "Camera",
@@ -283,6 +283,28 @@ describe("itemRouter", () => {
     expect(result.ownerName).toBe("owner1")
     expect(result.categories).toEqual(["ELECTRONICS"])
     expect(result.tags).toEqual(["photo"])
+  })
+
+  it("delete blocks items with active or upcoming transactions", async () => {
+    const findUnique = vi.fn().mockResolvedValue({
+      lenderId: "owner-1",
+      transactions: [{ id: "txn-1" }],
+    })
+    const update = vi.fn()
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: { item: { findUnique, update } } as never,
+      user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
+    })
+
+    await expect(caller.delete({ id: VALID_UUID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message:
+        "This item cannot be deleted because it has active or upcoming transactions. Deactivate the listing instead to preserve system records.",
+    })
+
+    expect(update).not.toHaveBeenCalled()
   })
 
   it("toggleLike creates a like when it does not exist", async () => {

@@ -223,6 +223,15 @@ export const useMyListings = () => {
     return result
   }
 
+  const deleteListing = async (id: string): Promise<MyListingItem> => {
+    const result = await $fetch<MyListingItem>(`/api/items/${id}`, {
+      method: "DELETE",
+    })
+    invalidateItemSearchCaches()
+    await refresh()
+    return result
+  }
+
   const loadMore = () => {
     if (!hasMore.value || isLoading.value) return
     void fetchListings(nextCursor.value, true)
@@ -248,6 +257,7 @@ export const useMyListings = () => {
     createListing,
     updateListing,
     toggleStatus,
+    deleteListing,
     loadMore,
     refresh,
   }
