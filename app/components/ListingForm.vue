@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import type { MyListingItem } from "../composables/use-my-listings"
+import { mergeParsedTags } from "../utils/tag-input"
 
 type ItemCategory =
   | "ELECTRONICS"
@@ -476,8 +477,7 @@ const toggleCategory = (cat: ItemCategory) => {
 }
 
 const addTag = () => {
-  const t = tagInput.value.trim().toLowerCase()
-  if (t && !form.tags.includes(t)) form.tags.push(t)
+  form.tags = mergeParsedTags(form.tags, tagInput.value)
   tagInput.value = ""
 }
 
@@ -537,6 +537,10 @@ const handleSubmit = () => {
   fieldErrors.value = {}
   availabilityErrors.value = []
   imageUploadError.value = null
+
+  if (tagInput.value.trim()) {
+    addTag()
+  }
 
   if (isUploadingImages.value) {
     imageUploadError.value = "Please wait for image uploads to finish."
@@ -1122,9 +1126,10 @@ onBeforeUnmount(() => {
         <input
           v-model="tagInput"
           type="text"
-          placeholder="Add a tag..."
+          placeholder="Add tags with commas or spaces"
           class="flex-1 bg-white rounded-[5px] border border-red-300/50 px-3 py-2.5 text-base font-geist text-neutral-800 placeholder:text-neutral-800/50 focus:outline-none focus:border-orange-500 transition-colors"
           @keydown.enter.prevent="addTag"
+          @blur="addTag"
         />
         <button
           type="button"
