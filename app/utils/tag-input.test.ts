@@ -19,6 +19,10 @@ describe("tag-input utils", () => {
   })
 
   it("merges parsed tags without duplicates", () => {
-    expect(mergeParsedTags(["camera"], "camera tripod, bag")).toEqual(["camera", "tripod", "bag"])
+    expect(mergeParsedTags(["camera"], "camera tripod, bag")).toEqual([
+      "camera",
+      "tripod",
+      "bag",
+    ])
   })
 })
