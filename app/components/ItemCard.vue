@@ -161,6 +161,7 @@
 import { computed, ref, watch } from "vue"
 import { buildItemDetailPath } from "../utils/item-detail-route"
 import { resetPaginatedItemsCache } from "../composables/use-paginated-items"
+import { useLikes } from "../composables/use-likes"
 
 const props = defineProps<{
   id: string | number
@@ -182,6 +183,7 @@ const emit = defineEmits<{
   likeChanged: [payload: { itemId: string; isLiked: boolean }]
 }>()
 
+const { incrementLikes, decrementLikes } = useLikes()
 const isLiked = ref(Boolean(props.isLiked))
 const isTogglingLike = ref(false)
 const router = useRouter()
@@ -287,6 +289,14 @@ const toggleLike = async () => {
     if (typeof nextIsLiked === "boolean") {
       isLiked.value = nextIsLiked
       resetPaginatedItemsCache()
+
+      // Update global count
+      if (nextIsLiked) {
+        incrementLikes()
+      } else {
+        decrementLikes()
+      }
+
       emit("likeChanged", {
         itemId: String(props.id),
         isLiked: nextIsLiked,
