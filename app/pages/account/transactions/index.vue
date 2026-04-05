@@ -74,7 +74,7 @@ const sectionSubtitle = computed(() =>
 
     <!-- Search bar -->
     <div
-      class="flex items-center gap-2 sm:gap-3 bg-white rounded-[20px] border-[0.50px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5 mb-3 sm:mb-4"
+      class="flex items-center gap-2 sm:gap-3 bg-cream rounded-[20px] border-[0.50px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5 mb-3 sm:mb-4"
     >
       <svg
         class="w-4 h-4 sm:w-5 sm:h-5 text-stone-400 shrink-0"

@@ -106,7 +106,7 @@ onMounted(() => {
       <!-- Left Sidebar -->
       <aside
         v-if="!hideSidebar"
-        class="fixed inset-y-0 left-0 z-40 flex h-full w-[300px] shrink-0 flex-col bg-cream transition-all duration-500 ease-in-out lg:w-[360px]"
+        class="fixed inset-y-0 left-0 z-40 flex h-full w-[300px] shrink-0 flex-col bg-cream border-r border-cinnamon-ice/30 transition-all duration-500 ease-in-out lg:w-[360px]"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
         <div class="flex h-full flex-col" :class="isHeaderVisible ? 'pt-14' : 'pt-0'">

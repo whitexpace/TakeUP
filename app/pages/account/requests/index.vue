@@ -120,7 +120,7 @@ const handleBookingDecision = async (
     </div>
 
     <div
-      class="flex items-center gap-3 bg-white rounded-[20px] border-[0.5px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5"
+      class="flex items-center gap-3 bg-cream rounded-[20px] border-[0.5px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5"
     >
       <svg
         class="w-4 h-4 sm:w-5 sm:h-5 text-stone-400 shrink-0"

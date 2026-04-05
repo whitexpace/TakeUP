@@ -129,6 +129,7 @@ async function restoreSession() {
       data: { session },
     } = await supabase.auth.getSession()
     const user = session?.user
+    const accessToken = session?.access_token
     const email = user?.email?.toLowerCase() ?? ""
 
     if (!user) {
@@ -157,6 +158,15 @@ async function restoreSession() {
         "UP User",
     }
     loginStatus.value = "success"
+
+    if (accessToken) {
+      await $fetch("/api/auth/supabase-session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).catch(() => undefined)
+    }
+
+    await navigateTo("/dashboard")
   } catch {
     currentUser.value = null
     loginStatus.value = "idle"

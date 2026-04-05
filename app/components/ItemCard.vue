@@ -5,8 +5,14 @@
     @click="navigateToDetails"
   >
     <!-- Image Section (~70% of card) -->
-    <div class="relative aspect-square w-full bg-gray-50 overflow-hidden">
-      <img :src="image" :alt="name" class="w-full h-full object-cover" />
+    <div class="relative aspect-square w-full bg-gray-50">
+      <img v-if="image" :src="image" :alt="name" class="w-full h-full object-cover" />
+      <div
+        v-else
+        class="flex h-full w-full items-center justify-center bg-cream px-6 text-center font-geist text-[14px] font-medium text-noble-black/45"
+      >
+        No image uploaded
+      </div>
 
       <!-- Type Tag -->
       <div
@@ -179,7 +185,7 @@ const props = defineProps<{
   type: "Rent" | "Borrow"
   status?: string
   isTrending?: boolean
-  image: string
+  image: string | null
   category: string
   name: string
   rating: number | string
