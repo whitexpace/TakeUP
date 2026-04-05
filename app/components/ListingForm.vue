@@ -566,6 +566,9 @@ const handleSubmit = () => {
   if (!form.whatIsIncluded.trim()) {
     fieldErrors.value.whatIsIncluded = "What's included is required."
   }
+  if (images.value.length === 0) {
+    imageUploadError.value = "At least one item image is required for verification."
+  }
 
   const invalidAvailability = availabilityRanges.value.some(
     (range) =>
@@ -579,7 +582,11 @@ const handleSubmit = () => {
     availabilityErrors.value.push("Availability end dates must be later than start dates.")
   }
 
-  if (Object.keys(fieldErrors.value).length > 0 || availabilityErrors.value.length > 0) {
+  if (
+    imageUploadError.value ||
+    Object.keys(fieldErrors.value).length > 0 ||
+    availabilityErrors.value.length > 0
+  ) {
     return
   }
 
@@ -642,8 +649,8 @@ onBeforeUnmount(() => {
     >
       <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
       <p class="mt-1 text-[14px] text-noble-black/50">
-        Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
-        review.
+        Upload at least one real photo of your item. This is required for verification and helps
+        other users trust the listing.
       </p>
       <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
         {{ imageUploadError }}
