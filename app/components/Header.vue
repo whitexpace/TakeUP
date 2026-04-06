@@ -218,8 +218,8 @@ onBeforeUnmount(() => {
       <nav class="hidden lg:flex items-stretch gap-10 whitespace-nowrap px-4 h-full">
         <NuxtLink
           to="/dashboard"
-          class="text-noble-black font-geist font-normal hover:text-burning-orange transition-colors"
-          active-class="text-burning-orange"
+          class="nav-link flex items-center text-[15px] text-noble-black font-geist font-normal transition-colors duration-300 ease-in-out hover:text-burning-orange"
+          active-class="active-nav-link"
         >
           Dashboard
         </NuxtLink>

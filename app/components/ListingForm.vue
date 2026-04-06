@@ -682,18 +682,17 @@ const blurReplacementCost = () => {
 }
 
 const handleSubmit = () => {
+  if (tagInput.value.trim()) {
+    addTag()
+  }
+
   if (Object.keys(formErrors.value).length > 0) {
     showErrors.value = true
     nextTick(() => {
       const firstError = document.querySelector(".text-cinnabar-red")
       if (firstError) firstError.scrollIntoView({ behavior: "smooth", block: "center" })
     })
-  fieldErrors.value = {}
-  availabilityErrors.value = []
-  imageUploadError.value = null
-
-  if (tagInput.value.trim()) {
-    addTag()
+    return
   }
 
   if (isUploadingImages.value) {
@@ -1611,67 +1610,6 @@ const handleSubmit = () => {
               </div>
             </div>
           </div>
-          <input
-            v-model.number="form.replacementCost"
-            type="number"
-            min="0"
-            placeholder="0.00"
-            class="w-full bg-white rounded-[5px] border border-red-300/50 pl-7 pr-3 py-2.5 text-base font-geist text-neutral-800 placeholder:text-neutral-800/50 focus:outline-none focus:border-orange-500 transition-colors"
-          />
-        </div>
-        <p class="text-neutral-800/80 text-sm font-geist tracking-wide">
-          This helps determine deposit amount and liability in case of damage
-        </p>
-      </div>
-    </section>
-
-    <!-- Availability -->
-    <section class="bg-orange-50 rounded-[20px] border border-red-300 p-4 sm:p-6 space-y-4">
-      <div>
-        <h2 class="text-neutral-800 text-xl font-semibold font-geist">Availability</h2>
-        <p class="text-neutral-800/80 text-base font-normal font-geist tracking-wide">
-          Set when your item is available
-        </p>
-      </div>
-      <AvailabilityEditor v-model="availabilityRanges" :errors="availabilityErrors" />
-    </section>
-
-    <!-- Tags -->
-    <section class="bg-orange-50 rounded-[20px] border border-red-300 p-4 sm:p-6 space-y-4">
-      <div>
-        <h2 class="text-neutral-800 text-xl font-semibold font-geist">Tags</h2>
-        <p class="text-neutral-800/80 text-base font-normal font-geist tracking-wide">
-          Add tags to help others find your item
-        </p>
-      </div>
-
-      <!-- Tag input -->
-      <div class="flex gap-2">
-        <input
-          v-model="tagInput"
-          type="text"
-          placeholder="Add tags with commas or spaces"
-          class="flex-1 bg-white rounded-[5px] border border-red-300/50 px-3 py-2.5 text-base font-geist text-neutral-800 placeholder:text-neutral-800/50 focus:outline-none focus:border-orange-500 transition-colors"
-          @keydown.enter.prevent="addTag"
-          @blur="addTag"
-        />
-        <button
-          type="button"
-          class="px-4 py-2 bg-orange-500 text-white rounded-[5px] text-sm font-geist hover:bg-orange-600 transition-colors"
-          @click="addTag"
-        >
-          Add
-        </button>
-      </div>
-
-      <!-- Current tags -->
-      <div v-if="form.tags.length > 0" class="flex flex-wrap gap-2">
-        <span
-          v-for="tag in form.tags"
-          :key="tag"
-          class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-900 text-white text-sm font-geist rounded-2xl"
-        >
-          {{ tag }}
           <button
             type="button"
             class="flex items-center gap-2 text-[14px] font-medium text-burning-orange transition-colors hover:text-orange-600"
@@ -1713,7 +1651,7 @@ const handleSubmit = () => {
             <input
               v-model="tagInput"
               type="text"
-              placeholder="Add a tag"
+              placeholder="Add tags with commas or spaces"
               class="flex-1 bg-transparent px-1.5 text-[14px] outline-none"
               @input="handleTagInput"
               @blur="addTag"
