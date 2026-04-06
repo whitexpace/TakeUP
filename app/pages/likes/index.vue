@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import type { ItemCardViewModel } from "../../types/item-listing"
 import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
+import { filterListedItemsBySearch } from "../../utils/item-search"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
 
 definePageMeta({
@@ -11,11 +12,13 @@ definePageMeta({
 })
 
 const searchInput = ref("")
-const appliedSearch = ref("")
-let searchApplyTimeout: ReturnType<typeof setTimeout> | null = null
 let searchBlurTimeout: ReturnType<typeof setTimeout> | null = null
 const isSearchFocused = ref(false)
 const highlightedSuggestionIndex = ref(-1)
+const serverSearchQuery = ref("")
+const searchTerm = computed(() => searchInput.value.trim())
+const INITIAL_LIKES_PAGE_SIZE = 8
+let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
 const selectedStatus = ref("ALL")
 const selectedCategory = ref("ALL")
@@ -44,26 +47,10 @@ const categoryOptions = computed(() =>
 
 const clearSearch = () => {
   searchInput.value = ""
-  appliedSearch.value = ""
 }
 
 const applySearch = () => {
-  if (searchApplyTimeout !== null) {
-    clearTimeout(searchApplyTimeout)
-    searchApplyTimeout = null
-  }
-  appliedSearch.value = searchInput.value.trim()
-}
-
-const scheduleSearchApply = (delayMs = 250) => {
-  if (searchApplyTimeout !== null) {
-    clearTimeout(searchApplyTimeout)
-  }
-
-  searchApplyTimeout = setTimeout(() => {
-    appliedSearch.value = searchInput.value.trim()
-    searchApplyTimeout = null
-  }, delayMs)
+  searchInput.value = searchTerm.value
 }
 
 type SearchSuggestion = {
@@ -86,17 +73,21 @@ const {
   fetchNextPage,
   refresh,
 } = usePaginatedItems({
-  searchQuery: appliedSearch,
+  searchQuery: serverSearchQuery,
   filterParams,
-  pageSize: 12,
+  pageSize: INITIAL_LIKES_PAGE_SIZE,
 })
 
+const locallyFilteredItems = computed(() =>
+  filterListedItemsBySearch(listedItems.value, searchTerm.value),
+)
+
 const trendingItemIds = computed(() =>
-  getTrendingItemIds(listedItems.value, DEFAULT_TRENDING_BADGE_STRATEGY),
+  getTrendingItemIds(locallyFilteredItems.value, DEFAULT_TRENDING_BADGE_STRATEGY),
 )
 
 const cardItems = computed<ItemCardViewModel[]>(() =>
-  mapListedItemsToCards(listedItems.value, {
+  mapListedItemsToCards(locallyFilteredItems.value, {
     trendingItemIds: trendingItemIds.value,
   }),
 )
@@ -258,12 +249,38 @@ const syncLikedCategories = async () => {
 const reload = async () => {
   await syncLikedCategories()
   await refresh()
+  scheduleNextPagePrefetch()
 }
 
-const likedItemsCount = computed(() => listedItems.value.length)
+const likedItemsCount = computed(() => locallyFilteredItems.value.length)
+
+const cancelPendingPrefetch = () => {
+  if (prefetchNextPageTimeout !== null) {
+    clearTimeout(prefetchNextPageTimeout)
+    prefetchNextPageTimeout = null
+  }
+}
+
+const scheduleNextPagePrefetch = () => {
+  cancelPendingPrefetch()
+
+  if (!hasMore.value) {
+    return
+  }
+
+  prefetchNextPageTimeout = setTimeout(() => {
+    prefetchNextPageTimeout = null
+
+    if (hasMore.value && !isLoading.value) {
+      void fetchNextPage()
+    }
+  }, 120)
+}
 
 const scheduleReload = () => {
-  void refresh()
+  void refresh().then(() => {
+    scheduleNextPagePrefetch()
+  })
 }
 
 const handleLikeChanged = async (payload: { itemId: string; isLiked: boolean }) => {
@@ -298,23 +315,15 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
   }
-  if (searchApplyTimeout !== null) {
-    clearTimeout(searchApplyTimeout)
-    searchApplyTimeout = null
-  }
   if (searchBlurTimeout !== null) {
     clearTimeout(searchBlurTimeout)
     searchBlurTimeout = null
   }
-})
-
-watch(appliedSearch, () => {
-  scheduleReload()
+  cancelPendingPrefetch()
 })
 
 watch(searchInput, () => {
   resetSuggestionHighlight()
-  scheduleSearchApply()
 })
 
 watch(

@@ -21,6 +21,7 @@ type PaginatedItemsCacheEntry = {
 
 const PAGINATED_ITEMS_CACHE_TTL_MS = 30_000
 const paginatedItemsCache = new Map<string, PaginatedItemsCacheEntry>()
+const pendingPaginatedItemsRequests = new Map<string, Promise<PaginatedItemsResponse>>()
 
 const clonePaginatedItemsResponse = (response: PaginatedItemsResponse) => structuredClone(response)
 
@@ -84,6 +85,7 @@ const buildPaginatedItemsQuery = ({
 
 export const resetPaginatedItemsCache = () => {
   paginatedItemsCache.clear()
+  pendingPaginatedItemsRequests.clear()
 }
 
 export const usePaginatedItems = ({
@@ -133,7 +135,17 @@ export const usePaginatedItems = ({
       pageSize,
       cursor: cursor.value,
     })
-    const cacheKey = serializePaginatedItemsQuery(query)
+    let viewerCacheKey = "anonymous"
+    let accessToken: string | undefined
+    if (supabase) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      accessToken = session?.access_token
+      viewerCacheKey = session?.user?.id ?? viewerCacheKey
+    }
+
+    const cacheKey = `${viewerCacheKey}:${serializePaginatedItemsQuery(query)}`
     const cachedResponse = getCachedPaginatedItemsResponse(cacheKey)
 
     if (cachedResponse) {
@@ -144,24 +156,29 @@ export const usePaginatedItems = ({
     isLoading.value = true
 
     try {
-      let accessToken: string | undefined
-      if (supabase) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        accessToken = session?.access_token
-      }
+      const pendingRequest = pendingPaginatedItemsRequests.get(cacheKey)
+      const response = pendingRequest
+        ? await pendingRequest
+        : await (() => {
+            const request = $fetch<PaginatedItemsResponse>("/api/items", {
+              query,
+              ...(accessToken
+                ? {
+                    headers: {
+                      authorization: `Bearer ${accessToken}`,
+                    },
+                  }
+                : {}),
+            })
 
-      const response = await $fetch<PaginatedItemsResponse>("/api/items", {
-        query,
-        ...(accessToken
-          ? {
-              headers: {
-                authorization: `Bearer ${accessToken}`,
-              },
-            }
-          : {}),
-      })
+            pendingPaginatedItemsRequests.set(cacheKey, request)
+
+            return request.finally(() => {
+              if (pendingPaginatedItemsRequests.get(cacheKey) === request) {
+                pendingPaginatedItemsRequests.delete(cacheKey)
+              }
+            })
+          })()
 
       if (version !== requestVersion.value) return
 

@@ -5,6 +5,7 @@ import {
   type ItemCondition,
   type ItemStatus,
   type Prisma,
+  type TransactionStatus,
 } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
@@ -80,6 +81,13 @@ const ACTIVE_TRANSACTION_DISPUTE_STATUSES = [
   PrismaDisputeStatus.UNDER_REVIEW,
   PrismaDisputeStatus.APPEALED,
 ] as const
+
+const TERMINAL_TRANSACTION_STATUSES = [
+  "COMPLETED",
+  "CANCELLED",
+  "REFUNDED",
+  "FAILED",
+] as const satisfies ReadonlyArray<TransactionStatus>
 
 const myListingsWithDisputes = {
   ...itemWithTaxonomy,
@@ -316,11 +324,11 @@ const mapItemTaxonomy = (
 ) => {
   const { availability, categories, tags, lender, likes, images, ...rest } = item
   const lenderUser = lender.user
-  const ownerName =
-    lenderUser.username ||
+  const lenderFullName =
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
-    lenderUser.email ||
-    item.lenderId
+    null
+  const lenderUsername = lenderUser.username || null
+  const ownerName = lenderUsername || lenderFullName || lenderUser.email || item.lenderId
   const orderedPhotos =
     images?.map((entry) => entry.path) ??
     item.photos ??
@@ -334,6 +342,8 @@ const mapItemTaxonomy = (
   return {
     ...rest,
     ownerName,
+    lenderUsername,
+    lenderFullName,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     images:
       images?.map((entry, index) => ({
@@ -986,7 +996,18 @@ export const itemRouter = router({
   delete: protectedProcedure.input(deleteItemSchema).mutation(async ({ ctx, input }) => {
     const existing = await ctx.prisma.item.findUnique({
       where: { id: input.id },
-      select: { lenderId: true },
+      select: {
+        lenderId: true,
+        transactions: {
+          where: {
+            status: {
+              notIn: [...TERMINAL_TRANSACTION_STATUSES],
+            },
+          },
+          select: { id: true },
+          take: 1,
+        },
+      },
     })
 
     if (!existing) {
@@ -995,6 +1016,14 @@ export const itemRouter = router({
 
     if (existing.lenderId !== ctx.user.id) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to delete this item." })
+    }
+
+    if (existing.transactions.length > 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "This item cannot be deleted because it has active or upcoming transactions. Deactivate the listing instead to preserve system records.",
+      })
     }
 
     return ctx.prisma.item

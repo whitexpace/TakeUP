@@ -33,6 +33,8 @@ const makeItem = (id = ITEM_ID) =>
     likeCount: 0,
     isTrending: false,
     ownerName: "Test Lender",
+    lenderUsername: "test-lender",
+    lenderFullName: "Test Lender",
     isLiked: false,
     description: null,
     condition: "GOOD",
@@ -212,6 +214,41 @@ describe("useMyListings", () => {
         query: {},
       }),
     )
+  })
+
+  it("deleteListing invalidates item search caches and refreshes filtered listings", async () => {
+    const resetPaginatedItemsCache = vi.spyOn(paginatedItemsModule, "resetPaginatedItemsCache")
+    const resetFilteredResultsCountCache = vi.spyOn(
+      filteredResultsCountModule,
+      "resetFilteredResultsCountCache",
+    )
+
+    fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [makeItem()], nextCursor: null })
+      .mockResolvedValueOnce({ ...makeItem(), status: "DELETED" })
+      .mockResolvedValueOnce({ items: [], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const { deleteListing, refresh, listings } = useMyListings()
+    await refresh()
+    await deleteListing(ITEM_ID)
+
+    expect(resetPaginatedItemsCache).toHaveBeenCalledTimes(1)
+    expect(resetFilteredResultsCountCache).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `/api/items/${ITEM_ID}`,
+      expect.objectContaining({ method: "DELETE" }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/my-listings",
+      expect.objectContaining({
+        query: {},
+      }),
+    )
+    expect(listings.value).toEqual([])
   })
 
   it("refresh marks the initial fetch as loaded after completing", async () => {

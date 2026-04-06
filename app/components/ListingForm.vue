@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from "vue"
 import type { MyListingItem } from "../composables/use-my-listings"
+import { mergeParsedTags } from "../utils/tag-input"
 
 type ItemCategory =
   | "ELECTRONICS"
@@ -504,13 +505,7 @@ const closeLightbox = () => {
 
 // Tags
 const addTag = () => {
-  const newTags = tagInput.value
-    .split(",")
-    .map((t) => t.trim().toLowerCase())
-    .filter(Boolean)
-  newTags.forEach((tag) => {
-    if (!form.tags.includes(tag)) form.tags.push(tag)
-  })
+  form.tags = mergeParsedTags(form.tags, tagInput.value)
   tagInput.value = ""
 }
 
@@ -624,15 +619,15 @@ const buildPayload = () => {
   }
 }
 
-const parseRateValue = (value: string) => {
-  const clean = value.replace(/,/g, "")
-  return clean ? Number(clean) || 0 : 0
-}
-
 const formatRateValue = (value: string) => {
   const digitsOnly = value.replace(/[^0-9]/g, "")
   if (!digitsOnly) return ""
   return Number(digitsOnly).toLocaleString("en-US")
+}
+
+const parseRateValue = (value: string) => {
+  const digitsOnly = value.replace(/[^0-9]/g, "")
+  return digitsOnly ? Number(digitsOnly) : 0
 }
 
 const blockInvalidRateInput = (event: InputEvent) => {
@@ -678,12 +673,23 @@ const blurReplacementCost = () => {
 }
 
 const handleSubmit = () => {
+  if (tagInput.value.trim()) {
+    addTag()
+  }
+
+  imageUploadError.value = null
+
   if (Object.keys(formErrors.value).length > 0) {
     showErrors.value = true
     nextTick(() => {
       const firstError = document.querySelector(".text-cinnabar-red")
       if (firstError) firstError.scrollIntoView({ behavior: "smooth", block: "center" })
     })
+    return
+  }
+
+  if (isUploadingImages.value) {
+    imageUploadError.value = "Please wait for image uploads to finish."
     return
   }
 
@@ -715,14 +721,23 @@ const handleSubmit = () => {
 
     <!-- Form Sections -->
     <div class="mt-12 flex flex-col gap-8">
-      <!-- Images Section -->
+      <!-- Section 1: Images -->
       <section
         class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
+        :class="{
+          'ring-2 ring-cinnabar-red/20 border-cinnabar-red/30': showErrors && formErrors.coverImage,
+        }"
       >
         <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
         <p class="mt-1 text-[14px] text-noble-black/50">
-          Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
-          review.
+          Upload at least one real photo of your item. This is required for verification and helps
+          other users trust the listing.
+        </p>
+        <p
+          v-if="showErrors && formErrors.coverImage"
+          class="mt-2 text-[13px] font-medium text-cinnabar-red"
+        >
+          {{ formErrors.coverImage }}
         </p>
         <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
           {{ imageUploadError }}
@@ -1510,7 +1525,7 @@ const handleSubmit = () => {
             <input
               v-model="tagInput"
               type="text"
-              placeholder="Add a tag"
+              placeholder="Add tags with commas or spaces"
               class="flex-1 bg-transparent px-1.5 text-[14px] outline-none"
               @input="handleTagInput"
               @blur="addTag"

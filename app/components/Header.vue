@@ -208,15 +208,21 @@ onBeforeUnmount(() => {
       :class="[showNav ? 'lg:w-80' : '', customPadding || 'px-4 sm:px-6']"
     >
       <slot name="left" />
-      <slot name="mobile-menu" />
-      <a href="/dashboard" class="flex items-center gap-3">
+      <NuxtLink to="/dashboard" class="flex items-center gap-3">
         <img src="/images/logo.svg" alt="TakeUP Logo" class="h-8 w-auto" />
-      </a>
+      </NuxtLink>
     </div>
 
     <!-- Middle Section: Navigation (Centered) -->
     <div v-if="showNav" class="flex-1 flex justify-center overflow-hidden px-2 h-full">
       <nav class="hidden lg:flex items-stretch gap-10 whitespace-nowrap px-4 h-full">
+        <NuxtLink
+          to="/dashboard"
+          class="nav-link flex items-center text-[15px] text-noble-black font-geist font-normal transition-colors duration-300 ease-in-out hover:text-burning-orange"
+          active-class="active-nav-link"
+        >
+          Dashboard
+        </NuxtLink>
         <NuxtLink
           to="/feed"
           class="nav-link flex items-center text-[15px] text-noble-black font-geist font-normal transition-colors duration-300 ease-in-out hover:text-burning-orange"
