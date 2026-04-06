@@ -249,10 +249,24 @@ let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
 const clearSearch = () => {
   searchInput.value = ""
+  if (!serverSearchQuery.value) {
+    return
+  }
+
+  serverSearchQuery.value = ""
+  scheduleReload()
 }
 
 const applySearch = () => {
-  searchInput.value = searchTerm.value
+  const nextQuery = searchTerm.value
+  searchInput.value = nextQuery
+
+  if (serverSearchQuery.value === nextQuery) {
+    return
+  }
+
+  serverSearchQuery.value = nextQuery
+  scheduleReload()
 }
 
 type SearchSuggestion = {
