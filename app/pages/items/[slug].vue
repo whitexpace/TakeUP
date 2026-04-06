@@ -2,6 +2,7 @@
 import type { inferRouterOutputs } from "@trpc/server"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 import { useBag } from "../../composables/use-bag"
+import { useLikes } from "../../composables/use-likes"
 import { buildItemDetailPath, extractItemIdFromSlug } from "../../utils/item-detail-route"
 import type { AppRouter } from "../../../server/trpc/routers"
 
@@ -880,8 +881,14 @@ const closeBookingModal = () => {
   }
 }
 
+const { incrementLikes, decrementLikes } = useLikes()
 const toggleSaved = () => {
   isSaved.value = !isSaved.value
+  if (isSaved.value) {
+    incrementLikes()
+  } else {
+    decrementLikes()
+  }
 }
 
 const shareItem = async () => {
@@ -1007,7 +1014,7 @@ onUnmounted(() => {
   <div class="min-h-screen bg-white font-geist">
     <Header />
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6" @mouseleave="handleCalendarMouseLeave">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pt-20" @mouseleave="handleCalendarMouseLeave">
       <!-- Back Link -->
       <NuxtLink
         :to="backNavigationPath"

@@ -55,6 +55,7 @@
           <button
             v-for="option in timeOptions"
             :key="option.value"
+            type="button"
             class="w-full text-left px-4 py-2 text-[13px] transition-all duration-200"
             :class="[
               isTimeDisabled(option.value)

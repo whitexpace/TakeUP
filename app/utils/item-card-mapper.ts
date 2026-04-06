@@ -1,14 +1,5 @@
 import type { ItemCardViewModel, ListedItem } from "../types/item-listing"
-
-export const FALLBACK_ITEM_IMAGES = [
-  "/images/popular/macbook.jpg",
-  "/images/popular/scical.jpg",
-  "/images/popular/camera.jpg",
-  "/images/popular/dress.jpg",
-]
-
 type ItemCardMapOptions = {
-  fallbackImages?: string[]
   trendingItemIds?: Set<string>
 }
 
@@ -30,11 +21,10 @@ const formatCategory = (category: string | undefined) => {
 
 export const mapListedItemToCard = (
   item: ListedItem,
-  index: number,
+  _index: number,
   options: ItemCardMapOptions = {},
 ): ItemCardViewModel => {
-  const fallbackImages = options.fallbackImages ?? FALLBACK_ITEM_IMAGES
-  const image = getPrimaryItemImage(item) ?? fallbackImages[index % fallbackImages.length]!
+  const image = getPrimaryItemImage(item)
   const isTrending = options.trendingItemIds?.has(item.id) ?? false
 
   return {

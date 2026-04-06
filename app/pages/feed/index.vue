@@ -2,11 +2,15 @@
   <div class="flex flex-col h-screen font-geist bg-white overflow-hidden">
     <Header
       :notifications="currentUserNotifications"
+      scroll-container-selector=".custom-main-scrollbar"
       @mark-notification-read="markNotificationRead"
       @mark-all-notifications-read="markAllNotificationsRead"
     />
 
-    <main ref="feedMainRef" class="flex-1 overflow-y-auto custom-main-scrollbar bg-white">
+    <main
+      ref="feedMainRef"
+      class="flex-1 overflow-y-auto custom-main-scrollbar bg-white h-screen pt-14"
+    >
       <div class="container mx-auto px-4 py-8 pt-10 max-w-[1440px]">
         <div class="flex flex-col lg:flex-row gap-10">
           <aside class="hidden lg:block lg:w-[240px] xl:w-[280px] shrink-0">

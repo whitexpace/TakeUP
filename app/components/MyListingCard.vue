@@ -10,132 +10,92 @@ const emit = defineEmits<{
   toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
 }>()
 
-const typeBadge = computed(() => {
-  if (props.item.freeToBorrow) return { label: "Borrow", class: "bg-indigo-900 text-orange-50" }
-  return { label: "Rent", class: "bg-red-300 text-neutral-800" }
-})
-
-const statusLabel = computed(() => {
-  switch (props.item.displayStatus) {
-    case "ACTIVE":
-      return "ACTIVE"
-    case "IN_USE":
-      return "IN USE"
-    case "INACTIVE":
-      return "INACTIVE"
-    case "DISPUTED":
-      return "DISPUTED"
-    default:
-      return props.item.displayStatus
-  }
-})
-
-const priceDisplay = computed(() => {
-  if (props.item.freeToBorrow) return "₱Free"
-  const rate = props.item.rateOption === "PER_HOUR" ? "/hr" : "/day"
-  return `₱${props.item.rentalFee.toLocaleString()}${rate}`
-})
-
-const primaryCategory = computed(() =>
-  props.item.categories.length > 0 ? props.item.categories[0] : "OTHER",
-)
-
-const formattedCategory = computed(() =>
-  String(primaryCategory.value)
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase()),
-)
-
-const canToggle = computed(() => props.item.status !== "RENTED")
-const toggleLabel = computed(() =>
-  props.item.status === "DEACTIVATED" ? "Activate" : "Deactivate",
-)
-const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
-  props.item.status === "DEACTIVATED" ? "AVAILABLE" : "DEACTIVATED",
-)
-
-const coverImage = computed(
-  () =>
+const cardProps = computed(() => {
+  const image =
     props.item.images.find((image) => image.isPrimary)?.path ??
     props.item.images[0]?.path ??
     props.item.thumbnailImage ??
-    "https://placehold.co/289x200",
+    "https://placehold.co/289x200"
+
+  return {
+    id: props.item.id,
+    type: (props.item.freeToBorrow ? "Borrow" : "Rent") as "Borrow" | "Rent",
+    status: props.item.status,
+    image,
+    category: formatCategory(props.item.categories[0] ?? "OTHER"),
+    name: props.item.name,
+    rating: props.item.rating.toFixed(1),
+    reviews: props.item.bookingCount,
+    price: props.item.freeToBorrow ? undefined : props.item.rentalFee,
+    priceUnit: (props.item.rateOption === "PER_HOUR" ? "hour" : "day") as "hour" | "day",
+    owner: "You",
+    isManagement: true,
+    allowNavigation: true,
+  }
+})
+
+function formatCategory(category: string) {
+  return category
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
+const isInUse = computed(() => props.item.displayStatus === "IN_USE")
+const isDeactivated = computed(() => props.item.status === "DEACTIVATED")
+
+const toggleLabel = computed(() => (isDeactivated.value ? "Activate" : "Deactivate"))
+const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
+  isDeactivated.value ? "AVAILABLE" : "DEACTIVATED",
 )
 </script>
 
 <template>
-  <div
-    class="flex flex-col rounded-[20px] overflow-hidden border border-orange-500/30 bg-white hover:shadow-md transition-shadow duration-200"
-  >
-    <!-- Image with type badge -->
-    <div class="relative">
-      <img :src="coverImage" :alt="item.name" class="w-full h-40 sm:h-48 object-cover" />
-      <span
-        class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-sm font-normal font-geist tracking-wide"
-        :class="typeBadge.class"
+  <ItemCard v-bind="cardProps">
+    <template #image-overlay>
+      <!-- Dark blurred overlay with a smooth fade-in transition -->
+      <div
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-noble-black/70 px-4 backdrop-blur-sm transition-opacity duration-300 ease-in-out opacity-0 group-hover:opacity-100"
       >
-        {{ typeBadge.label }}
-      </span>
-    </div>
-
-    <!-- Card Info -->
-    <div class="p-3 flex flex-col gap-1 flex-1">
-      <!-- Category + Status row -->
-      <div class="flex justify-between items-center">
-        <span class="text-orange-500 text-xs font-medium font-geist uppercase">{{
-          formattedCategory
-        }}</span>
-        <span
-          class="text-xs font-medium font-geist"
-          :class="item.hasActiveDispute ? 'text-cinnabar-red' : 'text-indigo-900'"
-        >
-          {{ statusLabel }}
-        </span>
-      </div>
-
-      <!-- Item name -->
-      <p class="text-blue-950 text-sm sm:text-base font-semibold font-geist line-clamp-1">
-        {{ item.name }}
-      </p>
-
-      <!-- Rating row -->
-      <div class="flex items-center gap-1">
-        <span class="w-2.5 h-2.5 bg-orange-500 inline-block" />
-        <span class="text-neutral-800/80 text-xs font-medium font-geist">{{
-          item.rating.toFixed(1)
-        }}</span>
-        <span class="text-neutral-800/60 text-xs font-light font-geist"
-          >({{ item.bookingCount }})</span
-        >
-      </div>
-
-      <!-- Divider -->
-      <hr class="border-red-300/50 my-1" />
-
-      <!-- Price -->
-      <p class="text-orange-500 text-base sm:text-lg font-bold font-geist">{{ priceDisplay }}</p>
-
-      <!-- Action buttons -->
-      <div class="flex gap-2 mt-2">
+        <!-- Edit Button (Primary) -->
         <NuxtLink
           :to="`/account/listings/${item.id}/edit`"
-          class="flex-1 py-1.5 text-center text-sm font-medium font-geist text-white bg-indigo-900 rounded-lg hover:bg-indigo-800 transition-colors"
+          class="w-full max-w-[140px] rounded-full bg-burning-orange py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-burning-orange/90 active:scale-95"
+          @click.stop
         >
-          Edit
+          Edit Listing
         </NuxtLink>
-        <button
-          :disabled="!canToggle || isToggling"
-          class="flex-1 py-1.5 text-sm font-medium font-geist rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          :class="
-            item.status === 'DEACTIVATED'
-              ? 'text-white bg-burning-orange hover:bg-orange-600'
-              : 'text-neutral-800 border border-neutral-300 hover:bg-neutral-50'
-          "
-          @click="emit('toggleStatus', item.id, toggleTarget)"
-        >
-          {{ isToggling ? "..." : toggleLabel }}
-        </button>
+
+        <!-- Deactivate/Activate Button -->
+        <div class="relative group/tooltip w-full max-w-[140px]">
+          <button
+            :disabled="isInUse || isToggling"
+            class="w-full rounded-full py-2 font-geist text-sm font-semibold shadow-lg transition-all duration-300 active:scale-95 disabled:cursor-not-allowed"
+            :class="[
+              isInUse
+                ? 'bg-white/10 text-white/30 border border-white/10 backdrop-blur-sm'
+                : 'bg-white text-noble-black hover:bg-cream',
+              isDeactivated ? 'border-burning-orange text-burning-orange' : '',
+            ]"
+            @click.stop="emit('toggleStatus', item.id, toggleTarget)"
+          >
+            {{ isToggling ? "..." : toggleLabel }}
+          </button>
+
+          <!-- Contextual Tooltip for "In Use" state -->
+          <div
+            v-if="isInUse"
+            class="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 rounded-lg bg-noble-black px-3 py-1.5 text-[11px] font-medium text-white opacity-0 transition-opacity duration-200 group-hover/tooltip:opacity-100 whitespace-nowrap z-30 shadow-xl border border-white/10"
+          >
+            Item is currently In Use
+            <!-- Tooltip arrow -->
+            <div
+              class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-noble-black border-r border-b border-white/10"
+            />
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
+    </template>
+  </ItemCard>
 </template>

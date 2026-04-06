@@ -286,7 +286,7 @@ const handleRequestBooking = async () => {
   <div class="min-h-screen bg-white font-geist">
     <Header />
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12 pt-24">
       <div class="mb-10">
         <div
           class="text-noble-black mb-1"

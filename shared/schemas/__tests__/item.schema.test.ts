@@ -20,6 +20,8 @@ describe("item schema validations", () => {
       rentalFee: 150,
       whatItemOffers: "A dependable drill with steady power.",
       whatIsIncluded: "Drill body and battery.",
+      thumbnailImage: "https://example.com/drill.jpg",
+      photos: ["https://example.com/drill.jpg"],
       availability: [
         {
           startDate: "2026-03-10T00:00:00.000Z",
@@ -32,7 +34,8 @@ describe("item schema validations", () => {
     expect(parsed.status).toBe("AVAILABLE")
     expect(parsed.rateOption).toBe("PER_DAY")
     expect(parsed.freeToBorrow).toBe(false)
-    expect(parsed.photos).toEqual([])
+    expect(parsed.thumbnailImage).toBe("https://example.com/drill.jpg")
+    expect(parsed.photos).toEqual(["https://example.com/drill.jpg"])
     expect(parsed.categories).toEqual(["TOOLS"])
     expect(parsed.tags).toEqual(["lab"])
     expect(parsed.availability[0]?.startDate).toBeInstanceOf(Date)
@@ -74,6 +77,8 @@ describe("item schema validations", () => {
       freeToBorrow: false,
       whatItemOffers: "Stable tripod support.",
       whatIsIncluded: "Tripod and bag.",
+      thumbnailImage: "https://example.com/tripod.jpg",
+      photos: ["https://example.com/tripod.jpg"],
       availability: [
         {
           startDate: "2026-03-10T00:00:00.000Z",
@@ -120,6 +125,8 @@ describe("item schema validations", () => {
       rentalFee: 500,
       whatItemOffers: "High-quality stills and video.",
       whatIsIncluded: "Camera body and battery.",
+      thumbnailImage: "https://example.com/camera.jpg",
+      photos: ["https://example.com/camera.jpg"],
       availability: [
         {
           startDate: "2026-03-10T00:00:00.000Z",
@@ -142,6 +149,33 @@ describe("item schema validations", () => {
     }
   })
 
+  it("rejects item creation without at least one image", () => {
+    const result = createItemSchema.safeParse({
+      name: "Tripod",
+      description: "Stable tripod for classes.",
+      condition: "GOOD",
+      categories: ["ELECTRONICS"],
+      tags: ["photo"],
+      rentalFee: 120,
+      whatItemOffers: "Steady support for photos and video.",
+      whatIsIncluded: "Tripod and carry bag.",
+      photos: [],
+      availability: [
+        {
+          startDate: "2026-03-10T00:00:00.000Z",
+          endDate: "2026-03-12T00:00:00.000Z",
+          status: "AVAILABLE",
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.thumbnailImage).toBeTruthy()
+      expect(result.error.flatten().fieldErrors.photos).toBeTruthy()
+    }
+  })
+
   it("requires at least one mutable field for updateItemSchema", () => {
     const result = updateItemSchema.safeParse({ id: VALID_UUID })
 
@@ -152,6 +186,20 @@ describe("item schema validations", () => {
           issue.message.includes("At least one field is required for update"),
         ),
       ).toBe(true)
+    }
+  })
+
+  it("rejects update payloads that try to clear all item images", () => {
+    const result = updateItemSchema.safeParse({
+      id: VALID_UUID,
+      thumbnailImage: null,
+      photos: [],
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.thumbnailImage).toBeTruthy()
+      expect(result.error.flatten().fieldErrors.photos).toBeTruthy()
     }
   })
 

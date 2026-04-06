@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue"
+import Header from "../components/Header.vue"
 
 const images = [
   { src: "/images/landing-pic.jpg", position: "object-[50%_50%]" },
@@ -128,6 +129,7 @@ async function restoreSession() {
       data: { session },
     } = await supabase.auth.getSession()
     const user = session?.user
+    const accessToken = session?.access_token
     const email = user?.email?.toLowerCase() ?? ""
 
     if (!user) {
@@ -156,6 +158,15 @@ async function restoreSession() {
         "UP User",
     }
     loginStatus.value = "success"
+
+    if (accessToken) {
+      await $fetch("/api/auth/supabase-session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).catch(() => undefined)
+    }
+
+    await navigateTo("/dashboard")
   } catch {
     currentUser.value = null
     loginStatus.value = "idle"
@@ -196,52 +207,36 @@ const handleGoogleLogin = async () => {
 
 <template>
   <main class="min-h-screen font-sans">
-    <!-- Header -->
-    <div
-      class="fixed top-0 left-0 w-full h-[77px] box-border bg-white border-b border-cinnamon-ice flex items-center justify-between z-[1000] px-4 lg:px-[60px] 2xl:px-[168px]"
-    >
-      <div class="flex items-center h-full">
-        <div class="text-blue-estate font-rewon text-[22px] lg:text-[28px] leading-none">
-          <img
-            src="/images/logo.svg"
-            alt="TakeUP Logo"
-            class="cursor-pointer hover:cursor-pointer"
-          />
+    <Header :show-nav="false" hide-icons custom-padding="px-4 lg:px-[60px] 2xl:px-[168px]">
+      <template #right>
+        <div class="flex items-center">
+          <button
+            v-if="currentUser"
+            type="button"
+            class="bg-burning-orange text-white px-6 py-2 rounded-full font-geist font-bold text-[14px] hover:bg-blue-estate transition-colors duration-300"
+            @click="handleLogout"
+          >
+            Log out
+          </button>
+          <button
+            v-else
+            type="button"
+            class="bg-burning-orange text-white px-6 py-2 rounded-full font-geist font-bold text-[14px] flex items-center gap-2 hover:bg-blue-estate transition-colors duration-300"
+            :disabled="loginStatus === 'loading'"
+            @click="handleGoogleLogin"
+          >
+            <img src="/images/login-button.svg" alt="" class="w-4 h-4 brightness-0 invert" />
+            <span>Sign in</span>
+          </button>
         </div>
-      </div>
-      <button
-        v-if="currentUser"
-        type="button"
-        class="text-noble-black text-base font-normal leading-none bg-transparent border-none p-0 cursor-pointer hover:opacity-80 transition-opacity"
-        @click="handleLogout"
-      >
-        Log out
-      </button>
-      <button
-        v-else
-        type="button"
-        class="flex items-center gap-3 h-full bg-transparent border-none p-0 cursor-pointer"
-        :disabled="loginStatus === 'loading'"
-        @click="handleGoogleLogin"
-      >
-        <img
-          src="/images/login-button.svg"
-          alt="Sign in with Google"
-          class="w-6 h-6 block cursor-pointer hover:cursor-pointer"
-        />
-        <div
-          class="text-noble-black text-base font-normal leading-none cursor-pointer hover:cursor-pointer"
-        >
-          Sign in
-        </div>
-      </button>
-    </div>
+      </template>
+    </Header>
 
     <!-- Main Content -->
     <div class="px-4 lg:px-[60px] 2xl:px-[168px]">
       <!-- Section One -->
       <div
-        class="flex flex-col items-center pt-[160px] gap-12 xl:flex-row xl:items-start xl:justify-center xl:pt-[200px] xl:gap-24"
+        class="flex flex-col items-center pt-[120px] gap-12 xl:flex-row xl:items-start xl:justify-center xl:pt-[160px] xl:gap-24"
       >
         <!-- Left Column -->
         <div

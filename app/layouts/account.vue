@@ -5,6 +5,7 @@ import { useNotifications } from "../composables/use-notifications"
 const route = useRoute()
 const showMobileSidebar = ref(false)
 const showLogoutModal = ref(false)
+const isHeaderVisible = ref(true)
 const hideSidebar = computed(() => Boolean(route.meta.hideAccountSidebar))
 const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
   useNotifications()
@@ -52,12 +53,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen font-geist bg-white relative">
+  <div class="flex h-screen flex-col overflow-hidden font-geist bg-white relative">
     <!-- Top Navbar -->
     <Header
       :notifications="notifications"
+      scroll-container-selector=".custom-account-main-scrollbar"
       @mark-notification-read="markNotificationRead"
       @mark-all-notifications-read="markAllNotificationsRead"
+      @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
       <template #mobile-menu>
         <button
@@ -83,10 +86,7 @@ onMounted(() => {
     </Header>
 
     <!-- Main Content Container -->
-    <div
-      class="flex flex-1 overflow-hidden"
-      :class="hideSidebar ? 'lg:h-auto' : 'lg:h-[calc(100vh-56px)]'"
-    >
+    <div class="relative flex flex-1 overflow-hidden">
       <!-- Mobile backdrop -->
       <Transition name="fade">
         <div
@@ -99,56 +99,59 @@ onMounted(() => {
       <!-- Left panel background strip (connects sidebar + logout visually) -->
       <div
         v-if="!hideSidebar"
-        class="fixed top-0 bottom-0 left-0 z-[35] w-[300px] lg:w-[360px] bg-cream transition-transform duration-300 pointer-events-none"
+        class="pointer-events-none fixed inset-y-0 left-0 z-[35] w-[300px] lg:w-[360px] bg-cream transition-transform duration-300"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       />
 
       <!-- Left Sidebar -->
       <aside
         v-if="!hideSidebar"
-        class="fixed lg:static top-0 left-0 z-40 h-full w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0 transition-transform duration-300 relative"
+        class="fixed inset-y-0 left-0 z-40 flex h-full w-[300px] shrink-0 flex-col bg-cream border-r border-cinnamon-ice/30 transition-all duration-500 ease-in-out lg:w-[360px]"
         :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
-        <!-- Mobile close button -->
-        <button
-          class="lg:hidden absolute top-4 right-4 p-2 text-noble-black/50 hover:text-noble-black"
-          @click="showMobileSidebar = false"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        <!-- Sidebar Title -->
-        <div class="px-8 pt-10 pb-6">
-          <h2 class="font-bold text-[25px] text-blue-estate">MY ACCOUNT</h2>
-        </div>
-
-        <!-- Navigation Links -->
-        <nav class="flex-1 flex flex-col overflow-y-auto pb-24">
-          <NuxtLink
-            v-for="link in links"
-            :key="link.label"
-            :to="link.to"
-            class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
-            :class="
-              isActive(link)
-                ? 'bg-burning-orange text-white font-medium'
-                : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere'
-            "
+        <div class="flex h-full flex-col" :class="isHeaderVisible ? 'pt-14' : 'pt-0'">
+          <!-- Mobile close button -->
+          <button
+            class="absolute right-4 p-2 text-noble-black/50 hover:text-noble-black lg:hidden"
+            :class="isHeaderVisible ? 'top-16' : 'top-4'"
             @click="showMobileSidebar = false"
           >
-            {{ link.label }}
-          </NuxtLink>
-        </nav>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+
+          <!-- Sidebar Title -->
+          <div class="px-8 pt-10 pb-6">
+            <h2 class="font-bold text-[25px] text-blue-estate">MY ACCOUNT</h2>
+          </div>
+
+          <!-- Navigation Links -->
+          <nav class="flex flex-col pb-24">
+            <NuxtLink
+              v-for="link in links"
+              :key="link.label"
+              :to="link.to"
+              class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
+              :class="
+                isActive(link)
+                  ? 'bg-burning-orange text-white font-medium'
+                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere'
+              "
+              @click="showMobileSidebar = false"
+            >
+              {{ link.label }}
+            </NuxtLink>
+          </nav>
+        </div>
       </aside>
 
       <!-- Logout Section (Pinned to bottom-left of screen) -->
@@ -186,14 +189,19 @@ onMounted(() => {
 
       <!-- Page Content Slot -->
       <main
-        class="flex-1 bg-white min-w-0"
-        :class="
-          hideSidebar
-            ? 'overflow-visible p-4 sm:p-6 lg:px-12 lg:py-8'
-            : 'overflow-y-auto p-4 sm:p-6 lg:p-8'
-        "
+        class="custom-account-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-white transition-all duration-500 ease-in-out"
+        :class="hideSidebar ? '' : 'lg:ml-[360px]'"
       >
-        <slot />
+        <div
+          :class="[
+            hideSidebar
+              ? 'px-4 pb-4 sm:px-6 sm:pb-6 lg:px-12 lg:pb-8'
+              : 'px-4 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8',
+            isHeaderVisible ? 'pt-24' : 'pt-10',
+          ]"
+        >
+          <slot />
+        </div>
       </main>
     </div>
 
@@ -285,6 +293,30 @@ onMounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.custom-account-main-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-account-main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-account-main-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+
+.custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+
+.custom-account-main-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: theme("colors.noble-black / 10%") transparent;
+}
+</style>
 
 <style scoped>
 .fade-enter-active,
