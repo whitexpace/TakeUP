@@ -686,6 +686,8 @@ const handleSubmit = () => {
     addTag()
   }
 
+  imageUploadError.value = null
+
   if (Object.keys(formErrors.value).length > 0) {
     showErrors.value = true
     nextTick(() => {
@@ -701,55 +703,6 @@ const handleSubmit = () => {
   }
 
   emit("submit", buildPayload() as Record<string, unknown>)
-
-  const payload = buildPayload()
-
-  if (!form.name.trim()) {
-    fieldErrors.value.name = "Item name is required."
-  }
-  if (!form.description.trim()) {
-    fieldErrors.value.description = "Description is required."
-  }
-  if (!form.condition) {
-    fieldErrors.value.condition = "Condition is required."
-  }
-  if (form.categories.length === 0) {
-    fieldErrors.value.categories = "Select at least one category."
-  }
-  if (!form.freeToBorrow && Number(form.rentalFee) <= 0) {
-    fieldErrors.value.rentalFee = "Rate must be greater than 0 for rental listings."
-  }
-  if (!form.whatItemOffers.trim()) {
-    fieldErrors.value.whatItemOffers = "What this item offers is required."
-  }
-  if (!form.whatIsIncluded.trim()) {
-    fieldErrors.value.whatIsIncluded = "What's included is required."
-  }
-  if (images.value.length === 0) {
-    imageUploadError.value = "At least one item image is required for verification."
-  }
-
-  const invalidAvailability = availabilityRanges.value.some(
-    (range) =>
-      range.startDate &&
-      !range.noEndDate &&
-      range.endDate &&
-      range.endDate.getTime() <= range.startDate.getTime(),
-  )
-
-  if (invalidAvailability) {
-    availabilityErrors.value.push("Availability end dates must be later than start dates.")
-  }
-
-  if (
-    imageUploadError.value ||
-    Object.keys(fieldErrors.value).length > 0 ||
-    availabilityErrors.value.length > 0
-  ) {
-    return
-  }
-
-  emit("submit", payload as Record<string, unknown>)
 }
 </script>
 
@@ -786,8 +739,8 @@ const handleSubmit = () => {
       >
         <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
         <p class="mt-1 text-[14px] text-noble-black/50">
-          Upload photos of your item. Our AI will analyze them and auto-fill the details for you to
-          review.
+          Upload at least one real photo of your item. This is required for verification and helps
+          other users trust the listing.
         </p>
         <p
           v-if="showErrors && formErrors.coverImage"
@@ -795,18 +748,9 @@ const handleSubmit = () => {
         >
           {{ formErrors.coverImage }}
         </p>
-    <!-- Images Section -->
-    <section
-      class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
-    >
-      <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
-      <p class="mt-1 text-[14px] text-noble-black/50">
-        Upload at least one real photo of your item. This is required for verification and helps
-        other users trust the listing.
-      </p>
-      <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
-        {{ imageUploadError }}
-      </p>
+        <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
+          {{ imageUploadError }}
+        </p>
 
         <div class="mt-8 flex flex-wrap gap-4">
           <input
