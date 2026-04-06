@@ -1,6 +1,7 @@
 <template>
   <div
-    class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto cursor-pointer"
+    class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto relative group"
+    :class="canNavigate ? 'cursor-pointer' : ''"
     @click="navigateToDetails"
   >
     <!-- Image Section (~70% of card) -->
@@ -21,7 +22,10 @@
         {{ topBadge.label }}
       </div>
 
-      <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2">
+      <div
+        v-if="!isManagement"
+        class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2"
+      >
         <!-- Like Button -->
         <button
           class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all duration-150 group active:scale-90"
@@ -49,6 +53,9 @@
           </svg>
         </button>
       </div>
+
+      <!-- Management Overlay Slot -->
+      <slot name="image-overlay" />
     </div>
 
     <!-- Details Section -->
@@ -132,15 +139,19 @@
     </div>
 
     <!-- Divider -->
-    <div class="h-[1px] bg-cinnamon-ice w-full"></div>
+    <div v-if="!isManagement" class="h-[1px] bg-cinnamon-ice w-full"></div>
 
     <!-- Owner Section -->
-    <div class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white">
+    <div
+      v-if="!isManagement"
+      class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white"
+    >
       <span
         class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate pr-2"
         >by {{ owner }}</span
       >
       <button
+        v-if="!isManagement"
         class="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
         @click.stop.prevent
       >
@@ -184,6 +195,8 @@ const props = defineProps<{
   owner: string
   isLiked?: boolean
   fromPage?: "likes" | "dashboard"
+  isManagement?: boolean
+  allowNavigation?: boolean
 }>()
 const emit = defineEmits<{
   likeChanged: [payload: { itemId: string; isLiked: boolean }]
@@ -212,6 +225,7 @@ const itemDetailPath = computed(() =>
 
 const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")
 const displayPriceUnit = computed(() => props.priceUnit ?? "day")
+const canNavigate = computed(() => !props.isManagement || props.allowNavigation)
 
 const topBadge = computed(() => {
   if (normalizedStatus.value === "RENTED") {
@@ -236,6 +250,8 @@ const topBadge = computed(() => {
 })
 
 const navigateToDetails = () => {
+  if (!canNavigate.value) return
+
   if (props.fromPage) {
     router.push({
       path: itemDetailPath.value,

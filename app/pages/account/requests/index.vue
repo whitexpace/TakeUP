@@ -120,7 +120,7 @@ const handleBookingDecision = async (
     </div>
 
     <div
-      class="flex items-center gap-3 bg-white rounded-[20px] border-[0.5px] border-red-300 h-12 sm:h-16 px-4 sm:px-5"
+      class="flex items-center gap-3 bg-cream rounded-[20px] border-[0.5px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5"
     >
       <svg
         class="w-4 h-4 sm:w-5 sm:h-5 text-stone-400 shrink-0"
@@ -139,7 +139,7 @@ const handleBookingDecision = async (
       />
     </div>
 
-    <div class="bg-orange-50 rounded-[20px] border border-red-300 p-4 sm:p-6 space-y-5">
+    <div class="bg-cream rounded-[20px] border border-cinnamon-ice p-4 sm:p-6 space-y-5">
       <div class="flex flex-wrap gap-2">
         <button
           v-for="chip in statusChips"
