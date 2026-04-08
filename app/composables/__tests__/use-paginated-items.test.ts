@@ -33,6 +33,7 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   whatIsIncluded: null,
   knownIssues: null,
   usageLimitations: null,
+  images: [],
   thumbnailImage: null,
   photos: [],
   isTrending: false,
@@ -175,6 +176,40 @@ describe("usePaginatedItems", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(secondPaginatedItems.items.value.map((item) => item.id)).toEqual([
       "33333333-3333-3333-3333-333333333333",
+    ])
+  })
+
+  it("deduplicates identical in-flight dashboard item queries", async () => {
+    const response = createDeferred<PaginatedItemsResponse>()
+    const fetchMock = vi.fn().mockImplementation(() => response.promise)
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const firstPaginatedItems = usePaginatedItems({
+      searchQuery: ref("camera"),
+      filterParams: ref({ minRating: "4" }),
+    })
+    const secondPaginatedItems = usePaginatedItems({
+      searchQuery: ref("camera"),
+      filterParams: ref({ minRating: "4" }),
+    })
+
+    const firstRefresh = firstPaginatedItems.refresh()
+    const secondRefresh = secondPaginatedItems.refresh()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    response.resolve({
+      items: [makeItem("44444444-4444-4444-4444-444444444444")],
+      nextCursor: null,
+    })
+
+    await Promise.all([firstRefresh, secondRefresh])
+
+    expect(firstPaginatedItems.items.value.map((item) => item.id)).toEqual([
+      "44444444-4444-4444-4444-444444444444",
+    ])
+    expect(secondPaginatedItems.items.value.map((item) => item.id)).toEqual([
+      "44444444-4444-4444-4444-444444444444",
     ])
   })
 })

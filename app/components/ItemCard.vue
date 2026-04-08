@@ -1,28 +1,45 @@
 <template>
-  <NuxtLink
-    :to="itemDetailPath"
-    class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto cursor-pointer"
+  <div
+    class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto relative group"
+    :class="canNavigate ? 'cursor-pointer' : ''"
+    @click="navigateToDetails"
   >
     <!-- Image Section (~70% of card) -->
     <div class="relative aspect-square w-full bg-gray-50">
-      <img :src="image" :alt="name" class="w-full h-full object-cover" />
+      <img v-if="image" :src="image" :alt="name" class="w-full h-full object-cover" />
+      <div
+        v-else
+        class="flex h-full w-full items-center justify-center bg-cream px-6 text-center font-geist text-[14px] font-medium text-noble-black/45"
+      >
+        No image uploaded
+      </div>
 
       <!-- Type Tag -->
       <div
         class="absolute top-2 sm:top-4 left-2 sm:left-4 px-2 sm:px-4 py-1 sm:py-1.5 min-w-[50px] sm:min-w-[80px] h-[24px] sm:h-[32px] rounded-full font-geist text-[11px] sm:text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm whitespace-nowrap"
-        :class="type === 'Rent' ? 'bg-cinnamon-ice text-noble-black' : 'bg-blue-estate text-white'"
+        :class="topBadge.className"
       >
-        {{ type }}
+        {{ topBadge.label }}
       </div>
 
-      <div class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2">
+      <div
+        v-if="!isManagement"
+        class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2"
+      >
         <!-- Like Button -->
         <button
-          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors group"
+          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all duration-150 group active:scale-90"
           title="Favorite"
+          :aria-pressed="isLiked"
+          @click.stop="toggleLike"
         >
           <svg
-            class="w-4 h-4 sm:w-5 sm:h-5 stroke-noble-black group-hover:fill-noble-black/10 transition-colors"
+            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-150"
+            :class="
+              isLiked
+                ? 'fill-cinnabar-red/90 stroke-cinnabar-red/90'
+                : 'stroke-noble-black group-hover:fill-noble-black/10'
+            "
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -35,24 +52,50 @@
             />
           </svg>
         </button>
-
-        <span
-          v-if="isTrending"
-          class="inline-flex items-center gap-1 rounded-full bg-burning-orange text-white px-2 sm:px-2.5 py-1 font-geist font-medium text-[10px] sm:text-[11px] leading-none shadow-sm whitespace-nowrap"
-          title="Trending item"
-        >
-          <span aria-hidden="true">🔥</span>
-          <span>Trending</span>
-        </span>
       </div>
+
+      <!-- Management Overlay Slot -->
+      <slot name="image-overlay" />
     </div>
 
     <!-- Details Section -->
     <div class="p-3 sm:p-5 flex-1 flex flex-col bg-white">
       <div
-        class="font-geist font-medium text-[11px] sm:text-[13px] uppercase tracking-wide text-burning-orange mb-1 sm:mb-1.5"
+        class="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-1.5 min-w-0 font-geist font-medium text-[11px] sm:text-[13px] uppercase tracking-wide"
       >
-        {{ category }}
+        <div class="text-burning-orange min-w-0 truncate">
+          {{ category }}
+        </div>
+
+        <template v-if="isTrending">
+          <span class="h-1 w-1 shrink-0 rounded-full bg-noble-black/30" aria-hidden="true" />
+          <span class="inline-flex shrink-0 items-center gap-1 text-blue-estate normal-case">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 16L10 10L14 14L20 8"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M14 8H20V14"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>Trending</span>
+          </span>
+        </template>
       </div>
 
       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-2">
@@ -89,22 +132,26 @@
           >
           <span
             class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-70"
-            >/day</span
+            >/{{ displayPriceUnit }}</span
           >
         </div>
       </div>
     </div>
 
     <!-- Divider -->
-    <div class="h-[1px] bg-cinnamon-ice w-full"></div>
+    <div v-if="!isManagement" class="h-[1px] bg-cinnamon-ice w-full"></div>
 
     <!-- Owner Section -->
-    <div class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white">
+    <div
+      v-if="!isManagement"
+      class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white"
+    >
       <span
         class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate pr-2"
         >by {{ owner }}</span
       >
       <button
+        v-if="!isManagement"
         class="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
         @click.stop.prevent
       >
@@ -124,25 +171,50 @@
         </svg>
       </button>
     </div>
-  </NuxtLink>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref, watch } from "vue"
 import { buildItemDetailPath } from "../utils/item-detail-route"
+import { resetPaginatedItemsCache } from "../composables/use-paginated-items"
+import { useLikes } from "../composables/use-likes"
 
 const props = defineProps<{
   id: string | number
   type: "Rent" | "Borrow"
+  status?: string
   isTrending?: boolean
-  image: string
+  image: string | null
   category: string
   name: string
   rating: number | string
   reviews: number | string
   price?: string | number
+  priceUnit?: "hour" | "day"
   owner: string
+  isLiked?: boolean
+  fromPage?: "likes" | "dashboard"
+  isManagement?: boolean
+  allowNavigation?: boolean
 }>()
+const emit = defineEmits<{
+  likeChanged: [payload: { itemId: string; isLiked: boolean }]
+}>()
+
+const { incrementLikes, decrementLikes } = useLikes()
+const isLiked = ref(Boolean(props.isLiked))
+const isTogglingLike = ref(false)
+const router = useRouter()
+
+watch(
+  () => props.isLiked,
+  (nextValue) => {
+    if (typeof nextValue === "boolean") {
+      isLiked.value = nextValue
+    }
+  },
+)
 
 const itemDetailPath = computed(() =>
   buildItemDetailPath({
@@ -150,4 +222,121 @@ const itemDetailPath = computed(() =>
     name: props.name,
   }),
 )
+
+const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")
+const displayPriceUnit = computed(() => props.priceUnit ?? "day")
+const canNavigate = computed(() => !props.isManagement || props.allowNavigation)
+
+const topBadge = computed(() => {
+  if (normalizedStatus.value === "RENTED") {
+    return {
+      label: props.type === "Borrow" ? "Borrowed" : "Rented",
+      className: "bg-noble-black/90 text-white",
+    }
+  }
+
+  if (normalizedStatus.value && normalizedStatus.value !== "AVAILABLE") {
+    return {
+      label: "Unavailable",
+      className: "bg-white/90 text-noble-black border border-noble-black/10",
+    }
+  }
+
+  return {
+    label: props.type,
+    className:
+      props.type === "Rent" ? "bg-cinnamon-ice text-noble-black" : "bg-blue-estate text-white",
+  }
+})
+
+const navigateToDetails = () => {
+  if (!canNavigate.value) return
+
+  if (props.fromPage) {
+    router.push({
+      path: itemDetailPath.value,
+      query: { from: props.fromPage },
+    })
+    return
+  }
+
+  router.push(itemDetailPath.value)
+}
+
+const toggleLike = async () => {
+  if (isTogglingLike.value) return
+
+  let previousValue: boolean | null = null
+
+  try {
+    // Check if user is authenticated via Supabase
+    const user = useSupabaseUser()
+    const supabase = useSupabaseClient()
+    if (!user.value) {
+      console.error("User not authenticated. Please log in first.")
+      return
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      console.error("No active Supabase session token found.")
+      return
+    }
+
+    previousValue = isLiked.value
+    isLiked.value = !previousValue
+    isTogglingLike.value = true
+
+    const response = await $fetch("/api/trpc/item.toggleLike", {
+      method: "POST",
+      body: {
+        json: {
+          itemId: String(props.id),
+        },
+      },
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    const typedResponse = response as {
+      result?: { data?: { isLiked?: boolean; json?: { isLiked?: boolean } } }
+    }
+    const nextIsLiked =
+      typedResponse.result?.data?.isLiked ?? typedResponse.result?.data?.json?.isLiked
+
+    if (typeof nextIsLiked === "boolean") {
+      isLiked.value = nextIsLiked
+      resetPaginatedItemsCache()
+
+      // Update global count
+      if (nextIsLiked) {
+        incrementLikes()
+      } else {
+        decrementLikes()
+      }
+
+      emit("likeChanged", {
+        itemId: String(props.id),
+        isLiked: nextIsLiked,
+      })
+    }
+  } catch (error) {
+    if (previousValue !== null) {
+      isLiked.value = previousValue
+    }
+
+    // Log more details about the error
+    if (error instanceof Error) {
+      console.error("Failed to toggle like:", error.message)
+    } else {
+      console.error("Failed to toggle like:", error)
+    }
+  } finally {
+    isTogglingLike.value = false
+  }
+}
 </script>

@@ -115,4 +115,31 @@ describe("useFilteredResultsCount", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(secondResultsCount.totalResultsCount.value).toBe(12)
   })
+
+  it("deduplicates identical in-flight count requests", async () => {
+    const response = createDeferred<{ count: number }>()
+    const fetchMock = vi.fn().mockImplementation(() => response.promise)
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const firstResultsCount = useFilteredResultsCount({
+      searchQuery: ref("camera"),
+      filterParams: ref({ freeToBorrow: "true", minRating: "4" }),
+    })
+    const secondResultsCount = useFilteredResultsCount({
+      searchQuery: ref("camera"),
+      filterParams: ref({ freeToBorrow: "true", minRating: "4" }),
+    })
+
+    const firstRefresh = firstResultsCount.refreshResultsCount()
+    const secondRefresh = secondResultsCount.refreshResultsCount()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    response.resolve({ count: 18 })
+
+    await Promise.all([firstRefresh, secondRefresh])
+
+    expect(firstResultsCount.totalResultsCount.value).toBe(18)
+    expect(secondResultsCount.totalResultsCount.value).toBe(18)
+  })
 })

@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
-import type { TransactionStatus } from "../../../shared/schemas/transaction"
-import { useTransactions } from "../../composables/use-transactions"
+import type { TransactionStatus } from "../../../../shared/schemas/transaction"
+import { useTransactions } from "../../../composables/use-transactions"
 
 definePageMeta({
   layout: "account",
+  middleware: "account-auth",
 })
 
 type ActiveRole = "BORROWER" | "LENDER"
 
-const activeRole = ref<ActiveRole>("BORROWER")
+const route = useRoute()
+const router = useRouter()
+const activeRole = ref<ActiveRole>((route.query.role as ActiveRole) || "BORROWER")
 const activeStatus = ref<TransactionStatus | null>(null)
 const searchQuery = ref("")
 
@@ -27,6 +30,7 @@ const setRole = (role: ActiveRole) => {
   activeRole.value = role
   activeStatus.value = null
   searchQuery.value = ""
+  router.replace({ query: { ...route.query, role } })
 }
 
 const setStatus = (status: TransactionStatus | null) => {
@@ -40,8 +44,12 @@ type StatusChip = {
 
 const statusChips = computed<StatusChip[]>(() => [
   { label: "All", value: null },
-  { label: activeRole.value === "BORROWER" ? "To Receive" : "To Deliver", value: "PENDING" },
+  {
+    label: activeRole.value === "BORROWER" ? "To Receive" : "For Approval",
+    value: "PENDING",
+  },
   { label: "In Use", value: "ACTIVE" },
+  { label: "Returned", value: "RETURNED" },
   { label: "Completed", value: "COMPLETED" },
   { label: "Cancelled", value: "CANCELLED" },
 ])
@@ -66,7 +74,7 @@ const sectionSubtitle = computed(() =>
 
     <!-- Search bar -->
     <div
-      class="flex items-center gap-2 sm:gap-3 bg-white rounded-[20px] border-[0.50px] border-red-300 h-12 sm:h-16 px-4 sm:px-5 mb-3 sm:mb-4"
+      class="flex items-center gap-2 sm:gap-3 bg-white rounded-[20px] border-[0.50px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5 mb-3 sm:mb-4"
     >
       <svg
         class="w-4 h-4 sm:w-5 sm:h-5 text-stone-400 shrink-0"
@@ -97,7 +105,7 @@ const sectionSubtitle = computed(() =>
 
     <!-- Tab bar -->
     <div
-      class="flex items-center rounded-[20px] bg-orange-50 border border-red-300 h-12 sm:h-16 overflow-hidden mb-3 sm:mb-4"
+      class="flex items-center rounded-[20px] bg-cream border border-cinnamon-ice h-12 sm:h-16 overflow-hidden mb-3 sm:mb-4"
     >
       <!-- Borrow History tab -->
       <button
@@ -127,7 +135,7 @@ const sectionSubtitle = computed(() =>
     </div>
 
     <!-- Content panel -->
-    <div class="bg-orange-50 rounded-[20px] border border-red-300 p-4 sm:p-6">
+    <div class="bg-cream rounded-[20px] border border-cinnamon-ice p-4 sm:p-6">
       <!-- Section title -->
       <h2 class="text-neutral-800 text-lg sm:text-xl font-semibold">{{ sectionTitle }}</h2>
       <p

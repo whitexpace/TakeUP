@@ -6,6 +6,7 @@ describe("parseItemFilterQuery", () => {
     expect(
       parseItemFilterQuery({
         search: " camera ",
+        ownedOnly: "true",
         categories: "ELECTRONICS,OTHERS",
         conditions: "GOOD,FAIR",
         tags: "photo,audio",
@@ -18,6 +19,7 @@ describe("parseItemFilterQuery", () => {
       }),
     ).toEqual({
       search: " camera ",
+      ownedOnly: true,
       categories: ["ELECTRONICS", "OTHERS"],
       conditions: ["GOOD", "FAIR"],
       tags: ["photo", "audio"],
@@ -34,6 +36,7 @@ describe("parseItemFilterQuery", () => {
     expect(
       parseItemFilterQuery({
         categories: "",
+        ownedOnly: "nope",
         freeToBorrow: "maybe",
         minRating: undefined,
       }),

@@ -1,38 +1,39 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { computed, onMounted, ref } from "vue"
+import { useNotifications } from "../composables/use-notifications"
 
-const currentLink = ref("Account Information")
-const showLogoutModal = ref(false)
-const showMobileSidebar = ref(false)
 const route = useRoute()
+const showMobileSidebar = ref(false)
+const showLogoutModal = ref(false)
+const isHeaderVisible = ref(true)
+const hideSidebar = computed(() => Boolean(route.meta.hideAccountSidebar))
+const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
+  useNotifications()
 
-type SidebarLink = {
+type AccountLink = {
   label: string
-  to?: string
+  to: string
 }
 
-const links: SidebarLink[] = [
+const links: AccountLink[] = [
   { label: "Account Information", to: "/account" },
-  { label: "My Wallet" },
+  { label: "My Wallet", to: "/account/wallet" },
   { label: "My Transactions", to: "/account/transactions" },
-  { label: "My Listings" },
-  { label: "My Listing Analytics" },
-  { label: "My Rewards" },
+  { label: "My Listings", to: "/account/listings" },
+  { label: "My Listing Analytics", to: "/account/analytics" },
+  { label: "My Rewards", to: "/account/rewards" },
 ]
 
-const isActive = (link: SidebarLink) => {
-  if (link.to) return route.path === link.to
-  return currentLink.value === link.label
+const isActive = (link: AccountLink) => {
+  if (link.to === "/account") return route.path === "/account"
+  return route.path.startsWith(link.to)
 }
 
-const selectLink = (link: SidebarLink) => {
-  if (!link.to) currentLink.value = link.label
-  showMobileSidebar.value = false
-}
 const supabase = useSupabaseClient()
 
 const openLogoutModal = () => {
   showLogoutModal.value = true
+  showMobileSidebar.value = false
 }
 
 const cancelLogout = () => {
@@ -45,135 +46,162 @@ const confirmLogout = async () => {
   await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
   await navigateTo("/")
 }
+
+onMounted(() => {
+  void loadNotifications()
+})
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen font-geist bg-white relative">
+  <div class="flex h-screen flex-col overflow-hidden font-geist bg-white relative">
     <!-- Top Navbar -->
-    <nav
-      class="h-[77px] w-full bg-white border-b border-cinnamon-ice shrink-0 flex items-center px-4 lg:px-8 gap-3"
+    <Header
+      :notifications="notifications"
+      scroll-container-selector=".custom-account-main-scrollbar"
+      @mark-notification-read="markNotificationRead"
+      @mark-all-notifications-read="markAllNotificationsRead"
+      @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
-      <!-- Hamburger button (mobile only) -->
-      <button
-        class="lg:hidden p-2 rounded-lg text-noble-black hover:bg-cream transition-colors"
-        aria-label="Open menu"
-        @click="showMobileSidebar = true"
-      >
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <line x1="3" y1="6" x2="21" y2="6" stroke-width="2" stroke-linecap="round" />
-          <line x1="3" y1="12" x2="21" y2="12" stroke-width="2" stroke-linecap="round" />
-          <line x1="3" y1="18" x2="21" y2="18" stroke-width="2" stroke-linecap="round" />
-        </svg>
-      </button>
-      <!-- Mobile title -->
-      <span class="lg:hidden font-bold text-lg text-blue-estate">MY ACCOUNT</span>
-    </nav>
+      <template #mobile-menu>
+        <button
+          class="lg:hidden p-2 text-noble-black hover:text-burning-orange transition-colors"
+          aria-label="Open menu"
+          @click="showMobileSidebar = true"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+      </template>
+    </Header>
 
     <!-- Main Content Container -->
-    <div class="flex flex-1 lg:overflow-hidden lg:h-[calc(100vh-77px)]">
-      <!-- Mobile sidebar backdrop -->
+    <div class="relative flex flex-1 overflow-hidden">
+      <!-- Mobile backdrop -->
       <Transition name="fade">
         <div
-          v-if="showMobileSidebar"
-          class="fixed inset-0 z-40 bg-noble-black/50 lg:hidden"
+          v-if="showMobileSidebar && !hideSidebar"
+          class="fixed inset-0 z-30 bg-noble-black/50 lg:hidden"
           @click="showMobileSidebar = false"
         />
       </Transition>
 
-      <!-- Left Sidebar (desktop: static; mobile: slide-in drawer) -->
+      <!-- Left panel background strip (connects sidebar + logout visually) -->
+      <div
+        v-if="!hideSidebar"
+        class="pointer-events-none fixed inset-y-0 left-0 z-[35] w-[300px] lg:w-[360px] bg-cream transition-transform duration-300"
+        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      />
+
+      <!-- Left Sidebar -->
       <aside
-        class="fixed lg:static inset-y-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out lg:translate-x-0"
-        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full'"
+        v-if="!hideSidebar"
+        class="fixed inset-y-0 left-0 z-40 flex h-full w-[300px] shrink-0 flex-col bg-cream transition-all duration-500 ease-in-out lg:w-[360px]"
+        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       >
-        <!-- Mobile close button -->
-        <div class="flex items-center justify-between px-6 pt-6 pb-2 lg:hidden">
-          <h2 class="font-bold text-[22px] text-blue-estate">MY ACCOUNT</h2>
+        <div class="flex h-full flex-col" :class="isHeaderVisible ? 'pt-14' : 'pt-0'">
+          <!-- Mobile close button -->
           <button
-            class="p-2 rounded-lg text-noble-black hover:bg-pale-cashmere"
+            class="absolute right-4 p-2 text-noble-black/50 hover:text-noble-black lg:hidden"
+            :class="isHeaderVisible ? 'top-16' : 'top-4'"
             @click="showMobileSidebar = false"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
-        </div>
 
-        <!-- Sidebar Title (desktop only) -->
-        <div class="hidden lg:block px-8 pt-10 pb-6">
-          <h2 class="font-bold text-[25px] text-blue-estate">MY ACCOUNT</h2>
-        </div>
+          <!-- Sidebar Title -->
+          <div class="px-8 pt-10 pb-6">
+            <h2 class="font-bold text-[25px] text-blue-estate">MY ACCOUNT</h2>
+          </div>
 
-        <!-- Navigation Links -->
-        <nav class="flex-1 flex flex-col">
-          <template v-for="link in links" :key="link.label">
+          <!-- Navigation Links -->
+          <nav class="flex flex-col pb-24">
             <NuxtLink
-              v-if="link.to"
+              v-for="link in links"
+              :key="link.label"
               :to="link.to"
-              class="block w-full px-6 lg:px-8 py-3 text-[17px] lg:text-[18px] transition-all duration-200"
-              :class="[
+              class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
+              :class="
                 isActive(link)
                   ? 'bg-burning-orange text-white font-medium'
-                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere',
-              ]"
+                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere'
+              "
               @click="showMobileSidebar = false"
             >
               {{ link.label }}
             </NuxtLink>
-            <a
-              v-else
-              href="#"
-              class="block w-full px-6 lg:px-8 py-3 text-[17px] lg:text-[18px] transition-all duration-200"
-              :class="[
-                isActive(link)
-                  ? 'bg-burning-orange text-white font-medium'
-                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere',
-              ]"
-              @click.prevent="selectLink(link)"
-            >
-              {{ link.label }}
-            </a>
-          </template>
-        </nav>
-
-        <!-- Logout Section -->
-        <div class="mt-auto border-t border-cinnamon-ice bg-cream">
-          <button
-            class="flex items-center gap-3 w-full px-6 lg:px-8 py-5 group transition-all duration-200 text-noble-black"
-            @click="openLogoutModal"
-          >
-            <!-- Logout Icon -->
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-colors duration-200 group-hover:text-burning-orange"
-            >
-              <path
-                d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-                stroke="currentColor"
-                stroke-width="1"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <span
-              class="font-normal text-[18px] transition-colors duration-200 group-hover:text-burning-orange"
-              >Log Out</span
-            >
-          </button>
+          </nav>
         </div>
       </aside>
 
+      <!-- Logout Section (Pinned to bottom-left of screen) -->
+      <div
+        v-if="!hideSidebar"
+        class="fixed bottom-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream transition-transform duration-300"
+        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+      >
+        <button
+          class="flex items-center gap-3 w-full px-8 py-5 group transition-all duration-200 text-noble-black"
+          @click="openLogoutModal"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            class="transition-colors duration-200 group-hover:text-burning-orange"
+          >
+            <path
+              d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
+              stroke="currentColor"
+              stroke-width="1"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span
+            class="font-normal text-[18px] transition-colors duration-200 group-hover:text-burning-orange"
+            >Log Out</span
+          >
+        </button>
+      </div>
+
       <!-- Page Content Slot -->
-      <main class="flex-1 bg-white overflow-y-auto p-4 sm:p-6 lg:p-8">
-        <slot />
+      <main
+        class="custom-account-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-white transition-all duration-500 ease-in-out"
+        :class="hideSidebar ? '' : 'lg:ml-[360px]'"
+      >
+        <div
+          :class="[
+            hideSidebar
+              ? 'px-4 pb-4 sm:px-6 sm:pb-6 lg:px-12 lg:pb-8'
+              : 'px-4 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8',
+            isHeaderVisible ? 'pt-24' : 'pt-10',
+          ]"
+        >
+          <slot />
+        </div>
       </main>
     </div>
 
@@ -183,18 +211,14 @@ const confirmLogout = async () => {
         v-if="showLogoutModal"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 font-geist"
       >
-        <!-- Backdrop -->
         <div
           class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm transition-opacity"
           @click="cancelLogout"
         />
-
-        <!-- Modal Content -->
         <div
           class="relative bg-white rounded-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 shadow-2xl"
         >
           <div class="p-8 flex flex-col items-center text-center">
-            <!-- Warning Icon -->
             <div class="w-16 h-16 bg-cream rounded-full flex items-center justify-center mb-6">
               <svg
                 width="32"
@@ -213,66 +237,42 @@ const confirmLogout = async () => {
                 />
               </svg>
             </div>
-
-            <!-- Title -->
             <h3 class="text-2xl font-bold text-blue-estate mb-2">Confirm Logout</h3>
-
-            <!-- Description -->
             <p class="text-noble-black/50 mb-8 font-medium">Are you sure you want to log out?</p>
-
-            <!-- Pending Items List -->
             <div
               class="w-full bg-cream rounded-xl p-5 mb-8 text-left space-y-4 border border-cinnamon-ice/30"
             >
               <div class="flex items-center gap-3">
-                <div class="shrink-0">
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
-                    <path
-                      d="M8 12L11 15L16 9"
-                      stroke="white"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
+                  <path
+                    d="M8 12L11 15L16 9"
+                    stroke="white"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
                 <span class="text-noble-black text-[15px] font-light leading-tight"
                   >Requests will remain pending</span
                 >
               </div>
               <div class="flex items-center gap-3">
-                <div class="shrink-0">
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
-                    <path
-                      d="M8 12L11 15L16 9"
-                      stroke="white"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
+                  <path
+                    d="M8 12L11 15L16 9"
+                    stroke="white"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
                 <span class="text-noble-black text-[15px] font-light leading-tight"
                   >You can review them after logging back in</span
                 >
               </div>
             </div>
-
-            <!-- Action Buttons -->
             <div class="flex flex-col sm:flex-row gap-3 w-full">
               <button
                 class="flex-1 px-6 py-3 border-[0.5px] border-cinnamon-ice rounded-lg text-noble-black font-medium hover:bg-pale-cashmere transition-colors duration-200 focus:outline-none"
@@ -295,9 +295,33 @@ const confirmLogout = async () => {
 </template>
 
 <style scoped>
+.custom-account-main-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-account-main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-account-main-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+
+.custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+
+.custom-account-main-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: theme("colors.noble-black / 10%") transparent;
+}
+</style>
+
+<style scoped>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s;
 }
 .fade-enter-from,
 .fade-leave-to {

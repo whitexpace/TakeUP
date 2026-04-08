@@ -1,5 +1,12 @@
 import { TRPCError } from "@trpc/server"
-import type { ItemCategory, ItemCondition, ItemStatus, Prisma } from "@prisma/client"
+import {
+  DisputeStatus as PrismaDisputeStatus,
+  type ItemCategory,
+  type ItemCondition,
+  type ItemStatus,
+  type Prisma,
+  type TransactionStatus,
+} from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -7,18 +14,34 @@ import {
   deleteItemSchema,
   itemIdSchema,
   listItemsSchema,
+  myListingsSchema,
   paginatedItemsSchema,
   itemStatusSchema,
   updateItemSchema,
+  toggleLikeSchema,
   KNOWN_SIDEBAR_DB_CATEGORIES,
   UI_OTHERS_SENTINEL,
 } from "../../../shared/schemas/item"
+import { removeItemImagesFromStorage } from "../../utils/item-image-storage"
+
 import { getDefaultItemOrderBy } from "./item-sorting"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
+const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+]
 
 const itemWithTaxonomy = {
+  images: {
+    select: {
+      path: true,
+      isPrimary: true,
+      sortOrder: true,
+    },
+    orderBy: itemImageOrderBy,
+  },
   availability: {
     select: {
       id: true,
@@ -51,11 +74,52 @@ const itemWithTaxonomy = {
       },
     },
   },
-} as const
+} satisfies Prisma.ItemInclude
+
+const ACTIVE_TRANSACTION_DISPUTE_STATUSES = [
+  PrismaDisputeStatus.OPEN,
+  PrismaDisputeStatus.UNDER_REVIEW,
+  PrismaDisputeStatus.APPEALED,
+] as const
+
+const TERMINAL_TRANSACTION_STATUSES = [
+  "COMPLETED",
+  "CANCELLED",
+  "REFUNDED",
+  "FAILED",
+] as const satisfies ReadonlyArray<TransactionStatus>
+
+const myListingsWithDisputes = {
+  ...itemWithTaxonomy,
+  transactions: {
+    select: {
+      disputes: {
+        where: {
+          status: {
+            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+          },
+        },
+        select: {
+          id: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.ItemInclude
 
 type ItemWithTaxonomy = Prisma.ItemGetPayload<{
   include: typeof itemWithTaxonomy
 }>
+
+type MyListingFilterStatus = "ACTIVE" | "IN_USE" | "INACTIVE" | "DISPUTED"
+
+type ItemWithListingDisputes = Prisma.ItemGetPayload<{
+  include: typeof myListingsWithDisputes
+}>
+
+type ItemWithUserLike = ItemWithTaxonomy & {
+  likes?: Array<{ id: string }>
+}
 
 const itemSearchSelect = {
   id: true,
@@ -251,18 +315,44 @@ const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>
   return ranked.map((entry) => entry.item)
 }
 
-const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
-  const { availability, categories, tags, lender, ...rest } = item
+const mapItemTaxonomy = (
+  item: ItemWithUserLike & {
+    images?: Array<{ path: string; isPrimary?: boolean; sortOrder?: number }>
+    thumbnailImage?: string | null
+    photos?: string[]
+  },
+) => {
+  const { availability, categories, tags, lender, likes, images, ...rest } = item
   const lenderUser = lender.user
-  const ownerName =
-    lenderUser.username ||
+  const lenderFullName =
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
-    lenderUser.email ||
-    item.lenderId
+    null
+  const lenderUsername = lenderUser.username || null
+  const ownerName = lenderUsername || lenderFullName || lenderUser.email || item.lenderId
+  const orderedPhotos =
+    images?.map((entry) => entry.path) ??
+    item.photos ??
+    (item.thumbnailImage ? [item.thumbnailImage] : [])
+  const thumbnailImage =
+    images?.find((entry) => entry.isPrimary)?.path ??
+    item.thumbnailImage ??
+    orderedPhotos[0] ??
+    null
 
   return {
     ...rest,
     ownerName,
+    lenderUsername,
+    lenderFullName,
+    isLiked: Array.isArray(likes) ? likes.length > 0 : false,
+    images:
+      images?.map((entry, index) => ({
+        path: entry.path,
+        isPrimary: Boolean(entry.isPrimary),
+        sortOrder: entry.sortOrder ?? index,
+      })) ?? [],
+    thumbnailImage,
+    photos: orderedPhotos,
     availability: availability.map((entry) => ({
       id: entry.id,
       startDate: entry.startDate,
@@ -274,8 +364,98 @@ const mapItemTaxonomy = (item: ItemWithTaxonomy) => {
   }
 }
 
+const itemHasActiveDispute = (item: Pick<ItemWithListingDisputes, "transactions">) =>
+  item.transactions.some((transaction) => transaction.disputes.length > 0)
+
+const getMyListingDisplayStatus = (
+  item: Pick<ItemWithListingDisputes, "status" | "transactions">,
+): MyListingFilterStatus => {
+  if (itemHasActiveDispute(item)) {
+    return "DISPUTED"
+  }
+
+  switch (item.status) {
+    case itemStatusSchema.enum.AVAILABLE:
+      return "ACTIVE"
+    case itemStatusSchema.enum.RENTED:
+      return "IN_USE"
+    case itemStatusSchema.enum.DEACTIVATED:
+      return "INACTIVE"
+    default:
+      return "INACTIVE"
+  }
+}
+
+const mapMyListing = (item: ItemWithListingDisputes) => ({
+  ...mapItemTaxonomy(item),
+  hasActiveDispute: itemHasActiveDispute(item),
+  displayStatus: getMyListingDisplayStatus(item),
+})
+
+const buildOrderedImagePaths = (thumbnailImage?: string | null, photos?: string[]) => {
+  if (thumbnailImage === undefined && photos === undefined) {
+    return undefined
+  }
+
+  const seenPaths = new Set<string>()
+  return [...(photos ?? []), ...(thumbnailImage ? [thumbnailImage] : [])].filter((path) => {
+    if (!path || seenPaths.has(path)) return false
+    seenPaths.add(path)
+    return true
+  })
+}
+
+const buildCreateImageWrites = (
+  thumbnailImage?: string | null,
+  photos?: string[],
+): Prisma.ItemImageCreateNestedManyWithoutItemInput | undefined => {
+  const orderedPaths = buildOrderedImagePaths(thumbnailImage, photos)
+  if (!orderedPaths || orderedPaths.length === 0) {
+    return undefined
+  }
+
+  const primaryPath =
+    thumbnailImage && orderedPaths.includes(thumbnailImage) ? thumbnailImage : orderedPaths[0]!
+
+  return {
+    create: orderedPaths.map((path, index) => ({
+      path,
+      sortOrder: index,
+      isPrimary: path === primaryPath,
+    })),
+  }
+}
+
+const buildUpdateImageWrites = (
+  thumbnailImage?: string | null,
+  photos?: string[],
+): Prisma.ItemImageUpdateManyWithoutItemNestedInput | undefined => {
+  const orderedPaths = buildOrderedImagePaths(thumbnailImage, photos)
+  if (!orderedPaths) {
+    return undefined
+  }
+
+  if (orderedPaths.length === 0) {
+    return { deleteMany: {} }
+  }
+
+  const primaryPath =
+    thumbnailImage && orderedPaths.includes(thumbnailImage) ? thumbnailImage : orderedPaths[0]!
+
+  return {
+    deleteMany: {},
+    create: orderedPaths.map((path, index) => ({
+      path,
+      sortOrder: index,
+      isPrimary: path === primaryPath,
+    })),
+  }
+}
+
 type ListWhereFilters = {
   search?: string
+  likedOnly?: boolean
+  ownedOnly?: boolean
   status?: ItemStatus
   statuses?: ItemStatus[]
   // May contain real DB categories or the UI-only "OTHERS" sentinel
@@ -292,9 +472,11 @@ type ListWhereFilters = {
 
 const buildListWhere = (
   input?: ListWhereFilters,
-  options: { includeSearch?: boolean } = {},
+  options: { includeSearch?: boolean; userId?: string | null } = {},
 ): Prisma.ItemWhereInput => {
   const search = input?.search?.trim()
+  const likedOnly = input?.likedOnly
+  const ownedOnly = input?.ownedOnly
   const status = input?.status
   const statuses = input?.statuses
   const rawCategories = input?.categories
@@ -307,6 +489,7 @@ const buildListWhere = (
   const availableTo = input?.availableTo
   const minRating = input?.minRating
   const includeSearch = options.includeSearch ?? true
+  const userId = options.userId ?? null
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? status
@@ -344,6 +527,24 @@ const buildListWhere = (
 
   return {
     status: statusFilter,
+    ...(likedOnly
+      ? userId
+        ? {
+            likes: {
+              some: {
+                userId,
+              },
+            },
+          }
+        : { id: "__liked_requires_user__" }
+      : {}),
+    ...(ownedOnly
+      ? userId
+        ? {
+            lenderId: userId,
+          }
+        : { id: "__owned_requires_user__" }
+      : {}),
     ...categoryFilter,
     ...(search && includeSearch
       ? {
@@ -418,6 +619,17 @@ const buildPaginationWhereFromCursor = (cursor: {
   ],
 })
 
+const buildItemInclude = (userId: string | null) =>
+  ({
+    ...itemWithTaxonomy,
+    likes: {
+      where: { userId: userId ?? "__anonymous_user__" },
+      select: { id: true },
+    },
+  }) satisfies Prisma.ItemInclude
+
+const blockingBookingStatusFilter = ["CONFIRMED", "IN_DISPUTE"] as const
+
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
     const search = input?.search?.trim()
@@ -425,8 +637,11 @@ export const itemRouter = router({
     const records = await ctx.prisma.item.findMany({
       take: search ? SEARCH_SCAN_LIMIT : 50,
       orderBy: getDefaultItemOrderBy(),
-      include: itemWithTaxonomy,
-      where: buildListWhere(input, { includeSearch: !search }),
+      include: buildItemInclude(ctx.user?.id ?? null),
+      where: buildListWhere(input, {
+        includeSearch: !search,
+        userId: ctx.user?.id ?? null,
+      }),
     })
 
     const matchedItems = search ? filterAndRankSearchResults(records, search).slice(0, 50) : records
@@ -435,7 +650,10 @@ export const itemRouter = router({
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
     const search = input.search?.trim()
-    const baseWhere = buildListWhere(input, { includeSearch: !search })
+    const baseWhere = buildListWhere(input, {
+      includeSearch: !search,
+      userId: ctx.user?.id ?? null,
+    })
     const paginationWhere = input.cursor
       ? buildPaginationWhereFromCursor({
           bookingCount: input.cursor.bookingCount,
@@ -447,7 +665,7 @@ export const itemRouter = router({
     const records = await ctx.prisma.item.findMany({
       take: search ? SEARCH_SCAN_LIMIT : input.limit + 1,
       orderBy: getDefaultItemOrderBy(),
-      include: itemWithTaxonomy,
+      include: buildItemInclude(ctx.user?.id ?? null),
       where: paginationWhere ? { AND: [baseWhere, paginationWhere] } : baseWhere,
     })
 
@@ -475,12 +693,15 @@ export const itemRouter = router({
     const search = input?.search?.trim()
 
     if (!search) {
-      const where = buildListWhere(input)
+      const where = buildListWhere(input, { userId: ctx.user?.id ?? null })
       const count = await ctx.prisma.item.count({ where })
       return { count }
     }
 
-    const where = buildListWhere(input, { includeSearch: false })
+    const where = buildListWhere(input, {
+      includeSearch: false,
+      userId: ctx.user?.id ?? null,
+    })
     let totalCount = 0
     let cursor: { id: string; createdAt: Date; bookingCount: number } | null = null
 
@@ -579,7 +800,29 @@ export const itemRouter = router({
     }
   }),
 
-  create: protectedProcedure.input(createItemSchema).mutation(({ ctx, input }) => {
+  create: protectedProcedure.input(createItemSchema).mutation(async ({ ctx, input }) => {
+    const existingUser = await ctx.prisma.user.findUnique({
+      where: { id: ctx.user.id },
+      select: { id: true },
+    })
+
+    if (!existingUser) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Your account is missing from the database. Sign out and sign in again before publishing an item.",
+      })
+    }
+
+    // Ensure Lender profile exists for this user
+    await ctx.prisma.lender.upsert({
+      where: { userId: ctx.user.id },
+      create: { userId: ctx.user.id, lenderRating: 0 },
+      update: {},
+    })
+
+    const imageWrites = buildCreateImageWrites(input.thumbnailImage, input.photos)
+
     return ctx.prisma.item
       .create({
         data: {
@@ -602,13 +845,12 @@ export const itemRouter = router({
           whatIsIncluded: input.whatIsIncluded ?? null,
           knownIssues: input.knownIssues ?? null,
           usageLimitations: input.usageLimitations ?? null,
-          thumbnailImage: input.thumbnailImage ?? null,
           isTrending: input.isTrending ?? false,
           viewCount: input.viewCount ?? 0,
           bookingCount: input.bookingCount ?? 0,
           likeCount: input.likeCount ?? 0,
-          photos: input.photos,
           lenderId: ctx.user.id,
+          ...(imageWrites ? { images: imageWrites } : {}),
           categories: {
             create: input.categories.map((category) => ({ category })),
           },
@@ -632,15 +874,53 @@ export const itemRouter = router({
     return ctx.prisma.item
       .findUnique({
         where: { id: input.id },
-        include: itemWithTaxonomy,
+        include: {
+          ...buildItemInclude(ctx.user?.id ?? null),
+          bookings: {
+            where: {
+              status: { in: [...blockingBookingStatusFilter] },
+            },
+            select: {
+              id: true,
+              startDate: true,
+              endDate: true,
+            },
+          },
+        },
       })
-      .then((item: ItemWithTaxonomy | null) => (item ? mapItemTaxonomy(item) : null))
+      .then(
+        (
+          item:
+            | (ItemWithUserLike & {
+                bookings: Array<{ id: string; startDate: Date; endDate: Date }>
+              })
+            | null,
+        ) =>
+          item
+            ? {
+                ...mapItemTaxonomy(item),
+                bookingBlocks: item.bookings.map((booking) => ({
+                  id: booking.id,
+                  startDate: booking.startDate,
+                  endDate: booking.endDate,
+                  status: "RENTED" as const,
+                })),
+              }
+            : null,
+      )
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
     const existing = await ctx.prisma.item.findUnique({
       where: { id: input.id },
-      select: { lenderId: true },
+      select: {
+        lenderId: true,
+        images: {
+          select: {
+            path: true,
+          },
+        },
+      },
     })
 
     if (!existing) {
@@ -651,9 +931,14 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
     }
 
-    const { id, availability, categories, tags, ...data } = input
+    const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
+    const imageWrites = buildUpdateImageWrites(thumbnailImage, photos)
+    const nextImageUrls = new Set(buildOrderedImagePaths(thumbnailImage, photos) ?? [])
+    const removedImageUrls = existing.images
+      .map((image) => image.path)
+      .filter((path) => !nextImageUrls.has(path))
 
-    return ctx.prisma.item
+    const updatedItem = await ctx.prisma.item
       .update({
         where: { id },
         data: {
@@ -693,16 +978,36 @@ export const itemRouter = router({
                 },
               }
             : {}),
+          ...(imageWrites ? { images: imageWrites } : {}),
         },
         include: itemWithTaxonomy,
       })
       .then(mapItemTaxonomy)
+
+    void removeItemImagesFromStorage(removedImageUrls, {
+      bucket: useRuntimeConfig(ctx.event).public.itemImageBucket,
+      supabaseUrl: useRuntimeConfig(ctx.event).public.supabase.url,
+      serviceRoleKey: useRuntimeConfig(ctx.event).supabaseServiceRoleKey,
+    })
+
+    return updatedItem
   }),
 
   delete: protectedProcedure.input(deleteItemSchema).mutation(async ({ ctx, input }) => {
     const existing = await ctx.prisma.item.findUnique({
       where: { id: input.id },
-      select: { lenderId: true },
+      select: {
+        lenderId: true,
+        transactions: {
+          where: {
+            status: {
+              notIn: [...TERMINAL_TRANSACTION_STATUSES],
+            },
+          },
+          select: { id: true },
+          take: 1,
+        },
+      },
     })
 
     if (!existing) {
@@ -713,6 +1018,14 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to delete this item." })
     }
 
+    if (existing.transactions.length > 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "This item cannot be deleted because it has active or upcoming transactions. Deactivate the listing instead to preserve system records.",
+      })
+    }
+
     return ctx.prisma.item
       .update({
         where: { id: input.id },
@@ -720,5 +1033,167 @@ export const itemRouter = router({
         include: itemWithTaxonomy,
       })
       .then(mapItemTaxonomy)
+  }),
+
+  myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
+    const { search, statuses, categories, limit, cursor } = input
+    const userId = ctx.user.id
+
+    const activeDisputeWhere: Prisma.RentalTransactionWhereInput = {
+      disputes: {
+        some: {
+          status: {
+            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+          },
+        },
+      },
+    }
+
+    const selectedStatuses = statuses ?? []
+    const includeDisputed = selectedStatuses.includes("DISPUTED")
+    const requestedBaseStatuses = selectedStatuses.filter(
+      (status): status is Exclude<MyListingFilterStatus, "DISPUTED"> => status !== "DISPUTED",
+    )
+
+    const baseStatusClauses: Prisma.ItemWhereInput[] = requestedBaseStatuses.map((status) => {
+      switch (status) {
+        case "ACTIVE":
+          return {
+            status: itemStatusSchema.enum.AVAILABLE,
+            NOT: { transactions: { some: activeDisputeWhere } },
+          }
+        case "IN_USE":
+          return {
+            status: itemStatusSchema.enum.RENTED,
+            NOT: { transactions: { some: activeDisputeWhere } },
+          }
+        case "INACTIVE":
+          return {
+            status: itemStatusSchema.enum.DEACTIVATED,
+            NOT: { transactions: { some: activeDisputeWhere } },
+          }
+      }
+    })
+
+    const baseWhere: Prisma.ItemWhereInput = {
+      lenderId: userId,
+      status: { not: itemStatusSchema.enum.DELETED },
+      ...(categories?.length
+        ? {
+            categories: {
+              some: {
+                category: {
+                  in: categories,
+                },
+              },
+            },
+          }
+        : {}),
+      ...(selectedStatuses.length
+        ? {
+            OR: [
+              ...baseStatusClauses,
+              ...(includeDisputed
+                ? [
+                    {
+                      transactions: {
+                        some: activeDisputeWhere,
+                      },
+                    } satisfies Prisma.ItemWhereInput,
+                  ]
+                : []),
+            ],
+          }
+        : {}),
+    }
+
+    const cursorWhere: Prisma.ItemWhereInput = cursor
+      ? {
+          OR: [
+            { createdAt: { lt: cursor.createdAt } },
+            { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+          ],
+        }
+      : {}
+
+    const records = await ctx.prisma.item.findMany({
+      where: { AND: [baseWhere, cursorWhere] },
+      include: myListingsWithDisputes,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: search ? SEARCH_SCAN_LIMIT : limit + 1,
+    })
+
+    const filteredRecords = search
+      ? filterAndRankSearchResults(records, search, { sortByScore: false })
+      : records
+    const hasMore = filteredRecords.length > limit
+    const pageRecords = hasMore ? filteredRecords.slice(0, limit) : filteredRecords
+    const lastRecord = pageRecords.at(-1)
+
+    return {
+      items: pageRecords.map(mapMyListing),
+      nextCursor:
+        hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null,
+    }
+  }),
+
+  toggleLike: protectedProcedure.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
+    const userId = ctx.user.id
+    const { itemId } = input
+
+    // Check if item exists
+    const item = await ctx.prisma.item.findUnique({
+      where: { id: itemId },
+      select: { id: true },
+    })
+
+    if (!item) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Item not found." })
+    }
+
+    // Check if like already exists
+    const existingLike = await ctx.prisma.like.findUnique({
+      where: {
+        userId_itemId: {
+          userId,
+          itemId,
+        },
+      },
+    })
+
+    if (existingLike) {
+      // Unlike: delete the like
+      await ctx.prisma.like.delete({
+        where: {
+          userId_itemId: {
+            userId,
+            itemId,
+          },
+        },
+      })
+    } else {
+      // Like: create the like
+      await ctx.prisma.like.create({
+        data: {
+          userId,
+          itemId,
+        },
+      })
+    }
+
+    // Return the current like status
+    const currentLike = await ctx.prisma.like.findUnique({
+      where: {
+        userId_itemId: {
+          userId,
+          itemId,
+        },
+      },
+    })
+
+    return {
+      isLiked: !!currentLike,
+      itemId,
+    }
   }),
 })

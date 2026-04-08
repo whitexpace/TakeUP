@@ -97,8 +97,11 @@
       </div>
 
       <!-- Results Count -->
-      <p v-if="totalResultsCount !== null" class="mt-3 font-geist text-[14px] text-noble-black/50">
-        {{ totalResultsCount }} {{ totalResultsCount === 1 ? "result" : "results" }}
+      <p
+        v-if="visibleResultsCount !== null"
+        class="mt-3 font-geist text-[14px] text-noble-black/50"
+      >
+        {{ visibleResultsCount }} {{ visibleResultsCount === 1 ? "result" : "results" }}
       </p>
     </div>
 
@@ -112,6 +115,7 @@
         :id="item.id"
         :key="item.id"
         :type="item.type"
+        :status="item.status"
         :is-trending="item.isTrending"
         :image="item.image"
         :category="item.category"
@@ -119,7 +123,9 @@
         :rating="item.rating"
         :reviews="item.reviews"
         :price="item.price"
+        :price-unit="item.priceUnit"
         :owner="item.owner"
+        :is-liked="item.isLiked"
       />
 
       <template v-if="isLoading">
@@ -204,6 +210,7 @@ import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue"
 import type { ItemCardViewModel } from "../../types/item-listing"
 import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
+import { filterListedItemsBySearch } from "../../utils/item-search"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
 import { useFilteredResultsCount } from "../../composables/use-filtered-results-count"
 import type { useDashboardFilters } from "../../composables/use-dashboard-filters"
@@ -232,34 +239,34 @@ const greeting = computed(() => {
 
 // Search State
 const searchInput = ref("")
-const appliedSearch = ref("")
-let searchApplyTimeout: ReturnType<typeof setTimeout> | null = null
 let searchBlurTimeout: ReturnType<typeof setTimeout> | null = null
 const isSearchFocused = ref(false)
 const highlightedSuggestionIndex = ref(-1)
+const serverSearchQuery = ref("")
+const searchTerm = computed(() => searchInput.value.trim())
+const INITIAL_DASHBOARD_PAGE_SIZE = 8
+let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
 const clearSearch = () => {
   searchInput.value = ""
-  appliedSearch.value = ""
+  if (!serverSearchQuery.value) {
+    return
+  }
+
+  serverSearchQuery.value = ""
+  scheduleReload()
 }
 
 const applySearch = () => {
-  if (searchApplyTimeout !== null) {
-    clearTimeout(searchApplyTimeout)
-    searchApplyTimeout = null
-  }
-  appliedSearch.value = searchInput.value.trim()
-}
+  const nextQuery = searchTerm.value
+  searchInput.value = nextQuery
 
-const scheduleSearchApply = (delayMs = 250) => {
-  if (searchApplyTimeout !== null) {
-    clearTimeout(searchApplyTimeout)
+  if (serverSearchQuery.value === nextQuery) {
+    return
   }
 
-  searchApplyTimeout = setTimeout(() => {
-    appliedSearch.value = searchInput.value.trim()
-    searchApplyTimeout = null
-  }, delayMs)
+  serverSearchQuery.value = nextQuery
+  scheduleReload()
 }
 
 type SearchSuggestion = {
@@ -378,17 +385,21 @@ const {
   fetchNextPage,
   refresh,
 } = usePaginatedItems({
-  searchQuery: appliedSearch,
+  searchQuery: serverSearchQuery,
   filterParams: filters.filterQueryParams,
-  pageSize: 12,
+  pageSize: INITIAL_DASHBOARD_PAGE_SIZE,
 })
 
+const locallyFilteredItems = computed(() =>
+  filterListedItemsBySearch(listedItems.value, searchTerm.value),
+)
+
 const trendingItemIds = computed(() =>
-  getTrendingItemIds(listedItems.value, DEFAULT_TRENDING_BADGE_STRATEGY),
+  getTrendingItemIds(locallyFilteredItems.value, DEFAULT_TRENDING_BADGE_STRATEGY),
 )
 
 const cardItems = computed<ItemCardViewModel[]>(() =>
-  mapListedItemsToCards(listedItems.value, {
+  mapListedItemsToCards(locallyFilteredItems.value, {
     trendingItemIds: trendingItemIds.value,
   }),
 )
@@ -399,16 +410,47 @@ const {
   scheduleResultsCountRefresh,
   cancelPendingResultsCountRefresh,
 } = useFilteredResultsCount({
-  searchQuery: appliedSearch,
+  searchQuery: serverSearchQuery,
   filterParams: filters.filterQueryParams,
 })
 
+const visibleResultsCount = computed(() =>
+  searchTerm.value ? locallyFilteredItems.value.length : totalResultsCount.value,
+)
+
+const cancelPendingPrefetch = () => {
+  if (prefetchNextPageTimeout !== null) {
+    clearTimeout(prefetchNextPageTimeout)
+    prefetchNextPageTimeout = null
+  }
+}
+
+const scheduleNextPagePrefetch = () => {
+  cancelPendingPrefetch()
+
+  if (!hasMore.value) {
+    return
+  }
+
+  prefetchNextPageTimeout = setTimeout(() => {
+    prefetchNextPageTimeout = null
+
+    if (hasMore.value && !isLoading.value) {
+      void fetchNextPage()
+    }
+  }, 120)
+}
+
 const reload = async () => {
-  await Promise.all([refresh(), refreshResultsCount()])
+  await refresh()
+  scheduleNextPagePrefetch()
+  void refreshResultsCount()
 }
 
 const scheduleReload = () => {
-  void refresh()
+  void refresh().then(() => {
+    scheduleNextPagePrefetch()
+  })
   scheduleResultsCountRefresh()
 }
 
@@ -440,24 +482,16 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
   }
-  if (searchApplyTimeout !== null) {
-    clearTimeout(searchApplyTimeout)
-    searchApplyTimeout = null
-  }
   if (searchBlurTimeout !== null) {
     clearTimeout(searchBlurTimeout)
     searchBlurTimeout = null
   }
+  cancelPendingPrefetch()
   cancelPendingResultsCountRefresh()
-})
-
-watch(appliedSearch, () => {
-  scheduleReload()
 })
 
 watch(searchInput, () => {
   resetSuggestionHighlight()
-  scheduleSearchApply()
 })
 
 // Re-fetch when filters change

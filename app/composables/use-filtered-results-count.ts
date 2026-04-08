@@ -13,6 +13,7 @@ type ResultsCountCacheEntry = {
 
 const RESULTS_COUNT_CACHE_TTL_MS = 30_000
 const filteredResultsCountCache = new Map<string, ResultsCountCacheEntry>()
+const pendingResultsCountRequests = new Map<string, Promise<number>>()
 
 const buildResultsCountQuery = (
   searchQuery: Ref<string>,
@@ -65,13 +66,15 @@ const setCachedResultsCount = (cacheKey: string, count: number) => {
 
 export const resetFilteredResultsCountCache = () => {
   filteredResultsCountCache.clear()
+  pendingResultsCountRequests.clear()
 }
 
 export const useFilteredResultsCount = ({
   searchQuery,
   filterParams,
-  debounceMs = 200,
+  debounceMs = 75,
 }: UseFilteredResultsCountOptions) => {
+  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const totalResultsCount = ref<number | null>(null)
   const isCountLoading = ref(false)
   const requestVersion = ref(0)
@@ -86,7 +89,17 @@ export const useFilteredResultsCount = ({
 
   const fetchResultsCount = async (version = requestVersion.value) => {
     const query = buildResultsCountQuery(searchQuery, filterParams)
-    const cacheKey = serializeResultsCountQuery(query)
+    let viewerCacheKey = "anonymous"
+    let accessToken: string | undefined
+    if (supabase) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      accessToken = session?.access_token
+      viewerCacheKey = session?.user?.id ?? viewerCacheKey
+    }
+
+    const cacheKey = `${viewerCacheKey}:${serializeResultsCountQuery(query)}`
     const cachedCount = getCachedResultsCount(cacheKey)
 
     if (cachedCount !== null) {
@@ -100,13 +113,33 @@ export const useFilteredResultsCount = ({
     isCountLoading.value = true
 
     try {
-      const result = await $fetch<{ count: number }>("/api/items/count", {
-        query,
-      })
+      const pendingRequest = pendingResultsCountRequests.get(cacheKey)
+      const count = pendingRequest
+        ? await pendingRequest
+        : await (() => {
+            const request = $fetch<{ count: number }>("/api/items/count", {
+              query,
+              ...(accessToken
+                ? {
+                    headers: {
+                      authorization: `Bearer ${accessToken}`,
+                    },
+                  }
+                : {}),
+            }).then((result) => result.count)
+
+            pendingResultsCountRequests.set(cacheKey, request)
+
+            return request.finally(() => {
+              if (pendingResultsCountRequests.get(cacheKey) === request) {
+                pendingResultsCountRequests.delete(cacheKey)
+              }
+            })
+          })()
 
       if (version === requestVersion.value) {
-        setCachedResultsCount(cacheKey, result.count)
-        totalResultsCount.value = result.count
+        setCachedResultsCount(cacheKey, count)
+        totalResultsCount.value = count
       }
     } catch {
       if (version === requestVersion.value) {

@@ -1,5 +1,6 @@
 <template>
-  <button
+  <NuxtLink
+    to="/account/listings/new"
     class="w-max h-[62px] flex bg-white rounded-2xl font-geist font-medium text-[20px] text-noble-black items-center justify-center px-8 gap-3 hover:scale-105 active:scale-95 transition-all hover:bg-pale-cashmere shadow-sm"
   >
     <svg
@@ -15,5 +16,5 @@
       <path d="M4 10.25L16 10.25" stroke="currentColor" stroke-width="1.5" />
     </svg>
     Lend an Item
-  </button>
+  </NuxtLink>
 </template>

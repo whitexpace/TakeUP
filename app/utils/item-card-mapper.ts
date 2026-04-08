@@ -1,16 +1,14 @@
 import type { ItemCardViewModel, ListedItem } from "../types/item-listing"
-
-export const FALLBACK_ITEM_IMAGES = [
-  "/images/popular/macbook.jpg",
-  "/images/popular/scical.jpg",
-  "/images/popular/camera.jpg",
-  "/images/popular/dress.jpg",
-]
-
 type ItemCardMapOptions = {
-  fallbackImages?: string[]
   trendingItemIds?: Set<string>
 }
+
+const getPrimaryItemImage = (item: ListedItem) =>
+  item.images.find((entry) => entry.isPrimary)?.path ??
+  item.images[0]?.path ??
+  item.thumbnailImage ??
+  item.photos[0] ??
+  null
 
 const formatCategory = (category: string | undefined) => {
   if (!category) return "General"
@@ -23,17 +21,16 @@ const formatCategory = (category: string | undefined) => {
 
 export const mapListedItemToCard = (
   item: ListedItem,
-  index: number,
+  _index: number,
   options: ItemCardMapOptions = {},
 ): ItemCardViewModel => {
-  const fallbackImages = options.fallbackImages ?? FALLBACK_ITEM_IMAGES
-  const image =
-    item.thumbnailImage ?? item.photos[0] ?? fallbackImages[index % fallbackImages.length]!
+  const image = getPrimaryItemImage(item)
   const isTrending = options.trendingItemIds?.has(item.id) ?? false
 
   return {
     id: item.id,
     type: item.freeToBorrow ? "Borrow" : "Rent",
+    status: item.status,
     isTrending,
     image,
     category: formatCategory(item.categories[0]),
@@ -41,7 +38,9 @@ export const mapListedItemToCard = (
     rating: item.rating.toFixed(1),
     reviews: item.bookingCount,
     price: item.freeToBorrow ? undefined : item.rentalFee,
+    priceUnit: item.rateOption === "PER_HOUR" ? "hour" : "day",
     owner: item.ownerName,
+    isLiked: Boolean(item.isLiked),
   }
 }
 
