@@ -356,6 +356,8 @@ model User {
   middleName                   String?
   lastName                     String
   googleSub                    String                 @unique
+  createdAt                    DateTime               @default(now())
+  location                     String?
   accountType                  AccountType
   status                       UserStatus
   points                       Int                    @default(0)

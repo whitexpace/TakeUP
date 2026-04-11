@@ -4,7 +4,21 @@ definePageMeta({
   middleware: "account-auth",
 })
 
+type AuthMeResponse = {
+  user: {
+    id: string
+    email: string
+    name: string
+    accountType: string | null
+    createdAt: string | null
+    location: string | null
+  }
+}
+
 const user = useSupabaseUser()
+const { data: authData } = await useAsyncData("account:auth-me", () =>
+  $fetch<AuthMeResponse>("/api/auth/me"),
+)
 
 const asNonEmptyString = (value: unknown) => {
   if (typeof value !== "string") return undefined
@@ -99,28 +113,17 @@ const profileDetails = computed(() => {
   const avatarUrl = metadataSources.map(getAvatarFromSource).find(Boolean) || null
   const email = asNonEmptyString(authUserRecord?.email) || "No email available"
   const location =
+    asNonEmptyString(authData.value?.user.location) ||
     metadataSources
       .map((source) =>
         asNonEmptyString(source?.location) ||
         asNonEmptyString(source?.address) ||
         asNonEmptyString(source?.city),
       )
-      .find(Boolean) || "Location not set"
+      .find(Boolean) ||
+    "Location not set"
 
-  const possibleJoinDates = [
-    parseDate(authUserRecord?.created_at),
-    parseDate(authUserRecord?.createdAt),
-    parseDate(authUserRecord?.confirmed_at),
-    parseDate(authUserRecord?.email_confirmed_at),
-    ...metadataSources.flatMap((source) => [
-      parseDate(source?.created_at),
-      parseDate(source?.createdAt),
-      parseDate(source?.joined_at),
-      parseDate(source?.joinedAt),
-    ]),
-  ]
-
-  const memberSince = formatMonthYear(possibleJoinDates.find(Boolean) ?? null)
+  const memberSince = formatMonthYear(parseDate(authData.value?.user.createdAt))
 
   const isVerified =
     Boolean(authUserRecord?.email_confirmed_at) ||
