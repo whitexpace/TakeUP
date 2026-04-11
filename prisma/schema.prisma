@@ -358,6 +358,9 @@ model User {
   googleSub                    String                 @unique
   createdAt                    DateTime               @default(now())
   location                     String?
+  avatarUrl                    String?
+  bio                          String?
+  pronouns                     String?
   accountType                  AccountType
   status                       UserStatus
   points                       Int                    @default(0)

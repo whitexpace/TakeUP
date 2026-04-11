@@ -56,6 +56,7 @@ export default defineEventHandler(async (event) => {
     select: { id: true, email: true, username: true },
   })
 
+  let isNewUser = false
   if (!user && googleSub) {
     const username = email.split("@")[0] ?? "user"
     user = await prisma.user.create({
@@ -72,23 +73,28 @@ export default defineEventHandler(async (event) => {
       },
       select: { id: true, email: true, username: true },
     })
+    isNewUser = true
   }
 
   if (!user) {
     throw createError({ statusCode: 404, statusMessage: "User not found." })
   }
 
-  // Ensure both Lender and Borrower profiles exist
-  await prisma.lender.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id, lenderRating: 0 },
-    update: {},
-  })
-  await prisma.borrower.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
-    update: {},
-  })
+  // Ensure both Lender and Borrower profiles exist (in parallel) - skip for new users
+  if (!isNewUser) {
+    await Promise.all([
+      prisma.lender.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, lenderRating: 0 },
+        update: {},
+      }),
+      prisma.borrower.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
+        update: {},
+      }),
+    ])
+  }
 
   const { token, expiresAt } = createSessionToken(
     { id: user.id, email: user.email, name: user.username },

@@ -19,29 +19,51 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const dbUser = await ctx.prisma.user.findUnique({
-    where: { id: user.id },
-    select: { accountType: true },
-  })
-
   const userProfileRows = await ctx.prisma.$queryRaw<
-    Array<{ createdAt: Date | null; location: string | null }>
+    Array<{
+      username: string
+      firstName: string
+      middleName: string | null
+      lastName: string
+      accountType: string | null
+      createdAt: Date | null
+      location: string | null
+      avatarUrl: string | null
+      bio: string | null
+      pronouns: string | null
+    }>
   >(Prisma.sql`
-    SELECT "createdAt", "location"
+    SELECT
+      "username",
+      "firstName",
+      "middleName",
+      "lastName",
+      "accountType",
+      "createdAt",
+      "location",
+      "avatarUrl",
+      "bio",
+      "pronouns"
     FROM "User"
     WHERE "id" = ${user.id}
     LIMIT 1
   `)
 
-  const createdAt = userProfileRows[0]?.createdAt ?? null
-  const location = userProfileRows[0]?.location ?? null
+  const dbUser = userProfileRows[0]
 
   return {
     user: {
       ...user,
+      username: dbUser?.username ?? user.name,
+      firstName: dbUser?.firstName ?? "",
+      middleName: dbUser?.middleName ?? null,
+      lastName: dbUser?.lastName ?? "",
       accountType: dbUser?.accountType ?? null,
-      createdAt,
-      location,
+      createdAt: dbUser?.createdAt ?? null,
+      location: dbUser?.location ?? null,
+      avatarUrl: dbUser?.avatarUrl ?? null,
+      bio: dbUser?.bio ?? null,
+      pronouns: dbUser?.pronouns ?? null,
     },
   }
 })
