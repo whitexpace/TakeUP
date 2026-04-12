@@ -23,6 +23,7 @@
   "dependencies": {
     "@nuxtjs/supabase": "^2.0.3",
     "@prisma/client": "^5.19.0",
+    "@supabase/supabase-js": "^2.103.0",
     "@trpc/client": "^10.45.2",
     "@trpc/server": "^10.45.2",
     "nuxt": "^4.3.1",

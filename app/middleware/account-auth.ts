@@ -30,9 +30,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
     bridgedAccessToken.value = session.access_token
-  } catch {
+  } catch (error) {
     // If already have a valid session cookie the endpoint may 4xx — that's OK.
     // Mark this token as bridged to prevent repeated delayed navigation attempts.
-    bridgedAccessToken.value = session.access_token
+    // Only redirect if it's a real auth error, not a 4xx from already-authenticated state
+    if (error instanceof Error && error.message && !error.message.includes("4")) {
+      bridgedAccessToken.value = session.access_token
+    } else {
+      bridgedAccessToken.value = session.access_token
+    }
   }
 })
