@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
 
   let user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, username: true },
+    select: { id: true, email: true, username: true, status: true },
   })
 
   let isNewUser = false
@@ -71,13 +71,25 @@ export default defineEventHandler(async (event) => {
         lender: { create: { lenderRating: 0 } },
         borrower: { create: { borrowStatus: "ACTIVE", borrowerRating: 0 } },
       },
-      select: { id: true, email: true, username: true },
+      select: { id: true, email: true, username: true, status: true },
     })
     isNewUser = true
   }
 
   if (!user) {
     throw createError({ statusCode: 404, statusMessage: "User not found." })
+  }
+
+  if (user.status === "DEACTIVATED") {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: "ACTIVE" },
+      select: { id: true, email: true, username: true, status: true },
+    })
+  }
+
+  if (user.status !== "ACTIVE") {
+    throw createError({ statusCode: 403, statusMessage: "Your account is not active." })
   }
 
   // Ensure both Lender and Borrower profiles exist (in parallel) - skip for new users

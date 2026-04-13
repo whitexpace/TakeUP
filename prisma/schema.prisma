@@ -145,6 +145,7 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   PENDING
+  DEACTIVATED
 }
 
 enum ItemRequestStatus {
