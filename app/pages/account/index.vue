@@ -27,6 +27,17 @@ type UsernameAvailabilityResponse = {
   available: boolean
 }
 
+type DeactivationBlocker = {
+  code: "ACTIVE_RENTAL" | "FUTURE_CONFIRMED_BOOKING" | "OPEN_DISPUTE"
+  message: string
+  count: number
+}
+
+type DeactivationEligibilityResponse = {
+  allowed: boolean
+  blockers: DeactivationBlocker[]
+}
+
 type ProfileUpdateResponse = {
   user: {
     id: string
@@ -221,8 +232,13 @@ const profileInitial = computed(() => {
 
 const emailNotificationsEnabled = ref(true)
 const showEditProfileModal = ref(false)
+const showDeactivateAccountModal = ref(false)
 const isSavingProfile = ref(false)
+const isLoadingDeactivationEligibility = ref(false)
+const isDeactivatingAccount = ref(false)
 const profileSaveError = ref("")
+const deactivateAccountError = ref("")
+const deactivationEligibility = ref<DeactivationEligibilityResponse | null>(null)
 const avatarUploadError = ref("")
 const usernameStatus = ref<UsernameStatus>("idle")
 const checkedUsername = ref("")
@@ -274,6 +290,34 @@ const canSaveProfile = computed(() => {
   )
 })
 
+const canDeactivateAccount = computed(
+  () =>
+    !isLoadingDeactivationEligibility.value &&
+    !isDeactivatingAccount.value &&
+    Boolean(deactivationEligibility.value?.allowed),
+)
+
+const getDeactivationErrorDetails = (error: unknown) => {
+  const errorRecord = asRecord(error)
+  const responseData = asRecord(errorRecord?.data)
+  const nestedData = asRecord(responseData?.data)
+  const blockers = nestedData?.blockers
+  const eligibility =
+    typeof nestedData?.allowed === "boolean" && Array.isArray(blockers)
+      ? (nestedData as DeactivationEligibilityResponse)
+      : null
+
+  return {
+    eligibility,
+    message:
+      asNonEmptyString(responseData?.statusMessage) ||
+      asNonEmptyString(responseData?.message) ||
+      asNonEmptyString(errorRecord?.statusMessage) ||
+      asNonEmptyString(errorRecord?.message) ||
+      "Unable to check account deactivation right now.",
+  }
+}
+
 const revokePendingAvatarPreview = () => {
   if (!pendingAvatarPreviewUrl.value) return
   URL.revokeObjectURL(pendingAvatarPreviewUrl.value)
@@ -308,6 +352,54 @@ const closeEditProfileModal = () => {
   avatarUploadError.value = ""
   pendingAvatarFile.value = null
   revokePendingAvatarPreview()
+}
+
+const openDeactivateAccountModal = async () => {
+  showDeactivateAccountModal.value = true
+  isLoadingDeactivationEligibility.value = true
+  deactivateAccountError.value = ""
+  deactivationEligibility.value = null
+
+  try {
+    deactivationEligibility.value = await $fetch<DeactivationEligibilityResponse>(
+      "/api/account/deactivation-eligibility",
+    )
+  } catch (error) {
+    const details = getDeactivationErrorDetails(error)
+    deactivationEligibility.value = details.eligibility
+    deactivateAccountError.value = details.message
+  } finally {
+    isLoadingDeactivationEligibility.value = false
+  }
+}
+
+const closeDeactivateAccountModal = () => {
+  if (isDeactivatingAccount.value) return
+  showDeactivateAccountModal.value = false
+  deactivateAccountError.value = ""
+  deactivationEligibility.value = null
+}
+
+const deactivateAccount = async () => {
+  if (!canDeactivateAccount.value) return
+
+  isDeactivatingAccount.value = true
+  deactivateAccountError.value = ""
+
+  try {
+    await $fetch("/api/account/deactivate", { method: "POST" })
+    await Promise.allSettled([
+      supabase.auth.signOut(),
+      $fetch("/api/auth/logout", { method: "POST" }),
+    ])
+    await navigateTo("/")
+  } catch (error) {
+    const details = getDeactivationErrorDetails(error)
+    deactivationEligibility.value = details.eligibility ?? deactivationEligibility.value
+    deactivateAccountError.value = details.message
+  } finally {
+    isDeactivatingAccount.value = false
+  }
 }
 
 const triggerAvatarUpload = () => {
@@ -717,6 +809,7 @@ const saveProfile = async () => {
             <button
               type="button"
               class="h-11 w-[137px] rounded-[10px] bg-cinnabar-red px-4 text-[15px] font-normal tracking-[0.45px] text-white transition hover:brightness-95"
+              @click="openDeactivateAccountModal"
             >
               Deactivate
             </button>
@@ -906,6 +999,109 @@ const saveProfile = async () => {
                 @click="saveProfile"
               >
                 {{ isSavingProfile ? "Saving..." : "Save Changes" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <Teleport to="body">
+        <div
+          v-if="showDeactivateAccountModal"
+          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="closeDeactivateAccountModal"
+          />
+          <div
+            class="relative z-10 w-full max-w-xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-[13px] font-semibold uppercase tracking-[0.2em] text-cinnabar-red">
+                  Danger Zone
+                </p>
+                <h2 class="mt-2 text-[26px] font-semibold text-noble-black">Deactivate account?</h2>
+                <p class="mt-2 text-[15px] leading-6 tracking-[0.45px] text-noble-black/70">
+                  Your public profile and listings will be hidden. Your history stays saved, and you
+                  can reactivate later by signing in again.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isDeactivatingAccount"
+                @click="closeDeactivateAccountModal"
+              >
+                <span class="sr-only">Close deactivation dialog</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6L18 18"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div class="mt-7 rounded-[18px] border border-cinnamon-ice bg-cream p-5">
+              <p
+                v-if="isLoadingDeactivationEligibility"
+                class="text-[15px] tracking-[0.45px] text-noble-black/70"
+              >
+                Checking active rentals, future bookings, and open disputes...
+              </p>
+
+              <template v-else-if="deactivationEligibility?.blockers.length">
+                <h3 class="text-[17px] font-semibold text-noble-black">Deactivation is blocked</h3>
+                <p class="mt-2 text-[14px] leading-6 tracking-[0.42px] text-noble-black/70">
+                  Resolve these items first so other users are not left with active obligations.
+                </p>
+                <ul class="mt-4 space-y-3">
+                  <li
+                    v-for="blocker in deactivationEligibility.blockers"
+                    :key="blocker.code"
+                    class="rounded-[14px] border border-cinnabar-red/20 bg-white px-4 py-3 text-[14px] leading-5 text-noble-black/80"
+                  >
+                    {{ blocker.message }}
+                  </li>
+                </ul>
+              </template>
+
+              <template v-else-if="deactivationEligibility?.allowed">
+                <h3 class="text-[17px] font-semibold text-noble-black">Ready to deactivate</h3>
+                <p class="mt-2 text-[14px] leading-6 tracking-[0.42px] text-noble-black/70">
+                  No active rentals, future confirmed bookings, or open disputes were found.
+                </p>
+              </template>
+
+              <p v-else class="text-[15px] tracking-[0.45px] text-noble-black/70">
+                We could not confirm your eligibility yet. Try again before deactivating.
+              </p>
+            </div>
+
+            <p v-if="deactivateAccountError" class="mt-5 text-sm text-cinnabar-red">
+              {{ deactivateAccountError }}
+            </p>
+
+            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isDeactivatingAccount"
+                @click="closeDeactivateAccountModal"
+              >
+                Keep Account Active
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center rounded-[10px] bg-cinnabar-red px-6 text-[15px] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!canDeactivateAccount"
+                @click="deactivateAccount"
+              >
+                {{ isDeactivatingAccount ? "Deactivating..." : "Deactivate Account" }}
               </button>
             </div>
           </div>
