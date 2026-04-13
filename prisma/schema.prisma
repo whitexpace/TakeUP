@@ -589,3 +589,16 @@ model RequestPost {
   @@index([requestedTo])
   @@index([createdAt])
 }
+
+model AccountDeletionAuditLog {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  deletedUserId    String   @map("deleted_user_id")
+  deletedUserEmail String?  @map("deleted_user_email")
+  deletedUsername  String?  @map("deleted_username")
+  deletedAt        DateTime @default(now()) @map("deleted_at") @db.Timestamptz(6)
+  details          Json     @default("{}")
+
+  @@index([deletedUserId])
+  @@index([deletedAt(sort: Desc)])
+  @@map("account_deletion_audit_logs")
+}
