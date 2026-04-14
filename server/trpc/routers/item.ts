@@ -23,11 +23,17 @@ import {
   UI_OTHERS_SENTINEL,
 } from "../../../shared/schemas/item"
 import { removeItemImagesFromStorage } from "../../utils/item-image-storage"
+import {
+  ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES,
+  buildPublicVisibleItemWhere,
+  isPublicVisibleItem,
+} from "../../utils/item-visibility"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
+const VISIBILITY_SCAN_BATCH_SIZE = 100
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
   { createdAt: "asc" },
@@ -70,11 +76,24 @@ const itemWithTaxonomy = {
           middleName: true,
           lastName: true,
           email: true,
+          status: true,
         },
       },
     },
   },
 } satisfies Prisma.ItemInclude
+
+const itemVisibilityBookings = {
+  where: {
+    status: { in: [...ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES] },
+  },
+  select: {
+    id: true,
+    startDate: true,
+    endDate: true,
+    status: true,
+  },
+} satisfies Prisma.BookingFindManyArgs
 
 const ACTIVE_TRANSACTION_DISPUTE_STATUSES = [
   PrismaDisputeStatus.OPEN,
@@ -155,6 +174,7 @@ const itemSearchSelect = {
           middleName: true,
           lastName: true,
           email: true,
+          status: true,
         },
       },
     },
@@ -163,6 +183,16 @@ const itemSearchSelect = {
 
 type SearchableItem = Prisma.ItemGetPayload<{
   select: typeof itemSearchSelect
+}>
+
+const itemSearchWithVisibilitySelect = {
+  ...itemSearchSelect,
+  availability: itemWithTaxonomy.availability,
+  bookings: itemVisibilityBookings,
+} as const satisfies Prisma.ItemSelect
+
+type SearchableItemWithVisibility = Prisma.ItemGetPayload<{
+  select: typeof itemSearchWithVisibilitySelect
 }>
 
 const normalizeSearchText = (value: string) =>
@@ -208,7 +238,9 @@ const levenshteinDistance = (source: string, target: string) => {
   return previousRow[targetLength]!
 }
 
-const buildSearchWords = (item: SearchableItem | ItemWithTaxonomy) => {
+const buildSearchWords = (
+  item: SearchableItem | SearchableItemWithVisibility | ItemWithTaxonomy,
+) => {
   const lenderUser = item.lender?.user
   const lenderName = [lenderUser?.firstName, lenderUser?.middleName, lenderUser?.lastName]
     .filter(Boolean)
@@ -296,7 +328,9 @@ const scoreSearchMatch = (
   return totalScore
 }
 
-const filterAndRankSearchResults = <T extends SearchableItem | ItemWithTaxonomy>(
+const filterAndRankSearchResults = <
+  T extends SearchableItem | SearchableItemWithVisibility | ItemWithTaxonomy,
+>(
   items: T[],
   search: string,
   options: { sortByScore?: boolean } = {},
@@ -320,9 +354,19 @@ const mapItemTaxonomy = (
     images?: Array<{ path: string; isPrimary?: boolean; sortOrder?: number }>
     thumbnailImage?: string | null
     photos?: string[]
+    bookings?: unknown[]
   },
 ) => {
-  const { availability, categories, tags, lender, likes, images, ...rest } = item
+  const {
+    availability,
+    categories,
+    tags,
+    lender,
+    likes,
+    images,
+    bookings: _bookings,
+    ...rest
+  } = item
   const lenderUser = lender.user
   const lenderFullName =
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
@@ -472,7 +516,7 @@ type ListWhereFilters = {
 
 const buildListWhere = (
   input?: ListWhereFilters,
-  options: { includeSearch?: boolean; userId?: string | null } = {},
+  options: { includeSearch?: boolean; userId?: string | null; now?: Date } = {},
 ): Prisma.ItemWhereInput => {
   const search = input?.search?.trim()
   const likedOnly = input?.likedOnly
@@ -490,6 +534,8 @@ const buildListWhere = (
   const minRating = input?.minRating
   const includeSearch = options.includeSearch ?? true
   const userId = options.userId ?? null
+  const now = options.now ?? new Date()
+  const shouldApplyPublicVisibility = !ownedOnly
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? status
@@ -525,7 +571,7 @@ const buildListWhere = (
     }
   }
 
-  return {
+  const where: Prisma.ItemWhereInput = {
     status: statusFilter,
     ...(ownedOnly
       ? {}
@@ -607,6 +653,8 @@ const buildListWhere = (
         }
       : {}),
   }
+
+  return shouldApplyPublicVisibility ? { AND: [where, buildPublicVisibleItemWhere(now)] } : where
 }
 
 const buildPaginationWhereFromCursor = (cursor: {
@@ -637,52 +685,137 @@ const buildItemInclude = (userId: string | null) =>
     },
   }) satisfies Prisma.ItemInclude
 
-const blockingBookingStatusFilter = ["CONFIRMED", "IN_DISPUTE"] as const
+const buildPublicItemInclude = (userId: string | null) =>
+  ({
+    ...buildItemInclude(userId),
+    bookings: itemVisibilityBookings,
+  }) satisfies Prisma.ItemInclude
+
+type PublicVisibleItemRecord = ItemWithUserLike & {
+  bookings: Array<{ id: string; startDate: Date; endDate: Date; status: string }>
+}
+
+const getRequiredAvailabilityWindow = (
+  input?: Pick<ListWhereFilters, "availableFrom" | "availableTo">,
+) => {
+  if (!input?.availableFrom || !input.availableTo) return null
+
+  return {
+    startDate: input.availableFrom,
+    endDate: input.availableTo,
+  }
+}
+
+const filterPublicVisibleItems = <T extends PublicVisibleItemRecord>(
+  items: T[],
+  now: Date,
+  requiredWindow: { startDate: Date; endDate: Date } | null = null,
+): T[] => items.filter((item) => isPublicVisibleItem(item, now, { requiredWindow }))
+
+const buildPaginatedWhere = (
+  where: Prisma.ItemWhereInput,
+  cursor: { bookingCount: number; createdAt: Date; id: string } | null,
+) => {
+  if (!cursor) return where
+  return {
+    AND: [where, buildPaginationWhereFromCursor(cursor)],
+  } satisfies Prisma.ItemWhereInput
+}
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
     const search = input?.search?.trim()
+    const now = new Date()
+    const requiredWindow = getRequiredAvailabilityWindow(input)
+    const visibleRecords: PublicVisibleItemRecord[] = []
+    let scanCursor: { id: string; bookingCount: number; createdAt: Date } | null = null
 
-    const records = await ctx.prisma.item.findMany({
-      take: search ? SEARCH_SCAN_LIMIT : 50,
-      orderBy: getDefaultItemOrderBy(),
-      include: buildItemInclude(ctx.user?.id ?? null),
-      where: buildListWhere(input, {
-        includeSearch: !search,
-        userId: ctx.user?.id ?? null,
-      }),
-    })
+    while (visibleRecords.length < 50) {
+      const take = search ? SEARCH_SCAN_LIMIT : VISIBILITY_SCAN_BATCH_SIZE
+      const records = (await ctx.prisma.item.findMany({
+        take,
+        orderBy: getDefaultItemOrderBy(),
+        include: buildPublicItemInclude(ctx.user?.id ?? null),
+        where: buildPaginatedWhere(
+          buildListWhere(input, {
+            includeSearch: !search,
+            userId: ctx.user?.id ?? null,
+            now,
+          }),
+          scanCursor,
+        ),
+      })) as PublicVisibleItemRecord[]
 
-    const matchedItems = search ? filterAndRankSearchResults(records, search).slice(0, 50) : records
+      if (records.length === 0) break
+
+      visibleRecords.push(...filterPublicVisibleItems(records, now, requiredWindow))
+
+      if (search || records.length < take) break
+
+      const lastScannedRecord = records.at(-1)
+      if (!lastScannedRecord) break
+
+      scanCursor = {
+        id: lastScannedRecord.id,
+        bookingCount: lastScannedRecord.bookingCount,
+        createdAt: lastScannedRecord.createdAt,
+      }
+    }
+
+    const matchedItems = search
+      ? filterAndRankSearchResults(visibleRecords, search).slice(0, 50)
+      : visibleRecords.slice(0, 50)
     return matchedItems.map(mapItemTaxonomy)
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
     const search = input.search?.trim()
+    const now = new Date()
+    const requiredWindow = getRequiredAvailabilityWindow(input)
     const baseWhere = buildListWhere(input, {
       includeSearch: !search,
       userId: ctx.user?.id ?? null,
+      now,
     })
-    const paginationWhere = input.cursor
-      ? buildPaginationWhereFromCursor({
+    let scanCursor = input.cursor
+      ? {
           bookingCount: input.cursor.bookingCount,
           createdAt: input.cursor.createdAt,
           id: input.cursor.id,
-        })
+        }
       : null
+    const collectedRecords: PublicVisibleItemRecord[] = []
 
-    const records = await ctx.prisma.item.findMany({
-      take: search ? SEARCH_SCAN_LIMIT : input.limit + 1,
-      orderBy: getDefaultItemOrderBy(),
-      include: buildItemInclude(ctx.user?.id ?? null),
-      where: paginationWhere ? { AND: [baseWhere, paginationWhere] } : baseWhere,
-    })
+    while (collectedRecords.length <= input.limit) {
+      const take = search ? SEARCH_SCAN_LIMIT : VISIBILITY_SCAN_BATCH_SIZE
+      const records = (await ctx.prisma.item.findMany({
+        take,
+        orderBy: getDefaultItemOrderBy(),
+        include: buildPublicItemInclude(ctx.user?.id ?? null),
+        where: buildPaginatedWhere(baseWhere, scanCursor),
+      })) as PublicVisibleItemRecord[]
 
-    const filteredRecords = search
-      ? filterAndRankSearchResults(records, search, { sortByScore: false })
-      : records
-    const hasMore = filteredRecords.length > input.limit
-    const pageRecords = hasMore ? filteredRecords.slice(0, input.limit) : filteredRecords
+      if (records.length === 0) break
+
+      const filteredRecords = search
+        ? filterAndRankSearchResults(records, search, { sortByScore: false })
+        : records
+      collectedRecords.push(...filterPublicVisibleItems(filteredRecords, now, requiredWindow))
+
+      if (search || records.length < take) break
+
+      const lastScannedRecord = records.at(-1)
+      if (!lastScannedRecord) break
+
+      scanCursor = {
+        id: lastScannedRecord.id,
+        bookingCount: lastScannedRecord.bookingCount,
+        createdAt: lastScannedRecord.createdAt,
+      }
+    }
+
+    const hasMore = collectedRecords.length > input.limit
+    const pageRecords = hasMore ? collectedRecords.slice(0, input.limit) : collectedRecords
     const lastRecord = pageRecords.at(-1)
 
     return {
@@ -700,16 +833,13 @@ export const itemRouter = router({
 
   countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
     const search = input?.search?.trim()
-
-    if (!search) {
-      const where = buildListWhere(input, { userId: ctx.user?.id ?? null })
-      const count = await ctx.prisma.item.count({ where })
-      return { count }
-    }
+    const now = new Date()
+    const requiredWindow = getRequiredAvailabilityWindow(input)
 
     const where = buildListWhere(input, {
       includeSearch: false,
       userId: ctx.user?.id ?? null,
+      now,
     })
     let totalCount = 0
     let cursor: { id: string; createdAt: Date; bookingCount: number } | null = null
@@ -718,10 +848,10 @@ export const itemRouter = router({
       const paginationWhere: Prisma.ItemWhereInput | null = cursor
         ? buildPaginationWhereFromCursor(cursor)
         : null
-      const batch: SearchableItem[] = await ctx.prisma.item.findMany({
+      const batch: SearchableItemWithVisibility[] = await ctx.prisma.item.findMany({
         take: SEARCH_COUNT_BATCH_SIZE,
         orderBy: getDefaultItemOrderBy(),
-        select: itemSearchSelect,
+        select: itemSearchWithVisibilitySelect,
         where: paginationWhere ? { AND: [where, paginationWhere] } : where,
       })
 
@@ -729,9 +859,14 @@ export const itemRouter = router({
         break
       }
 
-      totalCount += filterAndRankSearchResults(batch, search, { sortByScore: false }).length
+      const visibleBatch = batch.filter((item) =>
+        isPublicVisibleItem(item, now, { requiredWindow }),
+      )
+      totalCount += search
+        ? filterAndRankSearchResults(visibleBatch, search, { sortByScore: false }).length
+        : visibleBatch.length
 
-      const last: SearchableItem | undefined = batch.at(-1)
+      const last: SearchableItemWithVisibility | undefined = batch.at(-1)
       if (!last || batch.length < SEARCH_COUNT_BATCH_SIZE) {
         break
       }
@@ -748,63 +883,53 @@ export const itemRouter = router({
   }),
 
   filterMetadata: publicProcedure.query(async ({ ctx }) => {
-    const baseWhere: Prisma.ItemWhereInput = {
-      status: { not: "DELETED" },
-      lender: { user: { status: "ACTIVE" } },
+    const now = new Date()
+    const records = await ctx.prisma.item.findMany({
+      where: buildPublicVisibleItemWhere(now),
+      select: {
+        condition: true,
+        freeToBorrow: true,
+        rentalFee: true,
+        status: true,
+        categories: {
+          select: { category: true },
+        },
+        availability: itemWithTaxonomy.availability,
+        bookings: itemVisibilityBookings,
+      },
+    })
+
+    const visibleRecords = records.filter((item) => isPublicVisibleItem(item, now))
+    const categoryCountMap: Record<string, number> = {}
+    const priceCountMap: Record<string, number> = {}
+    const conditionCountMap: Record<string, number> = {}
+    let freeToborrowCount = 0
+    let othersCount = 0
+
+    for (const item of visibleRecords) {
+      conditionCountMap[item.condition] = (conditionCountMap[item.condition] ?? 0) + 1
+
+      if (item.freeToBorrow) {
+        freeToborrowCount++
+      } else {
+        const bucket =
+          item.rentalFee < 100 ? "under100" : item.rentalFee <= 500 ? "100to500" : "over500"
+        priceCountMap[bucket] = (priceCountMap[bucket] ?? 0) + 1
+      }
+
+      const categories = item.categories.map((entry) => entry.category)
+      if (
+        !categories.some((category) =>
+          (KNOWN_SIDEBAR_DB_CATEGORIES as readonly string[]).includes(category),
+        )
+      ) {
+        othersCount++
+      }
+
+      for (const category of categories) {
+        categoryCountMap[category] = (categoryCountMap[category] ?? 0) + 1
+      }
     }
-
-    const [categoryGroups, priceGroups, conditionGroups, freeToborrowCount, othersCount] =
-      await Promise.all([
-        // Count per category
-        ctx.prisma.itemCategoryOnItem.groupBy({
-          by: ["category"],
-          where: { item: baseWhere },
-          _count: { category: true },
-        }),
-        // Count per price bucket for paid items (raw)
-        ctx.prisma.$queryRaw<Array<{ bucket: string; count: bigint }>>`
-          SELECT
-            CASE
-              WHEN i."rentalFee" < 100 THEN 'under100'
-              WHEN i."rentalFee" <= 500 THEN '100to500'
-              ELSE 'over500'
-            END AS bucket,
-            COUNT(*) AS count
-          FROM "Item" i
-          INNER JOIN "User" u ON u."id" = i."lenderId"
-          WHERE i."status" != 'DELETED'
-            AND i."freeToBorrow" = false
-            AND u."status" = 'ACTIVE'::"UserStatus"
-          GROUP BY bucket
-        `,
-        // Count per condition
-        ctx.prisma.item.groupBy({
-          by: ["condition"],
-          where: baseWhere,
-          _count: { condition: true },
-        }),
-        // Count free-to-borrow
-        ctx.prisma.item.count({ where: { ...baseWhere, freeToBorrow: true } }),
-        // Count "Others": items where NO category belongs to the known sidebar list
-        ctx.prisma.item.count({
-          where: {
-            ...baseWhere,
-            categories: {
-              none: { category: { in: [...KNOWN_SIDEBAR_DB_CATEGORIES] } },
-            },
-          },
-        }),
-      ])
-
-    const categoryCountMap = Object.fromEntries(
-      categoryGroups.map((g) => [g.category, g._count.category]),
-    )
-
-    const priceCountMap = Object.fromEntries(priceGroups.map((g) => [g.bucket, Number(g.count)]))
-
-    const conditionCountMap = Object.fromEntries(
-      conditionGroups.map((g) => [g.condition, g._count.condition]),
-    )
 
     return {
       categories: { ...categoryCountMap, OTHERS: othersCount },
@@ -884,50 +1009,33 @@ export const itemRouter = router({
       .then(mapItemTaxonomy)
   }),
 
-  byId: publicProcedure.input(itemIdSchema).query(({ ctx, input }) => {
-    return ctx.prisma.item
-      .findFirst({
-        where: {
-          id: input.id,
-          OR: [
-            { lender: { user: { status: "ACTIVE" } } },
-            ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
-          ],
-        },
-        include: {
-          ...buildItemInclude(ctx.user?.id ?? null),
-          bookings: {
-            where: {
-              status: { in: [...blockingBookingStatusFilter] },
-            },
-            select: {
-              id: true,
-              startDate: true,
-              endDate: true,
-            },
-          },
-        },
-      })
-      .then(
-        (
-          item:
-            | (ItemWithUserLike & {
-                bookings: Array<{ id: string; startDate: Date; endDate: Date }>
-              })
-            | null,
-        ) =>
-          item
-            ? {
-                ...mapItemTaxonomy(item),
-                bookingBlocks: item.bookings.map((booking) => ({
-                  id: booking.id,
-                  startDate: booking.startDate,
-                  endDate: booking.endDate,
-                  status: "RENTED" as const,
-                })),
-              }
-            : null,
-      )
+  byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
+    const now = new Date()
+    const item = (await ctx.prisma.item.findFirst({
+      where: {
+        id: input.id,
+        OR: [
+          { lender: { user: { status: "ACTIVE" } } },
+          ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
+        ],
+      },
+      include: buildPublicItemInclude(ctx.user?.id ?? null),
+    })) as PublicVisibleItemRecord | null
+
+    if (!item) return null
+
+    const isOwner = ctx.user?.id === item.lenderId
+    if (!isOwner && !isPublicVisibleItem(item, now)) return null
+
+    return {
+      ...mapItemTaxonomy(item),
+      bookingBlocks: item.bookings.map((booking) => ({
+        id: booking.id,
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        status: "RENTED" as const,
+      })),
+    }
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
@@ -1160,17 +1268,29 @@ export const itemRouter = router({
   toggleLike: protectedProcedure.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
     const userId = ctx.user.id
     const { itemId } = input
+    const now = new Date()
 
     // Check if item exists
     const item = await ctx.prisma.item.findFirst({
-      where: {
-        id: itemId,
-        lender: { user: { status: "ACTIVE" } },
+      where: { AND: [{ id: itemId }, buildPublicVisibleItemWhere(now)] },
+      select: {
+        id: true,
+        status: true,
+        lender: {
+          select: {
+            user: {
+              select: {
+                status: true,
+              },
+            },
+          },
+        },
+        availability: itemWithTaxonomy.availability,
+        bookings: itemVisibilityBookings,
       },
-      select: { id: true },
     })
 
-    if (!item) {
+    if (!item || !isPublicVisibleItem(item, now)) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Item not found." })
     }
 

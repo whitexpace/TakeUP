@@ -155,11 +155,12 @@ describe("itemRouter", () => {
         availability: [
           {
             id: "22222222-2222-2222-2222-222222222222",
-            startDate: new Date("2026-03-10T00:00:00.000Z"),
-            endDate: new Date("2026-03-12T00:00:00.000Z"),
+            startDate: new Date("2099-03-10T00:00:00.000Z"),
+            endDate: new Date("2099-03-12T00:00:00.000Z"),
             status: "AVAILABLE",
           },
         ],
+        bookings: [],
         images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
         categories: [{ category: "ELECTRONICS" }],
         tags: [{ tag: { name: "photo" } }],
@@ -186,9 +187,17 @@ describe("itemRouter", () => {
             }),
             orderBy: { startDate: "asc" },
           }),
+          bookings: expect.objectContaining({
+            where: expect.objectContaining({
+              status: { in: ["CONFIRMED", "IN_DISPUTE"] },
+            }),
+          }),
         }),
         where: expect.objectContaining({
-          status: { not: "DELETED" },
+          AND: expect.arrayContaining([
+            expect.objectContaining({ status: { not: "DELETED" } }),
+            expect.objectContaining({ status: "AVAILABLE" }),
+          ]),
         }),
       }),
     )
@@ -200,8 +209,8 @@ describe("itemRouter", () => {
     expect(result[0]?.availability).toEqual([
       {
         id: "22222222-2222-2222-2222-222222222222",
-        startDate: new Date("2026-03-10T00:00:00.000Z"),
-        endDate: new Date("2026-03-12T00:00:00.000Z"),
+        startDate: new Date("2099-03-10T00:00:00.000Z"),
+        endDate: new Date("2099-03-12T00:00:00.000Z"),
         status: "AVAILABLE",
       },
     ])
@@ -313,7 +322,19 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike creates a like when it does not exist", async () => {
-    const itemFindFirst = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      status: "AVAILABLE",
+      lender: { user: { status: "ACTIVE" } },
+      availability: [
+        {
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      bookings: [],
+    })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce(null) // check if like exists
@@ -340,7 +361,19 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike deletes a like when it exists", async () => {
-    const itemFindFirst = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      status: "AVAILABLE",
+      lender: { user: { status: "ACTIVE" } },
+      availability: [
+        {
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      bookings: [],
+    })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists
