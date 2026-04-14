@@ -313,7 +313,7 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike creates a like when it does not exist", async () => {
-    const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce(null) // check if like exists
@@ -324,7 +324,7 @@ describe("itemRouter", () => {
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findUnique: itemFindUnique },
+        item: { findFirst: itemFindFirst },
         like: { findUnique: likeFindUnique, create, delete: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
@@ -340,7 +340,7 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike deletes a like when it exists", async () => {
-    const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists
@@ -351,7 +351,7 @@ describe("itemRouter", () => {
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findUnique: itemFindUnique },
+        item: { findFirst: itemFindFirst },
         like: { findUnique: likeFindUnique, delete: deleteLike, create: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
@@ -372,12 +372,12 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike throws NOT_FOUND when item does not exist", async () => {
-    const itemFindUnique = vi.fn().mockResolvedValue(null) // item not found
+    const itemFindFirst = vi.fn().mockResolvedValue(null) // item not found
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findUnique: itemFindUnique },
+        item: { findFirst: itemFindFirst },
         like: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },

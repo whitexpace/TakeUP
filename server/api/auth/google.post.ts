@@ -21,6 +21,7 @@ type AuthUserRow = {
   id: string
   email: string
   name: string
+  status: "ACTIVE" | "SUSPENDED" | "PENDING" | "DEACTIVATED"
 }
 
 async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promise<AuthUserRow> {
@@ -32,6 +33,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
       email: true,
       username: true,
       googleSub: true,
+      status: true,
     },
   })
 
@@ -44,6 +46,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
         email: true,
         username: true,
         googleSub: true,
+        status: true,
       },
     })
 
@@ -56,6 +59,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
           email: true,
           username: true,
           googleSub: true,
+          status: true,
         },
       })
     }
@@ -77,6 +81,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
           email: true,
           username: true,
           googleSub: true,
+          status: true,
         },
       })
     }
@@ -90,14 +95,34 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
         email: true,
         username: true,
         googleSub: true,
+        status: true,
       },
     })
+  }
+
+  if (user.status === "DEACTIVATED") {
+    user = await db.user.update({
+      where: { id: user.id },
+      data: { status: "ACTIVE" },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        googleSub: true,
+        status: true,
+      },
+    })
+  }
+
+  if (user.status !== "ACTIVE") {
+    throw new AuthApiError("AUTH_ACCOUNT_INACTIVE")
   }
 
   return {
     id: user.id,
     email: user.email,
     name: user.username,
+    status: user.status,
   }
 }
 

@@ -63,6 +63,7 @@ export const requestRouter = router({
       FROM "RequestPost" rp
       INNER JOIN "User" u ON u.id = rp."requesterId"
       WHERE rp."requestedTo" >= NOW()
+        AND u.status = 'ACTIVE'::"UserStatus"
       ORDER BY rp."createdAt" DESC, rp.id DESC
     `
 

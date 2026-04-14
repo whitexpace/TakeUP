@@ -527,6 +527,15 @@ const buildListWhere = (
 
   return {
     status: statusFilter,
+    ...(ownedOnly
+      ? {}
+      : {
+          lender: {
+            user: {
+              status: "ACTIVE",
+            },
+          },
+        }),
     ...(likedOnly
       ? userId
         ? {
@@ -739,7 +748,10 @@ export const itemRouter = router({
   }),
 
   filterMetadata: publicProcedure.query(async ({ ctx }) => {
-    const baseWhere: Prisma.ItemWhereInput = { status: { not: "DELETED" } }
+    const baseWhere: Prisma.ItemWhereInput = {
+      status: { not: "DELETED" },
+      lender: { user: { status: "ACTIVE" } },
+    }
 
     const [categoryGroups, priceGroups, conditionGroups, freeToborrowCount, othersCount] =
       await Promise.all([
@@ -753,14 +765,16 @@ export const itemRouter = router({
         ctx.prisma.$queryRaw<Array<{ bucket: string; count: bigint }>>`
           SELECT
             CASE
-              WHEN "rentalFee" < 100 THEN 'under100'
-              WHEN "rentalFee" <= 500 THEN '100to500'
+              WHEN i."rentalFee" < 100 THEN 'under100'
+              WHEN i."rentalFee" <= 500 THEN '100to500'
               ELSE 'over500'
             END AS bucket,
             COUNT(*) AS count
-          FROM "Item"
-          WHERE status != 'DELETED'
-            AND "freeToBorrow" = false
+          FROM "Item" i
+          INNER JOIN "User" u ON u."id" = i."lenderId"
+          WHERE i."status" != 'DELETED'
+            AND i."freeToBorrow" = false
+            AND u."status" = 'ACTIVE'::"UserStatus"
           GROUP BY bucket
         `,
         // Count per condition
@@ -872,8 +886,14 @@ export const itemRouter = router({
 
   byId: publicProcedure.input(itemIdSchema).query(({ ctx, input }) => {
     return ctx.prisma.item
-      .findUnique({
-        where: { id: input.id },
+      .findFirst({
+        where: {
+          id: input.id,
+          OR: [
+            { lender: { user: { status: "ACTIVE" } } },
+            ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
+          ],
+        },
         include: {
           ...buildItemInclude(ctx.user?.id ?? null),
           bookings: {
@@ -1142,8 +1162,11 @@ export const itemRouter = router({
     const { itemId } = input
 
     // Check if item exists
-    const item = await ctx.prisma.item.findUnique({
-      where: { id: itemId },
+    const item = await ctx.prisma.item.findFirst({
+      where: {
+        id: itemId,
+        lender: { user: { status: "ACTIVE" } },
+      },
       select: { id: true },
     })
 
