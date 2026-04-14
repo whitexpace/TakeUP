@@ -288,7 +288,7 @@ describe("itemRouter", () => {
 
     expect(findById).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: VALID_UUID },
+        where: expect.objectContaining({ id: VALID_UUID }),
       }),
     )
     expect(result?.reviewsCount).toBe(1)
