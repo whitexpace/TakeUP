@@ -212,6 +212,89 @@ describe("itemRouter", () => {
     expect(result[0]?.photos).toEqual(["https://example.com/camera.jpg"])
   })
 
+  it("byId returns item review images for display", async () => {
+    const reviewImageUrl =
+      "https://example.supabase.co/storage/v1/object/public/item-images/reviews/u/r1.jpg"
+    const findUnique = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      name: "Camera",
+      status: "AVAILABLE",
+      lenderId: "owner-1",
+      lender: {
+        user: {
+          username: "owner1",
+          firstName: "Owner",
+          middleName: null,
+          lastName: "One",
+          email: "owner1@up.edu.ph",
+        },
+      },
+      availability: [],
+      images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
+      categories: [{ category: "ELECTRONICS" }],
+      tags: [{ tag: { name: "photo" } }],
+      likes: [],
+      description: "Mirrorless camera",
+      condition: "GOOD",
+      rateOption: "PER_DAY",
+      createdAt: new Date("2026-03-22T00:00:00.000Z"),
+      rentalFee: 250,
+      replacementCost: null,
+      freeToBorrow: false,
+      whatItemOffers: null,
+      whatIsIncluded: null,
+      knownIssues: null,
+      usageLimitations: null,
+      isTrending: false,
+      viewCount: 0,
+      bookingCount: 0,
+      likeCount: 0,
+      rating: 0,
+      borrowerId: null,
+      transactionReviews: [
+        {
+          id: "review-1",
+          transactionId: "txn-1",
+          reviewerUserId: "borrower-1",
+          reviewType: "ITEM_REVIEW",
+          revieweeUserId: null,
+          itemId: VALID_UUID,
+          rating: 5,
+          reviewText: "Very clean and complete.",
+          images: [reviewImageUrl],
+          isAnonymous: false,
+          createdAt: new Date("2026-04-14T00:00:00.000Z"),
+          reviewerUser: {
+            id: "borrower-1",
+            username: "borrower1",
+            firstName: "Borrower",
+            middleName: null,
+            lastName: "One",
+            avatarUrl: null,
+          },
+          revieweeUser: null,
+        },
+      ],
+      bookings: [],
+    })
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: { item: { findUnique } } as never,
+      user: null,
+    })
+
+    const result = await caller.byId({ id: VALID_UUID })
+
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: VALID_UUID },
+      }),
+    )
+    expect(result?.reviewsCount).toBe(1)
+    expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
+  })
+
   it("update throws NOT_FOUND when item does not exist", async () => {
     const findUnique = vi.fn().mockResolvedValue(null)
     const update = vi.fn()

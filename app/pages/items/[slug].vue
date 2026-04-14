@@ -2705,7 +2705,11 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <ReviewsSection :rating="item.rating" :reviews-count="item.bookingCount" />
+        <ReviewsSection
+          :rating="item.rating"
+          :reviews-count="item.reviewsCount"
+          :reviews="item.reviews"
+        />
       </div>
 
       <p v-else class="py-20 text-center text-sm text-noble-black/60">Item not found.</p>

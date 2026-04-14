@@ -5,9 +5,14 @@ import {
   extractStoragePathFromPublicUrl,
 } from "../../utils/item-image-storage"
 
-const cleanupItemImagesSchema = z.object({
-  urls: z.array(z.string().url()).max(20),
-})
+const cleanupItemImagesSchema = z
+  .object({
+    urls: z.array(z.string().url()).max(20).optional(),
+    imageUrls: z.array(z.string().url()).max(20).optional(),
+  })
+  .transform((input) => ({
+    urls: input.urls ?? input.imageUrls ?? [],
+  }))
 
 export default defineEventHandler(async (event) => {
   const user = event.context.authUser
@@ -23,10 +28,13 @@ export default defineEventHandler(async (event) => {
 
   const runtimeConfig = useRuntimeConfig(event)
   const bucket = runtimeConfig.public.itemImageBucket
-  const allowedPrefix = `items/${user.id}/`
   const ownedUrls = result.data.urls.filter((imageUrl) => {
     const path = extractStoragePathFromPublicUrl(imageUrl, bucket)
-    return path?.startsWith(allowedPrefix)
+    return (
+      path?.startsWith(`items/${user.id}/`) ||
+      path?.startsWith(`reviews/${user.id}/`) ||
+      path?.startsWith(`request-references/${user.id}/`)
+    )
   })
 
   const deletedResult = await removeItemImagesFromStorage(ownedUrls, {

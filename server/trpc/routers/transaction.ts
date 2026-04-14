@@ -1,35 +1,60 @@
-import { TransactionStatus as PrismaTransactionStatus, type Prisma } from "@prisma/client"
+import {
+  Prisma,
+  type PrismaClient,
+  TransactionStatus as PrismaTransactionStatus,
+} from "@prisma/client"
+import { TRPCError } from "@trpc/server"
 import { router } from "../init"
 import { protectedProcedure } from "../procedures"
 import {
   listTransactionsSchema,
   type TransactionStatus as UiTransactionStatus,
 } from "../../../shared/schemas/transaction"
+import {
+  createTransactionReviewSchema,
+  transactionReviewDraftKeySchema,
+  upsertTransactionReviewDraftSchema,
+} from "../../../shared/schemas/review"
+import {
+  buildTransactionReviewState,
+  isReviewTypeAllowedForTransaction,
+  mapTransactionReview,
+  transactionReviewSelect,
+} from "../review-helpers"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
   { createdAt: "asc" },
 ]
 
-const transactionInclude = {
-  item: {
-    select: {
-      id: true,
-      name: true,
-      images: {
-        select: {
-          path: true,
-          isPrimary: true,
-          sortOrder: true,
+const buildTransactionInclude = (currentUserId: string) =>
+  ({
+    item: {
+      select: {
+        id: true,
+        name: true,
+        images: {
+          select: {
+            path: true,
+            isPrimary: true,
+            sortOrder: true,
+          },
+          orderBy: itemImageOrderBy,
         },
-        orderBy: itemImageOrderBy,
+        rateOption: true,
+        rentalFee: true,
+        freeToBorrow: true,
       },
-      rateOption: true,
-      rentalFee: true,
-      freeToBorrow: true,
     },
-  },
-} satisfies Prisma.RentalTransactionInclude
+    reviews: {
+      where: {
+        reviewerUserId: currentUserId,
+      },
+      select: {
+        reviewType: true,
+      },
+    },
+  }) satisfies Prisma.RentalTransactionInclude
 
 const getTransactionThumbnailImage = (item: {
   images?: Array<{ path: string; isPrimary?: boolean }>
@@ -101,6 +126,9 @@ type TransactionRecord = {
       sortOrder: number
     }>
   } | null
+  reviews: Array<{
+    reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"
+  }>
 }
 
 type TransactionListItem = {
@@ -144,9 +172,25 @@ type TransactionListItem = {
       lastName: string
     }
   }
+  reviewState: {
+    isParticipant: boolean
+    isCompleted: boolean
+    allowedTypes: Array<"ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW">
+    actions: Array<{
+      reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"
+      label: string
+      submittedLabel: string
+      hasSubmitted: boolean
+      canSubmit: boolean
+    }>
+    canSubmitAny: boolean
+  }
 }
 
-const normalizeTransaction = (record: TransactionRecord): TransactionListItem | null => {
+const normalizeTransaction = (
+  record: TransactionRecord,
+  currentUserId: string,
+): TransactionListItem | null => {
   if (
     !record.item ||
     !record.itemId ||
@@ -198,7 +242,104 @@ const normalizeTransaction = (record: TransactionRecord): TransactionListItem | 
         lastName: "",
       },
     },
+    reviewState: buildTransactionReviewState({
+      status: toUiTransactionStatus(record.status),
+      itemId: record.itemId,
+      borrowerId: record.borrowerId,
+      lenderId: record.lenderId,
+      currentUserId,
+      existingReviewTypes: record.reviews.map((review) => review.reviewType),
+    }),
   }
+}
+
+type ReviewAccessPrisma = {
+  rentalTransaction: PrismaClient["rentalTransaction"]
+}
+
+type ReviewDraftPrisma = {
+  transactionReviewDraft: PrismaClient["transactionReviewDraft"]
+}
+
+const hasReviewDraftDelegate = (prisma: unknown): prisma is ReviewDraftPrisma =>
+  Boolean(
+    prisma &&
+    typeof prisma === "object" &&
+    "transactionReviewDraft" in prisma &&
+    (prisma as { transactionReviewDraft?: unknown }).transactionReviewDraft,
+  )
+
+const getTransactionReviewAccess = async (
+  prisma: ReviewAccessPrisma,
+  currentUserId: string,
+  input: {
+    transactionId: string
+    reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"
+  },
+  options?: {
+    forbiddenMessage?: string
+  },
+) => {
+  const transaction = await prisma.rentalTransaction.findUnique({
+    where: { id: input.transactionId },
+    select: {
+      id: true,
+      itemId: true,
+      status: true,
+      borrowerId: true,
+      lenderId: true,
+      reviews: {
+        where: {
+          reviewerUserId: currentUserId,
+        },
+        select: {
+          reviewType: true,
+        },
+      },
+    },
+  })
+
+  if (!transaction) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Transaction not found.",
+    })
+  }
+
+  const reviewState = buildTransactionReviewState({
+    status: transaction.status,
+    itemId: transaction.itemId,
+    borrowerId: transaction.borrowerId,
+    lenderId: transaction.lenderId,
+    currentUserId,
+    existingReviewTypes: transaction.reviews.map(
+      (review: { reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW" }) =>
+        review.reviewType,
+    ),
+  })
+
+  if (!reviewState.isParticipant) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: options?.forbiddenMessage ?? "Only transaction participants can submit a review.",
+    })
+  }
+
+  if (
+    !isReviewTypeAllowedForTransaction(input.reviewType, {
+      itemId: transaction.itemId,
+      borrowerId: transaction.borrowerId,
+      lenderId: transaction.lenderId,
+      currentUserId,
+    })
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "This review type is not allowed for your role in the transaction.",
+    })
+  }
+
+  return transaction
 }
 
 export const transactionRouter = router({
@@ -242,7 +383,7 @@ export const transactionRouter = router({
 
     const records = (await ctx.prisma.rentalTransaction.findMany({
       where: baseWhere,
-      include: transactionInclude,
+      include: buildTransactionInclude(userId),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
     })) as unknown as TransactionRecord[]
@@ -251,7 +392,7 @@ export const transactionRouter = router({
     const pageRecords = hasMore ? records.slice(0, limit) : records
     const normalizedRecords = pageRecords
       .filter(Boolean)
-      .map(normalizeTransaction)
+      .map((record) => normalizeTransaction(record, userId))
       .filter((record): record is TransactionListItem => record !== null)
 
     const participantIds = [
@@ -288,4 +429,241 @@ export const transactionRouter = router({
       nextCursor,
     }
   }),
+  createReview: protectedProcedure
+    .input(createTransactionReviewSchema)
+    .mutation(async ({ ctx, input }) => {
+      const transaction = await getTransactionReviewAccess(
+        ctx.prisma as ReviewAccessPrisma,
+        ctx.user.id,
+        input,
+        {
+          forbiddenMessage: "Only transaction participants can submit a review.",
+        },
+      )
+
+      if (transaction.status !== PrismaTransactionStatus.COMPLETED) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Reviews can only be submitted for completed transactions.",
+        })
+      }
+
+      if (
+        !isReviewTypeAllowedForTransaction(input.reviewType, {
+          itemId: transaction.itemId,
+          borrowerId: transaction.borrowerId,
+          lenderId: transaction.lenderId,
+          currentUserId: ctx.user.id,
+        })
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "This review type is not allowed for your role in the transaction.",
+        })
+      }
+
+      if (
+        transaction.reviews.some(
+          (review: { reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW" }) =>
+            review.reviewType === input.reviewType,
+        )
+      ) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "You have already submitted this review for the transaction.",
+        })
+      }
+
+      const revieweeUserId =
+        input.reviewType === "ITEM_REVIEW"
+          ? null
+          : input.reviewType === "LENDER_REVIEW"
+            ? transaction.lenderId
+            : transaction.borrowerId
+      const itemId = input.reviewType === "ITEM_REVIEW" ? transaction.itemId : null
+
+      if (input.reviewType === "ITEM_REVIEW" && !itemId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This transaction can no longer accept an item review.",
+        })
+      }
+
+      try {
+        const review = await ctx.prisma.$transaction(async (tx) => {
+          const txWithDrafts = tx as typeof tx & ReviewDraftPrisma
+          const createdReview = await tx.transactionReview.create({
+            data: {
+              transactionId: transaction.id,
+              reviewerUserId: ctx.user.id,
+              reviewType: input.reviewType,
+              revieweeUserId,
+              itemId,
+              rating: input.rating,
+              reviewText: input.reviewText,
+              images: input.images,
+              isAnonymous: input.isAnonymous,
+            },
+            select: transactionReviewSelect,
+          })
+
+          await txWithDrafts.transactionReviewDraft.deleteMany({
+            where: {
+              transactionId: transaction.id,
+              reviewerUserId: ctx.user.id,
+              reviewType: input.reviewType,
+            },
+          })
+
+          if (itemId) {
+            const itemReviewAggregate = await tx.transactionReview.aggregate({
+              where: {
+                itemId,
+                reviewType: "ITEM_REVIEW",
+              },
+              _avg: {
+                rating: true,
+              },
+            })
+
+            await tx.item.update({
+              where: { id: itemId },
+              data: {
+                rating: itemReviewAggregate._avg.rating ?? 0,
+              },
+            })
+          }
+
+          return createdReview
+        })
+
+        return mapTransactionReview(review)
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "You have already submitted this review for the transaction.",
+          })
+        }
+
+        throw error
+      }
+    }),
+  getReviewDraft: protectedProcedure
+    .input(transactionReviewDraftKeySchema)
+    .query(async ({ ctx, input }) => {
+      await getTransactionReviewAccess(ctx.prisma as ReviewAccessPrisma, ctx.user.id, input, {
+        forbiddenMessage: "Only transaction participants can manage review drafts.",
+      })
+
+      if (!hasReviewDraftDelegate(ctx.prisma)) {
+        return null
+      }
+
+      return await ctx.prisma.transactionReviewDraft.findUnique({
+        where: {
+          transactionId_reviewerUserId_reviewType: {
+            transactionId: input.transactionId,
+            reviewerUserId: ctx.user.id,
+            reviewType: input.reviewType,
+          },
+        },
+        select: {
+          transactionId: true,
+          reviewType: true,
+          rating: true,
+          reviewText: true,
+          images: true,
+          isAnonymous: true,
+          updatedAt: true,
+        },
+      })
+    }),
+  upsertReviewDraft: protectedProcedure
+    .input(upsertTransactionReviewDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const transaction = await getTransactionReviewAccess(
+        ctx.prisma as ReviewAccessPrisma,
+        ctx.user.id,
+        input,
+        {
+          forbiddenMessage: "Only transaction participants can manage review drafts.",
+        },
+      )
+
+      if (
+        transaction.reviews.some(
+          (review: { reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW" }) =>
+            review.reviewType === input.reviewType,
+        )
+      ) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "You have already submitted this review for the transaction.",
+        })
+      }
+
+      if (!hasReviewDraftDelegate(ctx.prisma)) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            "Review drafts are not available yet. Apply the latest Prisma migration and restart the server.",
+        })
+      }
+
+      return await ctx.prisma.transactionReviewDraft.upsert({
+        where: {
+          transactionId_reviewerUserId_reviewType: {
+            transactionId: input.transactionId,
+            reviewerUserId: ctx.user.id,
+            reviewType: input.reviewType,
+          },
+        },
+        create: {
+          transactionId: input.transactionId,
+          reviewerUserId: ctx.user.id,
+          reviewType: input.reviewType,
+          rating: input.rating,
+          reviewText: input.reviewText,
+          images: input.images,
+          isAnonymous: input.isAnonymous,
+        },
+        update: {
+          rating: input.rating,
+          reviewText: input.reviewText,
+          images: input.images,
+          isAnonymous: input.isAnonymous,
+        },
+        select: {
+          transactionId: true,
+          reviewType: true,
+          rating: true,
+          reviewText: true,
+          images: true,
+          isAnonymous: true,
+          updatedAt: true,
+        },
+      })
+    }),
+  deleteReviewDraft: protectedProcedure
+    .input(transactionReviewDraftKeySchema)
+    .mutation(async ({ ctx, input }) => {
+      await getTransactionReviewAccess(ctx.prisma as ReviewAccessPrisma, ctx.user.id, input, {
+        forbiddenMessage: "Only transaction participants can manage review drafts.",
+      })
+
+      if (!hasReviewDraftDelegate(ctx.prisma)) {
+        return { success: true }
+      }
+
+      await ctx.prisma.transactionReviewDraft.deleteMany({
+        where: {
+          transactionId: input.transactionId,
+          reviewerUserId: ctx.user.id,
+          reviewType: input.reviewType,
+        },
+      })
+
+      return { success: true }
+    }),
 })

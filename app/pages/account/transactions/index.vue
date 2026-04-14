@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
 import type { TransactionStatus } from "../../../../shared/schemas/transaction"
-import { useTransactions } from "../../../composables/use-transactions"
+import type { ReviewType } from "../../../../shared/schemas/review"
+import { useTransactions, type TransactionListItem } from "../../../composables/use-transactions"
 
 definePageMeta({
   layout: "account",
@@ -9,19 +10,30 @@ definePageMeta({
 })
 
 type ActiveRole = "BORROWER" | "LENDER"
+type TransactionFilter = TransactionStatus | "TO_REVIEW" | null
 
 const route = useRoute()
 const router = useRouter()
 const activeRole = ref<ActiveRole>((route.query.role as ActiveRole) || "BORROWER")
-const activeStatus = ref<TransactionStatus | null>(null)
+const activeStatus = ref<TransactionFilter>(null)
 const searchQuery = ref("")
 
 const { filteredTransactions, isLoading, error, hasMore, loadMore, refresh, fetchPage } =
   useTransactions({
     role: activeRole,
-    status: activeStatus,
+    status: computed(() => (activeStatus.value === "TO_REVIEW" ? null : activeStatus.value)),
     searchQuery,
   })
+
+const visibleTransactions = computed(() =>
+  activeStatus.value === "TO_REVIEW"
+    ? filteredTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny)
+    : filteredTransactions.value,
+)
+
+const isReviewModalOpen = ref(false)
+const selectedTransactionForReview = ref<TransactionListItem | null>(null)
+const selectedReviewType = ref<ReviewType | null>(null)
 
 onMounted(() => fetchPage())
 
@@ -33,13 +45,13 @@ const setRole = (role: ActiveRole) => {
   router.replace({ query: { ...route.query, role } })
 }
 
-const setStatus = (status: TransactionStatus | null) => {
+const setStatus = (status: TransactionFilter) => {
   activeStatus.value = status
 }
 
 type StatusChip = {
   label: string
-  value: TransactionStatus | null
+  value: TransactionFilter
 }
 
 const statusChips = computed<StatusChip[]>(() => [
@@ -51,6 +63,7 @@ const statusChips = computed<StatusChip[]>(() => [
   { label: "In Use", value: "ACTIVE" },
   { label: "Returned", value: "RETURNED" },
   { label: "Completed", value: "COMPLETED" },
+  { label: "To Review", value: "TO_REVIEW" },
   { label: "Cancelled", value: "CANCELLED" },
 ])
 
@@ -62,6 +75,46 @@ const sectionSubtitle = computed(() =>
     ? "Items you've borrowed from other users"
     : "Items you've lent to other users",
 )
+
+const reviewContext = computed(() => {
+  if (!selectedTransactionForReview.value) return null
+
+  const counterpart =
+    activeRole.value === "BORROWER"
+      ? selectedTransactionForReview.value.lender.user
+      : selectedTransactionForReview.value.borrower.user
+
+  return {
+    transactionId: selectedTransactionForReview.value.id,
+    reviewType: selectedReviewType.value,
+    currentUserRole: activeRole.value,
+    itemName: selectedTransactionForReview.value.item.name,
+    counterpartName: `${counterpart.firstName} ${counterpart.lastName[0]}.`,
+    itemId: selectedTransactionForReview.value.item.id,
+    targetUserId:
+      selectedReviewType.value === "ITEM_REVIEW"
+        ? null
+        : activeRole.value === "BORROWER"
+          ? selectedTransactionForReview.value.lenderId
+          : selectedTransactionForReview.value.borrowerId,
+  }
+})
+
+const openReviewModal = (payload: { transaction: TransactionListItem; reviewType: ReviewType }) => {
+  selectedTransactionForReview.value = payload.transaction
+  selectedReviewType.value = payload.reviewType
+  isReviewModalOpen.value = true
+}
+
+const closeReviewModal = () => {
+  isReviewModalOpen.value = false
+  selectedTransactionForReview.value = null
+  selectedReviewType.value = null
+}
+
+const handleReviewSubmitted = async () => {
+  await refresh()
+}
 </script>
 
 <template>
@@ -162,7 +215,7 @@ const sectionSubtitle = computed(() =>
       </div>
 
       <!-- Loading skeletons -->
-      <template v-if="isLoading && filteredTransactions.length === 0">
+      <template v-if="isLoading && visibleTransactions.length === 0">
         <div
           v-for="i in 3"
           :key="i"
@@ -172,7 +225,7 @@ const sectionSubtitle = computed(() =>
 
       <!-- Error state -->
       <div
-        v-else-if="error && filteredTransactions.length === 0"
+        v-else-if="error && visibleTransactions.length === 0"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
         <svg
@@ -196,7 +249,7 @@ const sectionSubtitle = computed(() =>
 
       <!-- Empty state -->
       <div
-        v-else-if="!isLoading && filteredTransactions.length === 0"
+        v-else-if="!isLoading && visibleTransactions.length === 0"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
         <svg
@@ -211,16 +264,20 @@ const sectionSubtitle = computed(() =>
         </svg>
         <p class="text-neutral-800 text-sm sm:text-base font-semibold mb-1">
           {{
-            activeRole === "BORROWER"
-              ? "No borrowing transactions yet"
-              : "No lending transactions yet"
+            activeStatus === "TO_REVIEW"
+              ? "No transactions awaiting your review"
+              : activeRole === "BORROWER"
+                ? "No borrowing transactions yet"
+                : "No lending transactions yet"
           }}
         </p>
         <p class="text-neutral-800/60 text-xs sm:text-sm">
           {{
-            activeRole === "BORROWER"
-              ? "Items you borrow will appear here."
-              : "Items you lend to others will appear here."
+            activeStatus === "TO_REVIEW"
+              ? "Completed transactions you can review will appear here."
+              : activeRole === "BORROWER"
+                ? "Items you borrow will appear here."
+                : "Items you lend to others will appear here."
           }}
         </p>
       </div>
@@ -228,16 +285,17 @@ const sectionSubtitle = computed(() =>
       <!-- Transaction list -->
       <div v-else class="flex flex-col gap-3 sm:gap-4">
         <TransactionCard
-          v-for="tx in filteredTransactions"
+          v-for="tx in visibleTransactions"
           :key="tx.id"
           :transaction="tx"
           :active-role="activeRole"
+          @write-review="openReviewModal"
         />
       </div>
 
       <!-- Load More -->
       <div
-        v-if="hasMore || (isLoading && filteredTransactions.length > 0)"
+        v-if="hasMore || (isLoading && visibleTransactions.length > 0)"
         class="flex justify-center mt-4 sm:mt-6"
       >
         <button
@@ -250,5 +308,12 @@ const sectionSubtitle = computed(() =>
         </button>
       </div>
     </div>
+
+    <TransactionReviewModal
+      :open="isReviewModalOpen"
+      :context="reviewContext"
+      @close="closeReviewModal"
+      @submitted="handleReviewSubmitted"
+    />
   </div>
 </template>

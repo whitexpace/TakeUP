@@ -25,6 +25,7 @@ import {
 import { removeItemImagesFromStorage } from "../../utils/item-image-storage"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
+import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
@@ -320,9 +321,21 @@ const mapItemTaxonomy = (
     images?: Array<{ path: string; isPrimary?: boolean; sortOrder?: number }>
     thumbnailImage?: string | null
     photos?: string[]
+    bookings?: Array<{ id: string; startDate: Date; endDate: Date }>
+    transactionReviews?: Array<unknown>
   },
 ) => {
-  const { availability, categories, tags, lender, likes, images, ...rest } = item
+  const {
+    availability,
+    categories,
+    tags,
+    lender,
+    likes,
+    images,
+    bookings,
+    transactionReviews,
+    ...rest
+  } = item
   const lenderUser = lender.user
   const lenderFullName =
     [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
@@ -876,6 +889,15 @@ export const itemRouter = router({
         where: { id: input.id },
         include: {
           ...buildItemInclude(ctx.user?.id ?? null),
+          transactionReviews: {
+            where: {
+              reviewType: "ITEM_REVIEW",
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+            select: transactionReviewSelect,
+          },
           bookings: {
             where: {
               status: { in: [...blockingBookingStatusFilter] },
@@ -892,20 +914,36 @@ export const itemRouter = router({
         (
           item:
             | (ItemWithUserLike & {
+                transactionReviews: Array<
+                  Prisma.TransactionReviewGetPayload<{
+                    select: typeof transactionReviewSelect
+                  }>
+                >
                 bookings: Array<{ id: string; startDate: Date; endDate: Date }>
               })
             | null,
         ) =>
           item
-            ? {
-                ...mapItemTaxonomy(item),
-                bookingBlocks: item.bookings.map((booking) => ({
-                  id: booking.id,
-                  startDate: booking.startDate,
-                  endDate: booking.endDate,
-                  status: "RENTED" as const,
-                })),
-              }
+            ? (() => {
+                const reviews = item.transactionReviews.map(mapTransactionReview)
+                const averageRating =
+                  reviews.length > 0
+                    ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length
+                    : 0
+
+                return {
+                  ...mapItemTaxonomy(item),
+                  rating: averageRating,
+                  reviews,
+                  reviewsCount: reviews.length,
+                  bookingBlocks: item.bookings.map((booking) => ({
+                    id: booking.id,
+                    startDate: booking.startDate,
+                    endDate: booking.endDate,
+                    status: "RENTED" as const,
+                  })),
+                }
+              })()
             : null,
       )
   }),

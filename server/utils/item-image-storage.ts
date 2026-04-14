@@ -5,7 +5,7 @@ type RemoveItemImagesOptions = {
 }
 
 const STORAGE_PUBLIC_SEGMENT = "/storage/v1/object/public/"
-const STORAGE_UPLOAD_PREFIX = "items/"
+const STORAGE_UPLOAD_PREFIXES = ["items/", "reviews/", "request-references/"] as const
 
 const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/")
 
@@ -38,7 +38,7 @@ export const extractStoragePathFromPublicUrl = (
       .map((segment) => decodeURIComponent(segment))
       .join("/")
 
-    return path.startsWith(STORAGE_UPLOAD_PREFIX) ? path : null
+    return STORAGE_UPLOAD_PREFIXES.some((prefix) => path.startsWith(prefix)) ? path : null
   } catch {
     return null
   }
