@@ -11,8 +11,17 @@ import { protectedProcedure } from "../procedures"
 import { listingAnalyticsQuerySchema } from "../../../shared/schemas/listing-analytics"
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const RANKING_LIMIT = 5
 
 const acceptedBookingStatuses = [
+  BookingStatus.CONFIRMED,
+  BookingStatus.RETURNED,
+  BookingStatus.COMPLETED,
+  BookingStatus.IN_DISPUTE,
+]
+
+const nonCancelledBookingStatuses = [
+  BookingStatus.PENDING,
   BookingStatus.CONFIRMED,
   BookingStatus.RETURNED,
   BookingStatus.COMPLETED,
@@ -23,6 +32,12 @@ const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
   { createdAt: "asc" },
 ]
+
+const rangeDays = {
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+} as const
 
 type DateRange = {
   startDate: Date
@@ -38,14 +53,6 @@ type DateWindow = {
   start: Date | null
   end: Date | null
 }
-
-const nonCancelledBookingStatuses = [
-  BookingStatus.PENDING,
-  BookingStatus.CONFIRMED,
-  BookingStatus.RETURNED,
-  BookingStatus.COMPLETED,
-  BookingStatus.IN_DISPUTE,
-]
 
 type MetricSeed = {
   totalViews: number
@@ -76,14 +83,6 @@ type RankedItem = {
   rentalFee: number
   freeToBorrow: boolean
 }
-
-const RANKING_LIMIT = 5
-
-const rangeDays = {
-  "7d": 7,
-  "30d": 30,
-  "90d": 90,
-} as const
 
 const getDateWindow = (range: keyof typeof rangeDays | "all"): DateWindow => {
   if (range === "all") return { start: null, end: null }
@@ -165,7 +164,7 @@ const emptySummary = () =>
 const emptyRankings = () => ({
   topViewedItems: [] as Array<RankedItem & { viewCount: number }>,
   topRequestedItems: [] as Array<RankedItem & { requestCount: number }>,
-  topBookedItems: [] as Array<RankedItem & { bookingCount: number }>,
+  topBookedItems: [] as Array<RankedItem>,
   itemRatings: [] as Array<RankedItem & { rating: number }>,
 })
 

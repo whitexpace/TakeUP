@@ -156,7 +156,6 @@ describe("listingAnalyticsRouter", () => {
 
     const result = await caller.list()
 
-    // booking.findMany is called twice: once for accepted bookings, once for all non-cancelled requests
     expect(bookingFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -171,6 +170,15 @@ describe("listingAnalyticsRouter", () => {
         }),
       }),
     )
+    expect(rentalTransactionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          lenderId: USER_ID,
+          itemId: { in: [ITEM_ID, DEACTIVATED_ITEM_ID] },
+          status: "COMPLETED",
+        }),
+      }),
+    )
 
     expect(result.listings).toHaveLength(2)
     expect(result.listings[0]).toMatchObject({
@@ -182,6 +190,11 @@ describe("listingAnalyticsRouter", () => {
       totalCompletedTransactions: 2,
       totalRevenue: 300.5,
       rating: 4.5,
+      availabilityDays: 5,
+      bookedDays: 5,
+      bookingRate: 1.7,
+      completionRate: 100,
+      utilizationRate: 100,
     })
     expect(result.listings[1]).toMatchObject({
       listingId: DEACTIVATED_ITEM_ID,
@@ -189,6 +202,8 @@ describe("listingAnalyticsRouter", () => {
       totalViews: 0,
       totalBookings: 0,
       totalBookingRequests: 0,
+      totalCompletedTransactions: 0,
+      totalRevenue: 0,
       rating: 0,
     })
     expect(result.summary).toMatchObject({
@@ -197,8 +212,14 @@ describe("listingAnalyticsRouter", () => {
       totalBookingRequests: 2,
       totalCompletedTransactions: 2,
       totalRevenue: 300.5,
+      availabilityDays: 5,
+      bookedDays: 5,
       overallItemRating: 4.5,
     })
+    expect(result.categoryBreakdown).toEqual([
+      { category: "ELECTRONICS", count: 2 },
+      { category: "TOOLS", count: 1 },
+    ])
   })
 
   it("computes overallItemRating as the average of rated items only", async () => {
@@ -228,7 +249,6 @@ describe("listingAnalyticsRouter", () => {
 
     const result = await caller.list()
 
-    // Average of 4.8 and 3.2 = 4.0 (item with rating 0 excluded)
     expect(result.summary.overallItemRating).toBe(4)
   })
 
@@ -244,12 +264,10 @@ describe("listingAnalyticsRouter", () => {
         categories: [],
       }),
     ])
-    // Return booking requests for ranking
     const bookingFindMany = vi
       .fn()
       .mockImplementation((args: { where: { status: { in: string[] } } }) => {
         if (args.where.status.in.includes("PENDING")) {
-          // Non-cancelled requests query
           return Promise.resolve([
             { itemId: ITEM_ID },
             { itemId: ITEM_ID },
@@ -257,7 +275,7 @@ describe("listingAnalyticsRouter", () => {
             { itemId: DEACTIVATED_ITEM_ID },
           ])
         }
-        // Accepted bookings query (with date ranges)
+
         return Promise.resolve([
           {
             itemId: ITEM_ID,
@@ -283,22 +301,18 @@ describe("listingAnalyticsRouter", () => {
 
     const result = await caller.list()
 
-    // Top viewed: ITEM_ID (200) before DEACTIVATED_ITEM_ID (50)
     expect(result.topViewedItems).toHaveLength(2)
     expect(result.topViewedItems[0]!.itemId).toBe(ITEM_ID)
     expect(result.topViewedItems[0]!.viewCount).toBe(200)
 
-    // Top requested: ITEM_ID (3 requests) before DEACTIVATED_ITEM_ID (1)
     expect(result.topRequestedItems).toHaveLength(2)
     expect(result.topRequestedItems[0]!.itemId).toBe(ITEM_ID)
     expect(result.topRequestedItems[0]!.requestCount).toBe(3)
 
-    // Top booked: DEACTIVATED_ITEM_ID (2 bookings) before ITEM_ID (1)
     expect(result.topBookedItems).toHaveLength(2)
     expect(result.topBookedItems[0]!.itemId).toBe(DEACTIVATED_ITEM_ID)
     expect(result.topBookedItems[0]!.bookingCount).toBe(2)
 
-    // Item ratings: Camera (4.9) before Wireless Mouse (4.5)
     expect(result.itemRatings).toHaveLength(2)
     expect(result.itemRatings[0]!.rating).toBe(4.9)
     expect(result.itemRatings[1]!.rating).toBe(4.5)
