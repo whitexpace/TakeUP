@@ -136,8 +136,8 @@ const chartItems = computed(() =>
     .slice(0, 6),
 )
 const maxViews = computed(() => Math.max(...chartItems.value.map((item) => item.totalViews), 1))
-const maxCategoryCount = computed(
-  () => Math.max(...categoryBreakdown.value.map((category) => category.count), 1),
+const maxCategoryCount = computed(() =>
+  Math.max(...categoryBreakdown.value.map((category) => category.count), 1),
 )
 
 const liveDataChips = computed(() => [
@@ -239,10 +239,7 @@ onMounted(() => {
       />
     </section>
 
-    <section
-      v-else-if="error"
-      class="rounded-2xl border border-cinnamon-ice bg-cream p-6 sm:p-8"
-    >
+    <section v-else-if="error" class="rounded-2xl border border-cinnamon-ice bg-cream p-6 sm:p-8">
       <h2 class="text-xl font-bold text-noble-black">Unable to load analytics</h2>
       <p class="mt-2 text-sm text-noble-black/70">{{ error }}</p>
       <button
@@ -275,7 +272,8 @@ onMounted(() => {
       >
         <p class="text-xl font-bold text-noble-black">No listings yet</p>
         <p class="mt-2 text-sm text-noble-black/70">
-          Publish an item first, then analytics for views, bookings, and utilization will appear here.
+          Publish an item first, then analytics for views, bookings, and utilization will appear
+          here.
         </p>
         <NuxtLink
           class="mt-5 inline-flex rounded-2xl bg-burning-orange px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-estate"
@@ -285,10 +283,7 @@ onMounted(() => {
         </NuxtLink>
       </section>
 
-      <section
-        v-else
-        class="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"
-      >
+      <section v-else class="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]">
         <div class="space-y-6">
           <div
             v-if="hasFetched && !hasActivity"
@@ -373,7 +368,9 @@ onMounted(() => {
                 class="grid grid-cols-[28px_42px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-cinnamon-ice bg-white p-2.5 transition hover:border-burning-orange hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-burning-orange/40"
                 :to="getItemDetailPath(item)"
               >
-                <span class="text-center text-lg font-semibold text-blue-estate">{{ index + 1 }}</span>
+                <span class="text-center text-lg font-semibold text-blue-estate">{{
+                  index + 1
+                }}</span>
                 <img
                   v-if="item.thumbnailImage"
                   :alt="item.itemName"
@@ -389,7 +386,8 @@ onMounted(() => {
                 <div class="min-w-0">
                   <p class="truncate text-xs font-semibold text-noble-black">{{ item.itemName }}</p>
                   <p class="truncate text-xs text-noble-black/60">
-                    {{ formatNumber(item.totalBookings) }} bookings • {{ formatPeso(item.totalRevenue) }}
+                    {{ formatNumber(item.totalBookings) }} bookings •
+                    {{ formatPeso(item.totalRevenue) }}
                   </p>
                 </div>
                 <span class="text-right text-xs font-semibold text-burning-orange">
@@ -424,7 +422,10 @@ onMounted(() => {
         </aside>
       </section>
 
-      <section v-if="hasListings" class="rounded-2xl border border-cinnamon-ice bg-cream p-5 sm:p-8">
+      <section
+        v-if="hasListings"
+        class="rounded-2xl border border-cinnamon-ice bg-cream p-5 sm:p-8"
+      >
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 class="text-xl font-bold text-noble-black">Listing Details</h2>
