@@ -356,8 +356,10 @@ onBeforeUnmount(() => {
 
         <!-- Chat Icon -->
         <div class="relative hidden md:flex items-stretch group/tooltip">
-          <button
+          <NuxtLink
+            to="/chat"
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            active-class="active-nav-link"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -373,7 +375,7 @@ onBeforeUnmount(() => {
             >
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-          </button>
+          </NuxtLink>
           <div class="custom-tooltip">
             Chat
             <div class="tooltip-arrow"></div>
