@@ -215,7 +215,7 @@ describe("itemRouter", () => {
   it("byId returns item review images for display", async () => {
     const reviewImageUrl =
       "https://example.supabase.co/storage/v1/object/public/item-images/reviews/u/r1.jpg"
-    const findUnique = vi.fn().mockResolvedValue({
+    const findById = vi.fn().mockResolvedValue({
       id: VALID_UUID,
       name: "Camera",
       status: "AVAILABLE",
@@ -280,13 +280,13 @@ describe("itemRouter", () => {
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique } } as never,
+      prisma: { item: { findUnique: findById, findFirst: findById } } as never,
       user: null,
     })
 
     const result = await caller.byId({ id: VALID_UUID })
 
-    expect(findUnique).toHaveBeenCalledWith(
+    expect(findById).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: VALID_UUID },
       }),
