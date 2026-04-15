@@ -20,7 +20,6 @@ const searchTerm = computed(() => searchInput.value.trim())
 const INITIAL_LIKES_PAGE_SIZE = 8
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
-const selectedStatus = ref("ALL")
 const selectedCategory = ref("ALL")
 const availableCategoryValues = ref<string[]>([])
 
@@ -61,7 +60,6 @@ type SearchSuggestion = {
 
 const filterParams = computed<Record<string, string | undefined>>(() => ({
   likedOnly: "true",
-  status: selectedStatus.value !== "ALL" ? selectedStatus.value : undefined,
   categories: selectedCategory.value !== "ALL" ? selectedCategory.value : undefined,
 }))
 
@@ -194,17 +192,7 @@ const applySuggestionOrSearch = () => {
   applySearch()
 }
 
-const formatEnumLabel = (value: string) =>
-  value
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ")
-
-const statusOptions = ["ALL", "AVAILABLE", "RENTED", "DEACTIVATED"] as const
-
 const clearFilters = () => {
-  selectedStatus.value = "ALL"
   selectedCategory.value = "ALL"
 }
 
@@ -327,7 +315,7 @@ watch(searchInput, () => {
 })
 
 watch(
-  [selectedStatus, selectedCategory],
+  selectedCategory,
   () => {
     scheduleReload()
   },
@@ -428,7 +416,7 @@ watch(
         <button
           class="rounded-full px-5 py-2 font-geist text-[14px] transition-colors"
           :class="
-            selectedStatus === 'ALL' && selectedCategory === 'ALL'
+            selectedCategory === 'ALL'
               ? 'bg-burning-orange text-white'
               : 'border border-cinnamon-ice bg-white text-noble-black/75 hover:bg-cream'
           "
@@ -436,15 +424,6 @@ watch(
         >
           All
         </button>
-
-        <select
-          v-model="selectedStatus"
-          class="rounded-full border border-cinnamon-ice bg-white px-4 py-2 font-geist text-[14px] text-noble-black/75 focus:outline-none"
-        >
-          <option v-for="status in statusOptions" :key="status" :value="status">
-            {{ status === "ALL" ? "Status" : formatEnumLabel(status) }}
-          </option>
-        </select>
 
         <select
           v-model="selectedCategory"
@@ -514,13 +493,13 @@ watch(
           class="mt-2 rounded-[20px] border border-cinnamon-ice/50 bg-cream px-4 py-20 text-center"
         >
           <h3 class="font-geist text-[26px] font-semibold text-noble-black">
-            No liked items found
+            No available liked items
           </h3>
           <p class="mx-auto mt-2 max-w-md font-geist text-[16px] text-noble-black/70">
-            Try adjusting your search or filters, or like items from the listings page.
+            Your liked items may be inactive, fully booked, or outside their available dates.
           </p>
           <button
-            v-if="searchInput || selectedStatus !== 'ALL' || selectedCategory !== 'ALL'"
+            v-if="searchInput || selectedCategory !== 'ALL'"
             class="mt-6 h-[46px] rounded-[12px] bg-burning-orange px-7 font-geist text-[15px] font-medium text-white transition-colors hover:bg-blue-estate"
             @click="
               () => {
