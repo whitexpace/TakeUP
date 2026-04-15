@@ -22,6 +22,7 @@ const links: AccountLink[] = [
   { label: "My Listings", to: "/account/listings" },
   { label: "My Listing Analytics", to: "/account/analytics" },
   { label: "My Rewards", to: "/account/rewards" },
+  { label: "My Reviews", to: "/account/reviews" },
 ]
 
 const isActive = (link: AccountLink) => {

@@ -20,6 +20,7 @@ import {
   isReviewTypeAllowedForTransaction,
   mapTransactionReview,
   transactionReviewSelect,
+  transactionReviewUserSelect,
 } from "../review-helpers"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
@@ -184,6 +185,181 @@ type TransactionListItem = {
       canSubmit: boolean
     }>
     canSubmitAny: boolean
+  }
+}
+
+const formatReviewLabel = (reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW") => {
+  switch (reviewType) {
+    case "ITEM_REVIEW":
+      return "Item Review"
+    case "LENDER_REVIEW":
+      return "Lender Review"
+    case "BORROWER_REVIEW":
+      return "Borrower Review"
+  }
+}
+
+const formatReference = (transactionId: string, bookingId: string | null) =>
+  bookingId ?? transactionId.slice(0, 16).toUpperCase()
+
+const formatParticipantName = (
+  user: { firstName: string; lastName: string } | null | undefined,
+) => {
+  if (!user?.firstName) return "Former user"
+  const lastInitial = user.lastName?.[0] ?? ""
+  return lastInitial ? `${user.firstName} ${lastInitial}.` : user.firstName
+}
+
+const reviewListItemSelect = {
+  id: true,
+  name: true,
+  images: {
+    select: {
+      path: true,
+      isPrimary: true,
+      sortOrder: true,
+    },
+    orderBy: itemImageOrderBy,
+  },
+} satisfies Prisma.ItemSelect
+
+const reviewDraftSelect = {
+  id: true,
+  transactionId: true,
+  reviewType: true,
+  rating: true,
+  reviewText: true,
+  images: true,
+  isAnonymous: true,
+  updatedAt: true,
+  createdAt: true,
+  transaction: {
+    select: {
+      id: true,
+      bookingId: true,
+      borrowerId: true,
+      lenderId: true,
+      item: {
+        select: reviewListItemSelect,
+      },
+      borrower: {
+        select: transactionReviewUserSelect,
+      },
+      lender: {
+        select: transactionReviewUserSelect,
+      },
+    },
+  },
+} satisfies Prisma.TransactionReviewDraftSelect
+
+const submittedReviewSelect = {
+  id: true,
+  transactionId: true,
+  reviewType: true,
+  rating: true,
+  reviewText: true,
+  images: true,
+  isAnonymous: true,
+  createdAt: true,
+  revieweeUser: {
+    select: transactionReviewUserSelect,
+  },
+  item: {
+    select: reviewListItemSelect,
+  },
+  transaction: {
+    select: {
+      id: true,
+      bookingId: true,
+      borrowerId: true,
+      lenderId: true,
+      item: {
+        select: reviewListItemSelect,
+      },
+      borrower: {
+        select: transactionReviewUserSelect,
+      },
+      lender: {
+        select: transactionReviewUserSelect,
+      },
+    },
+  },
+} satisfies Prisma.TransactionReviewSelect
+
+type ReviewDraftRecord = Prisma.TransactionReviewDraftGetPayload<{
+  select: typeof reviewDraftSelect
+}>
+
+type SubmittedReviewRecord = Prisma.TransactionReviewGetPayload<{
+  select: typeof submittedReviewSelect
+}>
+
+const mapReviewDraftListItem = (draft: ReviewDraftRecord, currentUserId: string) => {
+  const role =
+    draft.transaction.borrowerId === currentUserId
+      ? "BORROWER"
+      : draft.transaction.lenderId === currentUserId
+        ? "LENDER"
+        : null
+  const counterpart = role === "BORROWER" ? draft.transaction.lender : draft.transaction.borrower
+  const item = draft.transaction.item
+
+  return {
+    id: draft.id,
+    transactionId: draft.transactionId,
+    transactionReference: formatReference(draft.transaction.id, draft.transaction.bookingId),
+    reviewType: draft.reviewType,
+    typeLabel: formatReviewLabel(draft.reviewType),
+    role,
+    counterpartName: formatParticipantName(counterpart),
+    item: item
+      ? {
+          id: item.id,
+          name: item.name,
+          thumbnailImage: getTransactionThumbnailImage(item),
+        }
+      : null,
+    rating: draft.rating,
+    reviewText: draft.reviewText,
+    images: draft.images,
+    isAnonymous: draft.isAnonymous,
+    updatedAt: draft.updatedAt,
+    createdAt: draft.createdAt,
+  }
+}
+
+const mapSubmittedReviewListItem = (review: SubmittedReviewRecord, currentUserId: string) => {
+  const role =
+    review.transaction.borrowerId === currentUserId
+      ? "BORROWER"
+      : review.transaction.lenderId === currentUserId
+        ? "LENDER"
+        : null
+  const counterpart = role === "BORROWER" ? review.transaction.lender : review.transaction.borrower
+  const fallbackItem = review.transaction.item
+  const item = review.item ?? fallbackItem
+
+  return {
+    id: review.id,
+    transactionId: review.transactionId,
+    transactionReference: formatReference(review.transaction.id, review.transaction.bookingId),
+    reviewType: review.reviewType,
+    typeLabel: formatReviewLabel(review.reviewType),
+    role,
+    counterpartName: formatParticipantName(counterpart),
+    revieweeName: formatParticipantName(review.revieweeUser),
+    item: item
+      ? {
+          id: item.id,
+          name: item.name,
+          thumbnailImage: getTransactionThumbnailImage(item),
+        }
+      : null,
+    rating: review.rating,
+    reviewText: review.reviewText,
+    images: review.images,
+    isAnonymous: review.isAnonymous,
+    createdAt: review.createdAt,
   }
 }
 
@@ -549,6 +725,32 @@ export const transactionRouter = router({
         throw error
       }
     }),
+  listReviewDrafts: protectedProcedure.query(async ({ ctx }) => {
+    if (!hasReviewDraftDelegate(ctx.prisma)) {
+      return []
+    }
+
+    const drafts = await ctx.prisma.transactionReviewDraft.findMany({
+      where: {
+        reviewerUserId: ctx.user.id,
+      },
+      select: reviewDraftSelect,
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    })
+
+    return drafts.map((draft) => mapReviewDraftListItem(draft, ctx.user.id))
+  }),
+  listSubmittedReviews: protectedProcedure.query(async ({ ctx }) => {
+    const reviews = await ctx.prisma.transactionReview.findMany({
+      where: {
+        reviewerUserId: ctx.user.id,
+      },
+      select: submittedReviewSelect,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    })
+
+    return reviews.map((review) => mapSubmittedReviewListItem(review, ctx.user.id))
+  }),
   getReviewDraft: protectedProcedure
     .input(transactionReviewDraftKeySchema)
     .query(async ({ ctx, input }) => {
