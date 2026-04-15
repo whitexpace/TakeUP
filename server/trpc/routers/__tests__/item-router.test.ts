@@ -236,9 +236,17 @@ describe("itemRouter", () => {
           middleName: null,
           lastName: "One",
           email: "owner1@up.edu.ph",
+          status: "ACTIVE",
         },
       },
-      availability: [],
+      availability: [
+        {
+          id: "33333333-3333-3333-3333-333333333333",
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
       images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
       categories: [{ category: "ELECTRONICS" }],
       tags: [{ tag: { name: "photo" } }],
