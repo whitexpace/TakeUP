@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import type { TransactionListItem } from "../composables/use-transactions"
+import type { ReviewType } from "../../shared/schemas/review"
 
 const props = defineProps<{
   transaction: TransactionListItem
   activeRole: "LENDER" | "BORROWER"
+}>()
+
+const emit = defineEmits<{
+  writeReview: [payload: { transaction: TransactionListItem; reviewType: ReviewType }]
 }>()
 
 const formatPeso = (value: number) =>
@@ -62,12 +67,15 @@ const totalLabel = computed(() =>
   props.transaction.item.freeToBorrow ? "₱0" : formatPeso(props.transaction.totalAmount),
 )
 
-const isCompleted = computed(() => props.transaction.status === "COMPLETED")
 const detailPath = computed(() =>
   props.transaction.bookingId
     ? `/account/transactions/${props.transaction.bookingId}`
     : `/account/transactions/${props.transaction.id}`,
 )
+
+const handleWriteReview = (reviewType: ReviewType) => {
+  emit("writeReview", { transaction: props.transaction, reviewType })
+}
 </script>
 
 <template>
@@ -80,27 +88,23 @@ const detailPath = computed(() =>
         {{ counterpartName }}
       </span>
 
-      <!-- Action buttons for completed transactions -->
-      <div v-if="isCompleted" class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
         <button
-          class="bg-burning-orange text-white rounded-md px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none"
+          v-for="action in transaction.reviewState.actions.filter((entry) => entry.canSubmit)"
+          :key="action.reviewType"
+          class="bg-burning-orange text-white rounded-md px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none hover:bg-cinnabar-red transition-colors"
+          @click.stop="handleWriteReview(action.reviewType)"
         >
-          Leave a review
+          {{ action.label }}
         </button>
-        <button
+        <span
+          v-for="action in transaction.reviewState.actions.filter((entry) => entry.hasSubmitted)"
+          :key="`${action.reviewType}-submitted`"
           class="bg-indigo-900 text-white rounded-md px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none"
         >
-          See review
-        </button>
+          {{ action.submittedLabel }}
+        </span>
       </div>
-
-      <NuxtLink
-        v-if="detailPath"
-        :to="detailPath"
-        class="text-orange-500 text-xs sm:text-sm font-medium hover:text-orange-600 transition-colors"
-      >
-        View details
-      </NuxtLink>
 
       <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
     </div>

@@ -24,6 +24,15 @@ describe("item-image-storage", () => {
     ).toBeNull()
   })
 
+  it("extracts the storage path from a public review image URL", () => {
+    expect(
+      extractStoragePathFromPublicUrl(
+        "https://example.supabase.co/storage/v1/object/public/item-images/reviews/user-1/2026-03-23/file-name.jpg",
+        "item-images",
+      ),
+    ).toBe("reviews/user-1/2026-03-23/file-name.jpg")
+  })
+
   it("deletes only valid item image URLs when a service role key is configured", async () => {
     const fetchMock = vi.fn().mockResolvedValue({})
     vi.stubGlobal("$fetch", fetchMock)

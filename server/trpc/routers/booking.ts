@@ -23,6 +23,11 @@ import {
   returnBookingSchema,
   updateBookingSchema,
 } from "../../../shared/schemas/booking"
+import {
+  buildTransactionReviewState,
+  mapTransactionReview,
+  transactionReviewSelect,
+} from "../review-helpers"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -865,7 +870,35 @@ export const bookingRouter = router({
     }
 
     assertParticipantAccess(booking, ctx.user.id)
-    return mapBookingRecord(booking)
+    const transaction = await ctx.prisma.rentalTransaction.findUnique({
+      where: { bookingId: input.id },
+      select: {
+        id: true,
+        status: true,
+        borrowerId: true,
+        lenderId: true,
+        reviews: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: transactionReviewSelect,
+        },
+      },
+    })
+
+    return {
+      ...mapBookingRecord(booking),
+      transactionId: transaction?.id ?? null,
+      reviewState: buildTransactionReviewState({
+        status: transaction?.status ?? booking.status,
+        itemId: booking.itemId,
+        borrowerId: transaction?.borrowerId ?? booking.borrowerId,
+        lenderId: transaction?.lenderId ?? booking.lenderId,
+        currentUserId: ctx.user.id,
+        existingReviewTypes: transaction?.reviews.map((review) => review.reviewType) ?? [],
+      }),
+      reviews: transaction?.reviews.map(mapTransactionReview) ?? [],
+    }
   }),
 
   update: protectedProcedure.input(updateBookingSchema).mutation(async ({ ctx, input }) => {

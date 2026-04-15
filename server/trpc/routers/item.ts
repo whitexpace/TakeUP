@@ -30,6 +30,7 @@ import {
 } from "../../utils/item-visibility"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
+import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
@@ -354,7 +355,8 @@ const mapItemTaxonomy = (
     images?: Array<{ path: string; isPrimary?: boolean; sortOrder?: number }>
     thumbnailImage?: string | null
     photos?: string[]
-    bookings?: unknown[]
+    bookings?: Array<{ id: string; startDate: Date; endDate: Date; status?: string }>
+    transactionReviews?: Array<unknown>
   },
 ) => {
   const {
@@ -365,6 +367,7 @@ const mapItemTaxonomy = (
     likes,
     images,
     bookings: _bookings,
+    transactionReviews: _transactionReviews,
     ...rest
   } = item
   const lenderUser = lender.user
@@ -1011,7 +1014,7 @@ export const itemRouter = router({
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
     const now = new Date()
-    const item = (await ctx.prisma.item.findFirst({
+    const item = await ctx.prisma.item.findFirst({
       where: {
         id: input.id,
         OR: [
@@ -1019,16 +1022,36 @@ export const itemRouter = router({
           ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
         ],
       },
-      include: buildPublicItemInclude(ctx.user?.id ?? null),
-    })) as PublicVisibleItemRecord | null
+      include: {
+        ...buildPublicItemInclude(ctx.user?.id ?? null),
+        transactionReviews: {
+          where: {
+            reviewType: "ITEM_REVIEW",
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: transactionReviewSelect,
+        },
+      },
+    })
 
     if (!item) return null
 
     const isOwner = ctx.user?.id === item.lenderId
     if (!isOwner && !isPublicVisibleItem(item, now)) return null
 
+    const reviews = item.transactionReviews.map(mapTransactionReview)
+    const averageRating =
+      reviews.length > 0
+        ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length
+        : 0
+
     return {
       ...mapItemTaxonomy(item),
+      rating: averageRating,
+      reviews,
+      reviewsCount: reviews.length,
       bookingBlocks: item.bookings.map((booking) => ({
         id: booking.id,
         startDate: booking.startDate,

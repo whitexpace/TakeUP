@@ -161,6 +161,12 @@ enum RequestOfferStatus {
   CANCELLED
 }
 
+enum ReviewType {
+  ITEM_REVIEW
+  LENDER_REVIEW
+  BORROWER_REVIEW
+}
+
 model Item {
   id               String        @id @default(uuid())
   numericId        Int           @unique @default(autoincrement())
@@ -275,13 +281,14 @@ model RentalTransaction {
   status      TransactionStatus @default(PENDING) @map("current_status")
   updatedAt   DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  borrower   User?                  @relation("transactions_borrower_user_idToUser", fields: [borrowerId], references: [id], onDelete: Restrict)
-  lender     User?                  @relation("transactions_lender_user_idToUser", fields: [lenderId], references: [id], onDelete: Restrict)
-  item       Item?                  @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  disputes   TransactionDispute[]
-  payments   TransactionPayment[]
-  reviews    TransactionReview[]
-  statusLogs TransactionStatusLog[]
+  borrower     User?                    @relation("transactions_borrower_user_idToUser", fields: [borrowerId], references: [id], onDelete: Restrict)
+  lender       User?                    @relation("transactions_lender_user_idToUser", fields: [lenderId], references: [id], onDelete: Restrict)
+  item         Item?                    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  disputes     TransactionDispute[]
+  payments     TransactionPayment[]
+  reviewDrafts TransactionReviewDraft[]
+  reviews      TransactionReview[]
+  statusLogs   TransactionStatusLog[]
 
   @@index([borrowerId, status, createdAt(sort: Desc)], map: "idx_transactions_borrower_status")
   @@index([lenderId, status, createdAt(sort: Desc)], map: "idx_transactions_lender_status")
@@ -350,38 +357,39 @@ model ItemTagOnItem {
 }
 
 model User {
-  id                           String                 @id @default(uuid())
-  username                     String
-  email                        String                 @unique
-  firstName                    String
-  middleName                   String?
-  lastName                     String
-  googleSub                    String                 @unique
-  createdAt                    DateTime               @default(now())
-  location                     String?
-  avatarUrl                    String?
-  bio                          String?
-  pronouns                     String?
-  accountType                  AccountType
-  status                       UserStatus
-  points                       Int                    @default(0)
-  admin                        Admin?
-  appNotificationsReceived     AppNotification[]      @relation("app_notifications_recipient_user_idToUser")
-  appNotificationsSent         AppNotification[]      @relation("app_notifications_actor_user_idToUser")
-  borrower                     Borrower?
-  cartEntries                  CartEntry[]
-  lender                       Lender?
-  likes                        Like[]
-  transactionDisputesAdmin     TransactionDispute[]   @relation("transaction_disputes_admin_idToUser")
-  transactionDisputesFiled     TransactionDispute[]   @relation("transaction_disputes_filed_by_user_idToUser")
-  transactionPaymentsPayee     TransactionPayment[]   @relation("transaction_payments_payee_user_idToUser")
-  transactionPaymentsPayer     TransactionPayment[]   @relation("transaction_payments_payer_user_idToUser")
-  transactionReviewsReviewee   TransactionReview[]    @relation("transaction_reviews_reviewee_user_idToUser")
-  transactionReviewsReviewer   TransactionReview[]    @relation("transaction_reviews_reviewer_user_idToUser")
-  transactionStatusLogsChanged TransactionStatusLog[]
-  borrowedTransactions         RentalTransaction[]    @relation("transactions_borrower_user_idToUser")
-  lentTransactions             RentalTransaction[]    @relation("transactions_lender_user_idToUser")
-  requestPosts                 RequestPost[]
+  id                              String                   @id @default(uuid())
+  username                        String
+  email                           String                   @unique
+  firstName                       String
+  middleName                      String?
+  lastName                        String
+  googleSub                       String                   @unique
+  createdAt                       DateTime                 @default(now())
+  location                        String?
+  avatarUrl                       String?
+  bio                             String?
+  pronouns                        String?
+  accountType                     AccountType
+  status                          UserStatus
+  points                          Int                      @default(0)
+  admin                           Admin?
+  appNotificationsReceived        AppNotification[]        @relation("app_notifications_recipient_user_idToUser")
+  appNotificationsSent            AppNotification[]        @relation("app_notifications_actor_user_idToUser")
+  borrower                        Borrower?
+  cartEntries                     CartEntry[]
+  lender                          Lender?
+  likes                           Like[]
+  transactionDisputesAdmin        TransactionDispute[]     @relation("transaction_disputes_admin_idToUser")
+  transactionDisputesFiled        TransactionDispute[]     @relation("transaction_disputes_filed_by_user_idToUser")
+  transactionPaymentsPayee        TransactionPayment[]     @relation("transaction_payments_payee_user_idToUser")
+  transactionPaymentsPayer        TransactionPayment[]     @relation("transaction_payments_payer_user_idToUser")
+  transactionReviewDraftsReviewer TransactionReviewDraft[] @relation("transaction_review_drafts_reviewer_user_idToUser")
+  transactionReviewsReviewee      TransactionReview[]      @relation("transaction_reviews_reviewee_user_idToUser")
+  transactionReviewsReviewer      TransactionReview[]      @relation("transaction_reviews_reviewer_user_idToUser")
+  transactionStatusLogsChanged    TransactionStatusLog[]
+  borrowedTransactions            RentalTransaction[]      @relation("transactions_borrower_user_idToUser")
+  lentTransactions                RentalTransaction[]      @relation("transactions_lender_user_idToUser")
+  requestPosts                    RequestPost[]
 }
 
 model CartEntry {
@@ -535,24 +543,46 @@ model TransactionPayment {
 }
 
 model TransactionReview {
-  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  transactionId  String   @map("transaction_id")
-  reviewerUserId String   @map("reviewer_user_id")
-  revieweeUserId String?  @map("reviewee_user_id")
-  itemId         String?  @map("item_id")
-  rating         Int      @db.SmallInt
-  reviewText     String?  @map("review_text")
-  isAnonymous    Boolean  @default(false) @map("is_anonymous")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId  String     @map("transaction_id")
+  reviewerUserId String     @map("reviewer_user_id")
+  reviewType     ReviewType @default(ITEM_REVIEW) @map("review_type")
+  revieweeUserId String?    @map("reviewee_user_id")
+  itemId         String?    @map("item_id")
+  rating         Int        @db.SmallInt
+  reviewText     String     @map("review_text")
+  images         String[]   @default([])
+  isAnonymous    Boolean    @default(false) @map("is_anonymous")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
   item         Item?             @relation(fields: [itemId], references: [id])
   revieweeUser User?             @relation("transaction_reviews_reviewee_user_idToUser", fields: [revieweeUserId], references: [id])
   reviewerUser User              @relation("transaction_reviews_reviewer_user_idToUser", fields: [reviewerUserId], references: [id])
   transaction  RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
-  @@unique([transactionId, reviewerUserId], map: "transaction_reviews_transaction_reviewer_unique")
+  @@unique([transactionId, reviewerUserId, reviewType], map: "transaction_reviews_transaction_reviewer_type_unique")
   @@index([revieweeUserId, createdAt(sort: Desc)], map: "idx_reviews_reviewee_created")
   @@map("transaction_reviews")
+}
+
+model TransactionReviewDraft {
+  id             String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId  String     @map("transaction_id")
+  reviewerUserId String     @map("reviewer_user_id")
+  reviewType     ReviewType @default(ITEM_REVIEW) @map("review_type")
+  rating         Int        @default(5) @db.SmallInt
+  reviewText     String     @default("") @map("review_text")
+  images         String[]   @default([])
+  isAnonymous    Boolean    @default(false) @map("is_anonymous")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reviewerUser User              @relation("transaction_review_drafts_reviewer_user_idToUser", fields: [reviewerUserId], references: [id])
+  transaction  RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, reviewerUserId, reviewType], map: "transaction_review_drafts_transaction_reviewer_type_unique")
+  @@index([reviewerUserId, updatedAt(sort: Desc)], map: "idx_review_drafts_reviewer_updated")
+  @@map("transaction_review_drafts")
 }
 
 model TransactionStatusLog {
