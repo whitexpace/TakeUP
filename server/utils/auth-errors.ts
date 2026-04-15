@@ -7,6 +7,7 @@ const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   AUTH_PROVIDER_MISCONFIG: "Auth provider is misconfigured.",
   AUTH_UNAUTHORIZED: "You must be authenticated to access this resource.",
   AUTH_SESSION_INVALID: "Session is invalid or expired.",
+  AUTH_ACCOUNT_INACTIVE: "Your account is not active.",
   AUTH_INTERNAL: "Authentication failed due to an internal error.",
 }
 
@@ -17,6 +18,7 @@ const AUTH_ERROR_STATUS: Record<AuthErrorCode, number> = {
   AUTH_PROVIDER_MISCONFIG: 500,
   AUTH_UNAUTHORIZED: 401,
   AUTH_SESSION_INVALID: 401,
+  AUTH_ACCOUNT_INACTIVE: 403,
   AUTH_INTERNAL: 500,
 }
 

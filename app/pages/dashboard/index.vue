@@ -178,13 +178,13 @@
         </svg>
       </div>
       <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">
-        No items found
+        No available items
       </h3>
       <p
         class="font-geist font-normal text-[16px] sm:text-[18px] text-noble-black/70 max-w-md mx-auto"
       >
-        We couldn't find any items matching your search or filters. Try adjusting them to see more
-        results!
+        We couldn't find any bookable items matching your search or filters. Try adjusting them to
+        see more results.
       </p>
       <button
         v-if="searchInput || filters.hasActiveFilters.value"

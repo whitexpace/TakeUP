@@ -27,6 +27,17 @@ type UsernameAvailabilityResponse = {
   available: boolean
 }
 
+type DeactivationBlocker = {
+  code: "ACTIVE_RENTAL" | "FUTURE_CONFIRMED_BOOKING" | "OPEN_DISPUTE"
+  message: string
+  count: number
+}
+
+type DeactivationEligibilityResponse = {
+  allowed: boolean
+  blockers: DeactivationBlocker[]
+}
+
 type ProfileUpdateResponse = {
   user: {
     id: string
@@ -39,6 +50,28 @@ type ProfileUpdateResponse = {
     bio: string | null
     avatarUrl: string | null
   }
+}
+
+type AccountDeletionReason = {
+  code:
+    | "ACTIVE_TRANSACTIONS"
+    | "PENDING_OR_UPCOMING_BOOKINGS"
+    | "ACTIVE_DISPUTES"
+    | "REMAINING_PAYOUT_BALANCE"
+    | "UNSETTLED_PAYMENTS_OR_FEES"
+    | "ACCOUNT_RESTRICTION"
+  title: string
+  message: string
+  nextStep: string
+  details?: Array<{
+    title: string
+    subtitle?: string
+  }>
+}
+
+type AccountDeletionEligibilityResponse = {
+  eligible: boolean
+  reasons: AccountDeletionReason[]
 }
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid"
@@ -221,15 +254,26 @@ const profileInitial = computed(() => {
 
 const emailNotificationsEnabled = ref(true)
 const showEditProfileModal = ref(false)
+const showDeleteAccountModal = ref(false)
+const showDeactivateAccountModal = ref(false)
+const isLoadingDeletionEligibility = ref(false)
+const isDeletingAccount = ref(false)
 const isSavingProfile = ref(false)
+const isLoadingDeactivationEligibility = ref(false)
+const isDeactivatingAccount = ref(false)
 const profileSaveError = ref("")
+const deactivateAccountError = ref("")
+const deactivationEligibility = ref<DeactivationEligibilityResponse | null>(null)
 const avatarUploadError = ref("")
+const deleteAccountError = ref("")
+const deleteConfirmationText = ref("")
 const usernameStatus = ref<UsernameStatus>("idle")
 const checkedUsername = ref("")
 const initialUsername = ref("")
 const avatarInputRef = ref<HTMLInputElement | null>(null)
 const pendingAvatarFile = ref<File | null>(null)
 const pendingAvatarPreviewUrl = ref<string | null>(null)
+const deletionEligibility = ref<AccountDeletionEligibilityResponse | null>(null)
 
 const profileForm = reactive({
   name: "",
@@ -274,6 +318,43 @@ const canSaveProfile = computed(() => {
   )
 })
 
+const canDeleteAccount = computed(
+  () =>
+    Boolean(deletionEligibility.value?.eligible) &&
+    deleteConfirmationText.value.trim().toUpperCase() === "DELETE" &&
+    !isDeletingAccount.value,
+)
+
+const deletionBlockingReasons = computed(() => deletionEligibility.value?.reasons ?? [])
+
+const canDeactivateAccount = computed(
+  () =>
+    !isLoadingDeactivationEligibility.value &&
+    !isDeactivatingAccount.value &&
+    Boolean(deactivationEligibility.value?.allowed),
+)
+
+const getDeactivationErrorDetails = (error: unknown) => {
+  const errorRecord = asRecord(error)
+  const responseData = asRecord(errorRecord?.data)
+  const nestedData = asRecord(responseData?.data)
+  const blockers = nestedData?.blockers
+  const eligibility =
+    typeof nestedData?.allowed === "boolean" && Array.isArray(blockers)
+      ? (nestedData as DeactivationEligibilityResponse)
+      : null
+
+  return {
+    eligibility,
+    message:
+      asNonEmptyString(responseData?.statusMessage) ||
+      asNonEmptyString(responseData?.message) ||
+      asNonEmptyString(errorRecord?.statusMessage) ||
+      asNonEmptyString(errorRecord?.message) ||
+      "Unable to check account deactivation right now.",
+  }
+}
+
 const revokePendingAvatarPreview = () => {
   if (!pendingAvatarPreviewUrl.value) return
   URL.revokeObjectURL(pendingAvatarPreviewUrl.value)
@@ -308,6 +389,54 @@ const closeEditProfileModal = () => {
   avatarUploadError.value = ""
   pendingAvatarFile.value = null
   revokePendingAvatarPreview()
+}
+
+const openDeactivateAccountModal = async () => {
+  showDeactivateAccountModal.value = true
+  isLoadingDeactivationEligibility.value = true
+  deactivateAccountError.value = ""
+  deactivationEligibility.value = null
+
+  try {
+    deactivationEligibility.value = await $fetch<DeactivationEligibilityResponse>(
+      "/api/account/deactivation-eligibility",
+    )
+  } catch (error) {
+    const details = getDeactivationErrorDetails(error)
+    deactivationEligibility.value = details.eligibility
+    deactivateAccountError.value = details.message
+  } finally {
+    isLoadingDeactivationEligibility.value = false
+  }
+}
+
+const closeDeactivateAccountModal = () => {
+  if (isDeactivatingAccount.value) return
+  showDeactivateAccountModal.value = false
+  deactivateAccountError.value = ""
+  deactivationEligibility.value = null
+}
+
+const deactivateAccount = async () => {
+  if (!canDeactivateAccount.value) return
+
+  isDeactivatingAccount.value = true
+  deactivateAccountError.value = ""
+
+  try {
+    await $fetch("/api/account/deactivate", { method: "POST" })
+    await Promise.allSettled([
+      supabase.auth.signOut(),
+      $fetch("/api/auth/logout", { method: "POST" }),
+    ])
+    await navigateTo("/")
+  } catch (error) {
+    const details = getDeactivationErrorDetails(error)
+    deactivationEligibility.value = details.eligibility ?? deactivationEligibility.value
+    deactivateAccountError.value = details.message
+  } finally {
+    isDeactivatingAccount.value = false
+  }
 }
 
 const triggerAvatarUpload = () => {
@@ -366,6 +495,46 @@ const uploadAvatarFile = async (file: File) => {
   }
 
   return signedUpload.publicUrl
+}
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  const maybeError = error as {
+    data?: {
+      statusMessage?: string
+      message?: string
+    }
+    message?: string
+    statusMessage?: string
+  }
+
+  return (
+    maybeError?.data?.statusMessage ||
+    maybeError?.data?.message ||
+    maybeError?.statusMessage ||
+    maybeError?.message ||
+    fallback
+  )
+}
+
+const getDeletionEligibilityPayload = (
+  error: unknown,
+): AccountDeletionEligibilityResponse | null => {
+  const maybeError = error as {
+    data?: AccountDeletionEligibilityResponse | { data?: AccountDeletionEligibilityResponse }
+  }
+
+  if (maybeError?.data && "eligible" in maybeError.data && "reasons" in maybeError.data) {
+    return maybeError.data
+  }
+
+  const nestedData = (maybeError?.data as { data?: AccountDeletionEligibilityResponse } | undefined)
+    ?.data
+
+  if (nestedData && "eligible" in nestedData && "reasons" in nestedData) {
+    return nestedData
+  }
+
+  return null
 }
 
 const checkUsernameAvailability = async (username: string) => {
@@ -458,6 +627,85 @@ const saveProfile = async () => {
       error instanceof Error ? error.message : "Unable to save your profile right now."
   } finally {
     isSavingProfile.value = false
+  }
+}
+
+const loadDeletionEligibility = async () => {
+  isLoadingDeletionEligibility.value = true
+  deleteAccountError.value = ""
+
+  try {
+    deletionEligibility.value =
+      await $fetch<AccountDeletionEligibilityResponse>("/api/account/deletion")
+  } catch (error) {
+    deletionEligibility.value = null
+    deleteAccountError.value = getErrorMessage(
+      error,
+      "We could not check whether your account is ready for deletion.",
+    )
+  } finally {
+    isLoadingDeletionEligibility.value = false
+  }
+}
+
+const openDeleteAccountModal = async () => {
+  showDeleteAccountModal.value = true
+  deleteConfirmationText.value = ""
+  deleteAccountError.value = ""
+  deletionEligibility.value = null
+  await loadDeletionEligibility()
+}
+
+const closeDeleteAccountModal = () => {
+  showDeleteAccountModal.value = false
+  deleteConfirmationText.value = ""
+  deleteAccountError.value = ""
+  deletionEligibility.value = null
+}
+
+const deleteAccount = async () => {
+  if (!canDeleteAccount.value) return
+
+  isDeletingAccount.value = true
+  deleteAccountError.value = ""
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      throw new Error("You must be signed in to delete your account.")
+    }
+
+    await $fetch("/api/account/deletion", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: {
+        confirmation: deleteConfirmationText.value.trim(),
+      },
+    })
+
+    await supabase.auth.signOut()
+    await navigateTo("/?accountDeleted=1", { replace: true })
+  } catch (error) {
+    const eligibilityPayload = getDeletionEligibilityPayload(error)
+
+    if (eligibilityPayload) {
+      deletionEligibility.value = eligibilityPayload
+    } else {
+      await loadDeletionEligibility()
+    }
+
+    deleteAccountError.value = getErrorMessage(
+      error,
+      "We could not delete your account right now. Please try again.",
+    )
+  } finally {
+    isDeletingAccount.value = false
   }
 }
 </script>
@@ -717,6 +965,7 @@ const saveProfile = async () => {
             <button
               type="button"
               class="h-11 w-[137px] rounded-[10px] bg-cinnabar-red px-4 text-[15px] font-normal tracking-[0.45px] text-white transition hover:brightness-95"
+              @click="openDeactivateAccountModal"
             >
               Deactivate
             </button>
@@ -728,13 +977,14 @@ const saveProfile = async () => {
             <div>
               <h3 class="text-[20px] font-medium text-noble-black/90">Delete Account</h3>
               <p class="mt-1 text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-                Permanently delete your account and all data
+                Permanently delete your account and remove your visible personal data
               </p>
             </div>
 
             <button
               type="button"
               class="h-11 w-[137px] rounded-[10px] bg-cinnabar-red px-4 text-[15px] font-normal tracking-[0.45px] text-white transition hover:brightness-95"
+              @click="openDeleteAccountModal"
             >
               Delete
             </button>
@@ -743,6 +993,177 @@ const saveProfile = async () => {
       </section>
 
       <Teleport to="body">
+        <div
+          v-if="showDeleteAccountModal"
+          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="closeDeleteAccountModal"
+          />
+          <div
+            class="relative z-10 w-full max-w-2xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h2 class="text-[26px] font-semibold text-cinnabar-red">
+                  {{ deletionEligibility?.eligible ? "Delete Account" : "Cannot Delete Account" }}
+                </h2>
+                <p class="mt-1 text-[15px] tracking-[0.45px] text-noble-black/70">
+                  {{
+                    deletionEligibility?.eligible
+                      ? "This action is permanent and cannot be undone."
+                      : "Your account cannot be deleted due to the following:"
+                  }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere"
+                @click="closeDeleteAccountModal"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6L18 18"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div
+              class="mt-6 rounded-[20px] border border-cinnabar-red/20 bg-cinnabar-red/5 px-5 py-4 text-[15px] text-noble-black/85"
+            >
+              Deleting your account removes your profile, credentials, listings, and visible user
+              content where possible. Required financial and transaction records are retained in an
+              anonymized form for compliance.
+            </div>
+
+            <div v-if="isLoadingDeletionEligibility" class="mt-6 space-y-3 animate-pulse">
+              <div class="h-5 w-56 rounded-lg bg-cinnamon-ice/70" />
+              <div class="h-20 rounded-[18px] bg-cinnamon-ice/50" />
+              <div class="h-20 rounded-[18px] bg-cinnamon-ice/50" />
+            </div>
+
+            <template v-else>
+              <div
+                v-if="deletionEligibility?.eligible"
+                class="mt-6 rounded-[20px] border border-success-green/25 bg-success-green/10 px-5 py-4"
+              >
+                <h3 class="text-[18px] font-semibold text-noble-black">
+                  Your account is ready to be deleted
+                </h3>
+                <p class="mt-2 text-[15px] tracking-[0.45px] text-noble-black/75">
+                  Please confirm that you want to permanently delete your account. This action
+                  cannot be undone.
+                </p>
+              </div>
+
+              <div
+                v-else-if="deletionBlockingReasons.length > 0"
+                class="mt-6 rounded-[20px] border border-amber-300 bg-amber-50 px-5 py-4"
+              >
+                <h3 class="text-[18px] font-semibold text-noble-black">Cannot Delete Account</h3>
+                <p class="mt-2 text-[15px] tracking-[0.45px] text-noble-black/75">
+                  Your account cannot be deleted due to the following:
+                </p>
+
+                <div class="mt-4 space-y-3">
+                  <div
+                    v-for="reason in deletionBlockingReasons"
+                    :key="reason.code"
+                    class="rounded-[16px] border border-amber-200 bg-white px-4 py-4"
+                  >
+                    <p class="text-[16px] font-semibold text-noble-black">{{ reason.title }}</p>
+                    <p class="mt-2 text-[15px] tracking-[0.45px] text-noble-black/80">
+                      {{ reason.message }}
+                    </p>
+                    <div v-if="reason.details?.length" class="mt-3 space-y-2">
+                      <div
+                        v-for="detail in reason.details"
+                        :key="`${reason.code}-${detail.title}-${detail.subtitle ?? ''}`"
+                        class="rounded-[14px] bg-amber-50 px-3 py-3"
+                      >
+                        <p class="text-[15px] font-medium text-noble-black">
+                          {{ detail.title }}
+                        </p>
+                        <p v-if="detail.subtitle" class="mt-1 text-[14px] text-noble-black/70">
+                          {{ detail.subtitle }}
+                        </p>
+                      </div>
+                    </div>
+                    <p class="mt-2 text-[14px] font-medium text-burning-orange">
+                      {{ reason.nextStep }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-else-if="!deleteAccountError"
+                class="mt-6 rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-4 text-[15px] text-noble-black/75"
+              >
+                We could not determine your deletion eligibility yet. Please refresh this check and
+                try again.
+              </div>
+
+              <div v-if="deletionEligibility?.eligible" class="mt-6 space-y-3">
+                <label class="block space-y-2">
+                  <span class="text-[15px] font-medium text-noble-black">
+                    Type <span class="font-semibold text-cinnabar-red">DELETE</span> to confirm
+                  </span>
+                  <input
+                    v-model="deleteConfirmationText"
+                    type="text"
+                    autocomplete="off"
+                    class="w-full rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 text-[15px] uppercase text-noble-black outline-none transition focus:border-cinnabar-red"
+                    placeholder="DELETE"
+                    @input="
+                      deleteConfirmationText = (
+                        $event.target as HTMLInputElement
+                      ).value.toUpperCase()
+                    "
+                  />
+                </label>
+              </div>
+            </template>
+
+            <p v-if="deleteAccountError" class="mt-5 text-sm text-cinnabar-red">
+              {{ deleteAccountError }}
+            </p>
+
+            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream"
+                :disabled="isLoadingDeletionEligibility || isDeletingAccount"
+                @click="loadDeletionEligibility"
+              >
+                Refresh Check
+              </button>
+              <div class="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream"
+                  @click="closeDeleteAccountModal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-11 items-center justify-center rounded-[10px] bg-cinnabar-red px-6 text-[15px] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!canDeleteAccount"
+                  @click="deleteAccount"
+                >
+                  {{ isDeletingAccount ? "Deleting..." : "Permanently Delete Account" }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div
           v-if="showEditProfileModal"
           class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
@@ -906,6 +1327,109 @@ const saveProfile = async () => {
                 @click="saveProfile"
               >
                 {{ isSavingProfile ? "Saving..." : "Save Changes" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <Teleport to="body">
+        <div
+          v-if="showDeactivateAccountModal"
+          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="closeDeactivateAccountModal"
+          />
+          <div
+            class="relative z-10 w-full max-w-xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-[13px] font-semibold uppercase tracking-[0.2em] text-cinnabar-red">
+                  Danger Zone
+                </p>
+                <h2 class="mt-2 text-[26px] font-semibold text-noble-black">Deactivate account?</h2>
+                <p class="mt-2 text-[15px] leading-6 tracking-[0.45px] text-noble-black/70">
+                  Your public profile and listings will be hidden. Your history stays saved, and you
+                  can reactivate later by signing in again.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isDeactivatingAccount"
+                @click="closeDeactivateAccountModal"
+              >
+                <span class="sr-only">Close deactivation dialog</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6L18 18"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div class="mt-7 rounded-[18px] border border-cinnamon-ice bg-cream p-5">
+              <p
+                v-if="isLoadingDeactivationEligibility"
+                class="text-[15px] tracking-[0.45px] text-noble-black/70"
+              >
+                Checking active rentals, future bookings, and open disputes...
+              </p>
+
+              <template v-else-if="deactivationEligibility?.blockers.length">
+                <h3 class="text-[17px] font-semibold text-noble-black">Deactivation is blocked</h3>
+                <p class="mt-2 text-[14px] leading-6 tracking-[0.42px] text-noble-black/70">
+                  Resolve these items first so other users are not left with active obligations.
+                </p>
+                <ul class="mt-4 space-y-3">
+                  <li
+                    v-for="blocker in deactivationEligibility.blockers"
+                    :key="blocker.code"
+                    class="rounded-[14px] border border-cinnabar-red/20 bg-white px-4 py-3 text-[14px] leading-5 text-noble-black/80"
+                  >
+                    {{ blocker.message }}
+                  </li>
+                </ul>
+              </template>
+
+              <template v-else-if="deactivationEligibility?.allowed">
+                <h3 class="text-[17px] font-semibold text-noble-black">Ready to deactivate</h3>
+                <p class="mt-2 text-[14px] leading-6 tracking-[0.42px] text-noble-black/70">
+                  No active rentals, future confirmed bookings, or open disputes were found.
+                </p>
+              </template>
+
+              <p v-else class="text-[15px] tracking-[0.45px] text-noble-black/70">
+                We could not confirm your eligibility yet. Try again before deactivating.
+              </p>
+            </div>
+
+            <p v-if="deactivateAccountError" class="mt-5 text-sm text-cinnabar-red">
+              {{ deactivateAccountError }}
+            </p>
+
+            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isDeactivatingAccount"
+                @click="closeDeactivateAccountModal"
+              >
+                Keep Account Active
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-11 items-center justify-center rounded-[10px] bg-cinnabar-red px-6 text-[15px] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!canDeactivateAccount"
+                @click="deactivateAccount"
+              >
+                {{ isDeactivatingAccount ? "Deactivating..." : "Deactivate Account" }}
               </button>
             </div>
           </div>

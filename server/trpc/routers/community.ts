@@ -195,6 +195,12 @@ const buildRequestWhereSql = (
 ) => {
   const clauses: Prisma.Sql[] = []
 
+  if (viewerUserId) {
+    clauses.push(Prisma.sql`(u."status" = 'ACTIVE'::"UserStatus" OR b."userId" = ${viewerUserId})`)
+  } else {
+    clauses.push(Prisma.sql`u."status" = 'ACTIVE'::"UserStatus"`)
+  }
+
   if (options.requestId !== undefined) {
     clauses.push(Prisma.sql`r."id" = ${options.requestId}`)
   }
