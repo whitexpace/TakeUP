@@ -547,6 +547,22 @@ const promptText = computed(() =>
   props.context?.reviewType ? reviewPromptLabelMap[props.context.reviewType] : "",
 )
 
+const statusMessage = computed(() => {
+  if (isUploadingImages.value) {
+    return `Uploading images... ${uploadProgress.value}%`
+  }
+
+  if (isSavingDraft.value) {
+    return "Saving draft..."
+  }
+
+  if (isSubmitting.value || isFinalizingSubmit.value) {
+    return "Submitting review..."
+  }
+
+  return ""
+})
+
 const closeModal = async () => {
   if (isSubmitting.value || isSavingDraft.value || isUploadingImages.value) return
 
@@ -750,10 +766,10 @@ const submitReview = async () => {
           </label>
 
           <p
-            v-if="(isSubmitting || isSavingDraft || isUploadingImages) && isItemReview"
+            v-if="statusMessage"
             class="rounded-2xl border border-cinnamon-ice bg-cream/50 px-4 py-3 text-sm text-noble-black/70"
           >
-            Uploading images... {{ uploadProgress }}%
+            {{ statusMessage }}
           </p>
 
           <p
