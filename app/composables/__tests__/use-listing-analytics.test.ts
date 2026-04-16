@@ -5,6 +5,7 @@ const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
   summary: {
     totalViews: 10,
     totalBookings: 2,
+    totalBookingRequests: 5,
     totalCompletedTransactions: 1,
     totalRevenue: 250,
     availabilityDays: 12,
@@ -12,16 +13,21 @@ const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
     bookingRate: 20,
     completionRate: 50,
     utilizationRate: 25,
+    overallItemRating: 4.5,
   },
   listings: [
     {
       listingId: "item-1",
       itemName: "Wireless Mouse",
       status: "AVAILABLE",
+      rating: 4.5,
+      rentalFee: 500,
+      freeToBorrow: false,
       thumbnailImage: null,
       categories: ["ELECTRONICS"],
       totalViews: 10,
       totalBookings: 2,
+      totalBookingRequests: 5,
       totalCompletedTransactions: 1,
       totalRevenue: 250,
       availabilityDays: 12,
@@ -30,6 +36,18 @@ const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
       completionRate: 50,
       utilizationRate: 25,
     },
+  ],
+  topViewedItems: [
+    { itemId: "item-1", name: "Wireless Mouse", thumbnailImage: null, viewCount: 10, bookingCount: 2, rentalFee: 500, freeToBorrow: false },
+  ],
+  topRequestedItems: [
+    { itemId: "item-1", name: "Wireless Mouse", thumbnailImage: null, requestCount: 5, bookingCount: 2, rentalFee: 500, freeToBorrow: false },
+  ],
+  topBookedItems: [
+    { itemId: "item-1", name: "Wireless Mouse", thumbnailImage: null, bookingCount: 2, rentalFee: 500, freeToBorrow: false },
+  ],
+  itemRatings: [
+    { itemId: "item-1", name: "Wireless Mouse", thumbnailImage: null, rating: 4.5, bookingCount: 2, rentalFee: 500, freeToBorrow: false },
   ],
   categoryBreakdown: [{ category: "ELECTRONICS", count: 1 }],
   range: "all",
@@ -51,13 +69,23 @@ describe("useListingAnalytics", () => {
     vi.unstubAllGlobals()
   })
 
-  it("fetches listing analytics and exposes derived state", async () => {
+  it("fetches listing analytics and exposes derived state including ranked lists", async () => {
     const response = makeAnalyticsResponse()
     const fetchMock = vi.fn().mockResolvedValue(response)
     vi.stubGlobal("$fetch", fetchMock)
 
-    const { fetchAnalytics, listings, summary, categoryBreakdown, hasListings, hasActivity } =
-      useListingAnalytics()
+    const {
+      fetchAnalytics,
+      listings,
+      summary,
+      categoryBreakdown,
+      topViewedItems,
+      topRequestedItems,
+      topBookedItems,
+      itemRatings,
+      hasListings,
+      hasActivity,
+    } = useListingAnalytics()
     await fetchAnalytics()
 
     expect(fetchMock).toHaveBeenCalledWith("/api/account/listing-analytics", {
@@ -65,8 +93,14 @@ describe("useListingAnalytics", () => {
       headers: { authorization: "Bearer token-123" },
     })
     expect(summary.value?.totalViews).toBe(10)
+    expect(summary.value?.totalBookingRequests).toBe(5)
+    expect(summary.value?.overallItemRating).toBe(4.5)
     expect(listings.value).toHaveLength(1)
     expect(categoryBreakdown.value).toEqual([{ category: "ELECTRONICS", count: 1 }])
+    expect(topViewedItems.value).toHaveLength(1)
+    expect(topRequestedItems.value).toHaveLength(1)
+    expect(topBookedItems.value).toHaveLength(1)
+    expect(itemRatings.value).toHaveLength(1)
     expect(hasListings.value).toBe(true)
     expect(hasActivity.value).toBe(true)
   })

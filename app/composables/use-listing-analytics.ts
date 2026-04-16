@@ -72,6 +72,10 @@ export const useListingAnalytics = () => {
   const listings = computed(() => analytics.value?.listings ?? [])
   const summary = computed(() => analytics.value?.summary ?? null)
   const categoryBreakdown = computed(() => analytics.value?.categoryBreakdown ?? [])
+  const topViewedItems = computed(() => analytics.value?.topViewedItems ?? [])
+  const topRequestedItems = computed(() => analytics.value?.topRequestedItems ?? [])
+  const topBookedItems = computed(() => analytics.value?.topBookedItems ?? [])
+  const itemRatings = computed(() => analytics.value?.itemRatings ?? [])
   const hasListings = computed(() => listings.value.length > 0)
   const hasActivity = computed(() => {
     const current = summary.value
@@ -92,6 +96,10 @@ export const useListingAnalytics = () => {
     summary,
     listings,
     categoryBreakdown,
+    topViewedItems,
+    topRequestedItems,
+    topBookedItems,
+    itemRatings,
     isLoading,
     error,
     hasFetched,
