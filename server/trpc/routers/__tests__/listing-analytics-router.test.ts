@@ -245,35 +245,37 @@ describe("listingAnalyticsRouter", () => {
       }),
     ])
     // Return booking requests for ranking
-    const bookingFindMany = vi.fn().mockImplementation((args: { where: { status: { in: string[] } } }) => {
-      if (args.where.status.in.includes("PENDING")) {
-        // Non-cancelled requests query
+    const bookingFindMany = vi
+      .fn()
+      .mockImplementation((args: { where: { status: { in: string[] } } }) => {
+        if (args.where.status.in.includes("PENDING")) {
+          // Non-cancelled requests query
+          return Promise.resolve([
+            { itemId: ITEM_ID },
+            { itemId: ITEM_ID },
+            { itemId: ITEM_ID },
+            { itemId: DEACTIVATED_ITEM_ID },
+          ])
+        }
+        // Accepted bookings query (with date ranges)
         return Promise.resolve([
-          { itemId: ITEM_ID },
-          { itemId: ITEM_ID },
-          { itemId: ITEM_ID },
-          { itemId: DEACTIVATED_ITEM_ID },
+          {
+            itemId: ITEM_ID,
+            startDate: new Date("2026-04-01"),
+            endDate: new Date("2026-04-03"),
+          },
+          {
+            itemId: DEACTIVATED_ITEM_ID,
+            startDate: new Date("2026-04-01"),
+            endDate: new Date("2026-04-02"),
+          },
+          {
+            itemId: DEACTIVATED_ITEM_ID,
+            startDate: new Date("2026-04-03"),
+            endDate: new Date("2026-04-04"),
+          },
         ])
-      }
-      // Accepted bookings query (with date ranges)
-      return Promise.resolve([
-        {
-          itemId: ITEM_ID,
-          startDate: new Date("2026-04-01"),
-          endDate: new Date("2026-04-03"),
-        },
-        {
-          itemId: DEACTIVATED_ITEM_ID,
-          startDate: new Date("2026-04-01"),
-          endDate: new Date("2026-04-02"),
-        },
-        {
-          itemId: DEACTIVATED_ITEM_ID,
-          startDate: new Date("2026-04-03"),
-          endDate: new Date("2026-04-04"),
-        },
-      ])
-    })
+      })
 
     const caller = listingAnalyticsRouter.createCaller(
       makeContext({ itemFindMany, bookingFindMany }),
@@ -348,9 +350,7 @@ describe("listingAnalyticsRouter", () => {
   })
 
   it("returns empty ranked lists when no items have activity", async () => {
-    const itemFindMany = vi.fn().mockResolvedValue([
-      makeListing({ viewCount: 0, rating: 0 }),
-    ])
+    const itemFindMany = vi.fn().mockResolvedValue([makeListing({ viewCount: 0, rating: 0 })])
     const bookingFindMany = vi.fn().mockResolvedValue([])
 
     const caller = listingAnalyticsRouter.createCaller(

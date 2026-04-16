@@ -127,13 +127,7 @@ onMounted(() => {
           <p class="text-xs font-semibold text-noble-black/60">{{ card.label }}</p>
           <p class="mt-3 text-lg font-bold text-burning-orange">{{ card.value }}</p>
           <p class="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-estate">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              class="shrink-0"
-            >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" class="shrink-0">
               <path
                 d="M4.38 4.38L7.5 4.38"
                 stroke="currentColor"
@@ -176,8 +170,8 @@ onMounted(() => {
       >
         <p class="text-lg font-bold text-noble-black">No data yet</p>
         <p class="mt-1 text-sm text-noble-black/70">
-          Your listings are ready, but they don't have views, bookings, or completed
-          transactions yet.
+          Your listings are ready, but they don't have views, bookings, or completed transactions
+          yet.
         </p>
       </section>
 
@@ -187,7 +181,10 @@ onMounted(() => {
         <article class="rounded-2xl border border-cinnamon-ice bg-cream p-5 sm:p-6">
           <div class="flex items-center justify-between">
             <h2 class="text-xl font-bold text-noble-black">Top viewed items</h2>
-            <NuxtLink class="text-xs font-semibold text-burning-orange" to="/account/analytics/top-viewed">
+            <NuxtLink
+              class="text-xs font-semibold text-burning-orange"
+              to="/account/analytics/top-viewed"
+            >
               View All
             </NuxtLink>
           </div>
@@ -216,7 +213,8 @@ onMounted(() => {
               <div class="min-w-0 flex-1">
                 <p class="truncate text-xs font-semibold text-noble-black">{{ item.name }}</p>
                 <p class="text-xs font-normal text-noble-black/60">
-                  {{ item.bookingCount }} bookings • {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
+                  {{ item.bookingCount }} bookings •
+                  {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
                 </p>
               </div>
               <span class="text-xs font-semibold text-burning-orange">{{
@@ -231,7 +229,10 @@ onMounted(() => {
         <article class="rounded-2xl border border-cinnamon-ice bg-cream p-5 sm:p-6">
           <div class="flex items-center justify-between">
             <h2 class="text-xl font-bold text-noble-black">Top booked items</h2>
-            <NuxtLink class="text-xs font-semibold text-burning-orange" to="/account/analytics/top-booked">
+            <NuxtLink
+              class="text-xs font-semibold text-burning-orange"
+              to="/account/analytics/top-booked"
+            >
               View All
             </NuxtLink>
           </div>
@@ -260,7 +261,8 @@ onMounted(() => {
               <div class="min-w-0 flex-1">
                 <p class="truncate text-xs font-semibold text-noble-black">{{ item.name }}</p>
                 <p class="text-xs font-normal text-noble-black/60">
-                  {{ item.bookingCount }} bookings • {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
+                  {{ item.bookingCount }} bookings •
+                  {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
                 </p>
               </div>
               <span class="text-xs font-semibold text-burning-orange">{{
@@ -275,7 +277,10 @@ onMounted(() => {
         <article class="rounded-2xl border border-cinnamon-ice bg-cream p-5 sm:p-6">
           <div class="flex items-center justify-between">
             <h2 class="text-xl font-bold text-noble-black">Top requested items</h2>
-            <NuxtLink class="text-xs font-semibold text-burning-orange" to="/account/analytics/top-requested">
+            <NuxtLink
+              class="text-xs font-semibold text-burning-orange"
+              to="/account/analytics/top-requested"
+            >
               View All
             </NuxtLink>
           </div>
@@ -304,7 +309,8 @@ onMounted(() => {
               <div class="min-w-0 flex-1">
                 <p class="truncate text-xs font-semibold text-noble-black">{{ item.name }}</p>
                 <p class="text-xs font-normal text-noble-black/60">
-                  {{ item.bookingCount }} bookings • {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
+                  {{ item.bookingCount }} bookings •
+                  {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
                 </p>
               </div>
               <span class="text-xs font-semibold text-burning-orange">{{
@@ -319,7 +325,10 @@ onMounted(() => {
         <article class="rounded-2xl border border-cinnamon-ice bg-cream p-5 sm:p-6">
           <div class="flex items-center justify-between">
             <h2 class="text-xl font-bold text-noble-black">Item ratings</h2>
-            <NuxtLink class="text-xs font-semibold text-burning-orange" to="/account/analytics/item-ratings">
+            <NuxtLink
+              class="text-xs font-semibold text-burning-orange"
+              to="/account/analytics/item-ratings"
+            >
               View All
             </NuxtLink>
           </div>
@@ -348,10 +357,13 @@ onMounted(() => {
               <div class="min-w-0 flex-1">
                 <p class="truncate text-xs font-semibold text-noble-black">{{ item.name }}</p>
                 <p class="text-xs font-normal text-noble-black/60">
-                  {{ item.bookingCount }} bookings • {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
+                  {{ item.bookingCount }} bookings •
+                  {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
                 </p>
               </div>
-              <span class="text-xs font-normal text-noble-black/60">{{ item.rating.toFixed(1) }}</span>
+              <span class="text-xs font-normal text-noble-black/60">{{
+                item.rating.toFixed(1)
+              }}</span>
             </NuxtLink>
           </div>
           <p v-else class="mt-5 text-sm text-noble-black/65">No rating data yet.</p>

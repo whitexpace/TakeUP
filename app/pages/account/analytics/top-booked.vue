@@ -33,21 +33,22 @@ onMounted(() => {
 <template>
   <div class="space-y-6 font-geist text-noble-black">
     <div class="flex items-center gap-3">
-      <NuxtLink
-        to="/account/analytics"
-        class="text-sm text-burning-orange hover:underline"
-      >
+      <NuxtLink to="/account/analytics" class="text-sm text-burning-orange hover:underline">
         ← Back to Analytics
       </NuxtLink>
     </div>
 
     <div>
       <h1 class="text-2xl font-bold text-noble-black">Top Booked Items</h1>
-      <p class="text-lg text-noble-black tracking-wide">All your items ranked by accepted bookings.</p>
+      <p class="text-lg text-noble-black tracking-wide">
+        All your items ranked by accepted bookings.
+      </p>
     </div>
 
     <div v-if="!hasFetched && !error" class="flex items-center justify-center py-16">
-      <div class="h-8 w-8 animate-spin rounded-full border-4 border-burning-orange border-t-transparent" />
+      <div
+        class="h-8 w-8 animate-spin rounded-full border-4 border-burning-orange border-t-transparent"
+      />
     </div>
 
     <div v-else-if="error" class="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
@@ -60,7 +61,10 @@ onMounted(() => {
       </button>
     </div>
 
-    <div v-else-if="!hasListings" class="rounded-2xl border border-cinnamon-ice bg-cream p-8 text-center">
+    <div
+      v-else-if="!hasListings"
+      class="rounded-2xl border border-cinnamon-ice bg-cream p-8 text-center"
+    >
       <p class="text-lg font-semibold text-noble-black">No listings yet</p>
     </div>
 
@@ -90,7 +94,9 @@ onMounted(() => {
             {{ item.totalBookings }} bookings • {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
           </p>
         </div>
-        <span class="text-xs font-semibold text-burning-orange">{{ formatNumber(item.totalBookings) }}</span>
+        <span class="text-xs font-semibold text-burning-orange">{{
+          formatNumber(item.totalBookings)
+        }}</span>
       </NuxtLink>
     </div>
   </div>
