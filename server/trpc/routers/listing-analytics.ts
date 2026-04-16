@@ -39,9 +39,18 @@ type DateWindow = {
   end: Date | null
 }
 
+const nonCancelledBookingStatuses = [
+  BookingStatus.PENDING,
+  BookingStatus.CONFIRMED,
+  BookingStatus.RETURNED,
+  BookingStatus.COMPLETED,
+  BookingStatus.IN_DISPUTE,
+]
+
 type MetricSeed = {
   totalViews: number
   totalBookings: number
+  totalBookingRequests: number
   totalCompletedTransactions: number
   totalRevenue: number
   availabilityDays: number
@@ -52,9 +61,23 @@ type ListingMetricSeed = MetricSeed & {
   listingId: string
   itemName: string
   status: ItemStatus
+  rating: number
+  rentalFee: number
+  freeToBorrow: boolean
   thumbnailImage: string | null
   categories: ItemCategory[]
 }
+
+type RankedItem = {
+  itemId: string
+  name: string
+  thumbnailImage: string | null
+  bookingCount: number
+  rentalFee: number
+  freeToBorrow: boolean
+}
+
+const RANKING_LIMIT = 5
 
 const rangeDays = {
   "7d": 7,
@@ -132,11 +155,19 @@ const emptySummary = () =>
   withRates({
     totalViews: 0,
     totalBookings: 0,
+    totalBookingRequests: 0,
     totalCompletedTransactions: 0,
     totalRevenue: 0,
     availabilityDays: 0,
     bookedDays: 0,
   })
+
+const emptyRankings = () => ({
+  topViewedItems: [] as Array<RankedItem & { viewCount: number }>,
+  topRequestedItems: [] as Array<RankedItem & { requestCount: number }>,
+  topBookedItems: [] as Array<RankedItem & { bookingCount: number }>,
+  itemRatings: [] as Array<RankedItem & { rating: number }>,
+})
 
 export const listingAnalyticsRouter = router({
   list: protectedProcedure.input(listingAnalyticsQuerySchema).query(async ({ ctx, input }) => {
@@ -160,6 +191,9 @@ export const listingAnalyticsRouter = router({
         name: true,
         status: true,
         viewCount: true,
+        rating: true,
+        rentalFee: true,
+        freeToBorrow: true,
         images: {
           select: {
             path: true,
@@ -179,8 +213,9 @@ export const listingAnalyticsRouter = router({
 
     if (listings.length === 0) {
       return {
-        summary: emptySummary(),
+        summary: { ...emptySummary(), overallItemRating: 0 },
         listings: [],
+        ...emptyRankings(),
         categoryBreakdown: [],
         range: input.range,
       }
@@ -188,7 +223,7 @@ export const listingAnalyticsRouter = router({
 
     const listingIds = listings.map((listing) => listing.id)
 
-    const [bookings, completedTransactions, availability] = await Promise.all([
+    const [bookings, bookingRequests, completedTransactions, availability] = await Promise.all([
       ctx.prisma.booking.findMany({
         where: {
           lenderId: ctx.user.id,
@@ -200,6 +235,17 @@ export const listingAnalyticsRouter = router({
           itemId: true,
           startDate: true,
           endDate: true,
+        },
+      }),
+      ctx.prisma.booking.findMany({
+        where: {
+          lenderId: ctx.user.id,
+          itemId: { in: listingIds },
+          status: { in: nonCancelledBookingStatuses },
+          ...bookingDateWhere,
+        },
+        select: {
+          itemId: true,
         },
       }),
       ctx.prisma.rentalTransaction.findMany({
@@ -235,6 +281,11 @@ export const listingAnalyticsRouter = router({
       bookingsByItem.set(booking.itemId, ranges)
     }
 
+    const requestCountByItem = new Map<string, number>()
+    for (const request of bookingRequests) {
+      requestCountByItem.set(request.itemId, (requestCountByItem.get(request.itemId) ?? 0) + 1)
+    }
+
     const availabilityByItem = new Map<string, DateRange[]>()
     for (const slot of availability) {
       const ranges = availabilityByItem.get(slot.itemId) ?? []
@@ -256,15 +307,20 @@ export const listingAnalyticsRouter = router({
       const bookingRanges = bookingsByItem.get(listing.id) ?? []
       const availabilityRanges = availabilityByItem.get(listing.id) ?? []
       const transactionTotals = transactionsByItem.get(listing.id) ?? { count: 0, revenue: 0 }
+      const requestCount = requestCountByItem.get(listing.id) ?? 0
 
       const metrics: ListingMetricSeed = {
         listingId: listing.id,
         itemName: listing.name,
         status: listing.status,
+        rating: listing.rating,
+        rentalFee: listing.rentalFee,
+        freeToBorrow: listing.freeToBorrow,
         thumbnailImage: getPrimaryImage(listing.images),
         categories: listing.categories.map((entry) => entry.category),
         totalViews: listing.viewCount,
         totalBookings: bookingRanges.length,
+        totalBookingRequests: requestCount,
         totalCompletedTransactions: transactionTotals.count,
         totalRevenue: Number(transactionTotals.revenue.toFixed(2)),
         availabilityDays: countMergedDays(availabilityRanges, dateWindow),
@@ -278,6 +334,7 @@ export const listingAnalyticsRouter = router({
       (totals, listing) => ({
         totalViews: totals.totalViews + listing.totalViews,
         totalBookings: totals.totalBookings + listing.totalBookings,
+        totalBookingRequests: totals.totalBookingRequests + listing.totalBookingRequests,
         totalCompletedTransactions:
           totals.totalCompletedTransactions + listing.totalCompletedTransactions,
         totalRevenue: totals.totalRevenue + listing.totalRevenue,
@@ -287,12 +344,21 @@ export const listingAnalyticsRouter = router({
       {
         totalViews: 0,
         totalBookings: 0,
+        totalBookingRequests: 0,
         totalCompletedTransactions: 0,
         totalRevenue: 0,
         availabilityDays: 0,
         bookedDays: 0,
       },
     )
+
+    const ratedItems = analytics.filter((listing) => listing.rating > 0)
+    const overallItemRating =
+      ratedItems.length > 0
+        ? Number(
+            (ratedItems.reduce((sum, item) => sum + item.rating, 0) / ratedItems.length).toFixed(1),
+          )
+        : 0
 
     const categoryCounts = new Map<ItemCategory, number>()
     for (const listing of analytics) {
@@ -301,9 +367,58 @@ export const listingAnalyticsRouter = router({
       }
     }
 
+    const toRankedItem = (listing: (typeof analytics)[number]): RankedItem => ({
+      itemId: listing.listingId,
+      name: listing.itemName,
+      thumbnailImage: listing.thumbnailImage,
+      bookingCount: listing.totalBookings,
+      rentalFee: listing.rentalFee,
+      freeToBorrow: listing.freeToBorrow,
+    })
+
+    const topViewedItems = [...analytics]
+      .sort((a, b) => b.totalViews - a.totalViews)
+      .filter((item) => item.totalViews > 0)
+      .slice(0, RANKING_LIMIT)
+      .map((item) => ({
+        ...toRankedItem(item),
+        viewCount: item.totalViews,
+      }))
+
+    const topRequestedItems = [...analytics]
+      .sort((a, b) => b.totalBookingRequests - a.totalBookingRequests)
+      .filter((item) => item.totalBookingRequests > 0)
+      .slice(0, RANKING_LIMIT)
+      .map((item) => ({
+        ...toRankedItem(item),
+        requestCount: item.totalBookingRequests,
+      }))
+
+    const topBookedItems = [...analytics]
+      .sort((a, b) => b.totalBookings - a.totalBookings)
+      .filter((item) => item.totalBookings > 0)
+      .slice(0, RANKING_LIMIT)
+      .map((item) => toRankedItem(item))
+
+    const itemRatings = [...analytics]
+      .sort((a, b) => b.rating - a.rating)
+      .filter((item) => item.rating > 0)
+      .slice(0, RANKING_LIMIT)
+      .map((item) => ({
+        ...toRankedItem(item),
+        rating: item.rating,
+      }))
+
     return {
-      summary: withRates({ ...summary, totalRevenue: Number(summary.totalRevenue.toFixed(2)) }),
+      summary: {
+        ...withRates({ ...summary, totalRevenue: Number(summary.totalRevenue.toFixed(2)) }),
+        overallItemRating,
+      },
       listings: analytics,
+      topViewedItems,
+      topRequestedItems,
+      topBookedItems,
+      itemRatings,
       categoryBreakdown: Array.from(categoryCounts.entries())
         .map(([category, count]) => ({ category, count }))
         .sort(
