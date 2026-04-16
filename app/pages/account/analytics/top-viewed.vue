@@ -13,9 +13,7 @@ const numberFormatter = new Intl.NumberFormat("en-US")
 const formatNumber = (value: number) => numberFormatter.format(value)
 const formatPrice = (fee: number, free: boolean) => (free ? "Free" : `₱${formatNumber(fee)}`)
 
-const sortedItems = computed(() =>
-  [...listings.value].sort((a, b) => b.totalViews - a.totalViews),
-)
+const sortedItems = computed(() => [...listings.value].sort((a, b) => b.totalViews - a.totalViews))
 
 const getInitials = (name: string) =>
   name
@@ -33,10 +31,7 @@ onMounted(() => {
 <template>
   <div class="space-y-6 font-geist text-noble-black">
     <div class="flex items-center gap-3">
-      <NuxtLink
-        to="/account/analytics"
-        class="text-sm text-burning-orange hover:underline"
-      >
+      <NuxtLink to="/account/analytics" class="text-sm text-burning-orange hover:underline">
         ← Back to Analytics
       </NuxtLink>
     </div>
@@ -48,7 +43,9 @@ onMounted(() => {
 
     <!-- Loading -->
     <div v-if="!hasFetched && !error" class="flex items-center justify-center py-16">
-      <div class="h-8 w-8 animate-spin rounded-full border-4 border-burning-orange border-t-transparent" />
+      <div
+        class="h-8 w-8 animate-spin rounded-full border-4 border-burning-orange border-t-transparent"
+      />
     </div>
 
     <!-- Error -->
@@ -63,7 +60,10 @@ onMounted(() => {
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!hasListings" class="rounded-2xl border border-cinnamon-ice bg-cream p-8 text-center">
+    <div
+      v-else-if="!hasListings"
+      class="rounded-2xl border border-cinnamon-ice bg-cream p-8 text-center"
+    >
       <p class="text-lg font-semibold text-noble-black">No listings yet</p>
     </div>
 
@@ -94,7 +94,9 @@ onMounted(() => {
             {{ item.totalBookings }} bookings • {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
           </p>
         </div>
-        <span class="text-xs font-semibold text-burning-orange">{{ formatNumber(item.totalViews) }}</span>
+        <span class="text-xs font-semibold text-burning-orange">{{
+          formatNumber(item.totalViews)
+        }}</span>
       </NuxtLink>
     </div>
   </div>
