@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useBag } from "../composables/use-bag"
+import { useChat } from "../composables/use-chat"
 import { useLikes } from "../composables/use-likes"
 import type { CommunityOfferNotification } from "~/types/community-requests"
 import type { AppHeaderNotification } from "../types/notifications"
@@ -34,6 +35,7 @@ const emit = defineEmits<{
 
 const { bagCount } = useBag()
 const { likesCount, loadLikesCount } = useLikes()
+const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount } = useChat()
 const route = useRoute()
 const headerRef = ref<HTMLElement | null>(null)
 const showNotifications = ref(false)
@@ -184,6 +186,7 @@ onMounted(() => {
   document.addEventListener("pointerdown", handlePointerDownOutside)
   setupScrollListener()
   void loadLikesCount()
+  void loadChatUnreadCount()
 })
 
 onBeforeUnmount(() => {
@@ -375,6 +378,12 @@ onBeforeUnmount(() => {
             >
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
+            <span
+              v-if="chatUnreadCount > 0"
+              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
+            >
+              {{ chatUnreadCount }}
+            </span>
           </NuxtLink>
           <div class="custom-tooltip">
             Chat
