@@ -197,6 +197,7 @@ const props = defineProps<{
   fromPage?: "likes" | "dashboard"
   isManagement?: boolean
   allowNavigation?: boolean
+  customPath?: string
 }>()
 const emit = defineEmits<{
   likeChanged: [payload: { itemId: string; isLiked: boolean }]
@@ -216,11 +217,13 @@ watch(
   },
 )
 
-const itemDetailPath = computed(() =>
-  buildItemDetailPath({
-    id: String(props.id),
-    name: props.name,
-  }),
+const itemDetailPath = computed(
+  () =>
+    props.customPath ||
+    buildItemDetailPath({
+      id: String(props.id),
+      name: props.name,
+    }),
 )
 
 const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")

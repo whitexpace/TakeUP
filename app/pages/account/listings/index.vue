@@ -18,12 +18,10 @@ const {
   removeStatusFilter,
   removeCategoryFilter,
   clearFilters,
-  toggleStatus,
   loadMore,
   refresh,
 } = useMyListings()
 
-const togglingId = ref<string | null>(null)
 const categorySearch = ref("")
 const isCategoryDropdownOpen = ref(false)
 
@@ -72,17 +70,6 @@ const emptyStateMessage = computed(() => {
 
 const toggleCategoryMenu = () => {
   isCategoryDropdownOpen.value = !isCategoryDropdownOpen.value
-}
-
-const handleToggleStatus = async (id: string, status: "AVAILABLE" | "DEACTIVATED") => {
-  togglingId.value = id
-  try {
-    await toggleStatus(id, status)
-  } catch {
-    // error handled inline through page state
-  } finally {
-    togglingId.value = null
-  }
 }
 
 onMounted(() => {
@@ -315,13 +302,7 @@ onMounted(() => {
     </div>
 
     <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <MyListingCard
-        v-for="item in listings"
-        :key="item.id"
-        :item="item"
-        :is-toggling="togglingId === item.id"
-        @toggle-status="handleToggleStatus"
-      />
+      <MyListingCard v-for="item in listings" :key="item.id" :item="item" />
     </div>
 
     <div v-if="hasMore && !isLoading" class="flex justify-center pt-4">

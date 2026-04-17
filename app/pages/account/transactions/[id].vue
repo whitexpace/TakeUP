@@ -772,7 +772,7 @@ const handleReviewSubmitted = async () => {
 
           <TransactionReviewList
             title="Transaction Reviews"
-            :reviews="booking.reviews"
+            :reviews="booking.reviews as any"
             empty-message="No reviews have been submitted for this transaction yet."
           />
         </section>

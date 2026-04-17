@@ -583,9 +583,9 @@ const handleReviewSubmitted = async () => {
 
                   <p class="mt-3 text-sm leading-6 text-noble-black/75">{{ review.reviewText }}</p>
 
-                  <div v-if="review.images.length > 0" class="mt-4 flex flex-wrap gap-3">
+                  <div v-if="(review.images as any[]).length > 0" class="mt-4 flex flex-wrap gap-3">
                     <img
-                      v-for="image in review.images"
+                      v-for="image in review.images as any[]"
                       :key="image"
                       :src="getReviewImageUrl(image)"
                       :alt="`${review.typeLabel} image`"
