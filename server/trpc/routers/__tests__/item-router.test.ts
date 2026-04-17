@@ -435,6 +435,7 @@ describe("itemRouter", () => {
       .mockResolvedValueOnce(null) // check if like exists
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // after create, check like exists
 
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const create = vi.fn().mockResolvedValue({ userId: "user-1", itemId: VALID_UUID })
 
     const caller = itemRouter.createCaller({
@@ -479,6 +480,7 @@ describe("itemRouter", () => {
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists
       .mockResolvedValueOnce(null) // after delete, check like exists
 
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const deleteLike = vi.fn().mockResolvedValue({ userId: "user-1", itemId: VALID_UUID })
 
     const caller = itemRouter.createCaller({
