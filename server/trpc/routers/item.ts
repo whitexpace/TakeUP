@@ -884,50 +884,50 @@ export const itemRouter = router({
       .then(mapItemTaxonomy)
   }),
 
-  byId: publicProcedure.input(itemIdSchema).query(({ ctx, input }) => {
-    return ctx.prisma.item
-      .findFirst({
-        where: {
-          id: input.id,
-          OR: [
-            { lender: { user: { status: "ACTIVE" } } },
-            ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
-          ],
-        },
-        include: {
-          ...buildItemInclude(ctx.user?.id ?? null),
-          bookings: {
-            where: {
-              status: { in: [...blockingBookingStatusFilter] },
-            },
-            select: {
-              id: true,
-              startDate: true,
-              endDate: true,
-            },
+  byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
+    const item = await ctx.prisma.item.findFirst({
+      where: {
+        id: input.id,
+        OR: [
+          { lender: { user: { status: "ACTIVE" } } },
+          ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
+        ],
+      },
+      include: {
+        ...buildItemInclude(ctx.user?.id ?? null),
+        bookings: {
+          where: {
+            status: { in: [...blockingBookingStatusFilter] },
+          },
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
           },
         },
-      })
-      .then(
-        (
-          item:
-            | (ItemWithUserLike & {
-                bookings: Array<{ id: string; startDate: Date; endDate: Date }>
-              })
-            | null,
-        ) =>
-          item
-            ? {
-                ...mapItemTaxonomy(item),
-                bookingBlocks: item.bookings.map((booking) => ({
-                  id: booking.id,
-                  startDate: booking.startDate,
-                  endDate: booking.endDate,
-                  status: "RENTED" as const,
-                })),
-              }
-            : null,
-      )
+      },
+    }) as
+      | (ItemWithUserLike & {
+          bookings: Array<{ id: string; startDate: Date; endDate: Date }>
+        })
+      | null
+
+    if (!item) return null
+
+    // Increment view count (fire-and-forget, don't block the response)
+    ctx.prisma.item
+      .update({ where: { id: item.id }, data: { viewCount: { increment: 1 } } })
+      .catch(() => {})
+
+    return {
+      ...mapItemTaxonomy(item),
+      bookingBlocks: item.bookings.map((booking) => ({
+        id: booking.id,
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        status: "RENTED" as const,
+      })),
+    }
   }),
 
   update: protectedProcedure.input(updateItemSchema).mutation(async ({ ctx, input }) => {
@@ -1185,22 +1185,20 @@ export const itemRouter = router({
     })
 
     if (existingLike) {
-      // Unlike: delete the like
       await ctx.prisma.like.delete({
-        where: {
-          userId_itemId: {
-            userId,
-            itemId,
-          },
-        },
+        where: { userId_itemId: { userId, itemId } },
+      })
+      await ctx.prisma.item.update({
+        where: { id: itemId },
+        data: { likeCount: { decrement: 1 } },
       })
     } else {
-      // Like: create the like
       await ctx.prisma.like.create({
-        data: {
-          userId,
-          itemId,
-        },
+        data: { userId, itemId },
+      })
+      await ctx.prisma.item.update({
+        where: { id: itemId },
+        data: { likeCount: { increment: 1 } },
       })
     }
 
