@@ -294,10 +294,11 @@ describe("itemRouter", () => {
       ],
       bookings: [],
     })
+    const update = vi.fn().mockResolvedValue({ id: VALID_UUID })
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique: findById, findFirst: findById } } as never,
+      prisma: { item: { findUnique: findById, findFirst: findById, update } } as never,
       user: null,
     })
 
@@ -310,6 +311,10 @@ describe("itemRouter", () => {
     )
     expect(result?.reviewsCount).toBe(1)
     expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
+    expect(update).toHaveBeenCalledWith({
+      where: { id: VALID_UUID },
+      data: { viewCount: { increment: 1 } },
+    })
   })
 
   it("update throws NOT_FOUND when item does not exist", async () => {
@@ -426,6 +431,7 @@ describe("itemRouter", () => {
       ],
       bookings: [],
     })
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce(null) // check if like exists
@@ -436,7 +442,7 @@ describe("itemRouter", () => {
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findFirst: itemFindFirst },
+        item: { findFirst: itemFindFirst, update: itemUpdate },
         like: { findUnique: likeFindUnique, create, delete: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
@@ -446,6 +452,10 @@ describe("itemRouter", () => {
 
     expect(create).toHaveBeenCalledWith({
       data: { userId: "user-1", itemId: VALID_UUID },
+    })
+    expect(itemUpdate).toHaveBeenCalledWith({
+      where: { id: VALID_UUID },
+      data: { likeCount: { increment: 1 } },
     })
     expect(result.isLiked).toBe(true)
     expect(result.itemId).toBe(VALID_UUID)
@@ -465,6 +475,7 @@ describe("itemRouter", () => {
       ],
       bookings: [],
     })
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists
@@ -475,7 +486,7 @@ describe("itemRouter", () => {
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findFirst: itemFindFirst },
+        item: { findFirst: itemFindFirst, update: itemUpdate },
         like: { findUnique: likeFindUnique, delete: deleteLike, create: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
@@ -490,6 +501,10 @@ describe("itemRouter", () => {
           itemId: VALID_UUID,
         },
       },
+    })
+    expect(itemUpdate).toHaveBeenCalledWith({
+      where: { id: VALID_UUID },
+      data: { likeCount: { decrement: 1 } },
     })
     expect(result.isLiked).toBe(false)
     expect(result.itemId).toBe(VALID_UUID)
