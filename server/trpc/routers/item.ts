@@ -885,7 +885,7 @@ export const itemRouter = router({
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
-    const item = await ctx.prisma.item.findFirst({
+    const item = (await ctx.prisma.item.findFirst({
       where: {
         id: input.id,
         OR: [
@@ -906,7 +906,7 @@ export const itemRouter = router({
           },
         },
       },
-    }) as
+    })) as
       | (ItemWithUserLike & {
           bookings: Array<{ id: string; startDate: Date; endDate: Date }>
         })
