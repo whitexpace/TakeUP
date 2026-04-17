@@ -48,6 +48,29 @@ export type ConversationDetail = {
   otherParticipant: ChatParticipant | null
 }
 
+type FetchErrorData = {
+  data?: {
+    message?: string
+  }
+}
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "data" in error &&
+    typeof (error as FetchErrorData).data?.message === "string"
+  ) {
+    return (error as FetchErrorData).data?.message ?? fallback
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  return fallback
+}
+
 export const useChat = () => {
   const conversations = ref<ConversationSummary[]>([])
   const activeConversation = ref<ConversationDetail | null>(null)
@@ -67,8 +90,8 @@ export const useChat = () => {
     try {
       const data = await $fetch<ConversationSummary[]>("/api/chat/conversations")
       conversations.value = data
-    } catch (e: any) {
-      error.value = e?.data?.message || "Failed to load conversations"
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, "Failed to load conversations")
       conversations.value = []
     } finally {
       isLoadingConversations.value = false
@@ -88,8 +111,8 @@ export const useChat = () => {
       hasMoreMessages.value = false
       await loadMessages(data.conversationId)
       await markAsRead(data.conversationId)
-    } catch (e: any) {
-      error.value = e?.data?.message || "Failed to open conversation"
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, "Failed to open conversation")
     }
   }
 
@@ -134,8 +157,8 @@ export const useChat = () => {
       }
       nextCursor.value = data.nextCursor
       hasMoreMessages.value = data.hasMore
-    } catch (e: any) {
-      error.value = e?.data?.message || "Failed to load messages"
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, "Failed to load messages")
     } finally {
       isLoadingMessages.value = false
     }
@@ -183,8 +206,8 @@ export const useChat = () => {
       }
 
       return msg
-    } catch (e: any) {
-      error.value = e?.data?.message || "Failed to send message"
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, "Failed to send message")
       return null
     } finally {
       isSending.value = false

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server"
-import type { PrismaClient } from "@prisma/client"
+import type { Prisma, PrismaClient } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure } from "../procedures"
 import {
@@ -25,6 +25,74 @@ type ParticipantInfo = {
   avatarUrl: string | null
 }
 
+const transactionSummarySelect = {
+  id: true,
+  borrowerId: true,
+  lenderId: true,
+  status: true,
+  disputes: { select: { status: true } },
+  item: {
+    select: {
+      id: true,
+      name: true,
+      images: {
+        select: { path: true, isPrimary: true },
+        orderBy: { sortOrder: "asc" },
+        take: 1,
+      },
+    },
+  },
+  borrower: { select: participantSelect },
+  lender: { select: participantSelect },
+} as const
+
+const conversationWithTransactionInclude = {
+  transaction: {
+    select: {
+      id: true,
+      borrowerId: true,
+      lenderId: true,
+      status: true,
+      disputes: { select: { status: true } },
+      item: {
+        select: {
+          id: true,
+          name: true,
+          images: {
+            select: { path: true, isPrimary: true },
+            orderBy: { sortOrder: "asc" },
+            take: 1,
+          },
+        },
+      },
+    },
+  },
+} as const
+
+const conversationListInclude = {
+  transaction: {
+    select: transactionSummarySelect,
+  },
+  messages: {
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    select: { id: true, body: true, senderUserId: true, createdAt: true, isRead: true },
+  },
+} as const
+
+type ConversationWithTransaction = Prisma.ConversationGetPayload<{
+  include: typeof conversationWithTransactionInclude
+}>
+
+type ConversationListEntry = Prisma.ConversationGetPayload<{
+  include: typeof conversationListInclude
+}>
+
+type MessageGroupByRow = {
+  conversationId: string
+  _count: { id: number }
+}
+
 /** Check if a transaction+dispute combo means the chat is expired (read-only). */
 function isConversationExpired(transaction: {
   status: string
@@ -42,39 +110,30 @@ function assertParticipant(
   userId: string,
 ): { otherUserId: string } {
   if (transaction.borrowerId === userId) {
-    if (!transaction.lenderId) throw new TRPCError({ code: "BAD_REQUEST", message: "Transaction has no lender" })
+    if (!transaction.lenderId)
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Transaction has no lender" })
     return { otherUserId: transaction.lenderId }
   }
   if (transaction.lenderId === userId) {
-    if (!transaction.borrowerId) throw new TRPCError({ code: "BAD_REQUEST", message: "Transaction has no borrower" })
+    if (!transaction.borrowerId)
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Transaction has no borrower" })
     return { otherUserId: transaction.borrowerId }
   }
-  throw new TRPCError({ code: "FORBIDDEN", message: "You are not a participant of this conversation" })
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message: "You are not a participant of this conversation",
+  })
 }
 
-async function getConversationWithTransaction(
-  prisma: PrismaClient,
-  conversationId: string,
-) {
-  const conversation = await (prisma as any).conversation.findUnique({
+async function getConversationWithTransaction(prisma: PrismaClient, conversationId: string) {
+  const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    include: {
-      transaction: {
-        select: {
-          id: true,
-          borrowerId: true,
-          lenderId: true,
-          status: true,
-          disputes: { select: { status: true } },
-          item: { select: { id: true, name: true, images: { select: { path: true, isPrimary: true }, orderBy: { sortOrder: "asc" }, take: 1 } } },
-        },
-      },
-    },
+    include: conversationWithTransactionInclude,
   })
   if (!conversation) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" })
   }
-  return conversation
+  return conversation as ConversationWithTransaction
 }
 
 export const chatRouter = router({
@@ -82,24 +141,9 @@ export const chatRouter = router({
   getOrCreateConversation: protectedProcedure
     .input(getOrCreateConversationSchema)
     .mutation(async ({ ctx, input }) => {
-      const transaction = await (ctx.prisma as any).rentalTransaction.findUnique({
+      const transaction = await ctx.prisma.rentalTransaction.findUnique({
         where: { id: input.transactionId },
-        select: {
-          id: true,
-          borrowerId: true,
-          lenderId: true,
-          status: true,
-          disputes: { select: { status: true } },
-          item: {
-            select: {
-              id: true,
-              name: true,
-              images: { select: { path: true, isPrimary: true }, orderBy: { sortOrder: "asc" }, take: 1 },
-            },
-          },
-          borrower: { select: participantSelect },
-          lender: { select: participantSelect },
-        },
+        select: transactionSummarySelect,
       })
 
       if (!transaction) {
@@ -108,12 +152,12 @@ export const chatRouter = router({
 
       assertParticipant(transaction, ctx.user.id)
 
-      let conversation = await (ctx.prisma as any).conversation.findUnique({
+      let conversation = await ctx.prisma.conversation.findUnique({
         where: { transactionId: input.transactionId },
       })
 
       if (!conversation) {
-        conversation = await (ctx.prisma as any).conversation.create({
+        conversation = await ctx.prisma.conversation.create({
           data: { transactionId: input.transactionId },
         })
       }
@@ -132,7 +176,7 @@ export const chatRouter = router({
               thumbnailImage: transaction.item.images?.[0]?.path ?? null,
             }
           : null,
-        otherParticipant: otherUser as ParticipantInfo | null,
+        otherParticipant: (otherUser as ParticipantInfo | null) ?? null,
       }
     }),
 
@@ -140,45 +184,21 @@ export const chatRouter = router({
   listConversations: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user.id
 
-    const conversations = await (ctx.prisma as any).conversation.findMany({
+    const conversations = await ctx.prisma.conversation.findMany({
       where: {
         transaction: {
           OR: [{ borrowerId: userId }, { lenderId: userId }],
         },
       },
-      include: {
-        transaction: {
-          select: {
-            id: true,
-            borrowerId: true,
-            lenderId: true,
-            status: true,
-            disputes: { select: { status: true } },
-            item: {
-              select: {
-                id: true,
-                name: true,
-                images: { select: { path: true, isPrimary: true }, orderBy: { sortOrder: "asc" }, take: 1 },
-              },
-            },
-            borrower: { select: participantSelect },
-            lender: { select: participantSelect },
-          },
-        },
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { id: true, body: true, senderUserId: true, createdAt: true, isRead: true },
-        },
-      },
+      include: conversationListInclude,
       orderBy: { createdAt: "desc" },
     })
 
     // Get unread counts per conversation
-    const conversationIds = conversations.map((c: any) => c.id)
+    const conversationIds = conversations.map((c) => c.id)
     const unreadCounts =
       conversationIds.length > 0
-        ? await (ctx.prisma as any).message.groupBy({
+        ? await ctx.prisma.message.groupBy({
             by: ["conversationId"],
             where: {
               conversationId: { in: conversationIds },
@@ -190,14 +210,12 @@ export const chatRouter = router({
         : []
 
     const unreadMap = new Map(
-      unreadCounts.map((u: any) => [u.conversationId, u._count.id]),
+      (unreadCounts as MessageGroupByRow[]).map((u) => [u.conversationId, u._count.id]),
     )
 
-    return conversations.map((conv: any) => {
+    return (conversations as ConversationListEntry[]).map((conv) => {
       const otherUser =
-        conv.transaction.borrowerId === userId
-          ? conv.transaction.lender
-          : conv.transaction.borrower
+        conv.transaction.borrowerId === userId ? conv.transaction.lender : conv.transaction.borrower
 
       const lastMessage = conv.messages[0] ?? null
 
@@ -212,7 +230,7 @@ export const chatRouter = router({
               thumbnailImage: conv.transaction.item.images?.[0]?.path ?? null,
             }
           : null,
-        otherParticipant: otherUser as ParticipantInfo | null,
+        otherParticipant: (otherUser as ParticipantInfo | null) ?? null,
         lastMessage: lastMessage
           ? {
               id: lastMessage.id,
@@ -228,109 +246,104 @@ export const chatRouter = router({
   }),
 
   /** Fetch messages for a conversation (paginated, chronological) */
-  getMessages: protectedProcedure
-    .input(fetchMessagesSchema)
-    .query(async ({ ctx, input }) => {
-      const conv = await getConversationWithTransaction(ctx.prisma as any, input.conversationId)
-      assertParticipant(conv.transaction, ctx.user.id)
+  getMessages: protectedProcedure.input(fetchMessagesSchema).query(async ({ ctx, input }) => {
+    const conv = await getConversationWithTransaction(ctx.prisma, input.conversationId)
+    assertParticipant(conv.transaction, ctx.user.id)
 
-      const where: any = { conversationId: input.conversationId }
-      if (input.cursor) {
-        const cursorMessage = await (ctx.prisma as any).message.findUnique({
-          where: { id: input.cursor },
-          select: { createdAt: true },
-        })
-        if (cursorMessage) {
-          where.createdAt = { lt: cursorMessage.createdAt }
-        }
-      }
-
-      const messages = await (ctx.prisma as any).message.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: input.limit + 1,
-        select: {
-          id: true,
-          conversationId: true,
-          senderUserId: true,
-          body: true,
-          isRead: true,
-          readAt: true,
-          createdAt: true,
-        },
+    const where: Prisma.MessageWhereInput = { conversationId: input.conversationId }
+    if (input.cursor) {
+      const cursorMessage = await ctx.prisma.message.findUnique({
+        where: { id: input.cursor },
+        select: { createdAt: true },
       })
-
-      const hasMore = messages.length > input.limit
-      const items = hasMore ? messages.slice(0, input.limit) : messages
-
-      return {
-        messages: items.reverse(),
-        nextCursor: hasMore ? items[0]?.id ?? null : null,
-        hasMore,
+      if (cursorMessage) {
+        where.createdAt = { lt: cursorMessage.createdAt }
       }
-    }),
+    }
+
+    const messages = await ctx.prisma.message.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: input.limit + 1,
+      select: {
+        id: true,
+        conversationId: true,
+        senderUserId: true,
+        body: true,
+        isRead: true,
+        readAt: true,
+        createdAt: true,
+      },
+    })
+
+    const hasMore = messages.length > input.limit
+    const items = hasMore ? messages.slice(0, input.limit) : messages
+
+    return {
+      messages: items.reverse(),
+      nextCursor: hasMore ? (items[0]?.id ?? null) : null,
+      hasMore,
+    }
+  }),
 
   /** Send a message */
-  sendMessage: protectedProcedure
-    .input(sendMessageSchema)
-    .mutation(async ({ ctx, input }) => {
-      const conv = await getConversationWithTransaction(ctx.prisma as any, input.conversationId)
-      assertParticipant(conv.transaction, ctx.user.id)
+  sendMessage: protectedProcedure.input(sendMessageSchema).mutation(async ({ ctx, input }) => {
+    const conv = await getConversationWithTransaction(ctx.prisma, input.conversationId)
+    assertParticipant(conv.transaction, ctx.user.id)
 
-      if (isConversationExpired(conv.transaction)) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "This conversation is read-only. The transaction is completed with an open dispute.",
-        })
-      }
-
-      const message = await (ctx.prisma as any).message.create({
-        data: {
-          conversationId: input.conversationId,
-          senderUserId: ctx.user.id,
-          body: input.body.trim(),
-        },
-        select: {
-          id: true,
-          conversationId: true,
-          senderUserId: true,
-          body: true,
-          isRead: true,
-          readAt: true,
-          createdAt: true,
-        },
+    if (isConversationExpired(conv.transaction)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "This conversation is read-only. The transaction is completed with an open dispute.",
       })
+    }
 
-      return message
-    }),
+    const message = await ctx.prisma.message.create({
+      data: {
+        conversationId: input.conversationId,
+        senderUserId: ctx.user.id,
+        body: input.body.trim(),
+      },
+      select: {
+        id: true,
+        conversationId: true,
+        senderUserId: true,
+        body: true,
+        isRead: true,
+        readAt: true,
+        createdAt: true,
+      },
+    })
+
+    return message
+  }),
 
   /** Mark all unread messages in a conversation as read for the current user */
-  markAsRead: protectedProcedure
-    .input(markAsReadSchema)
-    .mutation(async ({ ctx, input }) => {
-      const conv = await getConversationWithTransaction(ctx.prisma as any, input.conversationId)
-      assertParticipant(conv.transaction, ctx.user.id)
+  markAsRead: protectedProcedure.input(markAsReadSchema).mutation(async ({ ctx, input }) => {
+    const conv = await getConversationWithTransaction(ctx.prisma, input.conversationId)
+    assertParticipant(conv.transaction, ctx.user.id)
 
-      const result = await (ctx.prisma as any).message.updateMany({
-        where: {
-          conversationId: input.conversationId,
-          senderUserId: { not: ctx.user.id },
-          isRead: false,
-        },
-        data: {
-          isRead: true,
-          readAt: new Date(),
-        },
-      })
+    const result = await ctx.prisma.message.updateMany({
+      where: {
+        conversationId: input.conversationId,
+        senderUserId: { not: ctx.user.id },
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    })
 
-      return { markedCount: result.count }
-    }),
+    return { markedCount: result.count }
+  }),
 
   /** Get total unread message count across all conversations */
   getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user.id
 
-    const count = await (ctx.prisma as any).message.count({
+    const count = await ctx.prisma.message.count({
       where: {
         senderUserId: { not: userId },
         isRead: false,

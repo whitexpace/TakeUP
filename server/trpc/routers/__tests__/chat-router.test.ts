@@ -1,6 +1,9 @@
 import { TRPCError } from "@trpc/server"
+import type { H3Event } from "h3"
 import { describe, expect, it, vi } from "vitest"
 import { chatRouter } from "../chat"
+import type { Context } from "../../context"
+import type { SessionUser } from "../../../utils/auth-session"
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const OTHER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -9,8 +12,14 @@ const CONV_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
 const MSG_ID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
 const OUTSIDER_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff"
 
-const mockUser = { id: USER_ID, email: "user@up.edu.ph", name: "Test User" }
-const outsiderUser = { id: OUTSIDER_ID, email: "outsider@up.edu.ph", name: "Outsider" }
+const mockUser: SessionUser = { id: USER_ID, email: "user@up.edu.ph", name: "Test User" }
+const outsiderUser: SessionUser = { id: OUTSIDER_ID, email: "outsider@up.edu.ph", name: "Outsider" }
+
+type PrismaMockOverrides = {
+  rentalTransaction?: Record<string, unknown>
+  conversation?: Record<string, unknown>
+  message?: Record<string, unknown>
+}
 
 const makeTransaction = (overrides: Record<string, unknown> = {}) => ({
   id: TX_ID,
@@ -19,8 +28,20 @@ const makeTransaction = (overrides: Record<string, unknown> = {}) => ({
   status: "ONGOING",
   disputes: [],
   item: { id: "item-1", name: "Camera", images: [{ path: "/img/cam.jpg", isPrimary: true }] },
-  borrower: { id: USER_ID, username: "borrower1", firstName: "Test", lastName: "User", avatarUrl: null },
-  lender: { id: OTHER_USER_ID, username: "lender1", firstName: "Other", lastName: "User", avatarUrl: null },
+  borrower: {
+    id: USER_ID,
+    username: "borrower1",
+    firstName: "Test",
+    lastName: "User",
+    avatarUrl: null,
+  },
+  lender: {
+    id: OTHER_USER_ID,
+    username: "lender1",
+    firstName: "Other",
+    lastName: "User",
+    avatarUrl: null,
+  },
   ...overrides,
 })
 
@@ -43,7 +64,7 @@ const makeMessage = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-function makePrisma(overrides: Record<string, any> = {}) {
+function makePrisma(overrides: PrismaMockOverrides = {}) {
   return {
     rentalTransaction: {
       findUnique: vi.fn().mockResolvedValue(makeTransaction()),
@@ -52,7 +73,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversation: {
       findUnique: vi.fn().mockResolvedValue(makeConversation()),
       findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: CONV_ID, transactionId: TX_ID, createdAt: new Date() }),
+      create: vi
+        .fn()
+        .mockResolvedValue({ id: CONV_ID, transactionId: TX_ID, createdAt: new Date() }),
       ...overrides.conversation,
     },
     message: {
@@ -67,15 +90,15 @@ function makePrisma(overrides: Record<string, any> = {}) {
   }
 }
 
-function makeContext(user = mockUser, prismaOverrides: Record<string, any> = {}) {
+function makeContext(user = mockUser, prismaOverrides: PrismaMockOverrides = {}) {
   return {
     user,
-    prisma: makePrisma(prismaOverrides),
-    event: {} as any,
-  }
+    prisma: makePrisma(prismaOverrides) as unknown as Context["prisma"],
+    event: {} as H3Event,
+  } satisfies Context
 }
 
-const caller = (ctx: ReturnType<typeof makeContext>) => chatRouter.createCaller(ctx)
+const caller = (ctx: Context) => chatRouter.createCaller(ctx)
 
 describe("chatRouter", () => {
   describe("getOrCreateConversation", () => {
@@ -106,26 +129,28 @@ describe("chatRouter", () => {
 
     it("rejects non-participant", async () => {
       const ctx = makeContext(outsiderUser)
-      await expect(
-        caller(ctx).getOrCreateConversation({ transactionId: TX_ID }),
-      ).rejects.toThrow(TRPCError)
+      await expect(caller(ctx).getOrCreateConversation({ transactionId: TX_ID })).rejects.toThrow(
+        TRPCError,
+      )
     })
 
     it("rejects when transaction not found", async () => {
       const ctx = makeContext(mockUser, {
         rentalTransaction: { findUnique: vi.fn().mockResolvedValue(null) },
       })
-      await expect(
-        caller(ctx).getOrCreateConversation({ transactionId: TX_ID }),
-      ).rejects.toThrow("Transaction not found")
+      await expect(caller(ctx).getOrCreateConversation({ transactionId: TX_ID })).rejects.toThrow(
+        "Transaction not found",
+      )
     })
 
     it("marks expired when COMPLETED with OPEN dispute", async () => {
       const ctx = makeContext(mockUser, {
         rentalTransaction: {
-          findUnique: vi.fn().mockResolvedValue(
-            makeTransaction({ status: "COMPLETED", disputes: [{ status: "OPEN" }] }),
-          ),
+          findUnique: vi
+            .fn()
+            .mockResolvedValue(
+              makeTransaction({ status: "COMPLETED", disputes: [{ status: "OPEN" }] }),
+            ),
         },
         conversation: {
           findUnique: vi.fn().mockResolvedValue({ id: CONV_ID, transactionId: TX_ID }),
@@ -162,9 +187,7 @@ describe("chatRouter", () => {
 
     it("rejects empty message", async () => {
       const ctx = makeContext()
-      await expect(
-        caller(ctx).sendMessage({ conversationId: CONV_ID, body: "" }),
-      ).rejects.toThrow()
+      await expect(caller(ctx).sendMessage({ conversationId: CONV_ID, body: "" })).rejects.toThrow()
     })
 
     it("rejects whitespace-only message", async () => {
@@ -222,9 +245,7 @@ describe("chatRouter", () => {
 
     it("rejects non-participant from fetching messages", async () => {
       const ctx = makeContext(outsiderUser)
-      await expect(
-        caller(ctx).getMessages({ conversationId: CONV_ID }),
-      ).rejects.toThrow(TRPCError)
+      await expect(caller(ctx).getMessages({ conversationId: CONV_ID })).rejects.toThrow(TRPCError)
     })
 
     it("supports pagination with hasMore flag", async () => {
@@ -259,9 +280,7 @@ describe("chatRouter", () => {
 
     it("rejects non-participant from marking as read", async () => {
       const ctx = makeContext(outsiderUser)
-      await expect(
-        caller(ctx).markAsRead({ conversationId: CONV_ID }),
-      ).rejects.toThrow(TRPCError)
+      await expect(caller(ctx).markAsRead({ conversationId: CONV_ID })).rejects.toThrow(TRPCError)
     })
   })
 
@@ -283,14 +302,18 @@ describe("chatRouter", () => {
       }
       const ctx = makeContext(mockUser, {
         conversation: { findMany: vi.fn().mockResolvedValue([conv]) },
-        message: { groupBy: vi.fn().mockResolvedValue([{ conversationId: CONV_ID, _count: { id: 3 } }]) },
+        message: {
+          groupBy: vi.fn().mockResolvedValue([{ conversationId: CONV_ID, _count: { id: 3 } }]),
+        },
       })
       const result = await caller(ctx).listConversations()
       expect(result).toHaveLength(1)
-      expect(result[0].conversationId).toBe(CONV_ID)
-      expect(result[0].lastMessage?.body).toBe("Last msg")
-      expect(result[0].unreadCount).toBe(3)
-      expect(result[0].otherParticipant?.id).toBe(OTHER_USER_ID)
+      const [firstConversation] = result
+      expect(firstConversation).toBeDefined()
+      expect(firstConversation?.conversationId).toBe(CONV_ID)
+      expect(firstConversation?.lastMessage?.body).toBe("Last msg")
+      expect(firstConversation?.unreadCount).toBe(3)
+      expect(firstConversation?.otherParticipant?.id).toBe(OTHER_USER_ID)
     })
 
     it("returns empty list when no conversations", async () => {

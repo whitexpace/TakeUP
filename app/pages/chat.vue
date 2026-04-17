@@ -20,7 +20,6 @@ const {
   isSending,
   error,
   hasMoreMessages,
-  totalUnreadCount,
   loadConversations,
   selectConversation,
   sendMessage: sendChatMessage,
@@ -95,24 +94,45 @@ const PHONE_REGEX =
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 const containsSensitiveInfo = (text: string) =>
   text.match(PHONE_REGEX) !== null || text.match(EMAIL_REGEX) !== null
-const escapeHtml = (text: string) =>
-  text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
-const censorText = (text: string) => {
-  const replacement = (match: string) => {
-    const clouds = "·".repeat(match.length * 2)
-    return `<span style="filter: blur(12px); background: rgba(255,255,255,0.7); color: transparent; border-radius: 100px; padding: 0 15px; margin: 0 4px; display: inline-block; pointer-events: none; user-select: none;">${clouds}</span>`
-  }
-  return text.replace(PHONE_REGEX, replacement).replace(EMAIL_REGEX, replacement)
-}
+type MessageSegment = { type: "text"; value: string } | { type: "masked"; value: string }
 
-const getDisplayText = (body: string) => {
-  const hasSensitive = containsSensitiveInfo(body)
-  return hasSensitive ? censorText(escapeHtml(body)) : escapeHtml(body)
+const buildMessageSegments = (body: string): MessageSegment[] => {
+  const matches = [...body.matchAll(new RegExp(`${PHONE_REGEX.source}|${EMAIL_REGEX.source}`, "g"))]
+
+  if (matches.length === 0) {
+    return [{ type: "text", value: body }]
+  }
+
+  const segments: MessageSegment[] = []
+  let currentIndex = 0
+
+  for (const match of matches) {
+    const matchText = match[0]
+    const matchIndex = match.index ?? 0
+
+    if (matchIndex > currentIndex) {
+      segments.push({
+        type: "text",
+        value: body.slice(currentIndex, matchIndex),
+      })
+    }
+
+    segments.push({
+      type: "masked",
+      value: "·".repeat(Math.max(matchText.length * 2, 6)),
+    })
+
+    currentIndex = matchIndex + matchText.length
+  }
+
+  if (currentIndex < body.length) {
+    segments.push({
+      type: "text",
+      value: body.slice(currentIndex),
+    })
+  }
+
+  return segments
 }
 
 // --- Actions ---
@@ -282,11 +302,21 @@ onUnmounted(() => {
             </div>
           </div>
           <!-- Error -->
-          <div v-else-if="error && !sortedConversations.length" class="p-12 text-center flex flex-col items-center">
+          <div
+            v-else-if="error && !sortedConversations.length"
+            class="p-12 text-center flex flex-col items-center"
+          >
             <div
               class="w-16 h-16 bg-cinnabar-red/5 rounded-full flex items-center justify-center mb-4 text-cinnabar-red/60"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" x2="12" y1="8" y2="12" />
                 <line x1="12" x2="12.01" y1="16" y2="16" />
@@ -315,7 +345,11 @@ onUnmounted(() => {
               v-else
               :key="conv.conversationId"
               class="px-4 py-3 cursor-pointer transition-all duration-200 relative group"
-              :class="[activeConversation?.conversationId === conv.conversationId ? 'bg-cream' : 'hover:bg-cream/40']"
+              :class="[
+                activeConversation?.conversationId === conv.conversationId
+                  ? 'bg-cream'
+                  : 'hover:bg-cream/40',
+              ]"
               @click="handleSelectChat(conv.conversationId)"
             >
               <div class="flex items-start gap-3">
@@ -323,7 +357,11 @@ onUnmounted(() => {
                   v-if="conv.otherParticipant?.avatarUrl"
                   class="w-12 h-12 rounded-full shrink-0 overflow-hidden"
                 >
-                  <img :src="conv.otherParticipant.avatarUrl" :alt="getParticipantName(conv.otherParticipant)" class="w-full h-full object-cover" />
+                  <img
+                    :src="conv.otherParticipant.avatarUrl"
+                    :alt="getParticipantName(conv.otherParticipant)"
+                    class="w-full h-full object-cover"
+                  />
                 </div>
                 <div
                   v-else
@@ -337,7 +375,8 @@ onUnmounted(() => {
                     <span
                       class="font-bold text-[15px] truncate"
                       :class="{ 'text-burning-orange': conv.unreadCount > 0 }"
-                    >{{ getParticipantName(conv.otherParticipant) }}</span>
+                      >{{ getParticipantName(conv.otherParticipant) }}</span
+                    >
                     <span class="text-[11px] text-noble-black/40 shrink-0 whitespace-nowrap ml-2">
                       {{ getChatTime(conv) }}
                     </span>
@@ -375,7 +414,10 @@ onUnmounted(() => {
         ]"
       >
         <!-- Loading messages -->
-        <div v-if="isLoadingMessages && !messages.length" class="flex-1 flex flex-col items-center justify-center space-y-4">
+        <div
+          v-if="isLoadingMessages && !messages.length"
+          class="flex-1 flex flex-col items-center justify-center space-y-4"
+        >
           <div
             class="w-12 h-12 border-4 border-cinnamon-ice/20 border-t-burning-orange rounded-full animate-spin"
           ></div>
@@ -395,7 +437,15 @@ onUnmounted(() => {
                 class="lg:hidden p-2 -ml-2 hover:bg-cream rounded-full transition-colors"
                 @click="handleCloseChat"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
                   <path d="m15 18-6-6 6-6" />
                 </svg>
               </button>
@@ -403,18 +453,30 @@ onUnmounted(() => {
                 v-if="activeConversation.otherParticipant?.avatarUrl"
                 class="w-10 h-10 rounded-full overflow-hidden"
               >
-                <img :src="activeConversation.otherParticipant.avatarUrl" :alt="getParticipantName(activeConversation.otherParticipant)" class="w-full h-full object-cover" />
+                <img
+                  :src="activeConversation.otherParticipant.avatarUrl"
+                  :alt="getParticipantName(activeConversation.otherParticipant)"
+                  class="w-full h-full object-cover"
+                />
               </div>
               <div
                 v-else
                 class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs"
-                :class="getAvatarColor(activeConversation.otherParticipant?.id ?? activeConversation.conversationId)"
+                :class="
+                  getAvatarColor(
+                    activeConversation.otherParticipant?.id ?? activeConversation.conversationId,
+                  )
+                "
               >
                 {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
               </div>
               <div class="flex flex-col">
-                <span class="font-bold text-[15px] leading-tight">{{ getParticipantName(activeConversation.otherParticipant) }}</span>
-                <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{ activeConversation.item.name }}</span>
+                <span class="font-bold text-[15px] leading-tight">{{
+                  getParticipantName(activeConversation.otherParticipant)
+                }}</span>
+                <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
+                  activeConversation.item.name
+                }}</span>
               </div>
             </div>
             <NuxtLink
@@ -458,7 +520,14 @@ onUnmounted(() => {
               class="flex-1 flex flex-col items-center justify-center text-center opacity-40 py-12"
             >
               <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                >
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
               </div>
@@ -471,13 +540,18 @@ onUnmounted(() => {
               <div class="flex justify-center">
                 <span
                   class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 bg-white/40 px-3 py-1 rounded-full"
-                >Today</span>
+                  >Today</span
+                >
               </div>
               <div
                 v-for="(msg, index) in messages"
                 :key="msg.id"
                 class="flex flex-col max-w-[85%] lg:max-w-[75%]"
-                :class="[msg.senderUserId !== activeConversation.otherParticipant?.id ? 'self-end items-end' : 'self-start items-start']"
+                :class="[
+                  msg.senderUserId !== activeConversation.otherParticipant?.id
+                    ? 'self-end items-end'
+                    : 'self-start items-start',
+                ]"
               >
                 <div
                   class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm leading-relaxed relative"
@@ -486,16 +560,37 @@ onUnmounted(() => {
                       ? 'bg-blue-estate text-white rounded-tr-none'
                       : 'bg-white text-noble-black border border-cinnamon-ice/30 rounded-tl-none',
                   ]"
-                  v-html="getDisplayText(msg.body)"
                 >
+                  <template
+                    v-for="(segment, segmentIndex) in buildMessageSegments(msg.body)"
+                    :key="`${msg.id}-${segmentIndex}`"
+                  >
+                    <span v-if="segment.type === 'text'" class="whitespace-pre-wrap break-words">
+                      {{ segment.value }}
+                    </span>
+                    <span
+                      v-else
+                      class="mx-1 inline-block select-none rounded-full px-4 text-transparent"
+                      style="
+                        filter: blur(12px);
+                        background: rgba(255, 255, 255, 0.7);
+                        pointer-events: none;
+                      "
+                    >
+                      {{ segment.value }}
+                    </span>
+                  </template>
                 </div>
                 <div class="mt-1 flex items-center gap-2">
                   <span
                     v-if="index === messages.length - 1"
                     class="text-[10px] text-noble-black/40 font-medium"
-                  >{{ formatDetailedTime(msg.createdAt) }}</span>
+                    >{{ formatDetailedTime(msg.createdAt) }}</span
+                  >
                   <div
-                    v-if="msg.senderUserId !== activeConversation.otherParticipant?.id && msg.isRead"
+                    v-if="
+                      msg.senderUserId !== activeConversation.otherParticipant?.id && msg.isRead
+                    "
                     class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[6px] text-white font-bold transition-all duration-500 scale-100"
                     :class="getAvatarColor(activeConversation.otherParticipant?.id ?? '')"
                   >
@@ -518,7 +613,10 @@ onUnmounted(() => {
           </transition>
 
           <!-- Message input (hidden when expired) -->
-          <div v-if="!activeConversation.isExpired" class="bg-white p-4 border-t border-cinnamon-ice/20 shrink-0 relative">
+          <div
+            v-if="!activeConversation.isExpired"
+            class="bg-white p-4 border-t border-cinnamon-ice/20 shrink-0 relative"
+          >
             <div class="flex items-end gap-2 lg:gap-3">
               <div
                 class="flex-1 bg-cream border border-cinnamon-ice/20 rounded-[22px] transition-all duration-300 focus-within:border-burning-orange/50 relative flex items-end"
@@ -536,10 +634,20 @@ onUnmounted(() => {
               <button
                 class="p-2.5 mb-1 bg-burning-orange text-white rounded-full shadow-md hover:bg-burning-orange/90 transition-all duration-300 active:scale-95 shrink-0"
                 :disabled="!newMessage.trim() || isSending"
-                :class="{ 'opacity-50 grayscale cursor-not-allowed': !newMessage.trim() || isSending }"
+                :class="{
+                  'opacity-50 grayscale cursor-not-allowed': !newMessage.trim() || isSending,
+                }"
                 @click="handleSendMessage"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <line x1="22" x2="11" y1="2" y2="13" />
                   <polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>
@@ -556,7 +664,15 @@ onUnmounted(() => {
           <div
             class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-cinnamon-ice/20"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </div>
