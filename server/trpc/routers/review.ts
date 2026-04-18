@@ -3,7 +3,7 @@ import { TransactionStatus, UserStatus, type Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import { bookingReviewLookupSchema, createReviewSchema } from "../../../shared/schemas/review"
-import { processReviewRewards } from "../../utils/rewards"
+import { processTransactionRewards } from "../../utils/rewards"
 import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
 import { syncRoleRatingForUser, syncRoleRatingsFromReviews } from "../../utils/review-ratings"
 
@@ -331,13 +331,10 @@ export const reviewRouter = router({
       }
     })
 
-    const rewardEventDelegate = (ctx.prisma as { rewardEvent?: { upsert?: unknown } }).rewardEvent
-    if (rewardEventDelegate && typeof rewardEventDelegate.upsert === "function") {
-      try {
-        await processReviewRewards(ctx.prisma as Prisma.TransactionClient, result.review.id)
-      } catch (error) {
-        console.error("Failed to process transaction rewards after review submission", error)
-      }
+    try {
+      await processTransactionRewards(ctx.prisma as Prisma.TransactionClient, result.transactionId)
+    } catch (error) {
+      console.error("Failed to process transaction rewards after review submission", error)
     }
 
     return result.review

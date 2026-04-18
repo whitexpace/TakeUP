@@ -22,7 +22,7 @@ import {
   transactionReviewSelect,
   transactionReviewUserSelect,
 } from "../review-helpers"
-import { processReviewRewards } from "../../utils/rewards"
+import { processTransactionRewards } from "../../utils/rewards"
 import { syncRoleRatingForUser } from "../../utils/review-ratings"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
@@ -726,17 +726,13 @@ export const transactionRouter = router({
           }
         })
 
-        const rewardEventDelegate = (ctx.prisma as { rewardEvent?: { upsert?: unknown } })
-          .rewardEvent
-        if (rewardEventDelegate && typeof rewardEventDelegate.upsert === "function") {
-          try {
-            await processReviewRewards(
-              ctx.prisma as Prisma.TransactionClient,
-              reviewResult.createdReview.id,
-            )
-          } catch (error) {
-            console.error("Failed to process transaction rewards after review submission", error)
-          }
+        try {
+          await processTransactionRewards(
+            ctx.prisma as Prisma.TransactionClient,
+            reviewResult.transactionId,
+          )
+        } catch (error) {
+          console.error("Failed to process transaction rewards after review submission", error)
         }
 
         return mapTransactionReview(reviewResult.createdReview)

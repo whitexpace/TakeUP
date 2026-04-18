@@ -152,6 +152,12 @@ type RewardReviewRecord = Prisma.TransactionReviewGetPayload<{
 
 type RewardClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient
 
+const hasRewardEventDelegate = (prisma: RewardClient) =>
+  typeof (prisma as { rewardEvent?: { upsert?: unknown } }).rewardEvent?.upsert === "function"
+
+const hasUserRewardDelegate = (prisma: RewardClient) =>
+  typeof (prisma as { userReward?: { upsert?: unknown } }).userReward?.upsert === "function"
+
 const roundPoints = (value: number) => Math.max(0, Math.round(value))
 
 const getBoostConfig = (boostType: ItemBoostType) => ITEM_BOOST_CONFIG[boostType]
@@ -487,6 +493,10 @@ const findRewardTransaction = async (
 }
 
 export const processTransactionRewards = async (prisma: RewardClient, transactionId: string) => {
+  if (!hasRewardEventDelegate(prisma) || !hasUserRewardDelegate(prisma)) {
+    return
+  }
+
   const transaction = await findRewardTransaction(prisma, transactionId)
 
   if (!transaction || !transaction.borrowerId || !transaction.lenderId) {
@@ -540,6 +550,10 @@ export const processTransactionRewards = async (prisma: RewardClient, transactio
   })
 
   await syncManyUserRewardLedgers(prisma, [transaction.borrowerId, transaction.lenderId])
+
+  for (const review of transaction.reviews) {
+    await processReviewRewards(prisma, review.id)
+  }
 }
 
 const findRewardReview = async (
@@ -582,6 +596,10 @@ const getRequiredReviewTypesForRole = (
 }
 
 export const processReviewRewards = async (prisma: RewardClient, reviewId: string) => {
+  if (!hasRewardEventDelegate(prisma) || !hasUserRewardDelegate(prisma)) {
+    return
+  }
+
   const review = await findRewardReview(prisma, reviewId)
 
   if (!review || !review.transaction.borrowerId || !review.transaction.lenderId) {
