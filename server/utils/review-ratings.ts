@@ -3,6 +3,16 @@ import type { Prisma } from "@prisma/client"
 type ReviewRatingClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient
 type RoleReviewType = "BORROWER_REVIEW" | "LENDER_REVIEW"
 
+const hasReviewLookupDelegate = (prisma: ReviewRatingClient) =>
+  typeof (prisma as { transactionReview?: { findMany?: unknown } }).transactionReview?.findMany ===
+  "function"
+
+const hasBorrowerUpsertDelegate = (prisma: ReviewRatingClient) =>
+  typeof (prisma as { borrower?: { upsert?: unknown } }).borrower?.upsert === "function"
+
+const hasLenderUpsertDelegate = (prisma: ReviewRatingClient) =>
+  typeof (prisma as { lender?: { upsert?: unknown } }).lender?.upsert === "function"
+
 const buildRoleRatingMap = (reviews: Array<{ revieweeUserId: string | null; rating: number }>) => {
   const grouped = new Map<string, { total: number; count: number }>()
 
@@ -23,6 +33,18 @@ export const syncRoleRatingsFromReviews = async (
   reviewType: RoleReviewType,
   userIds?: string[],
 ) => {
+  if (!hasReviewLookupDelegate(prisma)) {
+    return
+  }
+
+  if (reviewType === "BORROWER_REVIEW" && !hasBorrowerUpsertDelegate(prisma)) {
+    return
+  }
+
+  if (reviewType === "LENDER_REVIEW" && !hasLenderUpsertDelegate(prisma)) {
+    return
+  }
+
   const uniqueUserIds = [...new Set((userIds ?? []).filter(Boolean))]
 
   const reviews = await prisma.transactionReview.findMany({

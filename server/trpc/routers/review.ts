@@ -5,6 +5,7 @@ import { protectedProcedure, publicProcedure } from "../procedures"
 import { bookingReviewLookupSchema, createReviewSchema } from "../../../shared/schemas/review"
 import { processReviewRewards } from "../../utils/rewards"
 import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
+import { syncRoleRatingForUser, syncRoleRatingsFromReviews } from "../../utils/review-ratings"
 
 type ReviewLeaderboardType = "BORROWER_REVIEW" | "LENDER_REVIEW"
 
@@ -50,7 +51,6 @@ const listReviewLeaderboard = async (
 
   const eligibleStats = [...grouped.entries()].map(([userId, entry]) => ({
     userId,
-    totalRating: entry.totalRating,
     reviewCount: entry.reviewCount,
     lastActivityAt: entry.lastActivityAt,
   }))
@@ -61,26 +61,55 @@ const listReviewLeaderboard = async (
     return []
   }
 
-  const users = await prisma.user.findMany({
-    where: {
-      id: { in: userIds },
-      status: UserStatus.ACTIVE,
-    },
-    select: {
-      id: true,
-      username: true,
-      firstName: true,
-      lastName: true,
-      avatarUrl: true,
-    },
-  })
+  await syncRoleRatingsFromReviews(prisma, reviewType, userIds)
+
+  const [users, roleRatings] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        id: { in: userIds },
+        status: UserStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        avatarUrl: true,
+      },
+    }),
+    reviewType === "BORROWER_REVIEW"
+      ? prisma.borrower.findMany({
+          where: {
+            userId: { in: userIds },
+          },
+          select: {
+            userId: true,
+            borrowerRating: true,
+          },
+        })
+      : prisma.lender.findMany({
+          where: {
+            userId: { in: userIds },
+          },
+          select: {
+            userId: true,
+            lenderRating: true,
+          },
+        }),
+  ])
 
   const userMap = new Map(users.map((user) => [user.id, user]))
+  const ratingMap = new Map(
+    roleRatings.map((entry) => [
+      entry.userId,
+      reviewType === "BORROWER_REVIEW" ? entry.borrowerRating : entry.lenderRating,
+    ]),
+  )
 
   return eligibleStats
     .map((entry) => ({
       ...entry,
-      averageRating: entry.reviewCount > 0 ? entry.totalRating / entry.reviewCount : 0,
+      averageRating: ratingMap.get(entry.userId) ?? 0,
     }))
     .sort((left, right) => {
       if (right.averageRating !== left.averageRating) {
@@ -293,6 +322,8 @@ export const reviewRouter = router({
           isAnonymous: input.isAnonymous,
         },
       })
+
+      await syncRoleRatingForUser(tx as Prisma.TransactionClient, reviewType, revieweeUserId)
 
       return {
         review,
