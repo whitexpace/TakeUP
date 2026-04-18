@@ -1,0 +1,7 @@
+import { appRouter } from "../../../../server/trpc/routers"
+import { createContext } from "../../../trpc/context"
+
+export default defineEventHandler(async (event) => {
+  const caller = appRouter.createCaller(await createContext(event))
+  return caller.review.lenderLeaderboard()
+})

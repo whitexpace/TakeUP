@@ -22,6 +22,7 @@ import {
   transactionReviewSelect,
   transactionReviewUserSelect,
 } from "../review-helpers"
+import { syncRoleRatingForUser } from "../../utils/review-ratings"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -708,6 +709,14 @@ export const transactionRouter = router({
                 rating: itemReviewAggregate._avg.rating ?? 0,
               },
             })
+          }
+
+          if (revieweeUserId && input.reviewType !== "ITEM_REVIEW") {
+            await syncRoleRatingForUser(
+              tx as Prisma.TransactionClient,
+              input.reviewType,
+              revieweeUserId,
+            )
           }
 
           return createdReview
