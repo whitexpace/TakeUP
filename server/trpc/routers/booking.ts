@@ -1016,6 +1016,12 @@ export const bookingRouter = router({
       })
 
       if (isConfirmingBooking) {
+        // Increment bookingCount on the item
+        await (tx as Context["prisma"]).item.update({
+          where: { id: existing.itemId },
+          data: { bookingCount: { increment: 1 } },
+        })
+
         const overlappingPendingBookings = (await txBookingPrisma.booking.findMany({
           where: {
             itemId: existing.itemId,
