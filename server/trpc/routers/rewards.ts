@@ -29,7 +29,9 @@ export const rewardsRouter = router({
       ctx.prisma.rewardEvent.findMany({
         where: {
           userId: ctx.user.id,
-          status: { in: [RewardEventStatus.APPLIED, RewardEventStatus.PENDING, RewardEventStatus.BLOCKED] },
+          status: {
+            in: [RewardEventStatus.APPLIED, RewardEventStatus.PENDING, RewardEventStatus.BLOCKED],
+          },
         },
         orderBy: [{ createdAt: "desc" }],
         take: 20,
@@ -76,10 +78,7 @@ export const rewardsRouter = router({
         pointsDelta: event.pointsDelta,
         createdAt: event.createdAt,
         metadata: event.metadata,
-        item:
-          event.itemBoost?.item ??
-          event.transaction?.item ??
-          null,
+        item: event.itemBoost?.item ?? event.transaction?.item ?? null,
       })),
       boosts: activeBoosts,
     }
@@ -118,7 +117,9 @@ export const rewardsRouter = router({
       itemId: boost.itemId,
       itemName: boost.item.name,
       itemImage:
-        boost.item.images.find((image) => image.isPrimary)?.path ?? boost.item.images[0]?.path ?? null,
+        boost.item.images.find((image) => image.isPrimary)?.path ??
+        boost.item.images[0]?.path ??
+        null,
       boostStatus: boost.status,
       boostStartedAt: boost.startsAt,
       boostExpiresAt: boost.expiresAt,

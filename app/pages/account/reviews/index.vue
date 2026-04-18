@@ -30,12 +30,15 @@ const {
   error: transactionsError,
   refresh: refreshTransactions,
 } = await useAsyncData("account-my-review-transactions", async () => {
-  const transactionResponse = await $fetch<RouterOutputs["transaction"]["list"]>("/api/transactions", {
-    query: {
-      status: "COMPLETED",
-      limit: 100,
+  const transactionResponse = await $fetch<RouterOutputs["transaction"]["list"]>(
+    "/api/transactions",
+    {
+      query: {
+        status: "COMPLETED",
+        limit: 100,
+      },
     },
-  })
+  )
 
   return transactionResponse.transactions
 })
@@ -289,7 +292,12 @@ const closeReviewModal = () => {
 }
 
 const handleReviewSubmitted = async () => {
-  await Promise.all([refreshTransactions(), refreshDrafts(), refreshHistory(), refreshLeaderboard()])
+  await Promise.all([
+    refreshTransactions(),
+    refreshDrafts(),
+    refreshHistory(),
+    refreshLeaderboard(),
+  ])
 }
 
 const refreshCurrentTab = async () => {
@@ -720,7 +728,8 @@ watch(activeTab, async () => {
         <div>
           <h2 class="text-xl font-bold text-noble-black sm:text-[25px]">Community Leaderboards</h2>
           <p class="mt-2 text-sm leading-6 text-noble-black/70 sm:text-base">
-            Top community members ranked by average star rating from available borrower and lender reviews.
+            Top community members ranked by average star rating from available borrower and lender
+            reviews.
           </p>
         </div>
 
@@ -753,7 +762,10 @@ watch(activeTab, async () => {
             We couldn't load the borrower rankings right now.
           </div>
 
-          <div v-else-if="borrowerLeaderboard.length === 0" class="mt-5 text-sm text-noble-black/65">
+          <div
+            v-else-if="borrowerLeaderboard.length === 0"
+            class="mt-5 text-sm text-noble-black/65"
+          >
             No rankings yet.
           </div>
 
@@ -769,7 +781,11 @@ watch(activeTab, async () => {
                 #{{ entry.rank }}
               </div>
 
-              <UserAvatar :avatar-url="entry.user.avatarUrl" :user-name="entry.user.name" size="md" />
+              <UserAvatar
+                :avatar-url="entry.user.avatarUrl"
+                :user-name="entry.user.name"
+                size="md"
+              />
 
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-semibold text-noble-black sm:text-base">
@@ -823,7 +839,11 @@ watch(activeTab, async () => {
                 #{{ entry.rank }}
               </div>
 
-              <UserAvatar :avatar-url="entry.user.avatarUrl" :user-name="entry.user.name" size="md" />
+              <UserAvatar
+                :avatar-url="entry.user.avatarUrl"
+                :user-name="entry.user.name"
+                size="md"
+              />
 
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-semibold text-noble-black sm:text-base">
