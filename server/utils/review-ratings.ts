@@ -46,6 +46,11 @@ export const syncRoleRatingsFromReviews = async (
   }
 
   const uniqueUserIds = [...new Set((userIds ?? []).filter(Boolean))]
+  const reviewDelegate = (prisma as { transactionReview?: { findMany?: unknown } }).transactionReview
+
+  if (!reviewDelegate || typeof reviewDelegate.findMany !== "function") {
+    return
+  }
 
   const reviews = await prisma.transactionReview.findMany({
     where: {
@@ -60,6 +65,8 @@ export const syncRoleRatingsFromReviews = async (
 
   const ratingMap = buildRoleRatingMap(reviews)
   const targetUserIds = uniqueUserIds.length > 0 ? uniqueUserIds : [...ratingMap.keys()]
+  const borrowerDelegate = (prisma as { borrower?: { upsert?: unknown } }).borrower
+  const lenderDelegate = (prisma as { lender?: { upsert?: unknown } }).lender
 
   await Promise.all(
     targetUserIds.map(async (userId) => {
@@ -70,6 +77,10 @@ export const syncRoleRatingsFromReviews = async (
           : 0
 
       if (reviewType === "BORROWER_REVIEW") {
+        if (!borrowerDelegate || typeof borrowerDelegate.upsert !== "function") {
+          return
+        }
+
         await prisma.borrower.upsert({
           where: { userId },
           create: {
@@ -81,6 +92,10 @@ export const syncRoleRatingsFromReviews = async (
             borrowerRating: averageRating,
           },
         })
+        return
+      }
+
+      if (!lenderDelegate || typeof lenderDelegate.upsert !== "function") {
         return
       }
 
