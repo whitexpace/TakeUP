@@ -8,6 +8,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
+  boostListing: [itemId: string]
 }>()
 
 const cardProps = computed(() => {
@@ -49,6 +50,8 @@ const toggleLabel = computed(() => (isDeactivated.value ? "Activate" : "Deactiva
 const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
   isDeactivated.value ? "AVAILABLE" : "DEACTIVATED",
 )
+const hasActiveBoost = computed(() => props.item.hasActiveBoost)
+const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boost 50 pts"))
 </script>
 
 <template>
@@ -66,6 +69,14 @@ const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
         >
           Edit Listing
         </NuxtLink>
+
+        <button
+          :disabled="hasActiveBoost"
+          class="w-full max-w-[140px] rounded-full bg-blue-estate py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-blue-estate/90 active:scale-95 disabled:cursor-not-allowed disabled:bg-blue-estate/40"
+          @click.stop="emit('boostListing', item.id)"
+        >
+          {{ boostLabel }}
+        </button>
 
         <!-- Deactivate/Activate Button -->
         <div class="relative group/tooltip w-full max-w-[140px]">
@@ -95,6 +106,13 @@ const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
             />
           </div>
         </div>
+      </div>
+
+      <div
+        v-if="hasActiveBoost"
+        class="absolute left-3 top-3 z-20 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+      >
+        Boosted
       </div>
     </template>
   </ItemCard>
