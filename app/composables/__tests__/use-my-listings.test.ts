@@ -39,8 +39,6 @@ const makeItem = (id = ITEM_ID) =>
     lenderUsername: "test-lender",
     lenderFullName: "Test Lender",
     isLiked: false,
-    boostScore: 0,
-    boostExpiresAt: null,
     description: null,
     condition: "GOOD",
     whatItemOffers: null,
