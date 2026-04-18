@@ -659,8 +659,7 @@ const triggerFileUpload = () => {
 const handleFileChange = (event: Event) => {
   const input = event.target as HTMLInputElement
   if (!input.files?.length) return
-  // Handle file logic here
-  console.log("File selected:", input.files[0])
+  input.value = ""
 }
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === "Enter" && !e.shiftKey) {
