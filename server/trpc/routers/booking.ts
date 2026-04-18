@@ -28,11 +28,14 @@ import {
   mapTransactionReview,
   transactionReviewSelect,
 } from "../review-helpers"
+import { isActiveDisputeStatus, toApiDisputeStatus } from "../../utils/dispute-status"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
   { createdAt: "asc" },
 ]
+const DISPUTE_REPORT_WINDOW_DAYS = 15
+const DAY_IN_MS = 24 * 60 * 60 * 1000
 
 const bookingInclude = {
   item: {
@@ -161,6 +164,31 @@ type BookingTransactionRecord = Prisma.BookingGetPayload<{
   select: typeof bookingTransactionSelect
 }>
 
+type BookingReviewRecord = Parameters<typeof mapTransactionReview>[0]
+
+type BookingDetailTransaction = {
+  id: string
+  status: PrismaTransactionStatus
+  borrowerId: string | null
+  lenderId: string | null
+  disputes: Array<{
+    id: string
+    raisedById: string
+    reason: string
+    description: string | null
+    status: string
+    createdAt: Date
+    reviewedAt: Date | null
+    reviewedBy: {
+      id: string
+      firstName: string
+      middleName: string | null
+      lastName: string
+    } | null
+  }>
+  reviews: BookingReviewRecord[]
+}
+
 const overlappingPendingBookingSelect = {
   id: true,
   startDate: true,
@@ -277,6 +305,9 @@ const ensureBookingWindowMatchesAvailability = async (
 
 const getBookingThumbnailImage = (item: Pick<BookingRecord["item"], "images">) =>
   item.images.find((image) => image.isPrimary)?.path ?? item.images[0]?.path ?? null
+
+const isDateWithinWindow = (value: Date | null, days: number) =>
+  Boolean(value && value.getTime() >= Date.now() - days * DAY_IN_MS)
 
 const mapBookingRecord = (record: BookingRecord): BookingListItem => {
   const { item, ...rest } = record
@@ -870,13 +901,37 @@ export const bookingRouter = router({
     }
 
     assertParticipantAccess(booking, ctx.user.id)
-    const transaction = await ctx.prisma.rentalTransaction.findUnique({
+    const transaction = await (
+      ctx.prisma.rentalTransaction.findUnique as unknown as (
+        args: Record<string, unknown>,
+      ) => Promise<BookingDetailTransaction | null>
+    )({
       where: { bookingId: input.id },
       select: {
         id: true,
         status: true,
         borrowerId: true,
         lenderId: true,
+        disputes: {
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: {
+            id: true,
+            raisedById: true,
+            reason: true,
+            description: true,
+            status: true,
+            createdAt: true,
+            reviewedAt: true,
+            reviewedBy: {
+              select: {
+                id: true,
+                firstName: true,
+                middleName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
         reviews: {
           orderBy: {
             createdAt: "desc",
@@ -886,9 +941,40 @@ export const bookingRouter = router({
       },
     })
 
+    const latestDispute = transaction?.disputes[0] ?? null
+    const hasActiveDispute =
+      transaction?.disputes.some((dispute) => isActiveDisputeStatus(dispute.status)) ?? false
+    const isWithinDisputeWindow =
+      booking.status === bookingStatusSchema.enum.COMPLETED &&
+      isDateWithinWindow(booking.completedAt, DISPUTE_REPORT_WINDOW_DAYS)
+
     return {
       ...mapBookingRecord(booking),
       transactionId: transaction?.id ?? null,
+      canRaiseDispute:
+        Boolean(transaction?.id && (transaction.borrowerId || transaction.lenderId)) &&
+        isWithinDisputeWindow &&
+        !hasActiveDispute,
+      latestDispute: latestDispute
+        ? {
+            id: latestDispute.id,
+            raisedById: latestDispute.raisedById,
+            reason: latestDispute.reason,
+            description: latestDispute.description,
+            status: toApiDisputeStatus(latestDispute.status),
+            createdAt: latestDispute.createdAt,
+            reviewedAt: latestDispute.reviewedAt,
+            reviewedBy: latestDispute.reviewedBy
+              ? {
+                  id: latestDispute.reviewedBy.id,
+                  firstName: latestDispute.reviewedBy.firstName,
+                  middleName: latestDispute.reviewedBy.middleName,
+                  lastName: latestDispute.reviewedBy.lastName,
+                }
+              : null,
+            isActive: isActiveDisputeStatus(latestDispute.status),
+          }
+        : null,
       reviewState: buildTransactionReviewState({
         status: transaction?.status ?? booking.status,
         itemId: booking.itemId,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { getDeactivationEligibility } from "../account-deactivation"
+import { ACTIVE_DISPUTE_STATUSES } from "../dispute-status"
 
 const NOW = new Date("2026-04-14T12:00:00.000Z")
 
@@ -36,9 +37,9 @@ describe("getDeactivationEligibility", () => {
     })
     expect(prisma.transactionDispute.count).toHaveBeenCalledWith({
       where: {
-        status: { in: ["OPEN", "UNDER_REVIEW", "APPEALED"] },
+        status: { in: [...ACTIVE_DISPUTE_STATUSES] },
         OR: [
-          { filedByUserId: "user-1" },
+          { raisedById: "user-1" },
           { transaction: { borrowerId: "user-1" } },
           { transaction: { lenderId: "user-1" } },
         ],

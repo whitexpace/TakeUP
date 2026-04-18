@@ -113,20 +113,12 @@ enum ActorRole {
   @@map("actor_role_enum")
 }
 
-enum DisputeReason {
-  LATE    @map("late")
-  DAMAGED @map("damaged")
-  LOST    @map("lost")
-
-  @@map("dispute_reason_enum")
-}
-
 enum DisputeStatus {
-  OPEN         @map("open")
-  UNDER_REVIEW @map("under_review")
-  RESOLVED     @map("resolved")
-  REJECTED     @map("rejected")
-  APPEALED     @map("appealed")
+  SUBMITTED @map("under_review")
+  OPEN      @map("open")
+  REJECTED  @map("rejected")
+  RESOLVED  @map("resolved")
+  APPEALED  @map("appealed")
 
   @@map("dispute_status_enum")
 }
@@ -505,18 +497,18 @@ model RequestOffer {
 model TransactionDispute {
   id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
   transactionId String        @map("transaction_id")
-  filedByUserId String        @map("filed_by_user_id")
-  reason        DisputeReason
+  raisedById    String        @map("filed_by_user_id")
+  reason        String
   description   String?
   claimedAmount Decimal       @default(0) @map("claimed_amount") @db.Decimal(12, 2)
-  status        DisputeStatus @default(OPEN)
-  adminId       String?       @map("admin_id")
+  status        DisputeStatus @default(SUBMITTED)
+  reviewedById  String?       @map("admin_id")
   resolution    String?
-  resolvedAt    DateTime?     @map("resolved_at") @db.Timestamptz(6)
+  reviewedAt    DateTime?     @map("resolved_at") @db.Timestamptz(6)
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  admin       User?             @relation("transaction_disputes_admin_idToUser", fields: [adminId], references: [id])
-  filedByUser User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [filedByUserId], references: [id])
+  reviewedBy  User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
+  raisedBy    User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [raisedById], references: [id])
   transaction RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId, status, createdAt(sort: Desc)], map: "idx_disputes_txn_status")

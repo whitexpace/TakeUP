@@ -4,6 +4,7 @@ import { cartRouter } from "./cart"
 import { bookingRouter } from "./booking"
 import { chatRouter } from "./chat"
 import { communityRouter } from "./community"
+import { disputeRouter } from "./dispute"
 import { healthRouter } from "./health"
 import { itemRouter } from "./item"
 import { notificationRouter } from "./notification"
@@ -16,6 +17,7 @@ export const appRouter = router({
   booking: bookingRouter,
   chat: chatRouter,
   community: communityRouter,
+  dispute: disputeRouter,
   health: healthRouter,
   item: itemRouter,
   notification: notificationRouter,
