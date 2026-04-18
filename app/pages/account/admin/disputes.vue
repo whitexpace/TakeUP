@@ -58,7 +58,12 @@ if (authData.value?.user.accountType !== "ADMIN") {
   })
 }
 
-const { data: queueData, pending, error, refresh } = await useAsyncData("admin:disputes", () =>
+const {
+  data: queueData,
+  pending,
+  error,
+  refresh,
+} = await useAsyncData("admin:disputes", () =>
   $fetch<RouterOutputs["dispute"]["list"]>("/api/disputes", {
     query: { status: "SUBMITTED" },
   }),
@@ -90,7 +95,10 @@ watch(
       return
     }
 
-    if (!selectedDisputeId.value || !disputes.some((entry) => entry.id === selectedDisputeId.value)) {
+    if (
+      !selectedDisputeId.value ||
+      !disputes.some((entry) => entry.id === selectedDisputeId.value)
+    ) {
       selectedDisputeId.value = disputes[0]?.id ?? null
     }
   },
@@ -198,9 +206,7 @@ const reviewDispute = async (decision: "APPROVE" | "REJECT") => {
           class="mt-5 rounded-3xl border border-dashed border-cinnamon-ice bg-white px-5 py-12 text-center"
         >
           <p class="text-lg font-bold text-noble-black">No pending disputes</p>
-          <p class="mt-2 text-sm text-noble-black/60">
-            New submitted concerns will appear here.
-          </p>
+          <p class="mt-2 text-sm text-noble-black/60">New submitted concerns will appear here.</p>
         </div>
 
         <div v-else class="mt-5 space-y-3">

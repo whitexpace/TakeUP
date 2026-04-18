@@ -1,12 +1,6 @@
 import { z } from "zod"
 
-export const disputeStatusSchema = z.enum([
-  "SUBMITTED",
-  "OPEN",
-  "REJECTED",
-  "APPEALED",
-  "RESOLVED",
-])
+export const disputeStatusSchema = z.enum(["SUBMITTED", "OPEN", "REJECTED", "APPEALED", "RESOLVED"])
 
 export const disputeDecisionSchema = z.enum(["APPROVE", "REJECT"])
 

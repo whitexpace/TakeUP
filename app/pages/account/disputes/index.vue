@@ -10,7 +10,8 @@ definePageMeta({
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type MyDispute = RouterOutputs["dispute"]["mine"]["disputes"][number]
-type ReportableTransaction = RouterOutputs["dispute"]["reportableTransactions"]["transactions"][number]
+type ReportableTransaction =
+  RouterOutputs["dispute"]["reportableTransactions"]["transactions"][number]
 type DisputesTab = "report" | "disputes" | "appeals"
 
 const route = useRoute()
@@ -92,7 +93,9 @@ const {
   error: reportableError,
   refresh: refreshReportableTransactions,
 } = await useAsyncData("dispute:reportable-transactions", () =>
-  $fetch<RouterOutputs["dispute"]["reportableTransactions"]>("/api/dispute-reportable-transactions"),
+  $fetch<RouterOutputs["dispute"]["reportableTransactions"]>(
+    "/api/dispute-reportable-transactions",
+  ),
 )
 
 if (reportableError.value) {
@@ -119,7 +122,9 @@ const recentAppealableDisputes = computed(() =>
 )
 
 const selectedIssueType = ref<(typeof issueTypes)[number]["value"]>(issueTypes[0].value)
-const selectedResolution = ref<(typeof resolutionOptions)[number]["value"]>(resolutionOptions[0].value)
+const selectedResolution = ref<(typeof resolutionOptions)[number]["value"]>(
+  resolutionOptions[0].value,
+)
 const reportSummary = ref("")
 const reportEvidenceFiles = ref<string[]>([])
 const selectedTransactionId = ref<string | null>(null)
@@ -135,7 +140,8 @@ const appealFileInput = ref<HTMLInputElement | null>(null)
 
 const issueTypeLabel = computed(
   () =>
-    issueTypes.find((entry) => entry.value === selectedIssueType.value)?.label ?? issueTypes[0].label,
+    issueTypes.find((entry) => entry.value === selectedIssueType.value)?.label ??
+    issueTypes[0].label,
 )
 const resolutionLabel = computed(
   () =>
@@ -193,22 +199,20 @@ const selectedTransaction = computed<ReportableTransaction | null>(
     ) ?? null,
 )
 
-const isTransactionLocked = computed(
-  () =>
-    Boolean(
-      requestedTransactionId.value &&
-        selectedTransaction.value?.transactionId === requestedTransactionId.value,
-    ),
+const isTransactionLocked = computed(() =>
+  Boolean(
+    requestedTransactionId.value &&
+    selectedTransaction.value?.transactionId === requestedTransactionId.value,
+  ),
 )
 
-const requestedTransactionUnavailable = computed(
-  () =>
-    Boolean(
-      requestedTransactionId.value &&
-        !reportableTransactions.value.some(
-          (transaction) => transaction.transactionId === requestedTransactionId.value,
-        ),
+const requestedTransactionUnavailable = computed(() =>
+  Boolean(
+    requestedTransactionId.value &&
+    !reportableTransactions.value.some(
+      (transaction) => transaction.transactionId === requestedTransactionId.value,
     ),
+  ),
 )
 
 const resetReportForm = () => {
@@ -345,8 +349,8 @@ const submitAppeal = async () => {
     <div class="w-full max-w-[1120px] text-left">
       <h1 class="text-[38px] font-bold leading-none text-noble-black sm:text-[44px]">Disputes</h1>
       <p class="mt-3 max-w-[760px] text-base leading-relaxed text-noble-black/60">
-        Report transaction issues, follow dispute updates, and submit appeals when a recent
-        rejected decision is still eligible for review.
+        Report transaction issues, follow dispute updates, and submit appeals when a recent rejected
+        decision is still eligible for review.
       </p>
     </div>
 
@@ -405,11 +409,12 @@ const submitAppeal = async () => {
           within the last 15 days can be reported here.
         </div>
 
-        <div
-          v-if="reportablePending"
-          class="grid gap-4 lg:grid-cols-2"
-        >
-          <div v-for="index in 6" :key="index" class="h-24 animate-pulse rounded-3xl bg-white/80"></div>
+        <div v-if="reportablePending" class="grid gap-4 lg:grid-cols-2">
+          <div
+            v-for="index in 6"
+            :key="index"
+            class="h-24 animate-pulse rounded-3xl bg-white/80"
+          ></div>
         </div>
 
         <div
@@ -418,8 +423,8 @@ const submitAppeal = async () => {
         >
           <p class="text-xl font-bold text-noble-black">No reportable transactions</p>
           <p class="mt-2 text-sm text-noble-black/60">
-            Transactions become reportable only after they are completed, and only for the next
-            15 days.
+            Transactions become reportable only after they are completed, and only for the next 15
+            days.
           </p>
         </div>
 
@@ -449,7 +454,9 @@ const submitAppeal = async () => {
 
             <div class="mt-8 space-y-6">
               <div>
-                <label class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45">
+                <label
+                  class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45"
+                >
                   Which transaction is this related to?
                 </label>
                 <select
@@ -472,7 +479,9 @@ const submitAppeal = async () => {
 
               <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45">
+                  <label
+                    class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45"
+                  >
                     Item Name
                   </label>
                   <input
@@ -485,7 +494,9 @@ const submitAppeal = async () => {
                 </div>
 
                 <div>
-                  <label class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45">
+                  <label
+                    class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45"
+                  >
                     Other Party
                   </label>
                   <input
@@ -506,11 +517,7 @@ const submitAppeal = async () => {
               v-model="selectedResolution"
               class="mt-5 w-full rounded-2xl border border-cinnamon-ice/60 bg-white px-4 py-4 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
             >
-              <option
-                v-for="option in resolutionOptions"
-                :key="option.value"
-                :value="option.value"
-              >
+              <option v-for="option in resolutionOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
             </select>
@@ -579,9 +586,7 @@ const submitAppeal = async () => {
             <div
               class="mt-10 flex flex-col gap-4 border-t border-cinnamon-ice/80 pt-8 sm:flex-row sm:items-center sm:justify-between"
             >
-              <p class="text-xs text-noble-black/35">
-                False reports may lead to account action.
-              </p>
+              <p class="text-xs text-noble-black/35">False reports may lead to account action.</p>
 
               <button
                 type="button"
@@ -598,7 +603,9 @@ const submitAppeal = async () => {
     </template>
 
     <template v-else-if="activeTab === 'disputes'">
-      <section class="mt-6 w-full max-w-[1120px] rounded-[32px] border border-cinnamon-ice bg-cream p-6 text-left sm:p-8">
+      <section
+        class="mt-6 w-full max-w-[1120px] rounded-[32px] border border-cinnamon-ice bg-cream p-6 text-left sm:p-8"
+      >
         <div class="mb-6">
           <h2 class="text-[36px] font-bold text-noble-black">Your Disputes</h2>
           <p class="mt-2 text-sm text-noble-black/60">
@@ -654,7 +661,9 @@ const submitAppeal = async () => {
 
               <div class="text-right text-xs text-noble-black/45">
                 <p>{{ formatDate(dispute.createdAt) }}</p>
-                <p class="mt-2">{{ dispute.viewerRole ? dispute.viewerRole.toLowerCase() : "participant" }}</p>
+                <p class="mt-2">
+                  {{ dispute.viewerRole ? dispute.viewerRole.toLowerCase() : "participant" }}
+                </p>
               </div>
             </div>
 
@@ -681,7 +690,9 @@ const submitAppeal = async () => {
     </template>
 
     <template v-else>
-      <section class="mt-6 w-full max-w-[1120px] rounded-[32px] border border-cinnamon-ice bg-cream p-6 text-left sm:p-8">
+      <section
+        class="mt-6 w-full max-w-[1120px] rounded-[32px] border border-cinnamon-ice bg-cream p-6 text-left sm:p-8"
+      >
         <div class="mb-6">
           <h2 class="text-[36px] font-bold text-noble-black">Appeal a Dispute Decision</h2>
           <p class="mt-2 text-sm text-noble-black/60">

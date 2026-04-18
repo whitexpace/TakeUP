@@ -426,7 +426,9 @@ describe("disputeRouter", () => {
         status: REJECTED_DISPUTE_STATUS,
       },
       data: expect.objectContaining({
-        resolution: expect.stringContaining("New dated photos show the item condition during return."),
+        resolution: expect.stringContaining(
+          "New dated photos show the item condition during return.",
+        ),
       }),
     })
     expect(result.status).toBe("APPEALED")

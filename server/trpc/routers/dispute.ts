@@ -276,8 +276,7 @@ const mapDisputeRecord = (record: DisputeRecord, currentUserId?: string | null) 
         : null
   const borrower = mapParticipant(record.transaction.borrower)
   const lender = mapParticipant(record.transaction.lender)
-  const counterpart =
-    viewerRole === "BORROWER" ? lender : viewerRole === "LENDER" ? borrower : null
+  const counterpart = viewerRole === "BORROWER" ? lender : viewerRole === "LENDER" ? borrower : null
   const canAppeal =
     status === "REJECTED" && isDateWithinWindow(record.reviewedAt, DISPUTE_APPEAL_WINDOW_DAYS)
 
