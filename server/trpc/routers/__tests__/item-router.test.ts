@@ -155,11 +155,12 @@ describe("itemRouter", () => {
         availability: [
           {
             id: "22222222-2222-2222-2222-222222222222",
-            startDate: new Date("2026-03-10T00:00:00.000Z"),
-            endDate: new Date("2026-03-12T00:00:00.000Z"),
+            startDate: new Date("2099-03-10T00:00:00.000Z"),
+            endDate: new Date("2099-03-12T00:00:00.000Z"),
             status: "AVAILABLE",
           },
         ],
+        bookings: [],
         images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
         categories: [{ category: "ELECTRONICS" }],
         tags: [{ tag: { name: "photo" } }],
@@ -186,9 +187,17 @@ describe("itemRouter", () => {
             }),
             orderBy: { startDate: "asc" },
           }),
+          bookings: expect.objectContaining({
+            where: expect.objectContaining({
+              status: { in: ["CONFIRMED", "IN_DISPUTE"] },
+            }),
+          }),
         }),
         where: expect.objectContaining({
-          status: { not: "DELETED" },
+          AND: expect.arrayContaining([
+            expect.objectContaining({ status: { not: "DELETED" } }),
+            expect.objectContaining({ status: "AVAILABLE" }),
+          ]),
         }),
       }),
     )
@@ -200,8 +209,8 @@ describe("itemRouter", () => {
     expect(result[0]?.availability).toEqual([
       {
         id: "22222222-2222-2222-2222-222222222222",
-        startDate: new Date("2026-03-10T00:00:00.000Z"),
-        endDate: new Date("2026-03-12T00:00:00.000Z"),
+        startDate: new Date("2099-03-10T00:00:00.000Z"),
+        endDate: new Date("2099-03-12T00:00:00.000Z"),
         status: "AVAILABLE",
       },
     ])
@@ -210,6 +219,97 @@ describe("itemRouter", () => {
     ])
     expect(result[0]?.thumbnailImage).toBe("https://example.com/camera.jpg")
     expect(result[0]?.photos).toEqual(["https://example.com/camera.jpg"])
+  })
+
+  it("byId returns item review images for display", async () => {
+    const reviewImageUrl =
+      "https://example.supabase.co/storage/v1/object/public/item-images/reviews/u/r1.jpg"
+    const findById = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      name: "Camera",
+      status: "AVAILABLE",
+      lenderId: "owner-1",
+      lender: {
+        user: {
+          username: "owner1",
+          firstName: "Owner",
+          middleName: null,
+          lastName: "One",
+          email: "owner1@up.edu.ph",
+          status: "ACTIVE",
+        },
+      },
+      availability: [
+        {
+          id: "33333333-3333-3333-3333-333333333333",
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
+      categories: [{ category: "ELECTRONICS" }],
+      tags: [{ tag: { name: "photo" } }],
+      likes: [],
+      description: "Mirrorless camera",
+      condition: "GOOD",
+      rateOption: "PER_DAY",
+      createdAt: new Date("2026-03-22T00:00:00.000Z"),
+      rentalFee: 250,
+      replacementCost: null,
+      freeToBorrow: false,
+      whatItemOffers: null,
+      whatIsIncluded: null,
+      knownIssues: null,
+      usageLimitations: null,
+      isTrending: false,
+      viewCount: 0,
+      bookingCount: 0,
+      likeCount: 0,
+      rating: 0,
+      borrowerId: null,
+      transactionReviews: [
+        {
+          id: "review-1",
+          transactionId: "txn-1",
+          reviewerUserId: "borrower-1",
+          reviewType: "ITEM_REVIEW",
+          revieweeUserId: null,
+          itemId: VALID_UUID,
+          rating: 5,
+          reviewText: "Very clean and complete.",
+          images: [reviewImageUrl],
+          isAnonymous: false,
+          createdAt: new Date("2026-04-14T00:00:00.000Z"),
+          reviewerUser: {
+            id: "borrower-1",
+            username: "borrower1",
+            firstName: "Borrower",
+            middleName: null,
+            lastName: "One",
+            avatarUrl: null,
+          },
+          revieweeUser: null,
+        },
+      ],
+      bookings: [],
+    })
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: { item: { findUnique: findById, findFirst: findById } } as never,
+      user: null,
+    })
+
+    const result = await caller.byId({ id: VALID_UUID })
+
+    expect(findById).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: VALID_UUID }),
+      }),
+    )
+    expect(result?.reviewsCount).toBe(1)
+    expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
   })
 
   it("update throws NOT_FOUND when item does not exist", async () => {
@@ -313,8 +413,20 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike creates a like when it does not exist", async () => {
-    const itemFindFirst = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      status: "AVAILABLE",
+      lender: { user: { status: "ACTIVE" } },
+      availability: [
+        {
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      bookings: [],
+    })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce(null) // check if like exists
@@ -345,8 +457,20 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike deletes a like when it exists", async () => {
-    const itemFindFirst = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      status: "AVAILABLE",
+      lender: { user: { status: "ACTIVE" } },
+      availability: [
+        {
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      bookings: [],
+    })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists

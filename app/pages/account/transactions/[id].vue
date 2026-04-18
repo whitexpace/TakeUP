@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
+import type { ReviewType } from "../../../../shared/schemas/review"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
 
 definePageMeta({
@@ -65,7 +66,7 @@ const actionSuccessMessage = ref("")
 
 const currentUserId = computed(() => authData.value?.user.id ?? null)
 const isLender = computed(() => booking.value.lenderId === currentUserId.value)
-const userRole = computed(() => (isLender.value ? "LENDER" : "BORROWER"))
+const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
 const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
 
@@ -204,6 +205,8 @@ const timeline = computed(() => {
 const isReturnModalOpen = ref(false)
 const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
+const isReviewModalOpen = ref(false)
+const selectedReviewType = ref<ReviewType | null>(null)
 
 const handleReturn = () => {
   actionErrorMessage.value = ""
@@ -313,6 +316,47 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
 const handleDispute = () => {
   // Placeholder for dispute logic
   alert("Dispute filing will be available soon.")
+}
+
+const reviewCounterpartName = computed(() => {
+  const user = isLender.value ? booking.value.borrower.user : booking.value.lender.user
+  return `${user.firstName} ${user.lastName[0]}.`
+})
+
+const reviewContext = computed(() => {
+  if (!booking.value.transactionId || !selectedReviewType.value) return null
+
+  return {
+    transactionId: booking.value.transactionId,
+    reviewType: selectedReviewType.value,
+    currentUserRole: userRole.value,
+    itemName: booking.value.item.name,
+    counterpartName: reviewCounterpartName.value,
+    itemId: booking.value.item.id,
+    targetUserId:
+      selectedReviewType.value === "ITEM_REVIEW"
+        ? null
+        : selectedReviewType.value === "LENDER_REVIEW"
+          ? booking.value.lenderId
+          : booking.value.borrowerId,
+  }
+})
+
+const openReviewModal = (reviewType: ReviewType) => {
+  selectedReviewType.value = reviewType
+  const action = booking.value.reviewState.actions.find((entry) => entry.reviewType === reviewType)
+  if (!action?.canSubmit) return
+  isReviewModalOpen.value = true
+}
+
+const closeReviewModal = () => {
+  isReviewModalOpen.value = false
+  selectedReviewType.value = null
+}
+
+const handleReviewSubmitted = async () => {
+  await refresh()
+  actionSuccessMessage.value = "Thanks for your feedback. Your review is now visible here."
 }
 </script>
 
@@ -698,6 +742,41 @@ const handleDispute = () => {
           </div>
         </section>
 
+        <section class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+            <div>
+              <h2 class="text-lg font-bold text-noble-black">Feedback</h2>
+              <p class="text-sm text-noble-black/60 mt-1">
+                Reviews become available once the transaction is completed.
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="action in booking.reviewState.actions.filter((entry) => entry.canSubmit)"
+                :key="action.reviewType"
+                class="bg-burning-orange text-white px-5 py-2.5 rounded-xl font-bold hover:bg-cinnabar-red transition-colors"
+                @click="openReviewModal(action.reviewType)"
+              >
+                {{ action.label }}
+              </button>
+              <span
+                v-for="action in booking.reviewState.actions.filter((entry) => entry.hasSubmitted)"
+                :key="`${action.reviewType}-submitted`"
+                class="inline-flex items-center rounded-xl bg-indigo-900 px-4 py-2 text-sm font-semibold text-white"
+              >
+                {{ action.submittedLabel }}
+              </span>
+            </div>
+          </div>
+
+          <TransactionReviewList
+            title="Transaction Reviews"
+            :reviews="booking.reviews"
+            empty-message="No reviews have been submitted for this transaction yet."
+          />
+        </section>
+
         <!-- File Dispute Button -->
         <button
           class="w-full flex items-center justify-center gap-2 bg-cinnabar-red text-white font-bold py-4 hover:bg-cinnabar-red/90 rounded-2xl transition-colors mt-4"
@@ -864,6 +943,13 @@ const handleDispute = () => {
         </div>
       </div>
     </Transition>
+
+    <TransactionReviewModal
+      :open="isReviewModalOpen"
+      :context="reviewContext"
+      @close="closeReviewModal"
+      @submitted="handleReviewSubmitted"
+    />
   </div>
 </template>
 
