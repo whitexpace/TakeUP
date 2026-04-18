@@ -28,6 +28,7 @@ import {
   buildPublicVisibleItemWhere,
   isPublicVisibleItem,
 } from "../../utils/item-visibility"
+import { expireActiveBoosts } from "../../utils/rewards"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
@@ -145,6 +146,8 @@ const itemSearchSelect = {
   id: true,
   createdAt: true,
   bookingCount: true,
+  boostScore: true,
+  boostExpiresAt: true,
   name: true,
   description: true,
   condition: true,
@@ -400,6 +403,8 @@ const mapItemTaxonomy = (
       })) ?? [],
     thumbnailImage,
     photos: orderedPhotos,
+    hasActiveBoost:
+      item.boostExpiresAt instanceof Date ? item.boostExpiresAt.getTime() > Date.now() : false,
     availability: availability.map((entry) => ({
       id: entry.id,
       startDate: entry.startDate,
@@ -661,17 +666,24 @@ const buildListWhere = (
 }
 
 const buildPaginationWhereFromCursor = (cursor: {
+  boostScore: number
   bookingCount: number
   createdAt: Date
   id: string
 }): Prisma.ItemWhereInput => ({
   OR: [
-    { bookingCount: { lt: cursor.bookingCount } },
+    { boostScore: { lt: cursor.boostScore } },
     {
+      boostScore: cursor.boostScore,
+      bookingCount: { lt: cursor.bookingCount },
+    },
+    {
+      boostScore: cursor.boostScore,
       bookingCount: cursor.bookingCount,
       createdAt: { lt: cursor.createdAt },
     },
     {
+      boostScore: cursor.boostScore,
       bookingCount: cursor.bookingCount,
       createdAt: cursor.createdAt,
       id: { lt: cursor.id },
@@ -717,7 +729,7 @@ const filterPublicVisibleItems = <T extends PublicVisibleItemRecord>(
 
 const buildPaginatedWhere = (
   where: Prisma.ItemWhereInput,
-  cursor: { bookingCount: number; createdAt: Date; id: string } | null,
+  cursor: { boostScore: number; bookingCount: number; createdAt: Date; id: string } | null,
 ) => {
   if (!cursor) return where
   return {
@@ -727,11 +739,17 @@ const buildPaginatedWhere = (
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
     const visibleRecords: PublicVisibleItemRecord[] = []
-    let scanCursor: { id: string; bookingCount: number; createdAt: Date } | null = null
+    let scanCursor: {
+      id: string
+      boostScore: number
+      bookingCount: number
+      createdAt: Date
+    } | null = null
 
     while (visibleRecords.length < 50) {
       const take = search ? SEARCH_SCAN_LIMIT : VISIBILITY_SCAN_BATCH_SIZE
@@ -760,6 +778,7 @@ export const itemRouter = router({
 
       scanCursor = {
         id: lastScannedRecord.id,
+        boostScore: lastScannedRecord.boostScore,
         bookingCount: lastScannedRecord.bookingCount,
         createdAt: lastScannedRecord.createdAt,
       }
@@ -772,6 +791,7 @@ export const itemRouter = router({
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const search = input.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -782,6 +802,7 @@ export const itemRouter = router({
     })
     let scanCursor = input.cursor
       ? {
+          boostScore: input.cursor.boostScore,
           bookingCount: input.cursor.bookingCount,
           createdAt: input.cursor.createdAt,
           id: input.cursor.id,
@@ -812,6 +833,7 @@ export const itemRouter = router({
 
       scanCursor = {
         id: lastScannedRecord.id,
+        boostScore: lastScannedRecord.boostScore,
         bookingCount: lastScannedRecord.bookingCount,
         createdAt: lastScannedRecord.createdAt,
       }
@@ -827,6 +849,7 @@ export const itemRouter = router({
         hasMore && lastRecord
           ? {
               id: lastRecord.id,
+              boostScore: lastRecord.boostScore,
               bookingCount: lastRecord.bookingCount,
               createdAt: lastRecord.createdAt,
             }
@@ -835,6 +858,7 @@ export const itemRouter = router({
   }),
 
   countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -845,7 +869,8 @@ export const itemRouter = router({
       now,
     })
     let totalCount = 0
-    let cursor: { id: string; createdAt: Date; bookingCount: number } | null = null
+    let cursor: { id: string; createdAt: Date; bookingCount: number; boostScore: number } | null =
+      null
 
     while (true) {
       const paginationWhere: Prisma.ItemWhereInput | null = cursor
@@ -876,6 +901,7 @@ export const itemRouter = router({
 
       cursor = {
         id: last.id,
+        boostScore: last.boostScore,
         bookingCount: last.bookingCount,
         createdAt: last.createdAt,
       }
@@ -1013,6 +1039,7 @@ export const itemRouter = router({
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const now = new Date()
     const item = await ctx.prisma.item.findFirst({
       where: {
@@ -1191,6 +1218,7 @@ export const itemRouter = router({
   }),
 
   myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const { search, statuses, categories, limit, cursor } = input
     const userId = ctx.user.id
 
