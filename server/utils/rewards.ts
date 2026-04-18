@@ -454,32 +454,31 @@ const upsertRewardEvent = async (
 
 export const expireActiveBoosts = async (prisma: RewardClient) => {
   const now = new Date()
-  const itemBoostDelegate = (prisma as Partial<Pick<RewardClient, "itemBoost">>).itemBoost
-  const itemDelegate = (prisma as Partial<Pick<RewardClient, "item">>).item
-
-  if (!itemBoostDelegate?.updateMany || !itemDelegate?.updateMany) {
-    return
+  const itemBoostDelegate = (prisma as { itemBoost?: { updateMany?: unknown } }).itemBoost
+  if (itemBoostDelegate && typeof itemBoostDelegate.updateMany === "function") {
+    await prisma.itemBoost.updateMany({
+      where: {
+        status: ItemBoostStatus.ACTIVE,
+        expiresAt: { lte: now },
+      },
+      data: {
+        status: ItemBoostStatus.EXPIRED,
+      },
+    })
   }
 
-  await itemBoostDelegate.updateMany({
-    where: {
-      status: ItemBoostStatus.ACTIVE,
-      expiresAt: { lte: now },
-    },
-    data: {
-      status: ItemBoostStatus.EXPIRED,
-    },
-  })
-
-  await itemDelegate.updateMany({
-    where: {
-      boostExpiresAt: { lte: now },
-    },
-    data: {
-      boostScore: 0,
-      boostExpiresAt: null,
-    },
-  })
+  const itemDelegate = (prisma as { item?: { updateMany?: unknown } }).item
+  if (itemDelegate && typeof itemDelegate.updateMany === "function") {
+    await prisma.item.updateMany({
+      where: {
+        boostExpiresAt: { lte: now },
+      },
+      data: {
+        boostScore: 0,
+        boostExpiresAt: null,
+      },
+    })
+  }
 }
 
 const findRewardTransaction = async (
@@ -551,7 +550,7 @@ export const processTransactionRewards = async (prisma: RewardClient, transactio
 
   await syncManyUserRewardLedgers(prisma, [transaction.borrowerId, transaction.lenderId])
 
-  for (const review of transaction.reviews) {
+  for (const review of transaction.reviews ?? []) {
     await processReviewRewards(prisma, review.id)
   }
 }
