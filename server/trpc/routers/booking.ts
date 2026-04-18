@@ -30,6 +30,7 @@ import {
 } from "../review-helpers"
 import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
+import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },

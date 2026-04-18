@@ -1,9 +1,6 @@
-import {
-  TransactionStatus as PrismaTransactionStatus,
-  type Prisma,
-  type PrismaClient,
-} from "@prisma/client"
+import { TransactionStatus as PrismaTransactionStatus, type Prisma } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
+import type { Context } from "../context"
 import { router } from "../init"
 import { protectedProcedure } from "../procedures"
 import {
@@ -146,7 +143,10 @@ const assertParticipant = (
   })
 }
 
-const getConversationWithTransaction = async (prisma: PrismaClient, conversationId: string) => {
+const getConversationWithTransaction = async (
+  prisma: Context["prisma"],
+  conversationId: string,
+) => {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: conversationWithTransactionInclude,
@@ -160,7 +160,7 @@ const getConversationWithTransaction = async (prisma: PrismaClient, conversation
 }
 
 const getTransactionForChat = async (
-  prisma: PrismaClient,
+  prisma: Context["prisma"],
   transactionId: string,
   userId: string,
 ) => {
@@ -207,7 +207,7 @@ const mapConversationDetail = (input: {
   }
 }
 
-const upsertConversationForTransaction = async (prisma: PrismaClient, transactionId: string) =>
+const upsertConversationForTransaction = async (prisma: Context["prisma"], transactionId: string) =>
   prisma.conversation.upsert({
     where: { transactionId },
     update: {},
@@ -216,7 +216,7 @@ const upsertConversationForTransaction = async (prisma: PrismaClient, transactio
   })
 
 const getConversationByTransaction = async (
-  prisma: PrismaClient,
+  prisma: Context["prisma"],
   transactionId: string,
   userId: string,
 ) => {
@@ -230,7 +230,7 @@ const getConversationByTransaction = async (
   })
 }
 
-const listUserConversations = async (prisma: PrismaClient, userId: string) => {
+const listUserConversations = async (prisma: Context["prisma"], userId: string) => {
   const conversations = await prisma.conversation.findMany({
     where: {
       transaction: {
