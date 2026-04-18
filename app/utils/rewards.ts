@@ -7,7 +7,8 @@ const boostDateFormatter = new Intl.DateTimeFormat("en-PH", {
 
 const asDate = (value: string | Date) => (value instanceof Date ? value : new Date(value))
 
-export const formatBoostDateTime = (value: string | Date) => boostDateFormatter.format(asDate(value))
+export const formatBoostDateTime = (value: string | Date) =>
+  boostDateFormatter.format(asDate(value))
 
 export const getRemainingBoostTime = (expiresAt: string | Date, now: Date = new Date()) => {
   const expiresAtDate = asDate(expiresAt)

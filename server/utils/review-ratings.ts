@@ -3,9 +3,7 @@ import type { Prisma } from "@prisma/client"
 type ReviewRatingClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient
 type RoleReviewType = "BORROWER_REVIEW" | "LENDER_REVIEW"
 
-const buildRoleRatingMap = (
-  reviews: Array<{ revieweeUserId: string | null; rating: number }>,
-) => {
+const buildRoleRatingMap = (reviews: Array<{ revieweeUserId: string | null; rating: number }>) => {
   const grouped = new Map<string, { total: number; count: number }>()
 
   for (const review of reviews) {
@@ -45,7 +43,9 @@ export const syncRoleRatingsFromReviews = async (
     targetUserIds.map(async (userId) => {
       const aggregate = ratingMap.get(userId)
       const averageRating =
-        aggregate && aggregate.count > 0 ? Number((aggregate.total / aggregate.count).toFixed(2)) : 0
+        aggregate && aggregate.count > 0
+          ? Number((aggregate.total / aggregate.count).toFixed(2))
+          : 0
 
       if (reviewType === "BORROWER_REVIEW") {
         await prisma.borrower.upsert({

@@ -176,7 +176,9 @@ onMounted(() => {
         </p>
       </div>
 
-      <div class="mb-4 flex flex-col gap-2 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="mb-4 flex flex-col gap-2 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
           <p class="text-sm font-semibold text-neutral-800">
             Available rewards points: {{ rewardsSummary?.availablePoints ?? 0 }}
@@ -389,14 +391,14 @@ onMounted(() => {
     </div>
 
     <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MyListingCard
-          v-for="item in listings"
-          :key="item.id"
-          :item="item"
-          :is-toggling="togglingId === item.id || boostingId === item.id"
-          @toggle-status="handleToggleStatus"
-          @boost-listing="handleBoostListing"
-        />
+      <MyListingCard
+        v-for="item in listings"
+        :key="item.id"
+        :item="item"
+        :is-toggling="togglingId === item.id || boostingId === item.id"
+        @toggle-status="handleToggleStatus"
+        @boost-listing="handleBoostListing"
+      />
     </div>
 
     <div v-if="hasMore && !isLoading" class="flex justify-center pt-4">

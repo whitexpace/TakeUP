@@ -549,18 +549,18 @@ model RequestOffer {
 }
 
 model TransactionDispute {
-  id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  transactionId String        @map("transaction_id")
-  filedByUserId String        @map("filed_by_user_id")
+  id            String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId String          @map("transaction_id")
+  filedByUserId String          @map("filed_by_user_id")
   reason        DisputeReason
   description   String?
-  claimedAmount Decimal       @default(0) @map("claimed_amount") @db.Decimal(12, 2)
-  status        DisputeStatus @default(OPEN)
-  adminId       String?       @map("admin_id")
+  claimedAmount Decimal         @default(0) @map("claimed_amount") @db.Decimal(12, 2)
+  status        DisputeStatus   @default(OPEN)
+  adminId       String?         @map("admin_id")
   resolution    String?
   outcome       DisputeOutcome?
-  resolvedAt    DateTime?     @map("resolved_at") @db.Timestamptz(6)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt    DateTime?       @map("resolved_at") @db.Timestamptz(6)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
   admin       User?             @relation("transaction_disputes_admin_idToUser", fields: [adminId], references: [id])
   filedByUser User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [filedByUserId], references: [id])
@@ -672,24 +672,24 @@ model UserReward {
 }
 
 model RewardEvent {
-  id             String            @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId         String            @map("user_id")
-  transactionId  String?           @map("transaction_id")
-  reviewId       String?           @map("review_id")
-  itemBoostId    String?           @map("item_boost_id")
-  idempotencyKey String            @unique @map("idempotency_key")
-  sourceType     RewardSourceType  @map("source_type")
+  id             String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId         String             @map("user_id")
+  transactionId  String?            @map("transaction_id")
+  reviewId       String?            @map("review_id")
+  itemBoostId    String?            @map("item_boost_id")
+  idempotencyKey String             @unique @map("idempotency_key")
+  sourceType     RewardSourceType   @map("source_type")
   roleCategory   RewardRoleCategory @default(GENERAL) @map("role_category")
-  pointsDelta    Int               @map("points_delta")
-  status         RewardEventStatus @default(PENDING)
-  metadata       Json              @default("{}")
-  appliedAt      DateTime?         @map("applied_at") @db.Timestamptz(6)
-  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  pointsDelta    Int                @map("points_delta")
+  status         RewardEventStatus  @default(PENDING)
+  metadata       Json               @default("{}")
+  appliedAt      DateTime?          @map("applied_at") @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  itemBoost    ItemBoost?          @relation(fields: [itemBoostId], references: [id], onDelete: SetNull)
-  review       TransactionReview?  @relation(fields: [reviewId], references: [id], onDelete: SetNull)
-  transaction  RentalTransaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemBoost   ItemBoost?         @relation(fields: [itemBoostId], references: [id], onDelete: SetNull)
+  review      TransactionReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  transaction RentalTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([transactionId, status])
@@ -711,8 +711,8 @@ model ItemBoost {
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
   rewardEvents RewardEvent[]
-  item         Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([itemId, status, expiresAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])

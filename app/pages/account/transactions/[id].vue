@@ -917,7 +917,10 @@ const submitReview = async () => {
         {{ reviewErrorMessage }}
       </p>
 
-      <div v-if="currentUserReview" class="mt-5 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4">
+      <div
+        v-if="currentUserReview"
+        class="mt-5 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4"
+      >
         <p class="text-sm font-semibold text-neutral-800">Your review</p>
         <p class="mt-2 text-sm text-neutral-800/70">Rating: {{ currentUserReview.rating }}/5</p>
         <p v-if="currentUserReview.reviewText" class="mt-2 text-sm text-neutral-800/70">
@@ -949,7 +952,11 @@ const submitReview = async () => {
         </div>
 
         <label class="flex items-center gap-2 text-sm text-neutral-800/70">
-          <input v-model="reviewForm.isAnonymous" type="checkbox" class="rounded border-cinnamon-ice" />
+          <input
+            v-model="reviewForm.isAnonymous"
+            type="checkbox"
+            class="rounded border-cinnamon-ice"
+          />
           Submit anonymously
         </label>
 

@@ -41,15 +41,14 @@ const {
   pending: boostsPending,
   error: boostsError,
   refresh: refreshBoosts,
-} = await useAsyncData("rewards:active-boosts", () => $fetch<ActiveBoost[]>("/api/rewards/boosts/active"))
+} = await useAsyncData("rewards:active-boosts", () =>
+  $fetch<ActiveBoost[]>("/api/rewards/boosts/active"),
+)
 
 const activeBoosts = computed(() =>
   (activeBoostsResponse.value ?? [])
     .map((boost) => {
-      const timing = getRemainingBoostTime(
-        boost.boostExpiresAt,
-        new Date(now.value),
-      )
+      const timing = getRemainingBoostTime(boost.boostExpiresAt, new Date(now.value))
 
       return {
         ...boost,
@@ -84,16 +83,15 @@ onBeforeUnmount(() => {
         </p>
       </div>
 
-      <div class="rounded-[24px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)] sm:p-7">
+      <div
+        class="rounded-[24px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)] sm:p-7"
+      >
         <div
           v-if="summaryPending && !summary"
           class="h-40 animate-pulse rounded-[18px] border border-cinnamon-ice/70 bg-white"
         />
 
-        <div
-          v-else-if="summaryError"
-          class="rounded-[18px] border border-red-200 bg-white p-5"
-        >
+        <div v-else-if="summaryError" class="rounded-[18px] border border-red-200 bg-white p-5">
           <p class="text-base font-semibold text-neutral-800">Unable to load your points.</p>
           <p class="mt-2 text-sm text-neutral-800/60">
             Try again to view your current rewards balance.
@@ -107,19 +105,14 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div
-          v-else
-          class="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:items-center"
-        >
+        <div v-else class="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:items-center">
           <div class="flex justify-center lg:justify-end">
             <div class="flex items-center pl-4 pr-1 lg:pl-14 lg:pr-0">
               <div class="min-w-[170px] text-center lg:min-w-[210px]">
                 <p class="text-[32px] font-extrabold leading-none text-burning-orange">
                   {{ (summary?.availablePoints ?? 0).toLocaleString("en-US") }}
                 </p>
-                <p class="mt-2 text-[30px] font-medium leading-none text-neutral-800/80">
-                  Points
-                </p>
+                <p class="mt-2 text-[30px] font-medium leading-none text-neutral-800/80">Points</p>
               </div>
               <div class="ml-6 hidden h-36 w-px bg-[#D6D6D6] lg:block" />
             </div>
@@ -169,7 +162,9 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="grid gap-6 xl:grid-cols-2">
-        <article class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)]">
+        <article
+          class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)]"
+        >
           <h2 class="text-[20px] font-bold text-neutral-800">Redeem Points for Rewards!</h2>
           <p class="mt-2 text-sm leading-6 text-neutral-800/65 sm:text-[15px]">
             Keep these as lightweight preview rewards for now while the full redemption flow is
@@ -177,7 +172,9 @@ onBeforeUnmount(() => {
           </p>
 
           <div class="mt-5 grid gap-4 sm:grid-cols-2">
-            <div class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]">
+            <div
+              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
+            >
               <div class="flex min-h-[72px] items-center justify-center text-blue-estate">
                 <svg
                   width="36"
@@ -204,7 +201,9 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <div class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]">
+            <div
+              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
+            >
               <div class="flex min-h-[72px] items-center justify-center text-blue-estate">
                 <svg
                   width="36"
@@ -232,21 +231,27 @@ onBeforeUnmount(() => {
           </div>
         </article>
 
-        <article class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)]">
+        <article
+          class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)]"
+        >
           <h2 class="text-[20px] font-bold text-neutral-800">Boost your Listing!</h2>
           <p class="mt-2 max-w-[344px] text-[18px] leading-7 text-neutral-800/80">
             Boost an item listing to increase its visibility!
           </p>
 
           <div class="mt-5 grid gap-4 sm:grid-cols-2">
-            <div class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]">
+            <div
+              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
+            >
               <p class="text-[15px] font-bold text-neutral-800">Point Cost</p>
               <p class="mt-1 text-[20px] font-semibold text-burning-orange">
                 {{ BOOST_CONFIG.pointsCost }} pts
               </p>
             </div>
 
-            <div class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]">
+            <div
+              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
+            >
               <p class="text-[15px] font-bold text-neutral-800">Duration</p>
               <p class="mt-1 text-[20px] font-semibold text-neutral-800">
                 {{ BOOST_CONFIG.durationHours }} hours
@@ -316,7 +321,9 @@ onBeforeUnmount(() => {
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M12 3l2.6 5.26L20 9.27l-4 3.9.94 5.45L12 15.9l-4.94 2.72L8 13.17l-4-3.9 5.4-1.01L12 3z" />
+            <path
+              d="M12 3l2.6 5.26L20 9.27l-4 3.9.94 5.45L12 15.9l-4.94 2.72L8 13.17l-4-3.9 5.4-1.01L12 3z"
+            />
           </svg>
         </div>
         <h3 class="mt-4 text-lg font-semibold text-neutral-800">No active boosted listings</h3>
@@ -338,9 +345,7 @@ onBeforeUnmount(() => {
           class="overflow-hidden rounded-[22px] border border-cinnamon-ice/70 bg-white"
         >
           <div class="flex flex-col sm:flex-row">
-            <div
-              class="h-40 bg-cream sm:h-auto sm:w-40 sm:min-w-40"
-            >
+            <div class="h-40 bg-cream sm:h-auto sm:w-40 sm:min-w-40">
               <img
                 v-if="boost.itemImage"
                 :src="boost.itemImage"
