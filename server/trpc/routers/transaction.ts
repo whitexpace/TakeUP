@@ -22,7 +22,7 @@ import {
   transactionReviewSelect,
   transactionReviewUserSelect,
 } from "../review-helpers"
-import { syncRoleRatingForUser } from "../../utils/review-ratings"
+import { processTransactionRewards } from "../../utils/rewards"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -667,7 +667,7 @@ export const transactionRouter = router({
       }
 
       try {
-        const review = await ctx.prisma.$transaction(async (tx) => {
+        const reviewResult = await ctx.prisma.$transaction(async (tx) => {
           const txWithDrafts = tx as typeof tx & ReviewDraftPrisma
           const createdReview = await tx.transactionReview.create({
             data: {
@@ -711,18 +711,22 @@ export const transactionRouter = router({
             })
           }
 
-          if (revieweeUserId && input.reviewType !== "ITEM_REVIEW") {
-            await syncRoleRatingForUser(
-              tx as Prisma.TransactionClient,
-              input.reviewType,
-              revieweeUserId,
-            )
+          return {
+            createdReview,
+            transactionId: transaction.id,
           }
-
-          return createdReview
         })
 
-        return mapTransactionReview(review)
+        try {
+          await processTransactionRewards(
+            ctx.prisma as Prisma.TransactionClient,
+            reviewResult.transactionId,
+          )
+        } catch (error) {
+          console.error("Failed to process transaction rewards after review submission", error)
+        }
+
+        return mapTransactionReview(reviewResult.createdReview)
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
           throw new TRPCError({

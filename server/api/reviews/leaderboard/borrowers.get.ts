@@ -1,4 +1,4 @@
-import { appRouter } from "../../../../server/trpc/routers"
+import { appRouter } from "../../../trpc/routers"
 import { createContext } from "../../../trpc/context"
 
 export default defineEventHandler(async (event) => {
