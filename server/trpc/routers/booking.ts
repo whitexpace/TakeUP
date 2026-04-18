@@ -35,6 +35,7 @@ import { isActiveDisputeStatus, toApiDisputeStatus } from "../../utils/dispute-s
 import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
+import { isActiveDisputeStatus, toApiDisputeStatus } from "../../utils/dispute-status"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
