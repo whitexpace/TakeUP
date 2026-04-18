@@ -25,6 +25,7 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   viewCount: 0,
   bookingCount: 0,
   likeCount: 0,
+  boostScore: 0,
   rating: 4,
   lenderId: "lender-1",
   ownerName: "Alice",
@@ -33,6 +34,7 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   borrowerId: null,
   categories: ["ELECTRONICS"],
   tags: [],
+  hasActiveBoost: false,
   ...overrides,
 })
 

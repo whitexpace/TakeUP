@@ -50,6 +50,32 @@ if (error.value) {
   throw error.value
 }
 
+const { data: reviewState, refresh: refreshReviewState } = await useAsyncData(
+  () => `booking-review:${bookingId.value || "missing"}`,
+  async () => {
+    if (!bookingId.value) {
+      return {
+        canSubmit: false,
+        review: null,
+        transactionId: null,
+      }
+    }
+
+    return await $fetch<{
+      canSubmit: boolean
+      transactionId: string | null
+      review: null | {
+        id: string
+        rating: number
+        reviewText: string | null
+        isAnonymous: boolean
+        createdAt: string | Date
+      }
+    }>(`/api/reviews/booking/${bookingId.value}`)
+  },
+  { watch: [bookingId] },
+)
+
 const booking = computed(() => {
   if (!data.value) {
     throw createError({
@@ -207,6 +233,16 @@ const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
 const isReviewModalOpen = ref(false)
 const selectedReviewType = ref<ReviewType | null>(null)
+const isSubmittingReview = ref(false)
+const reviewErrorMessage = ref("")
+const reviewSuccessMessage = ref("")
+const reviewForm = reactive({
+  rating: 5,
+  reviewText: "",
+  isAnonymous: false,
+})
+const canSubmitReview = computed(() => reviewState.value?.canSubmit ?? false)
+const currentUserReview = computed(() => reviewState.value?.review ?? null)
 
 const handleReturn = () => {
   actionErrorMessage.value = ""
@@ -357,6 +393,48 @@ const closeReviewModal = () => {
 const handleReviewSubmitted = async () => {
   await refresh()
   actionSuccessMessage.value = "Thanks for your feedback. Your review is now visible here."
+}
+
+const submitReview = async () => {
+  isSubmittingReview.value = true
+  reviewErrorMessage.value = ""
+  reviewSuccessMessage.value = ""
+
+  try {
+    await $fetch("/api/reviews", {
+      method: "POST",
+      body: {
+        bookingId: booking.value.id,
+        rating: reviewForm.rating,
+        reviewText: reviewForm.reviewText,
+        isAnonymous: reviewForm.isAnonymous,
+      },
+    })
+
+    reviewSuccessMessage.value = "Review submitted. Your rewards bonus has been processed."
+    reviewForm.rating = 5
+    reviewForm.reviewText = ""
+    reviewForm.isAnonymous = false
+    await Promise.all([refreshReviewState(), refresh()])
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+          message?: string
+        }
+      }
+    )?.data
+
+    reviewErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      errorData?.message ??
+      "Unable to submit your review right now."
+  } finally {
+    isSubmittingReview.value = false
+  }
 }
 </script>
 
@@ -801,6 +879,76 @@ const handleReviewSubmitted = async () => {
         </button>
       </div>
     </template>
+
+    <section
+      v-if="booking.status === 'COMPLETED'"
+      class="mt-6 rounded-[24px] border border-cinnamon-ice bg-cream p-6"
+    >
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-noble-black">Review and Bonus</h2>
+          <p class="text-sm text-noble-black/60">
+            Submitting a review earns bonus points regardless of the star rating.
+          </p>
+        </div>
+      </div>
+
+      <p v-if="reviewSuccessMessage" class="mt-4 text-sm font-medium text-emerald-700">
+        {{ reviewSuccessMessage }}
+      </p>
+      <p v-if="reviewErrorMessage" class="mt-4 text-sm font-medium text-red-600">
+        {{ reviewErrorMessage }}
+      </p>
+
+      <div v-if="currentUserReview" class="mt-5 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4">
+        <p class="text-sm font-semibold text-neutral-800">Your review</p>
+        <p class="mt-2 text-sm text-neutral-800/70">Rating: {{ currentUserReview.rating }}/5</p>
+        <p v-if="currentUserReview.reviewText" class="mt-2 text-sm text-neutral-800/70">
+          {{ currentUserReview.reviewText }}
+        </p>
+      </div>
+
+      <form v-else-if="canSubmitReview" class="mt-5 space-y-4" @submit.prevent="submitReview">
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-neutral-800">Your rating</label>
+          <select
+            v-model="reviewForm.rating"
+            class="h-11 w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
+          >
+            <option v-for="rating in [5, 4, 3, 2, 1]" :key="rating" :value="rating">
+              {{ rating }} star{{ rating === 1 ? "" : "s" }}
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-neutral-800">Optional review</label>
+          <textarea
+            v-model="reviewForm.reviewText"
+            rows="4"
+            class="w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 py-3 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
+            placeholder="Share what went well, what could improve, or anything future borrowers/lenders should know."
+          />
+        </div>
+
+        <label class="flex items-center gap-2 text-sm text-neutral-800/70">
+          <input v-model="reviewForm.isAnonymous" type="checkbox" class="rounded border-cinnamon-ice" />
+          Submit anonymously
+        </label>
+
+        <button
+          :disabled="isSubmittingReview"
+          type="submit"
+          class="inline-flex items-center rounded-full bg-burning-orange px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-burning-orange/90 disabled:cursor-not-allowed disabled:bg-burning-orange/40"
+        >
+          {{ isSubmittingReview ? "Submitting..." : "Submit Review" }}
+        </button>
+      </form>
+
+      <p v-else class="mt-5 text-sm text-neutral-800/55">
+        Review submission is not available for this transaction.
+      </p>
+    </section>
 
     <!-- Return Confirmation UI (Modal) -->
     <Transition

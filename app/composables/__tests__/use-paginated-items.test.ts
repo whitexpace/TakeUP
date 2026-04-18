@@ -40,6 +40,7 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   viewCount: 0,
   bookingCount: 0,
   likeCount: 0,
+  boostScore: 0,
   rating: 4,
   lenderId: "lender-1",
   ownerName: "lender-1",
@@ -97,6 +98,7 @@ describe("usePaginatedItems", () => {
         items: [repeatedItem],
         nextCursor: {
           id: repeatedItem.id,
+          boostScore: repeatedItem.boostScore,
           bookingCount: repeatedItem.bookingCount,
           createdAt: repeatedItem.createdAt,
         },
