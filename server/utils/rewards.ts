@@ -142,7 +142,7 @@ const getBoostConfig = (boostType: ItemBoostType) => ITEM_BOOST_CONFIG[boostType
 const getRoleCategory = (role: RewardParticipantRole) =>
   role === "borrower" ? RewardRoleCategory.BORROWER : RewardRoleCategory.LENDER
 
-const getLatestRewardRelevantDispute = (disputes: RewardProcessingDispute[]) => {
+const getLatestRewardRelevantDispute = (disputes: RewardProcessingDispute[] = []) => {
   const active = disputes
     .filter((dispute) => ACTIVE_DISPUTE_STATUSES.includes(dispute.status))
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
@@ -432,25 +432,31 @@ const upsertRewardEvent = async (
 export const expireActiveBoosts = async (prisma: RewardClient) => {
   const now = new Date()
 
-  await prisma.itemBoost.updateMany({
-    where: {
-      status: ItemBoostStatus.ACTIVE,
-      expiresAt: { lte: now },
-    },
-    data: {
-      status: ItemBoostStatus.EXPIRED,
-    },
-  })
+  const itemBoostDelegate = (prisma as { itemBoost?: { updateMany?: unknown } }).itemBoost
+  if (itemBoostDelegate && typeof itemBoostDelegate.updateMany === "function") {
+    await prisma.itemBoost.updateMany({
+      where: {
+        status: ItemBoostStatus.ACTIVE,
+        expiresAt: { lte: now },
+      },
+      data: {
+        status: ItemBoostStatus.EXPIRED,
+      },
+    })
+  }
 
-  await prisma.item.updateMany({
-    where: {
-      boostExpiresAt: { lte: now },
-    },
-    data: {
-      boostScore: 0,
-      boostExpiresAt: null,
-    },
-  })
+  const itemDelegate = (prisma as { item?: { updateMany?: unknown } }).item
+  if (itemDelegate && typeof itemDelegate.updateMany === "function") {
+    await prisma.item.updateMany({
+      where: {
+        boostExpiresAt: { lte: now },
+      },
+      data: {
+        boostScore: 0,
+        boostExpiresAt: null,
+      },
+    })
+  }
 }
 
 const findRewardTransaction = async (
@@ -489,7 +495,7 @@ export const processTransactionRewards = async (prisma: RewardClient, transactio
     return
   }
 
-  const dispute = getLatestRewardRelevantDispute(transaction.disputes)
+  const dispute = getLatestRewardRelevantDispute(transaction.disputes ?? [])
   const borrowerDecision = getTransactionRewardDecision({
     role: "borrower",
     dispute,
@@ -537,7 +543,7 @@ export const processTransactionRewards = async (prisma: RewardClient, transactio
 
   await syncManyUserRewardLedgers(prisma, [transaction.borrowerId, transaction.lenderId])
 
-  for (const review of transaction.reviews) {
+  for (const review of transaction.reviews ?? []) {
     await processReviewRewards(prisma, review.id)
   }
 }
