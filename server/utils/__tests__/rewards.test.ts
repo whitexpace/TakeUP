@@ -1,11 +1,7 @@
-import {
-  DisputeStatus,
-  TransactionStatus,
-} from "@prisma/client"
+import { DisputeStatus, TransactionStatus, type Prisma } from "@prisma/client"
 import { describe, expect, it } from "vitest"
 import {
   DisputeOutcome,
-  ItemBoostStatus,
   ItemBoostType,
   RewardEventStatus,
   RewardRoleCategory,
@@ -15,6 +11,7 @@ import {
   processTransactionRewards,
   redeemListingBoost,
 } from "../rewards"
+import type { ItemBoostStatus } from "../rewards"
 
 type MockRewardEvent = {
   id: string
@@ -59,6 +56,7 @@ type MockStore = {
     id: string
     reviewerUserId: string
     transactionId: string
+    reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"
   }>
   rewardEvents: MockRewardEvent[]
   userRewards: MockUserReward[]
@@ -85,7 +83,10 @@ type MockStore = {
 
 const clone = <T>(value: T): T => structuredClone(value)
 
-const pickFields = <T extends Record<string, unknown>>(value: T, select?: Record<string, unknown>) => {
+const pickFields = <T extends Record<string, unknown>>(
+  value: T,
+  select?: Record<string, unknown>,
+) => {
   if (!select) {
     return clone(value)
   }
@@ -118,12 +119,27 @@ const createMockPrisma = (store: MockStore) =>
           transaction: clone({
             id: transaction.id,
             status: transaction.status,
+            itemId: "item-1",
             borrowerId: transaction.borrowerId,
             lenderId: transaction.lenderId,
             disputes: transaction.disputes,
           }),
         }
       },
+      findMany: async ({
+        where,
+        select,
+      }: {
+        where: { transactionId: string; reviewerUserId: string }
+        select?: Record<string, unknown>
+      }) =>
+        store.reviews
+          .filter(
+            (review) =>
+              review.transactionId === where.transactionId &&
+              review.reviewerUserId === where.reviewerUserId,
+          )
+          .map((review) => pickFields(review, select)),
     },
     rewardEvent: {
       findMany: async ({
@@ -143,7 +159,9 @@ const createMockPrisma = (store: MockStore) =>
         where: { idempotencyKey: string }
         select?: Record<string, unknown>
       }) => {
-        const event = store.rewardEvents.find((entry) => entry.idempotencyKey === where.idempotencyKey)
+        const event = store.rewardEvents.find(
+          (entry) => entry.idempotencyKey === where.idempotencyKey,
+        )
         return event ? pickFields(event, select) : null
       },
       create: async ({
@@ -256,7 +274,13 @@ const createMockPrisma = (store: MockStore) =>
         const item = store.items.find((entry) => entry.id === where.id)
         return item ? pickFields(item, select) : null
       },
-      update: async ({ where, data }: { where: { id: string }; data: Partial<MockStore["items"][number]> }) => {
+      update: async ({
+        where,
+        data,
+      }: {
+        where: { id: string }
+        data: Partial<MockStore["items"][number]>
+      }) => {
         const item = store.items.find((entry) => entry.id === where.id)
         if (!item) throw new Error("Item not found")
         Object.assign(item, clone(data))
@@ -330,7 +354,7 @@ const createMockPrisma = (store: MockStore) =>
         return { count: 0 }
       },
     },
-  }) as any
+  }) as unknown as Prisma.DefaultPrismaClient
 
 const createBaseStore = (): MockStore => ({
   transactions: [],
@@ -447,7 +471,7 @@ describe("rewards utility", () => {
     )
   })
 
-  it("applies reduced shared-fault base points and awards the review submission bonus once", async () => {
+  it("applies reduced shared-fault base points and awards a single +5 bonus after borrower submits both required reviews", async () => {
     const store = createBaseStore()
     store.transactions.push({
       id: "txn-3",
@@ -469,21 +493,30 @@ describe("rewards utility", () => {
       id: "review-1",
       reviewerUserId: "borrower-3",
       transactionId: "txn-3",
+      reviewType: "LENDER_REVIEW",
+    })
+    store.transactions[0]!.reviews.push({ id: "review-2" })
+    store.reviews.push({
+      id: "review-2",
+      reviewerUserId: "borrower-3",
+      transactionId: "txn-3",
+      reviewType: "ITEM_REVIEW",
     })
 
     const prisma = createMockPrisma(store)
 
     await processTransactionRewards(prisma, "txn-3")
     await processReviewRewards(prisma, "review-1")
+    await processReviewRewards(prisma, "review-2")
     await processReviewRewards(prisma, "review-1")
 
     expect(store.userRewards).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           userId: "borrower-3",
-          availablePoints: 8,
-          totalPointsEarned: 8,
-          borrowerPoints: 8,
+          availablePoints: 10,
+          totalPointsEarned: 10,
+          borrowerPoints: 10,
         }),
         expect.objectContaining({
           userId: "lender-3",
@@ -497,6 +530,64 @@ describe("rewards utility", () => {
     expect(
       store.rewardEvents.filter((event) => event.sourceType === RewardSourceType.REVIEW_SUBMITTED),
     ).toHaveLength(1)
+    expect(
+      store.rewardEvents.find((event) => event.sourceType === RewardSourceType.REVIEW_SUBMITTED)
+        ?.pointsDelta,
+    ).toBe(5)
+  })
+
+  it("does not award borrower review bonus until both lender and item reviews are submitted", async () => {
+    const store = createBaseStore()
+    store.transactions.push({
+      id: "txn-4",
+      status: TransactionStatus.COMPLETED,
+      borrowerId: "borrower-4",
+      lenderId: "lender-4",
+      disputes: [],
+      reviews: [{ id: "review-3" }],
+    })
+    store.reviews.push({
+      id: "review-3",
+      reviewerUserId: "borrower-4",
+      transactionId: "txn-4",
+      reviewType: "LENDER_REVIEW",
+    })
+
+    const prisma = createMockPrisma(store)
+
+    await processReviewRewards(prisma, "review-3")
+
+    expect(
+      store.rewardEvents.find(
+        (event) => event.idempotencyKey === "review:txn-4:borrower-4:submission",
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        pointsDelta: 0,
+        status: RewardEventStatus.BLOCKED,
+      }),
+    )
+
+    store.transactions[0]!.reviews.push({ id: "review-4" })
+    store.reviews.push({
+      id: "review-4",
+      reviewerUserId: "borrower-4",
+      transactionId: "txn-4",
+      reviewType: "ITEM_REVIEW",
+    })
+
+    await processReviewRewards(prisma, "review-4")
+
+    expect(
+      store.rewardEvents.find(
+        (event) => event.idempotencyKey === "review:txn-4:borrower-4:submission",
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        pointsDelta: 5,
+        status: RewardEventStatus.APPLIED,
+      }),
+    )
   })
 
   it("redeems a listing boost from available points without changing historical category points", async () => {

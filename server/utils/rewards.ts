@@ -1,8 +1,4 @@
-import {
-  DisputeStatus,
-  TransactionStatus,
-  type Prisma,
-} from "@prisma/client"
+import { DisputeStatus, TransactionStatus, type Prisma } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 
 export const RewardSourceType = {
@@ -65,7 +61,7 @@ const ACTIVE_DISPUTE_STATUSES: DisputeStatus[] = [
 const DEFAULT_REWARD_CONFIG = {
   borrowerBasePoints: 10,
   lenderBasePoints: 10,
-  reviewSubmissionBonus: 3,
+  reviewSubmissionBonus: 5,
   sharedFaultRatio: 0.5,
 } as const
 
@@ -94,6 +90,7 @@ type RewardDecision = {
     | "blocked_by_fault"
     | "shared_fault"
     | "transaction_ineligible"
+    | "incomplete_required_reviews"
 }
 
 type RewardEventLedgerEntry = {
@@ -123,11 +120,13 @@ type RewardTransactionRecord = {
 
 type RewardReviewRecord = {
   id: string
+  reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"
   reviewerUserId: string
   transactionId: string
   transaction: {
     id: string
     status: TransactionStatus
+    itemId: string | null
     borrowerId: string | null
     lenderId: string | null
     disputes: RewardProcessingDispute[]
@@ -551,12 +550,14 @@ const findRewardReview = async (
     where: { id: reviewId },
     select: {
       id: true,
+      reviewType: true,
       reviewerUserId: true,
       transactionId: true,
       transaction: {
         select: {
           id: true,
           status: true,
+          itemId: true,
           borrowerId: true,
           lenderId: true,
           disputes: {
@@ -574,6 +575,35 @@ const findRewardReview = async (
   })
 }
 
+const getSubmittedReviewTypesForReviewer = async (
+  prisma: RewardClient,
+  transactionId: string,
+  reviewerUserId: string,
+) => {
+  const reviews = await prisma.transactionReview.findMany({
+    where: {
+      transactionId,
+      reviewerUserId,
+    },
+    select: {
+      reviewType: true,
+    },
+  })
+
+  return new Set(reviews.map((review) => review.reviewType))
+}
+
+const getRequiredReviewTypesForRole = (
+  role: RewardParticipantRole,
+  hasItem: boolean,
+): Array<"ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"> => {
+  if (role === "borrower") {
+    return hasItem ? ["ITEM_REVIEW", "LENDER_REVIEW"] : ["LENDER_REVIEW"]
+  }
+
+  return ["BORROWER_REVIEW"]
+}
+
 export const processReviewRewards = async (prisma: RewardClient, reviewId: string) => {
   const review = await findRewardReview(prisma, reviewId)
 
@@ -585,17 +615,35 @@ export const processReviewRewards = async (prisma: RewardClient, reviewId: strin
     review.reviewerUserId === review.transaction.borrowerId ? "borrower" : "lender"
   const roleCategory = getRoleCategory(role)
   const dispute = getLatestRewardRelevantDispute(review.transaction.disputes)
-  const decision = getReviewRewardDecision({
+  const requiredReviewTypes = getRequiredReviewTypesForRole(
     role,
-    dispute,
-    transactionStatus: review.transaction.status,
-  })
+    Boolean(review.transaction.itemId),
+  )
+  const submittedReviewTypes = await getSubmittedReviewTypesForReviewer(
+    prisma,
+    review.transactionId,
+    review.reviewerUserId,
+  )
+  const hasCompletedRequiredReviews = requiredReviewTypes.every((reviewType) =>
+    submittedReviewTypes.has(reviewType),
+  )
+  const decision = hasCompletedRequiredReviews
+    ? getReviewRewardDecision({
+        role,
+        dispute,
+        transactionStatus: review.transaction.status,
+      })
+    : {
+        pointsDelta: 0,
+        status: RewardEventStatus.BLOCKED,
+        reason: "incomplete_required_reviews" as const,
+      }
 
   await upsertRewardEvent(prisma, {
     userId: review.reviewerUserId,
     transactionId: review.transactionId,
     reviewId: review.id,
-    idempotencyKey: `review:${review.id}:submission`,
+    idempotencyKey: `review:${review.transactionId}:${review.reviewerUserId}:submission`,
     sourceType: RewardSourceType.REVIEW_SUBMITTED,
     roleCategory,
     pointsDelta: decision.pointsDelta,
@@ -605,18 +653,16 @@ export const processReviewRewards = async (prisma: RewardClient, reviewId: strin
       reason: decision.reason,
       disputeId: dispute?.id ?? null,
       disputeOutcome: dispute?.outcome ?? null,
+      requiredReviewTypes,
+      submittedReviewTypes: [...submittedReviewTypes],
     },
   })
 
   await syncUserRewardLedger(prisma, review.reviewerUserId)
 }
 
-export const listRewardLeaderboard = async (
-  prisma: RewardClient,
-  role: "BORROWER" | "LENDER",
-) => {
-  const categoryField =
-    role === RewardRoleCategory.BORROWER ? "borrowerPoints" : "lenderPoints"
+export const listRewardLeaderboard = async (prisma: RewardClient, role: "BORROWER" | "LENDER") => {
+  const categoryField = role === RewardRoleCategory.BORROWER ? "borrowerPoints" : "lenderPoints"
 
   const entries = await prisma.userReward.findMany({
     where: {
@@ -627,11 +673,7 @@ export const listRewardLeaderboard = async (
         status: "ACTIVE",
       },
     },
-    orderBy: [
-      { [categoryField]: "desc" },
-      { totalPointsEarned: "desc" },
-      { updatedAt: "asc" },
-    ],
+    orderBy: [{ [categoryField]: "desc" }, { totalPointsEarned: "desc" }, { updatedAt: "asc" }],
     take: 25,
     select: {
       totalPointsEarned: true,

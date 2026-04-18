@@ -2,12 +2,8 @@ import { TRPCError } from "@trpc/server"
 import { TransactionStatus, UserStatus, type Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
-import {
-  bookingReviewLookupSchema,
-  createReviewSchema,
-} from "../../../shared/schemas/review"
-import { processReviewRewards, processTransactionRewards } from "../../utils/rewards"
-import { syncRoleRatingForUser, syncRoleRatingsFromReviews } from "../../utils/review-ratings"
+import { bookingReviewLookupSchema, createReviewSchema } from "../../../shared/schemas/review"
+import { processTransactionRewards } from "../../utils/rewards"
 
 type ReviewLeaderboardType = "BORROWER_REVIEW" | "LENDER_REVIEW"
 
@@ -51,12 +47,12 @@ const listReviewLeaderboard = async (
     grouped.set(review.revieweeUserId, existing)
   }
 
-  const eligibleStats = [...grouped.entries()]
-    .map(([userId, entry]) => ({
-      userId,
-      reviewCount: entry.reviewCount,
-      lastActivityAt: entry.lastActivityAt,
-    }))
+  const eligibleStats = [...grouped.entries()].map(([userId, entry]) => ({
+    userId,
+    totalRating: entry.totalRating,
+    reviewCount: entry.reviewCount,
+    lastActivityAt: entry.lastActivityAt,
+  }))
 
   const userIds = eligibleStats.map((entry) => entry.userId)
 
@@ -64,55 +60,26 @@ const listReviewLeaderboard = async (
     return []
   }
 
-  await syncRoleRatingsFromReviews(prisma, reviewType, userIds)
-
-  const [users, roleRatings] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        id: { in: userIds },
-        status: UserStatus.ACTIVE,
-      },
-      select: {
-        id: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        avatarUrl: true,
-      },
-    }),
-    reviewType === "BORROWER_REVIEW"
-      ? prisma.borrower.findMany({
-          where: {
-            userId: { in: userIds },
-          },
-          select: {
-            userId: true,
-            borrowerRating: true,
-          },
-        })
-      : prisma.lender.findMany({
-          where: {
-            userId: { in: userIds },
-          },
-          select: {
-            userId: true,
-            lenderRating: true,
-          },
-        }),
-  ])
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: userIds },
+      status: UserStatus.ACTIVE,
+    },
+    select: {
+      id: true,
+      username: true,
+      firstName: true,
+      lastName: true,
+      avatarUrl: true,
+    },
+  })
 
   const userMap = new Map(users.map((user) => [user.id, user]))
-  const ratingMap = new Map(
-    roleRatings.map((entry) => [
-      entry.userId,
-      reviewType === "BORROWER_REVIEW" ? entry.borrowerRating : entry.lenderRating,
-    ]),
-  )
 
   return eligibleStats
     .map((entry) => ({
       ...entry,
-      averageRating: ratingMap.get(entry.userId) ?? 0,
+      averageRating: entry.reviewCount > 0 ? entry.totalRating / entry.reviewCount : 0,
     }))
     .sort((left, right) => {
       if (right.averageRating !== left.averageRating) {
@@ -161,50 +128,48 @@ export const reviewRouter = router({
     }
   }),
 
-  byBooking: protectedProcedure
-    .input(bookingReviewLookupSchema)
-    .query(async ({ ctx, input }) => {
-      const transaction = await ctx.prisma.rentalTransaction.findUnique({
-        where: { bookingId: input.bookingId },
-        select: {
-          id: true,
-          status: true,
-          borrowerId: true,
-          lenderId: true,
-          reviews: {
-            where: { reviewerUserId: ctx.user.id },
-            select: {
-              id: true,
-              rating: true,
-              reviewText: true,
-              isAnonymous: true,
-              createdAt: true,
-            },
-            take: 1,
+  byBooking: protectedProcedure.input(bookingReviewLookupSchema).query(async ({ ctx, input }) => {
+    const transaction = await ctx.prisma.rentalTransaction.findUnique({
+      where: { bookingId: input.bookingId },
+      select: {
+        id: true,
+        status: true,
+        borrowerId: true,
+        lenderId: true,
+        reviews: {
+          where: { reviewerUserId: ctx.user.id },
+          select: {
+            id: true,
+            rating: true,
+            reviewText: true,
+            isAnonymous: true,
+            createdAt: true,
           },
+          take: 1,
         },
-      })
+      },
+    })
 
-      if (!transaction) {
-        return {
-          canSubmit: false,
-          review: null,
-          transactionId: null,
-        }
-      }
-
-      const isParticipant =
-        transaction.borrowerId === ctx.user.id || transaction.lenderId === ctx.user.id
-
+    if (!transaction) {
       return {
-        canSubmit:
-          isParticipant &&
-          transaction.status === TransactionStatus.COMPLETED &&
-          transaction.reviews.length === 0,
-        review: transaction.reviews[0] ?? null,
-        transactionId: transaction.id,
+        canSubmit: false,
+        review: null,
+        transactionId: null,
       }
-    }),
+    }
+
+    const isParticipant =
+      transaction.borrowerId === ctx.user.id || transaction.lenderId === ctx.user.id
+
+    return {
+      canSubmit:
+        isParticipant &&
+        transaction.status === TransactionStatus.COMPLETED &&
+        transaction.reviews.length === 0,
+      review: transaction.reviews[0] ?? null,
+      transactionId: transaction.id,
+    }
+  }),
 
   create: protectedProcedure.input(createReviewSchema).mutation(async ({ ctx, input }) => {
     const booking = await ctx.prisma.booking.findUnique({
@@ -235,7 +200,7 @@ export const reviewRouter = router({
       })
     }
 
-    return ctx.prisma.$transaction(async (tx) => {
+    const result = await ctx.prisma.$transaction(async (tx) => {
       const transaction = await tx.rentalTransaction.findUnique({
         where: { bookingId: input.bookingId },
         select: {
@@ -298,11 +263,18 @@ export const reviewRouter = router({
         },
       })
 
-      await syncRoleRatingForUser(tx as Prisma.TransactionClient, reviewType, revieweeUserId)
-      await processTransactionRewards(tx as Prisma.TransactionClient, transaction.id)
-      await processReviewRewards(tx as Prisma.TransactionClient, review.id)
-
-      return review
+      return {
+        review,
+        transactionId: transaction.id,
+      }
     })
+
+    try {
+      await processTransactionRewards(ctx.prisma as Prisma.TransactionClient, result.transactionId)
+    } catch (error) {
+      console.error("Failed to process transaction rewards after review submission", error)
+    }
+
+    return result.review
   }),
 })
