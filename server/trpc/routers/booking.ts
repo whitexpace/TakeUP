@@ -28,6 +28,7 @@ import {
   mapTransactionReview,
   transactionReviewSelect,
 } from "../review-helpers"
+import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -1072,6 +1073,25 @@ export const bookingRouter = router({
           remarks: `Booking status updated to ${updatedBooking.status}.`,
         },
       )
+
+      if (isConfirmingBooking) {
+        const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+          where: { bookingId: updatedBooking.id },
+          select: {
+            id: true,
+            status: true,
+          },
+        })
+
+        if (syncedTransaction && isChatAvailableForTransactionStatus(syncedTransaction.status)) {
+          await (tx as Context["prisma"]).conversation.upsert({
+            where: { transactionId: syncedTransaction.id },
+            update: {},
+            create: { transactionId: syncedTransaction.id },
+          })
+        }
+      }
+
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: updatedBooking.itemId,
       })

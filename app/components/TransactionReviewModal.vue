@@ -18,10 +18,16 @@ type ReviewContext = {
   targetUserId: string | null
 }
 
-const props = defineProps<{
-  open: boolean
-  context: ReviewContext | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    open?: boolean
+    context?: ReviewContext | null
+  }>(),
+  {
+    open: false,
+    context: null,
+  },
+)
 
 const emit = defineEmits<{
   close: []
