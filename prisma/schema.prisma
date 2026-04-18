@@ -482,7 +482,7 @@ model Admin {
 model Lender {
   id           Int    @unique @default(autoincrement())
   userId       String @id
-  lenderRating Int    @default(0)
+  lenderRating Float  @default(0)
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings      Booking[]
@@ -494,7 +494,7 @@ model Borrower {
   id             Int    @unique @default(autoincrement())
   userId         String @id
   borrowStatus   String
-  borrowerRating Int    @default(0)
+  borrowerRating Float  @default(0)
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings      Booking[]
