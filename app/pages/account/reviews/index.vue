@@ -342,7 +342,6 @@ const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
   if (shouldShowRewardPopup(payload)) {
     triggerRewardPopup()
   }
-
   await Promise.all([
     refreshTransactions(),
     refreshDrafts(),
