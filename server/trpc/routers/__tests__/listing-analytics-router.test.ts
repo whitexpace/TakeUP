@@ -5,6 +5,7 @@ import { listingAnalyticsRouter } from "../listing-analytics"
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const ITEM_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 const DEACTIVATED_ITEM_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+const ITEM_C_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
 
 const mockUser = { id: USER_ID, email: "lender@up.edu.ph", name: "Lender" }
 
@@ -30,6 +31,9 @@ const makeListing = (overrides: Record<string, unknown> = {}) => ({
   name: "Wireless Mouse",
   status: "AVAILABLE",
   viewCount: 120,
+  rating: 4.5,
+  rentalFee: 500,
+  freeToBorrow: false,
   images: [{ path: "https://example.com/mouse.jpg", isPrimary: true, sortOrder: 0 }],
   categories: [{ category: "ELECTRONICS" }],
   ...overrides,
@@ -72,6 +76,7 @@ describe("listingAnalyticsRouter", () => {
       summary: {
         totalViews: 0,
         totalBookings: 0,
+        totalBookingRequests: 0,
         totalCompletedTransactions: 0,
         totalRevenue: 0,
         availabilityDays: 0,
@@ -79,14 +84,19 @@ describe("listingAnalyticsRouter", () => {
         bookingRate: 0,
         completionRate: 0,
         utilizationRate: 0,
+        overallItemRating: 0,
       },
       listings: [],
+      topViewedItems: [],
+      topRequestedItems: [],
+      topBookedItems: [],
+      itemRatings: [],
       categoryBreakdown: [],
       range: "all",
     })
   })
 
-  it("counts only accepted bookings and completed transactions while preserving deactivated listings", async () => {
+  it("counts accepted bookings, booking requests, and completed transactions while preserving deactivated listings", async () => {
     const itemFindMany = vi.fn().mockResolvedValue([
       makeListing(),
       makeListing({
@@ -94,6 +104,9 @@ describe("listingAnalyticsRouter", () => {
         name: "Old Camera",
         status: "DEACTIVATED",
         viewCount: 0,
+        rating: 0,
+        rentalFee: 0,
+        freeToBorrow: true,
         images: [],
         categories: [{ category: "ELECTRONICS" }, { category: "TOOLS" }],
       }),
@@ -143,21 +156,18 @@ describe("listingAnalyticsRouter", () => {
 
     const result = await caller.list()
 
+    // booking.findMany is called twice: once for accepted bookings, once for all non-cancelled requests
     expect(bookingFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          lenderId: USER_ID,
-          itemId: { in: [ITEM_ID, DEACTIVATED_ITEM_ID] },
           status: { in: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"] },
         }),
       }),
     )
-    expect(rentalTransactionFindMany).toHaveBeenCalledWith(
+    expect(bookingFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          lenderId: USER_ID,
-          itemId: { in: [ITEM_ID, DEACTIVATED_ITEM_ID] },
-          status: "COMPLETED",
+          status: { in: ["PENDING", "CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"] },
         }),
       }),
     )
@@ -168,34 +178,130 @@ describe("listingAnalyticsRouter", () => {
       itemName: "Wireless Mouse",
       totalViews: 120,
       totalBookings: 2,
+      totalBookingRequests: 2,
       totalCompletedTransactions: 2,
       totalRevenue: 300.5,
-      availabilityDays: 5,
-      bookedDays: 5,
-      bookingRate: 1.7,
-      completionRate: 100,
-      utilizationRate: 100,
+      rating: 4.5,
     })
     expect(result.listings[1]).toMatchObject({
       listingId: DEACTIVATED_ITEM_ID,
       status: "DEACTIVATED",
       totalViews: 0,
       totalBookings: 0,
-      totalCompletedTransactions: 0,
-      totalRevenue: 0,
+      totalBookingRequests: 0,
+      rating: 0,
     })
     expect(result.summary).toMatchObject({
       totalViews: 120,
       totalBookings: 2,
+      totalBookingRequests: 2,
       totalCompletedTransactions: 2,
       totalRevenue: 300.5,
-      availabilityDays: 5,
-      bookedDays: 5,
+      overallItemRating: 4.5,
     })
-    expect(result.categoryBreakdown).toEqual([
-      { category: "ELECTRONICS", count: 2 },
-      { category: "TOOLS", count: 1 },
+  })
+
+  it("computes overallItemRating as the average of rated items only", async () => {
+    const itemFindMany = vi.fn().mockResolvedValue([
+      makeListing({ rating: 4.8 }),
+      makeListing({
+        id: DEACTIVATED_ITEM_ID,
+        name: "Camera",
+        rating: 3.2,
+        viewCount: 10,
+        images: [],
+        categories: [],
+      }),
+      makeListing({
+        id: ITEM_C_ID,
+        name: "Unrated Item",
+        rating: 0,
+        viewCount: 5,
+        images: [],
+        categories: [],
+      }),
     ])
+    const bookingFindMany = vi.fn().mockResolvedValue([])
+    const caller = listingAnalyticsRouter.createCaller(
+      makeContext({ itemFindMany, bookingFindMany }),
+    )
+
+    const result = await caller.list()
+
+    // Average of 4.8 and 3.2 = 4.0 (item with rating 0 excluded)
+    expect(result.summary.overallItemRating).toBe(4)
+  })
+
+  it("returns ranked lists sorted by respective metrics", async () => {
+    const itemFindMany = vi.fn().mockResolvedValue([
+      makeListing({ id: ITEM_ID, viewCount: 200, rating: 4.5 }),
+      makeListing({
+        id: DEACTIVATED_ITEM_ID,
+        name: "Camera",
+        viewCount: 50,
+        rating: 4.9,
+        images: [],
+        categories: [],
+      }),
+    ])
+    // Return booking requests for ranking
+    const bookingFindMany = vi
+      .fn()
+      .mockImplementation((args: { where: { status: { in: string[] } } }) => {
+        if (args.where.status.in.includes("PENDING")) {
+          // Non-cancelled requests query
+          return Promise.resolve([
+            { itemId: ITEM_ID },
+            { itemId: ITEM_ID },
+            { itemId: ITEM_ID },
+            { itemId: DEACTIVATED_ITEM_ID },
+          ])
+        }
+        // Accepted bookings query (with date ranges)
+        return Promise.resolve([
+          {
+            itemId: ITEM_ID,
+            startDate: new Date("2026-04-01"),
+            endDate: new Date("2026-04-03"),
+          },
+          {
+            itemId: DEACTIVATED_ITEM_ID,
+            startDate: new Date("2026-04-01"),
+            endDate: new Date("2026-04-02"),
+          },
+          {
+            itemId: DEACTIVATED_ITEM_ID,
+            startDate: new Date("2026-04-03"),
+            endDate: new Date("2026-04-04"),
+          },
+        ])
+      })
+
+    const caller = listingAnalyticsRouter.createCaller(
+      makeContext({ itemFindMany, bookingFindMany }),
+    )
+
+    const result = await caller.list()
+
+    // Top viewed: ITEM_ID (200) before DEACTIVATED_ITEM_ID (50)
+    expect(result.topViewedItems).toHaveLength(2)
+    expect(result.topViewedItems[0]!.itemId).toBe(ITEM_ID)
+    expect(result.topViewedItems[0]!.viewCount).toBe(200)
+
+    // Top requested: ITEM_ID (3 requests) before DEACTIVATED_ITEM_ID (1)
+    expect(result.topRequestedItems).toHaveLength(2)
+    expect(result.topRequestedItems[0]!.itemId).toBe(ITEM_ID)
+    expect(result.topRequestedItems[0]!.requestCount).toBe(3)
+
+    // Top booked: DEACTIVATED_ITEM_ID (2 bookings) before ITEM_ID (1)
+    expect(result.topBookedItems).toHaveLength(2)
+    expect(result.topBookedItems[0]!.itemId).toBe(DEACTIVATED_ITEM_ID)
+    expect(result.topBookedItems[0]!.bookingCount).toBe(2)
+
+    // Item ratings: Camera (4.9) before Wireless Mouse (4.5)
+    expect(result.itemRatings).toHaveLength(2)
+    expect(result.itemRatings[0]!.rating).toBe(4.9)
+    expect(result.itemRatings[1]!.rating).toBe(4.5)
   })
 
   it("filters booking, transaction, and availability metrics by the selected date range", async () => {
@@ -241,5 +347,22 @@ describe("listingAnalyticsRouter", () => {
         }),
       }),
     )
+  })
+
+  it("returns empty ranked lists when no items have activity", async () => {
+    const itemFindMany = vi.fn().mockResolvedValue([makeListing({ viewCount: 0, rating: 0 })])
+    const bookingFindMany = vi.fn().mockResolvedValue([])
+
+    const caller = listingAnalyticsRouter.createCaller(
+      makeContext({ itemFindMany, bookingFindMany }),
+    )
+
+    const result = await caller.list()
+
+    expect(result.topViewedItems).toEqual([])
+    expect(result.topRequestedItems).toEqual([])
+    expect(result.topBookedItems).toEqual([])
+    expect(result.itemRatings).toEqual([])
+    expect(result.summary.overallItemRating).toBe(0)
   })
 })

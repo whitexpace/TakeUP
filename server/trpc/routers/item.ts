@@ -1068,6 +1068,10 @@ export const itemRouter = router({
     const isOwner = ctx.user?.id === item.lenderId
     if (!isOwner && !isPublicVisibleItem(item, now)) return null
 
+    ctx.prisma.item
+      .update({ where: { id: item.id }, data: { viewCount: { increment: 1 } } })
+      .catch(() => {})
+
     const reviews = item.transactionReviews.map(mapTransactionReview)
     const averageRating =
       reviews.length > 0
@@ -1356,22 +1360,20 @@ export const itemRouter = router({
     })
 
     if (existingLike) {
-      // Unlike: delete the like
       await ctx.prisma.like.delete({
-        where: {
-          userId_itemId: {
-            userId,
-            itemId,
-          },
-        },
+        where: { userId_itemId: { userId, itemId } },
+      })
+      await ctx.prisma.item.update({
+        where: { id: itemId },
+        data: { likeCount: { decrement: 1 } },
       })
     } else {
-      // Like: create the like
       await ctx.prisma.like.create({
-        data: {
-          userId,
-          itemId,
-        },
+        data: { userId, itemId },
+      })
+      await ctx.prisma.item.update({
+        where: { id: itemId },
+        data: { likeCount: { increment: 1 } },
       })
     }
 
