@@ -294,11 +294,13 @@ describe("itemRouter", () => {
       ],
       bookings: [],
     })
-    const update = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const incrementViewCount = vi.fn().mockResolvedValue({ id: VALID_UUID })
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique: findById, findFirst: findById, update } } as never,
+      prisma: {
+        item: { findUnique: findById, findFirst: findById, update: incrementViewCount },
+      } as never,
       user: null,
     })
 
@@ -309,12 +311,12 @@ describe("itemRouter", () => {
         where: expect.objectContaining({ id: VALID_UUID }),
       }),
     )
-    expect(result?.reviewsCount).toBe(1)
-    expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
-    expect(update).toHaveBeenCalledWith({
+    expect(incrementViewCount).toHaveBeenCalledWith({
       where: { id: VALID_UUID },
       data: { viewCount: { increment: 1 } },
     })
+    expect(result?.reviewsCount).toBe(1)
+    expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
   })
 
   it("update throws NOT_FOUND when item does not exist", async () => {
