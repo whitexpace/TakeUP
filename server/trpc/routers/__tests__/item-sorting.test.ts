@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { DEFAULT_ITEM_SORT_STRATEGY, getDefaultItemOrderBy } from "../item-sorting"
 
 describe("item-sorting", () => {
-  it("keeps the default strategy focused on boost score and booking count with stable tie-breakers", () => {
+  it("keeps the default strategy focused on boost score, booking count, and stable tie-breakers", () => {
     expect(DEFAULT_ITEM_SORT_STRATEGY).toEqual({
       trendingFactors: [
         { field: "boostScore", direction: "desc" },

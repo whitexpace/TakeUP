@@ -31,6 +31,7 @@ import {
   mapTransactionReview,
   transactionReviewSelect,
 } from "../review-helpers"
+import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
 
@@ -1085,9 +1086,21 @@ export const bookingRouter = router({
       )
       const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
         where: { bookingId: updatedBooking.id },
-        select: { id: true },
+        select: {
+          id: true,
+          status: true,
+        },
       })
+
       if (syncedTransaction) {
+        if (isConfirmingBooking && isChatAvailableForTransactionStatus(syncedTransaction.status)) {
+          await (tx as Context["prisma"]).conversation.upsert({
+            where: { transactionId: syncedTransaction.id },
+            update: {},
+            create: { transactionId: syncedTransaction.id },
+          })
+        }
+
         await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
       }
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {

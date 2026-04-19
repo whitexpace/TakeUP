@@ -1,6 +1,6 @@
-import { appRouter } from "../../trpc/routers"
-import { createContext } from "../../trpc/context"
-import { handleChatApiError } from "./handle-chat-api-error"
+import { appRouter } from "../trpc/routers"
+import { createContext } from "../trpc/context"
+import { handleChatApiError } from "./chat/handle-chat-api-error"
 
 export default defineEventHandler(async (event) => {
   const caller = appRouter.createCaller(await createContext(event))

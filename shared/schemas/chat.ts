@@ -11,9 +11,15 @@ export const sendMessageSchema = z.object({
     .refine((val) => val.trim().length > 0, "Message cannot be whitespace only"),
 })
 
-export const getOrCreateConversationSchema = z.object({
-  transactionId: z.string().min(1),
+export const conversationIdSchema = z.object({
+  conversationId: z.string().uuid(),
 })
+
+export const transactionConversationSchema = z.object({
+  transactionId: z.string().uuid(),
+})
+
+export const getOrCreateConversationSchema = transactionConversationSchema
 
 export const fetchMessagesSchema = z.object({
   conversationId: z.string().uuid(),
@@ -26,6 +32,8 @@ export const markAsReadSchema = z.object({
 })
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
+export type ConversationIdInput = z.infer<typeof conversationIdSchema>
+export type TransactionConversationInput = z.infer<typeof transactionConversationSchema>
 export type GetOrCreateConversationInput = z.infer<typeof getOrCreateConversationSchema>
 export type FetchMessagesInput = z.infer<typeof fetchMessagesSchema>
 export type MarkAsReadInput = z.infer<typeof markAsReadSchema>
