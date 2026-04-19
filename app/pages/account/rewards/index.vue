@@ -28,6 +28,9 @@ const BOOST_CONFIG = {
 
 const now = ref(Date.now())
 let countdownInterval: number | null = null
+const showRewardPopup = ref(false)
+let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
+const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
 
 const {
   data: summary,
@@ -59,16 +62,37 @@ const activeBoosts = computed(() =>
     .filter((boost) => !boost.isExpired),
 )
 
+const triggerRewardPopup = () => {
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
+  }
+
+  showRewardPopup.value = true
+  rewardPopupTimeout = setTimeout(() => {
+    showRewardPopup.value = false
+    rewardPopupTimeout = null
+  }, 1800)
+}
+
 onMounted(() => {
   now.value = Date.now()
   countdownInterval = window.setInterval(() => {
     now.value = Date.now()
   }, 60_000)
+
+  if (window.sessionStorage.getItem(REVIEW_REWARD_POPUP_STORAGE_KEY) === "1") {
+    window.sessionStorage.removeItem(REVIEW_REWARD_POPUP_STORAGE_KEY)
+    triggerRewardPopup()
+  }
 })
 
 onBeforeUnmount(() => {
   if (countdownInterval) {
     clearInterval(countdownInterval)
+  }
+
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
   }
 })
 </script>
@@ -393,5 +417,24 @@ onBeforeUnmount(() => {
         </article>
       </div>
     </section>
+
+    <Transition
+      enter-active-class="transition duration-500 ease-out"
+      enter-from-class="opacity-0 scale-75 translate-y-3"
+      enter-to-class="opacity-100 scale-100 translate-y-0"
+      leave-active-class="transition duration-300 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-90"
+    >
+      <div
+        v-if="showRewardPopup"
+        class="pointer-events-none fixed inset-0 z-[140] flex items-center justify-center px-4"
+      >
+        <div class="rounded-full bg-emerald-500 px-7 py-4 text-center text-white shadow-2xl">
+          <p class="text-3xl font-black tracking-tight">+5 points</p>
+          <p class="text-sm font-medium text-white/90">Review bonus earned</p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
