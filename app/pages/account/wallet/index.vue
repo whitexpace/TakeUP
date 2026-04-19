@@ -277,15 +277,15 @@ const formatDate = (date: string | Date) => {
           >
             <div class="flex items-center gap-4">
               <div
-                class="w-10 h-10 rounded-full flex items-center justify-center"
+                class="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
                 :class="
-                  tx.type === 'TOP_UP'
+                  tx.direction === 'CREDIT'
                     ? 'bg-success-green/10 text-success-green'
-                    : 'bg-burning-orange/10 text-burning-orange'
+                    : 'bg-neutral-100 text-neutral-400'
                 "
               >
                 <svg
-                  v-if="tx.type === 'TOP_UP'"
+                  v-if="tx.direction === 'CREDIT'"
                   width="20"
                   height="20"
                   viewBox="0 0 24 24"
@@ -309,7 +309,15 @@ const formatDate = (date: string | Date) => {
               </div>
               <div>
                 <p class="font-bold text-neutral-800">
-                  {{ tx.type === "TOP_UP" ? "Top Up" : "Payment" }}
+                  {{
+                    tx.type === "TOP_UP"
+                      ? "Top Up"
+                      : tx.type === "REFUND"
+                        ? "Refund"
+                        : tx.type === "EARNING"
+                          ? "Earnings"
+                          : "Payment"
+                  }}
                 </p>
                 <p class="text-xs text-neutral-500">{{ formatDate(tx.createdAt) }}</p>
               </div>
@@ -317,9 +325,9 @@ const formatDate = (date: string | Date) => {
             <div class="text-right">
               <p
                 class="font-bold"
-                :class="tx.type === 'TOP_UP' ? 'text-success-green' : 'text-neutral-800'"
+                :class="tx.direction === 'CREDIT' ? 'text-success-green' : 'text-neutral-800'"
               >
-                {{ tx.type === "TOP_UP" ? "+" : "-" }} ₱{{
+                {{ tx.direction === "CREDIT" ? "+" : "-" }} ₱{{
                   Number(tx.amount.toString()).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })

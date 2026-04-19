@@ -131,6 +131,7 @@ const bookingEditableSelect = {
   completedAt: true,
   disputeOpenedAt: true,
   paymentProcessedAt: true,
+  refundAmount: true,
   item: {
     select: {
       id: true,
@@ -158,6 +159,7 @@ const bookingTransactionSelect = {
   platformCommission: true,
   status: true,
   paymentStatus: true,
+  refundAmount: true,
   confirmedAt: true,
   returnedAt: true,
   cancellationReason: true,
@@ -1114,11 +1116,12 @@ export const bookingRouter = router({
         existing.status !== bookingStatusSchema.enum.COMPLETED &&
         existing.paymentMethod === PrismaPaymentMethod.WALLET
       ) {
-        // 1. Calculate lender earnings based on ACTUAL total (after any refunds)
-        const finalFee = updatedBooking.totalFee
-        const finalCommission = updatedBooking.platformCommission
-        const lenderEarnings = finalFee - finalCommission
+        const originalTotalFee = updatedBooking.totalFee
+        const commission = updatedBooking.platformCommission
+        const refundAmount = updatedBooking.refundAmount ?? 0
+        const lenderEarnings = originalTotalFee - commission - refundAmount
 
+        // 1. Calculate lender earnings
         if (lenderEarnings > 0) {
           await creditToWallet(
             existing.lenderId,
@@ -1132,23 +1135,29 @@ export const bookingRouter = router({
           )
         }
 
-        // 2. Handle Early Return Refund for Borrower
-        // If an early return happened, the totalFee was already reduced in DB before completion.
-        // We need to credit the DIFFERENCE back to the borrower's wallet.
-        const originalPaid = existing.totalFee
-        const refundAmount = originalPaid - finalFee
-
+        // 2. Fallback Refund logic for Borrower
         if (refundAmount > 0) {
-          await creditToWallet(
-            existing.borrowerId,
-            refundAmount,
-            {
+          const existingRefund = await (tx as Context["prisma"]).walletTransaction.findFirst({
+            where: {
+              userId: existing.borrowerId,
               type: "REFUND",
               relatedEntityType: "BOOKING",
               relatedEntityId: updatedBooking.id,
             },
-            tx as Context["prisma"],
-          )
+          })
+
+          if (!existingRefund) {
+            await creditToWallet(
+              existing.borrowerId,
+              refundAmount,
+              {
+                type: "REFUND",
+                relatedEntityType: "BOOKING",
+                relatedEntityId: updatedBooking.id,
+              },
+              tx as Context["prisma"],
+            )
+          }
         }
       }
 
@@ -1370,6 +1379,7 @@ export const bookingRouter = router({
           returnedAt: now,
           refundStatus: refundCalc.eligible ? RefundStatus.PROCESSED : RefundStatus.NOT_ELIGIBLE,
           refundAmount: refundCalc.refundAmount,
+          totalFee: refundCalc.totalPaidAmount - refundCalc.refundAmount, // Update total fee to final amount
           refundProcessedAt: refundCalc.eligible ? now : null,
           refundReason: RefundReason.EARLY_RETURN,
         }
@@ -1411,6 +1421,20 @@ export const bookingRouter = router({
                 feeAmount: 0,
               },
             })
+
+            // Wallet Credit for Early Return Refund
+            if (existing.paymentMethod === PrismaPaymentMethod.WALLET) {
+              await creditToWallet(
+                existing.borrowerId,
+                refundCalc.refundAmount,
+                {
+                  type: "REFUND",
+                  relatedEntityType: "BOOKING",
+                  relatedEntityId: updatedBooking.id,
+                },
+                tx as Context["prisma"],
+              )
+            }
           }
         }
 

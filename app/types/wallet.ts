@@ -1,4 +1,4 @@
-export type WalletTransactionType = "TOP_UP" | "PAYMENT" | "REFUND" | "ADJUSTMENT"
+export type WalletTransactionType = "TOP_UP" | "PAYMENT" | "REFUND" | "ADJUSTMENT" | "EARNING"
 export type WalletTransactionMethod = "PSEUDO" | "GCASH" | "BANK" | "MAYA" | "SYSTEM"
 export type WalletTransactionStatus = "SUCCESS" | "FAILED" | "REVERSED" | "PENDING"
 export type WalletTransactionDirection = "CREDIT" | "DEBIT"
