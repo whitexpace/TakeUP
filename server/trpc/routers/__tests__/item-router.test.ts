@@ -309,6 +309,10 @@ describe("itemRouter", () => {
         where: expect.objectContaining({ id: VALID_UUID }),
       }),
     )
+    expect(incrementViewCount).toHaveBeenCalledWith({
+      where: { id: VALID_UUID },
+      data: { viewCount: { increment: 1 } },
+    })
     expect(result?.reviewsCount).toBe(1)
     expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
     expect(update).toHaveBeenCalledWith({
@@ -418,6 +422,7 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike creates a like when it does not exist", async () => {
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const itemFindFirst = vi.fn().mockResolvedValue({
       id: VALID_UUID,
       status: "AVAILABLE",
@@ -462,6 +467,7 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike deletes a like when it exists", async () => {
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
     const itemFindFirst = vi.fn().mockResolvedValue({
       id: VALID_UUID,
       status: "AVAILABLE",
