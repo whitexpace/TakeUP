@@ -90,15 +90,19 @@ function makePrisma(overrides: PrismaMockOverrides = {}) {
   }
 }
 
+type ChatRouterTestContext = Omit<Context, "prisma"> & {
+  prisma: ReturnType<typeof makePrisma>
+}
+
 function makeContext(user = mockUser, prismaOverrides: PrismaMockOverrides = {}) {
   return {
     user,
-    prisma: makePrisma(prismaOverrides) as unknown as Context["prisma"],
+    prisma: makePrisma(prismaOverrides),
     event: {} as H3Event,
-  } satisfies Context
+  } satisfies ChatRouterTestContext
 }
 
-const caller = (ctx: Context) => chatRouter.createCaller(ctx)
+const caller = (ctx: ChatRouterTestContext) => chatRouter.createCaller(ctx as unknown as Context)
 
 describe("chatRouter", () => {
   describe("getOrCreateConversation", () => {

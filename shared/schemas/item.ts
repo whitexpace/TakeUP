@@ -250,6 +250,7 @@ export const listItemsSchema = itemFilterSchema.optional()
 
 export const itemPaginationCursorSchema = z.object({
   id: z.string().uuid(),
+  boostScore: z.number().int().min(0),
   bookingCount: z.number().int().min(0),
   createdAt: z.coerce.date(),
 })

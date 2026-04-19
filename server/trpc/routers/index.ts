@@ -6,8 +6,11 @@ import { chatRouter } from "./chat"
 import { communityRouter } from "./community"
 import { healthRouter } from "./health"
 import { itemRouter } from "./item"
+import { listingAnalyticsRouter } from "./listing-analytics"
 import { notificationRouter } from "./notification"
 import { requestRouter } from "./request"
+import { rewardsRouter } from "./rewards"
+import { reviewRouter } from "./review"
 import { transactionRouter } from "./transaction"
 
 export const appRouter = router({
@@ -18,8 +21,11 @@ export const appRouter = router({
   community: communityRouter,
   health: healthRouter,
   item: itemRouter,
+  listingAnalytics: listingAnalyticsRouter,
   notification: notificationRouter,
   request: requestRouter,
+  rewards: rewardsRouter,
+  review: reviewRouter,
   transaction: transactionRouter,
 })
 

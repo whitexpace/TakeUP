@@ -3,6 +3,8 @@ import type { MyListingCategory, MyListingFilterStatus } from "../../../composab
 
 definePageMeta({ layout: "account", middleware: "account-auth" })
 
+const route = useRoute()
+
 const {
   listings,
   isLoading,
@@ -20,10 +22,23 @@ const {
   clearFilters,
   loadMore,
   refresh,
+  toggleStatus,
 } = useMyListings()
 
+const togglingId = ref<string | null>(null)
+const boostErrorMessage = ref("")
+const boostSuccessMessage = ref("")
+const boostingId = ref<string | null>(null)
 const categorySearch = ref("")
 const isCategoryDropdownOpen = ref(false)
+
+const { data: rewardsSummary, refresh: refreshRewards } = await useAsyncData(
+  "account:listings:rewards",
+  () =>
+    $fetch<{
+      availablePoints: number
+    }>("/api/rewards"),
+)
 
 const STATUS_OPTIONS: Array<{ value: MyListingFilterStatus; label: string }> = [
   { value: "ACTIVE", label: "Active" },
@@ -60,6 +75,8 @@ const selectedCategoryEntries = computed(() =>
   CATEGORY_OPTIONS.filter((category) => selectedCategories.value.includes(category.value)),
 )
 
+const showBoostIntentBanner = computed(() => route.query.boost === "true")
+
 const emptyStateMessage = computed(() => {
   if (searchQuery.value.trim() || hasActiveFilters.value) {
     return "No listings match your current search or filters."
@@ -70,6 +87,41 @@ const emptyStateMessage = computed(() => {
 
 const toggleCategoryMenu = () => {
   isCategoryDropdownOpen.value = !isCategoryDropdownOpen.value
+}
+
+const handleToggleStatus = async (id: string, status: "AVAILABLE" | "DEACTIVATED") => {
+  togglingId.value = id
+  try {
+    await toggleStatus(id, status)
+  } catch {
+    // error handled inline through page state
+  } finally {
+    togglingId.value = null
+  }
+}
+
+const handleBoostListing = async (itemId: string) => {
+  boostingId.value = itemId
+  boostErrorMessage.value = ""
+  boostSuccessMessage.value = ""
+
+  try {
+    await $fetch("/api/rewards/boosts", {
+      method: "POST",
+      body: {
+        itemId,
+        boostType: "STANDARD_24_HOUR",
+      },
+    })
+    boostSuccessMessage.value = "Listing boost activated for 24 hours."
+    await Promise.all([refresh(), refreshRewards()])
+  } catch (error: unknown) {
+    const data = (error as { data?: { statusMessage?: string; message?: string } })?.data
+    boostErrorMessage.value =
+      data?.statusMessage ?? data?.message ?? "Unable to boost this listing right now."
+  } finally {
+    boostingId.value = null
+  }
 }
 
 onMounted(() => {
@@ -113,6 +165,43 @@ onMounted(() => {
     </div>
 
     <div class="rounded-[24px] border border-cinnamon-ice bg-cream px-4 py-4 sm:px-5">
+      <div
+        v-if="showBoostIntentBanner"
+        class="mb-4 rounded-[18px] border border-burning-orange/20 bg-burning-orange/5 px-4 py-4 sm:px-5"
+      >
+        <p class="text-sm font-semibold text-neutral-800">Choose a listing to boost</p>
+        <p class="mt-1 text-sm text-neutral-800/60">
+          Select any eligible listing below to spend 50 points and increase its visibility for 24
+          hours.
+        </p>
+      </div>
+
+      <div
+        class="mb-4 flex flex-col gap-2 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
+          <p class="text-sm font-semibold text-neutral-800">
+            Available rewards points: {{ rewardsSummary?.availablePoints ?? 0 }}
+          </p>
+          <p class="mt-1 text-sm text-neutral-800/55">
+            Spend 50 points to boost one listing for 24 hours.
+          </p>
+        </div>
+        <NuxtLink
+          to="/account/rewards"
+          class="inline-flex w-fit items-center rounded-full border border-burning-orange px-4 py-2 text-sm font-medium text-burning-orange transition-colors hover:bg-burning-orange hover:text-white"
+        >
+          Open Rewards
+        </NuxtLink>
+      </div>
+
+      <p v-if="boostSuccessMessage" class="mb-4 text-sm font-medium text-emerald-700">
+        {{ boostSuccessMessage }}
+      </p>
+      <p v-if="boostErrorMessage" class="mb-4 text-sm font-medium text-red-600">
+        {{ boostErrorMessage }}
+      </p>
+
       <div class="flex flex-col gap-4 xl:flex-row xl:items-center">
         <div
           class="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] border border-cinnamon-ice bg-white px-4 py-3"
@@ -302,7 +391,14 @@ onMounted(() => {
     </div>
 
     <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <MyListingCard v-for="item in listings" :key="item.id" :item="item" />
+      <MyListingCard
+        v-for="item in listings"
+        :key="item.id"
+        :item="item"
+        :is-toggling="togglingId === item.id || boostingId === item.id"
+        @toggle-status="handleToggleStatus"
+        @boost-listing="handleBoostListing"
+      />
     </div>
 
     <div v-if="hasMore && !isLoading" class="flex justify-center pt-4">

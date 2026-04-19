@@ -28,6 +28,7 @@ import {
   mapTransactionReview,
   transactionReviewSelect,
 } from "../review-helpers"
+import { processTransactionRewards } from "../../utils/rewards"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -1016,6 +1017,12 @@ export const bookingRouter = router({
       })
 
       if (isConfirmingBooking) {
+        // Increment bookingCount on the item
+        await (tx as Context["prisma"]).item.update({
+          where: { id: existing.itemId },
+          data: { bookingCount: { increment: 1 } },
+        })
+
         const overlappingPendingBookings = (await txBookingPrisma.booking.findMany({
           where: {
             itemId: existing.itemId,
@@ -1072,6 +1079,13 @@ export const bookingRouter = router({
           remarks: `Booking status updated to ${updatedBooking.status}.`,
         },
       )
+      const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+        where: { bookingId: updatedBooking.id },
+        select: { id: true },
+      })
+      if (syncedTransaction) {
+        await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
+      }
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: updatedBooking.itemId,
       })
@@ -1186,6 +1200,13 @@ export const bookingRouter = router({
           remarks: "Borrower initiated item return.",
         },
       )
+      const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+        where: { bookingId: returnedBooking.id },
+        select: { id: true },
+      })
+      if (syncedTransaction) {
+        await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
+      }
 
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: returnedBooking.itemId,
