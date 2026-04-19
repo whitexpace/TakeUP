@@ -3,7 +3,6 @@ import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
 import { router } from "../init"
 import { protectedProcedure } from "../procedures"
-import type { Context } from "../context"
 import {
   conversationIdSchema,
   fetchMessagesSchema,
@@ -81,41 +80,9 @@ type ConversationWithTransaction = Prisma.ConversationGetPayload<{
   include: typeof conversationWithTransactionInclude
 }>
 
-type ChatTransactionSummary = Omit<ChatTransactionWithParticipants, "borrower" | "lender"> & {
-  borrower?: ParticipantInfo | null
-  lender?: ParticipantInfo | null
-}
-
-type ConversationWithTransaction = {
-  id: string
-  transactionId: string
-  createdAt?: Date
-  transaction: ChatTransactionSummary
-}
-
-type ConversationListEntry = {
-  id: string
-  transactionId?: string
-  createdAt?: Date
-  transaction: ChatTransactionWithParticipants
-  messages: Array<{
-    id: string
-    body: string
-    senderUserId: string
-    createdAt: Date
-    isRead: boolean
-  }>
-}
-
-type ChatMessageRecord = {
-  id: string
-  conversationId: string
-  senderUserId: string
-  body: string
-  isRead: boolean
-  readAt: Date | null
-  createdAt: Date
-}
+type ConversationListEntry = Prisma.ConversationGetPayload<{
+  include: typeof conversationListInclude
+}>
 
 type MessageGroupByRow = {
   conversationId: string
@@ -369,7 +336,7 @@ export const chatRouter = router({
     const where: Prisma.MessageWhereInput = { conversationId: input.conversationId }
 
     if (input.cursor) {
-      const cursorMessage = (await prisma.message.findUnique({
+      const cursorMessage = await ctx.prisma.message.findUnique({
         where: { id: input.cursor },
         select: { createdAt: true },
       })
@@ -379,7 +346,7 @@ export const chatRouter = router({
       }
     }
 
-    const messages = (await prisma.message.findMany({
+    const messages = await ctx.prisma.message.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: input.limit + 1,
@@ -392,7 +359,7 @@ export const chatRouter = router({
         readAt: true,
         createdAt: true,
       },
-    })) as ChatMessageRecord[]
+    })
 
     const hasMore = messages.length > input.limit
     const items = hasMore ? messages.slice(0, input.limit) : messages
@@ -441,7 +408,7 @@ export const chatRouter = router({
     assertParticipant(conversation.transaction, ctx.user.id)
     assertChatAvailableForTransaction(conversation.transaction)
 
-    const result = await prisma.message.updateMany({
+    const result = await ctx.prisma.message.updateMany({
       where: {
         conversationId: input.conversationId,
         senderUserId: { not: ctx.user.id },
@@ -457,7 +424,6 @@ export const chatRouter = router({
   }),
 
   getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
-    const prisma = getChatPrisma(ctx.prisma)
     const userId = ctx.user.id
 
     const unreadCount = await ctx.prisma.message.count({
