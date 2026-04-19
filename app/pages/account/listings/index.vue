@@ -20,9 +20,9 @@ const {
   removeStatusFilter,
   removeCategoryFilter,
   clearFilters,
-  toggleStatus,
   loadMore,
   refresh,
+  toggleStatus,
 } = useMyListings()
 
 const togglingId = ref<string | null>(null)

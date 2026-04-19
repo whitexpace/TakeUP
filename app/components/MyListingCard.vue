@@ -7,7 +7,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
   boostListing: [itemId: string]
 }>()
 
@@ -32,6 +31,7 @@ const cardProps = computed(() => {
     owner: "You",
     isManagement: true,
     allowNavigation: true,
+    customPath: `/account/listings/${props.item.id}/edit`,
   }
 })
 
@@ -43,13 +43,6 @@ function formatCategory(category: string) {
     .join(" ")
 }
 
-const isInUse = computed(() => props.item.displayStatus === "IN_USE")
-const isDeactivated = computed(() => props.item.status === "DEACTIVATED")
-
-const toggleLabel = computed(() => (isDeactivated.value ? "Activate" : "Deactivate"))
-const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
-  isDeactivated.value ? "AVAILABLE" : "DEACTIVATED",
-)
 const hasActiveBoost = computed(() => props.item.hasActiveBoost)
 const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boost 50 pts"))
 </script>
@@ -64,7 +57,7 @@ const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boos
         <!-- Edit Button (Primary) -->
         <NuxtLink
           :to="`/account/listings/${item.id}/edit`"
-          class="w-full max-w-[140px] rounded-full bg-burning-orange py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-burning-orange/90 active:scale-95"
+          class="w-full max-w-[140px] rounded-full bg-burning-orange py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-burning-orange/90 active:scale-95 cursor-pointer"
           @click.stop
         >
           Edit Listing
@@ -77,35 +70,6 @@ const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boos
         >
           {{ boostLabel }}
         </button>
-
-        <!-- Deactivate/Activate Button -->
-        <div class="relative group/tooltip w-full max-w-[140px]">
-          <button
-            :disabled="isInUse || isToggling"
-            class="w-full rounded-full py-2 font-geist text-sm font-semibold shadow-lg transition-all duration-300 active:scale-95 disabled:cursor-not-allowed"
-            :class="[
-              isInUse
-                ? 'bg-white/10 text-white/30 border border-white/10 backdrop-blur-sm'
-                : 'bg-white text-noble-black hover:bg-cream',
-              isDeactivated ? 'border-burning-orange text-burning-orange' : '',
-            ]"
-            @click.stop="emit('toggleStatus', item.id, toggleTarget)"
-          >
-            {{ isToggling ? "..." : toggleLabel }}
-          </button>
-
-          <!-- Contextual Tooltip for "In Use" state -->
-          <div
-            v-if="isInUse"
-            class="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 rounded-lg bg-noble-black px-3 py-1.5 text-[11px] font-medium text-white opacity-0 transition-opacity duration-200 group-hover/tooltip:opacity-100 whitespace-nowrap z-30 shadow-xl border border-white/10"
-          >
-            Item is currently In Use
-            <!-- Tooltip arrow -->
-            <div
-              class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-noble-black border-r border-b border-white/10"
-            />
-          </div>
-        </div>
       </div>
 
       <div

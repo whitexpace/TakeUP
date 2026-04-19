@@ -121,6 +121,7 @@ const handleDeactivateInstead = async () => {
     <!-- Edit form -->
     <ListingForm
       v-else
+      mode="edit"
       :item="item"
       :is-submitting="isSubmitting"
       :submit-error="submitError"
