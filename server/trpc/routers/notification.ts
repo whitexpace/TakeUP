@@ -5,7 +5,7 @@ import { listNotificationsSchema, notificationIdSchema } from "../../../shared/s
 
 const mapNotification = (notification: {
   id: string
-  type: "BOOKING_RETURN_REQUESTED"
+  type: "BOOKING_RETURN_REQUESTED" | "DISPUTE_OPENED"
   title: string
   body: string
   actionPath: string | null
@@ -41,7 +41,7 @@ export const notificationRouter = router({
     return notifications.map((notification) =>
       mapNotification({
         ...notification,
-        type: notification.type as "BOOKING_RETURN_REQUESTED",
+        type: notification.type as "BOOKING_RETURN_REQUESTED" | "DISPUTE_OPENED",
       }),
     )
   }),
@@ -80,7 +80,7 @@ export const notificationRouter = router({
 
     return mapNotification({
       ...notification,
-      type: notification.type as "BOOKING_RETURN_REQUESTED",
+      type: notification.type as "BOOKING_RETURN_REQUESTED" | "DISPUTE_OPENED",
     })
   }),
 

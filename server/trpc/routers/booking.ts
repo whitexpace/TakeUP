@@ -179,6 +179,16 @@ type BookingDetailTransaction = {
     status: string
     createdAt: Date
     reviewedAt: Date | null
+    rebuttalById: string | null
+    rebuttalText: string | null
+    rebuttalNotes: string | null
+    rebuttalSubmittedAt: Date | null
+    rebuttalBy: {
+      id: string
+      firstName: string
+      middleName: string | null
+      lastName: string
+    } | null
     reviewedBy: {
       id: string
       firstName: string
@@ -922,6 +932,18 @@ export const bookingRouter = router({
             status: true,
             createdAt: true,
             reviewedAt: true,
+            rebuttalById: true,
+            rebuttalText: true,
+            rebuttalNotes: true,
+            rebuttalSubmittedAt: true,
+            rebuttalBy: {
+              select: {
+                id: true,
+                firstName: true,
+                middleName: true,
+                lastName: true,
+              },
+            },
             reviewedBy: {
               select: {
                 id: true,
@@ -947,6 +969,13 @@ export const bookingRouter = router({
     const isWithinDisputeWindow =
       booking.status === bookingStatusSchema.enum.COMPLETED &&
       isDateWithinWindow(booking.completedAt, DISPUTE_REPORT_WINDOW_DAYS)
+    const canSubmitRebuttal =
+      Boolean(
+        latestDispute &&
+          toApiDisputeStatus(latestDispute.status) === "OPEN" &&
+          latestDispute.raisedById !== ctx.user.id &&
+          !latestDispute.rebuttalSubmittedAt,
+      )
 
     return {
       ...mapBookingRecord(booking),
@@ -964,6 +993,18 @@ export const bookingRouter = router({
             status: toApiDisputeStatus(latestDispute.status),
             createdAt: latestDispute.createdAt,
             reviewedAt: latestDispute.reviewedAt,
+            rebuttalById: latestDispute.rebuttalById,
+            rebuttalText: latestDispute.rebuttalText,
+            rebuttalNotes: latestDispute.rebuttalNotes,
+            rebuttalSubmittedAt: latestDispute.rebuttalSubmittedAt,
+            rebuttalBy: latestDispute.rebuttalBy
+              ? {
+                  id: latestDispute.rebuttalBy.id,
+                  firstName: latestDispute.rebuttalBy.firstName,
+                  middleName: latestDispute.rebuttalBy.middleName,
+                  lastName: latestDispute.rebuttalBy.lastName,
+                }
+              : null,
             reviewedBy: latestDispute.reviewedBy
               ? {
                   id: latestDispute.reviewedBy.id,
@@ -973,6 +1014,8 @@ export const bookingRouter = router({
                 }
               : null,
             isActive: isActiveDisputeStatus(latestDispute.status),
+            hasRebuttal: Boolean(latestDispute.rebuttalSubmittedAt && latestDispute.rebuttalText),
+            canSubmitRebuttal,
           }
         : null,
       reviewState: buildTransactionReviewState({

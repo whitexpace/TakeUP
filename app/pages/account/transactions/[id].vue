@@ -207,6 +207,12 @@ const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
 const isReviewModalOpen = ref(false)
 const selectedReviewType = ref<ReviewType | null>(null)
+const isRebuttalModalOpen = ref(false)
+const rebuttalModalStep = ref<"form" | "confirm">("form")
+const isSubmittingRebuttal = ref(false)
+const rebuttalText = ref("")
+const rebuttalNotes = ref("")
+const rebuttalValidationMessage = ref("")
 
 const handleReturn = () => {
   actionErrorMessage.value = ""
@@ -315,6 +321,7 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
 
 const latestDispute = computed(() => booking.value.latestDispute)
 const canRaiseDispute = computed(() => booking.value.canRaiseDispute)
+const canSubmitRebuttal = computed(() => Boolean(latestDispute.value?.canSubmitRebuttal))
 const disputeReportPath = computed(() =>
   booking.value.transactionId
     ? {
@@ -371,7 +378,9 @@ const disputeStatusDescription = computed(() => {
     case "SUBMITTED":
       return "Your concern has been submitted and is waiting for admin review."
     case "OPEN":
-      return "An admin approved this concern and opened a formal dispute."
+      return canSubmitRebuttal.value
+        ? "An admin approved this concern and opened a formal dispute. You may submit one rebuttal while review is in progress."
+        : "An admin approved this concern and opened a formal dispute."
     case "REJECTED":
       return "An admin reviewed this concern and did not open a dispute."
     case "APPEALED":
@@ -383,10 +392,97 @@ const disputeStatusDescription = computed(() => {
   }
 })
 
+const disputeRaisedByName = computed(() => {
+  if (!latestDispute.value) return null
+  const user =
+    latestDispute.value.raisedById === booking.value.borrowerId
+      ? booking.value.borrower.user
+      : booking.value.lender.user
+  return `${user.firstName} ${user.lastName[0]}.`
+})
+
+const rebuttalSubmittedByName = computed(() => {
+  if (!latestDispute.value?.rebuttalBy) return null
+  return `${latestDispute.value.rebuttalBy.firstName} ${latestDispute.value.rebuttalBy.lastName[0]}.`
+})
+
 const handleDispute = async () => {
   if (!canRaiseDispute.value) return
   actionErrorMessage.value = ""
   await navigateTo(disputeReportPath.value)
+}
+
+const resetRebuttalForm = () => {
+  rebuttalText.value = ""
+  rebuttalNotes.value = ""
+  rebuttalValidationMessage.value = ""
+  rebuttalModalStep.value = "form"
+}
+
+const openRebuttalModal = () => {
+  if (!canSubmitRebuttal.value) return
+  actionErrorMessage.value = ""
+  resetRebuttalForm()
+  isRebuttalModalOpen.value = true
+}
+
+const closeRebuttalModal = () => {
+  if (isSubmittingRebuttal.value) return
+  isRebuttalModalOpen.value = false
+  resetRebuttalForm()
+}
+
+const continueRebuttalReview = () => {
+  if (!rebuttalText.value.trim()) {
+    rebuttalValidationMessage.value = "Please provide your rebuttal statement."
+    return
+  }
+
+  rebuttalValidationMessage.value = ""
+  rebuttalModalStep.value = "confirm"
+}
+
+const submitRebuttal = async () => {
+  if (!latestDispute.value?.id) {
+    rebuttalValidationMessage.value = "This dispute is no longer available."
+    rebuttalModalStep.value = "form"
+    return
+  }
+
+  isSubmittingRebuttal.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+
+  try {
+    await $fetch(`/api/disputes/${latestDispute.value.id}/rebuttal`, {
+      method: "POST",
+      body: {
+        rebuttalText: rebuttalText.value.trim(),
+        rebuttalNotes: rebuttalNotes.value.trim() || undefined,
+      },
+    })
+
+    await refresh()
+    closeRebuttalModal()
+    actionSuccessMessage.value = "Your rebuttal has been submitted."
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    rebuttalValidationMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to submit your rebuttal right now."
+    rebuttalModalStep.value = "form"
+  } finally {
+    isSubmittingRebuttal.value = false
+  }
 }
 
 const reviewCounterpartName = computed(() => {
@@ -874,7 +970,7 @@ const handleReviewSubmitted = async () => {
           </div>
 
           <div v-if="latestDispute" class="mt-5 space-y-4 rounded-2xl bg-white p-5 shadow-sm">
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid gap-4 sm:grid-cols-3">
               <div>
                 <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
                   Reason
@@ -889,6 +985,14 @@ const handleReviewSubmitted = async () => {
                 </p>
                 <p class="mt-2 text-sm text-noble-black/80">
                   {{ formatDateTime(latestDispute.createdAt) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Raised By
+                </p>
+                <p class="mt-2 text-sm text-noble-black/80">
+                  {{ disputeRaisedByName ?? "Transaction participant" }}
                 </p>
               </div>
             </div>
@@ -911,40 +1015,81 @@ const handleReviewSubmitted = async () => {
                 {{ latestDispute.reviewedBy.lastName }}
               </p>
             </div>
+
+            <div v-if="latestDispute.hasRebuttal" class="rounded-2xl border border-cinnamon-ice bg-cream p-4">
+              <p class="text-sm font-semibold text-noble-black">
+                Rebuttal submitted
+                <span v-if="rebuttalSubmittedByName">by {{ rebuttalSubmittedByName }}</span>
+              </p>
+              <p v-if="latestDispute.rebuttalSubmittedAt" class="mt-1 text-sm text-noble-black/60">
+                Submitted on {{ formatDateTime(latestDispute.rebuttalSubmittedAt) }}
+              </p>
+              <p class="mt-3 text-sm leading-relaxed text-noble-black/80">
+                {{ latestDispute.rebuttalText }}
+              </p>
+              <p
+                v-if="latestDispute.rebuttalNotes"
+                class="mt-3 text-sm leading-relaxed text-noble-black/65"
+              >
+                Additional notes: {{ latestDispute.rebuttalNotes }}
+              </p>
+            </div>
           </div>
 
           <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p v-if="latestDispute?.status === 'SUBMITTED'" class="text-sm text-noble-black/60">
               Resubmission is disabled while this concern is under review.
             </p>
+            <p
+              v-else-if="latestDispute?.status === 'OPEN' && latestDispute?.hasRebuttal"
+              class="text-sm text-noble-black/60"
+            >
+              Rebuttal submitted. Admin review is still in progress.
+            </p>
+            <p
+              v-else-if="latestDispute?.status === 'OPEN' && canSubmitRebuttal"
+              class="text-sm text-noble-black/60"
+            >
+              You may submit one rebuttal while this dispute is open.
+            </p>
             <p v-else-if="booking.transactionId" class="text-sm text-noble-black/60">
               Your concern will be reviewed by an admin before a dispute is opened.
             </p>
 
-            <button
-              v-if="canRaiseDispute"
-              class="inline-flex items-center justify-center gap-2 rounded-2xl bg-cinnabar-red px-6 py-3.5 font-bold text-white transition-colors hover:bg-cinnabar-red/90"
-              @click="handleDispute"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+            <div class="flex flex-wrap gap-3">
+              <button
+                v-if="canSubmitRebuttal"
+                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-estate px-6 py-3.5 font-bold text-white transition-colors hover:bg-indigo-900"
+                @click="openRebuttalModal"
               >
-                <path
-                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
-                />
-                <line x1="12" x2="12" y1="9" y2="13" />
-                <line x1="12" x2="12.01" y1="17" y2="17" />
-              </svg>
-              Report an Issue
-            </button>
+                Submit Rebuttal
+              </button>
+
+              <button
+                v-if="canRaiseDispute"
+                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-cinnabar-red px-6 py-3.5 font-bold text-white transition-colors hover:bg-cinnabar-red/90"
+                @click="handleDispute"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+                  />
+                  <line x1="12" x2="12" y1="9" y2="13" />
+                  <line x1="12" x2="12.01" y1="17" y2="17" />
+                </svg>
+                Report an Issue
+              </button>
+            </div>
           </div>
         </section>
       </div>
@@ -1087,6 +1232,130 @@ const handleReviewSubmitted = async () => {
             >
               Great, thanks!
             </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isRebuttalModalOpen"
+        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="closeRebuttalModal"
+        />
+
+        <div
+          class="relative w-full max-w-lg rounded-[32px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+        >
+          <div v-if="rebuttalModalStep === 'form'">
+            <div class="text-center">
+              <h3 class="text-2xl font-bold text-noble-black">Submit Rebuttal</h3>
+              <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
+                Respond to the opened dispute so the admin can review both sides of the issue.
+              </p>
+            </div>
+
+            <div class="mt-6 space-y-4">
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black">Rebuttal Statement</span>
+                <textarea
+                  v-model="rebuttalText"
+                  rows="5"
+                  maxlength="2000"
+                  placeholder="Explain your side of the transaction."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
+                ></textarea>
+              </label>
+
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black">Additional Notes</span>
+                <textarea
+                  v-model="rebuttalNotes"
+                  rows="4"
+                  maxlength="2000"
+                  placeholder="Optional additional context for the admin."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
+                ></textarea>
+              </label>
+
+              <p
+                v-if="rebuttalValidationMessage"
+                class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+              >
+                {{ rebuttalValidationMessage }}
+              </p>
+            </div>
+
+            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                class="flex-1 rounded-2xl bg-blue-estate py-4 font-bold text-white transition-colors hover:bg-indigo-900"
+                @click="continueRebuttalReview"
+              >
+                Continue
+              </button>
+              <button
+                class="flex-1 rounded-2xl bg-cream py-4 font-bold text-noble-black transition-colors hover:bg-pale-cashmere"
+                @click="closeRebuttalModal"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div v-else>
+            <div class="text-center">
+              <h3 class="text-2xl font-bold text-noble-black">Confirm Rebuttal</h3>
+              <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
+                Your rebuttal will be reviewed by the admin as part of the dispute resolution process.
+              </p>
+            </div>
+
+            <div class="mt-6 space-y-4 rounded-[28px] bg-cream p-5">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Rebuttal Statement
+                </p>
+                <p class="mt-2 text-sm leading-relaxed text-noble-black">
+                  {{ rebuttalText.trim() }}
+                </p>
+              </div>
+
+              <div v-if="rebuttalNotes.trim()">
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Additional Notes
+                </p>
+                <p class="mt-2 text-sm leading-relaxed text-noble-black/70">
+                  {{ rebuttalNotes.trim() }}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                :disabled="isSubmittingRebuttal"
+                class="flex-1 rounded-2xl bg-blue-estate py-4 font-bold text-white transition-colors hover:bg-indigo-900 disabled:opacity-50"
+                @click="submitRebuttal"
+              >
+                {{ isSubmittingRebuttal ? "Submitting..." : "Submit Rebuttal" }}
+              </button>
+              <button
+                :disabled="isSubmittingRebuttal"
+                class="flex-1 rounded-2xl bg-cream py-4 font-bold text-noble-black transition-colors hover:bg-pale-cashmere disabled:opacity-50"
+                @click="rebuttalModalStep = 'form'"
+              >
+                Back
+              </button>
+            </div>
           </div>
         </div>
       </div>

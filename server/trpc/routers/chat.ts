@@ -93,15 +93,12 @@ type MessageGroupByRow = {
   _count: { id: number }
 }
 
-/** Check if a transaction+dispute combo means the chat is expired (read-only). */
+/** Chat becomes read-only whenever the linked transaction has a formally opened dispute. */
 function isConversationExpired(transaction: {
   status: string
   disputes?: Array<{ status: string }>
 }): boolean {
-  return (
-    transaction.status === "COMPLETED" &&
-    (transaction.disputes ?? []).some((d) => d.status === "OPEN")
-  )
+  return (transaction.disputes ?? []).some((d) => d.status === "OPEN")
 }
 
 /** Verify current user is borrower or lender on the transaction. Returns the other participant's userId. */
@@ -295,7 +292,7 @@ export const chatRouter = router({
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
-          "This conversation is read-only. The transaction is completed with an open dispute.",
+          "This conversation is read-only because the transaction is under dispute review.",
       })
     }
 

@@ -31,8 +31,15 @@ export const appealDisputeSchema = z.object({
   evidenceFileNames: z.array(z.string().trim().min(1).max(255)).max(5).optional(),
 })
 
+export const submitRebuttalSchema = z.object({
+  id: z.string().uuid(),
+  rebuttalText: z.string().trim().min(1, "A rebuttal statement is required.").max(2000),
+  rebuttalNotes: z.string().trim().max(2000).optional(),
+})
+
 export type DisputeStatus = z.infer<typeof disputeStatusSchema>
 export type DisputeDecision = z.infer<typeof disputeDecisionSchema>
 export type SubmitDisputeInput = z.infer<typeof submitDisputeSchema>
 export type ReviewDisputeInput = z.infer<typeof reviewDisputeSchema>
 export type AppealDisputeInput = z.infer<typeof appealDisputeSchema>
+export type SubmitRebuttalInput = z.infer<typeof submitRebuttalSchema>

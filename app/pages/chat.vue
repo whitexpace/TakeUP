@@ -206,6 +206,7 @@ const startPolling = () => {
   pollTimer = setInterval(async () => {
     if (!activeConversation.value) return
     try {
+      await loadConversations()
       const params: Record<string, string> = {
         conversationId: activeConversation.value.conversationId,
       }
@@ -494,7 +495,7 @@ onUnmounted(() => {
             class="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center"
           >
             <p class="text-xs text-amber-700 font-medium">
-              This conversation is read-only. The transaction is completed with an open dispute.
+              Direct messaging is disabled because this transaction is under dispute review.
             </p>
           </div>
 
