@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, it, expect } from "vitest"
 import { DEFAULT_ITEM_SORT_STRATEGY, getDefaultItemOrderBy } from "../item-sorting"
 
 describe("item-sorting", () => {
