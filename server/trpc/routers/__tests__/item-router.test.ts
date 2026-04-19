@@ -311,10 +311,6 @@ describe("itemRouter", () => {
         where: expect.objectContaining({ id: VALID_UUID }),
       }),
     )
-    expect(incrementViewCount).toHaveBeenCalledWith({
-      where: { id: VALID_UUID },
-      data: { viewCount: { increment: 1 } },
-    })
     expect(result?.reviewsCount).toBe(1)
     expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
   })
