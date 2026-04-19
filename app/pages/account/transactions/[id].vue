@@ -2,6 +2,7 @@
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
 import type { ReviewType } from "../../../../shared/schemas/review"
+import { isChatAvailableForBookingStatus } from "../../../../shared/chat-rules"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
 
 definePageMeta({
@@ -21,6 +22,7 @@ type AuthMeResponse = {
 }
 
 const route = useRoute()
+const router = useRouter()
 const bookingId = computed(() => {
   const id = route.params.id
   return Array.isArray(id) ? (id[0] ?? "") : (id ?? "")
@@ -95,6 +97,10 @@ const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
 const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
+const canOpenChat = computed(
+  () =>
+    Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
+)
 
 const mappedStatus = computed(() => {
   switch (booking.value.status) {
@@ -352,6 +358,15 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
 const handleDispute = () => {
   // Placeholder for dispute logic
   alert("Dispute filing will be available soon.")
+}
+
+const openChat = async () => {
+  if (!booking.value.transactionId || !canOpenChat.value) return
+
+  await router.push({
+    path: "/chat",
+    query: { transactionId: booking.value.transactionId },
+  })
 }
 
 const reviewCounterpartName = computed(() => {
@@ -798,12 +813,13 @@ const submitReview = async () => {
                 </div>
               </div>
             </div>
-            <a
-              :href="`mailto:${isLender ? booking.borrower.user.email : booking.lender.user.email}`"
-              class="w-10 h-10 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
+            <button
+              v-if="canOpenChat"
+              class="inline-flex items-center gap-2 shrink-0 rounded-2xl bg-blue-estate px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-burning-orange transition-colors"
+              @click="openChat"
             >
               <svg
-                class="w-5 h-5"
+                class="w-4 h-4"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -816,7 +832,8 @@ const submitReview = async () => {
                   stroke-linejoin="round"
                 />
               </svg>
-            </a>
+              Chat
+            </button>
           </div>
         </section>
 
