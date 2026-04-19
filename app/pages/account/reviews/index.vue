@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, watch } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "~~/server/trpc/routers"
 import type { ReviewType } from "~~/shared/schemas/review"
@@ -14,6 +14,7 @@ definePageMeta({
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type ReviewDraftListItem = RouterOutputs["transaction"]["listReviewDrafts"][number]
 type SubmittedReviewListItem = RouterOutputs["transaction"]["listSubmittedReviews"][number]
+type ReviewLeaderboardEntry = RouterOutputs["review"]["borrowerLeaderboard"]["leaderboard"][number]
 type ReviewsTab = "PENDING" | "DRAFTS" | "HISTORY"
 
 const activeTab = ref<ReviewsTab>("PENDING")
@@ -24,32 +25,86 @@ const reviewImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 
 const {
-  data: pageData,
-  pending,
-  error,
-  refresh,
-} = await useAsyncData("account-my-reviews", async () => {
-  const [transactionResponse, drafts, history] = await Promise.all([
-    $fetch<RouterOutputs["transaction"]["list"]>("/api/transactions", {
+  data: transactionsData,
+  pending: transactionsPending,
+  error: transactionsError,
+  refresh: refreshTransactions,
+} = await useAsyncData("account-my-review-transactions", async () => {
+  const transactionResponse = await $fetch<RouterOutputs["transaction"]["list"]>(
+    "/api/transactions",
+    {
       query: {
         status: "COMPLETED",
         limit: 100,
       },
-    }),
-    $fetch<ReviewDraftListItem[]>("/api/my-reviews/drafts"),
-    $fetch<SubmittedReviewListItem[]>("/api/my-reviews/submitted"),
+    },
+  )
+
+  return transactionResponse.transactions
+})
+
+const {
+  data: draftsData,
+  pending: draftsPending,
+  error: draftsError,
+  refresh: refreshDrafts,
+} = await useAsyncData("account-my-review-drafts", async () => {
+  return await $fetch<ReviewDraftListItem[]>("/api/my-reviews/drafts")
+})
+
+const {
+  data: historyData,
+  pending: historyPending,
+  error: historyError,
+  refresh: refreshHistory,
+} = await useAsyncData("account-my-review-history", async () => {
+  return await $fetch<SubmittedReviewListItem[]>("/api/my-reviews/submitted")
+})
+
+const {
+  data: leaderboardData,
+  pending: leaderboardPending,
+  error: leaderboardError,
+  refresh: refreshLeaderboard,
+} = await useAsyncData("account-review-leaderboards", async () => {
+  const [borrowersResponse, lendersResponse] = await Promise.all([
+    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/borrowers"),
+    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/lenders"),
   ])
 
   return {
-    transactions: transactionResponse.transactions,
-    drafts,
-    history,
+    borrowers: borrowersResponse.leaderboard,
+    lenders: lendersResponse.leaderboard,
   }
 })
 
-const allTransactions = computed(() => pageData.value?.transactions ?? [])
-const allDrafts = computed(() => pageData.value?.drafts ?? [])
-const allHistory = computed(() => pageData.value?.history ?? [])
+const allTransactions = computed(() => transactionsData.value ?? [])
+const allDrafts = computed(() => draftsData.value ?? [])
+const allHistory = computed(() => historyData.value ?? [])
+const borrowerLeaderboard = computed(() => leaderboardData.value?.borrowers ?? [])
+const lenderLeaderboard = computed(() => leaderboardData.value?.lenders ?? [])
+
+const currentTabPending = computed(() => {
+  if (activeTab.value === "DRAFTS") return draftsPending.value
+  if (activeTab.value === "HISTORY") return historyPending.value
+  return transactionsPending.value
+})
+
+const currentTabErrorMessage = computed(() => {
+  if (activeTab.value === "DRAFTS" && draftsError.value) {
+    return "We couldn't load your saved drafts right now. Please try again."
+  }
+
+  if (activeTab.value === "HISTORY" && historyError.value) {
+    return "We couldn't load your posted reviews right now. Please try again."
+  }
+
+  if (activeTab.value === "PENDING" && transactionsError.value) {
+    return "We couldn't load your reviews right now. Please try again."
+  }
+
+  return ""
+})
 
 const pendingTransactions = computed(() =>
   allTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny),
@@ -155,6 +210,8 @@ const computeDuration = (startDate: Date | string, endDate: Date | string) => {
 
 const formatRoleLabel = (role: string | null) => (role === "LENDER" ? "Lender" : "Borrower")
 
+const formatReviewCount = (value: number) => `${value} ${value === 1 ? "review" : "reviews"}`
+
 const getCurrentUserRoleForTransaction = (
   transaction: TransactionListItem,
 ): "BORROWER" | "LENDER" => {
@@ -235,8 +292,31 @@ const closeReviewModal = () => {
 }
 
 const handleReviewSubmitted = async () => {
-  await refresh()
+  await Promise.all([
+    refreshTransactions(),
+    refreshDrafts(),
+    refreshHistory(),
+    refreshLeaderboard(),
+  ])
 }
+
+const refreshCurrentTab = async () => {
+  if (activeTab.value === "DRAFTS") {
+    await refreshDrafts()
+    return
+  }
+
+  if (activeTab.value === "HISTORY") {
+    await refreshHistory()
+    return
+  }
+
+  await refreshTransactions()
+}
+
+watch(activeTab, async () => {
+  await refreshCurrentTab()
+})
 </script>
 
 <template>
@@ -340,7 +420,7 @@ const handleReviewSubmitted = async () => {
             {{ pageActionError }}
           </p>
 
-          <div v-if="pending" class="mt-6 space-y-4">
+          <div v-if="currentTabPending" class="mt-6 space-y-4">
             <div
               v-for="i in 3"
               :key="i"
@@ -349,10 +429,19 @@ const handleReviewSubmitted = async () => {
           </div>
 
           <div
-            v-else-if="error"
+            v-else-if="currentTabErrorMessage"
             class="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-5 text-sm text-red-600"
           >
-            We couldn't load your reviews right now. Please try again.
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p>{{ currentTabErrorMessage }}</p>
+              <button
+                type="button"
+                class="inline-flex w-fit rounded-2xl border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-600 hover:text-white"
+                @click="refreshCurrentTab()"
+              >
+                Retry
+              </button>
+            </div>
           </div>
 
           <div v-else-if="activeTab === 'PENDING'" class="mt-6 space-y-4">
@@ -583,9 +672,9 @@ const handleReviewSubmitted = async () => {
 
                   <p class="mt-3 text-sm leading-6 text-noble-black/75">{{ review.reviewText }}</p>
 
-                  <div v-if="review.images.length > 0" class="mt-4 flex flex-wrap gap-3">
+                  <div v-if="(review.images as any[]).length > 0" class="mt-4 flex flex-wrap gap-3">
                     <img
-                      v-for="image in review.images"
+                      v-for="image in review.images as any[]"
                       :key="image"
                       :src="getReviewImageUrl(image)"
                       :alt="`${review.typeLabel} image`"
@@ -633,6 +722,148 @@ const handleReviewSubmitted = async () => {
         </section>
       </aside>
     </div>
+
+    <section class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 sm:p-6">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-noble-black sm:text-[25px]">Community Leaderboards</h2>
+          <p class="mt-2 text-sm leading-6 text-noble-black/70 sm:text-base">
+            Top community members ranked by average star rating from available borrower and lender
+            reviews.
+          </p>
+        </div>
+
+        <button
+          v-if="leaderboardError"
+          type="button"
+          class="inline-flex w-fit rounded-2xl border border-burning-orange px-4 py-2 text-sm font-medium text-burning-orange transition-colors hover:bg-burning-orange hover:text-white"
+          @click="refreshLeaderboard()"
+        >
+          Retry
+        </button>
+      </div>
+
+      <div class="mt-6 grid gap-6 xl:grid-cols-2">
+        <article class="rounded-2xl border border-cinnamon-ice bg-white p-5">
+          <h3 class="text-lg font-bold text-noble-black">Top Borrowers</h3>
+
+          <div v-if="leaderboardPending && !leaderboardData" class="mt-5 space-y-3">
+            <div
+              v-for="index in 5"
+              :key="`borrowers-skeleton-${index}`"
+              class="h-16 animate-pulse rounded-2xl border border-cinnamon-ice/50 bg-cream"
+            />
+          </div>
+
+          <div
+            v-else-if="leaderboardError"
+            class="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-600"
+          >
+            We couldn't load the borrower rankings right now.
+          </div>
+
+          <div
+            v-else-if="borrowerLeaderboard.length === 0"
+            class="mt-5 text-sm text-noble-black/65"
+          >
+            No rankings yet.
+          </div>
+
+          <div v-else class="mt-5 space-y-3">
+            <div
+              v-for="entry in borrowerLeaderboard"
+              :key="`borrower-${entry.user.id}`"
+              class="flex items-center gap-4 rounded-2xl border border-cinnamon-ice/70 bg-cream px-4 py-3"
+            >
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-burning-orange/10 text-sm font-bold text-burning-orange"
+              >
+                #{{ entry.rank }}
+              </div>
+
+              <UserAvatar
+                :avatar-url="entry.user.avatarUrl"
+                :user-name="entry.user.name"
+                size="md"
+              />
+
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-noble-black sm:text-base">
+                  {{ entry.user.name }}
+                </p>
+                <p class="mt-1 text-xs text-noble-black/60 sm:text-sm">
+                  {{ formatReviewCount(entry.reviewCount) }}
+                </p>
+              </div>
+
+              <div class="text-right">
+                <p class="text-sm font-bold text-burning-orange sm:text-base">
+                  {{ entry.averageRating.toFixed(1) }} ★
+                </p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="rounded-2xl border border-cinnamon-ice bg-white p-5">
+          <h3 class="text-lg font-bold text-noble-black">Top Lenders</h3>
+
+          <div v-if="leaderboardPending && !leaderboardData" class="mt-5 space-y-3">
+            <div
+              v-for="index in 5"
+              :key="`lenders-skeleton-${index}`"
+              class="h-16 animate-pulse rounded-2xl border border-cinnamon-ice/50 bg-cream"
+            />
+          </div>
+
+          <div
+            v-else-if="leaderboardError"
+            class="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-600"
+          >
+            We couldn't load the lender rankings right now.
+          </div>
+
+          <div v-else-if="lenderLeaderboard.length === 0" class="mt-5 text-sm text-noble-black/65">
+            No rankings yet.
+          </div>
+
+          <div v-else class="mt-5 space-y-3">
+            <div
+              v-for="entry in lenderLeaderboard"
+              :key="`lender-${entry.user.id}`"
+              class="flex items-center gap-4 rounded-2xl border border-cinnamon-ice/70 bg-cream px-4 py-3"
+            >
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-estate/10 text-sm font-bold text-blue-estate"
+              >
+                #{{ entry.rank }}
+              </div>
+
+              <UserAvatar
+                :avatar-url="entry.user.avatarUrl"
+                :user-name="entry.user.name"
+                size="md"
+              />
+
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-noble-black sm:text-base">
+                  {{ entry.user.name }}
+                </p>
+                <p class="mt-1 text-xs text-noble-black/60 sm:text-sm">
+                  {{ formatReviewCount(entry.reviewCount) }}
+                </p>
+              </div>
+
+              <div class="text-right">
+                <p class="text-sm font-bold text-burning-orange sm:text-base">
+                  {{ entry.averageRating.toFixed(1) }} ★
+                </p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
 
     <TransactionReviewModal
       :open="isReviewModalOpen"

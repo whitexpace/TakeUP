@@ -142,34 +142,11 @@
     <div v-if="!isManagement" class="h-[1px] bg-cinnamon-ice w-full"></div>
 
     <!-- Owner Section -->
-    <div
-      v-if="!isManagement"
-      class="px-3 py-2 sm:px-5 sm:py-4 flex justify-between items-center bg-white"
-    >
+    <div v-if="!isManagement" class="px-3 py-2 sm:px-5 sm:py-4 flex items-center bg-white">
       <span
-        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate pr-2"
+        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate"
         >by {{ owner }}</span
       >
-      <button
-        v-if="!isManagement"
-        class="w-7 h-7 sm:w-9 sm:h-9 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
-        @click.stop.prevent
-      >
-        <svg
-          class="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-            stroke="white"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
     </div>
   </div>
 </template>
@@ -197,6 +174,7 @@ const props = defineProps<{
   fromPage?: "likes" | "dashboard"
   isManagement?: boolean
   allowNavigation?: boolean
+  customPath?: string
 }>()
 const emit = defineEmits<{
   likeChanged: [payload: { itemId: string; isLiked: boolean }]
@@ -216,11 +194,13 @@ watch(
   },
 )
 
-const itemDetailPath = computed(() =>
-  buildItemDetailPath({
-    id: String(props.id),
-    name: props.name,
-  }),
+const itemDetailPath = computed(
+  () =>
+    props.customPath ||
+    buildItemDetailPath({
+      id: String(props.id),
+      name: props.name,
+    }),
 )
 
 const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")

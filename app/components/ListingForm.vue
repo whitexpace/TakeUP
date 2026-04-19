@@ -672,6 +672,19 @@ const blurReplacementCost = () => {
   form.replacementCost = formatRateValue(form.replacementCost)
 }
 
+const showPreview = ref(false)
+const previewData = computed(() => {
+  const payload = buildPayload()
+  return {
+    ...payload,
+    categories: form.categories, // buildPayload returns the raw values
+    condition: form.condition || "GOOD",
+    ownerName: props.item?.ownerName,
+    rating: props.item?.rating,
+    bookingCount: props.item?.bookingCount,
+  }
+})
+
 const handleSubmit = () => {
   if (tagInput.value.trim()) {
     addTag()
@@ -1549,7 +1562,7 @@ const handleSubmit = () => {
     </div>
 
     <!-- Action Buttons -->
-    <div class="mt-12 flex items-center justify-end gap-8 pb-20">
+    <div class="mt-12 flex items-center justify-end gap-6 pb-20">
       <button
         type="button"
         class="text-[15px] font-semibold text-noble-black transition-colors hover:text-cinnabar-red"
@@ -1557,26 +1570,39 @@ const handleSubmit = () => {
       >
         Cancel
       </button>
-      <button
-        type="submit"
-        :disabled="isSubmitting || isUploadingImages"
-        class="rounded-full bg-burning-orange px-10 py-3.5 text-[15px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all duration-300 hover:scale-[1.02] hover:bg-blue-estate disabled:opacity-50"
-      >
-        {{
-          isUploadingImages
-            ? "Uploading..."
-            : isSubmitting
-              ? props.mode === "new"
-                ? "Publishing..."
-                : "Saving..."
-              : props.mode === "new"
-                ? "Publish Item"
-                : "Save Changes"
-        }}
-      </button>
+
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          class="rounded-full border border-cinnamon-ice bg-white px-8 py-3.5 text-[15px] font-bold text-noble-black transition-all hover:bg-cream active:scale-95"
+          @click="showPreview = true"
+        >
+          Preview
+        </button>
+
+        <button
+          type="submit"
+          :disabled="isSubmitting || isUploadingImages"
+          class="rounded-full bg-burning-orange px-10 py-3.5 text-[15px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all duration-300 hover:scale-[1.02] hover:bg-blue-estate disabled:opacity-50"
+        >
+          {{
+            isUploadingImages
+              ? "Uploading..."
+              : isSubmitting
+                ? props.mode === "new"
+                  ? "Publishing..."
+                  : "Saving..."
+                : props.mode === "new"
+                  ? "Publish Item"
+                  : "Save Changes"
+          }}
+        </button>
+      </div>
     </div>
 
     <!-- Lightbox & Modals -->
+    <ItemPreviewModal :show="showPreview" :data="previewData" @close="showPreview = false" />
+
     <Teleport to="body">
       <div
         v-if="lightboxImage"

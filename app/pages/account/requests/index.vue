@@ -112,6 +112,13 @@ const handleBookingDecision = async (
 
 <template>
   <div class="font-geist space-y-6">
+    <NuxtLink
+      to="/account/listings"
+      class="inline-flex items-center gap-2 bg-transparent py-2 text-sm transition-colors hover:text-burning-orange"
+    >
+      <span>← Back to My Listings</span>
+    </NuxtLink>
+
     <div>
       <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold">{{ pageTitle }}</h1>
       <p class="text-neutral-800 text-base sm:text-lg font-normal tracking-wide mt-1">
