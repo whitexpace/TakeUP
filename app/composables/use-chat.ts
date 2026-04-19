@@ -92,7 +92,8 @@ export const useChat = () => {
       conversations.value = data
       if (activeConversation.value) {
         const matchingConversation = data.find(
-          (conversation) => conversation.conversationId === activeConversation.value?.conversationId,
+          (conversation) =>
+            conversation.conversationId === activeConversation.value?.conversationId,
         )
         if (matchingConversation) {
           activeConversation.value = {
@@ -224,17 +225,15 @@ export const useChat = () => {
       const message = getErrorMessage(e, "Failed to send message")
       error.value = message
 
-      if (
-        activeConversation.value &&
-        message.toLowerCase().includes("read-only")
-      ) {
+      if (activeConversation.value && message.toLowerCase().includes("read-only")) {
         activeConversation.value = {
           ...activeConversation.value,
           isExpired: true,
         }
 
         const matchingConversation = conversations.value.find(
-          (conversation) => conversation.conversationId === activeConversation.value?.conversationId,
+          (conversation) =>
+            conversation.conversationId === activeConversation.value?.conversationId,
         )
 
         if (matchingConversation) {

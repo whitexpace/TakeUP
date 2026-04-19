@@ -497,21 +497,21 @@ model RequestOffer {
 }
 
 model TransactionDispute {
-  id                 String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  transactionId      String        @map("transaction_id")
-  raisedById         String        @map("filed_by_user_id")
-  reason             String
-  description        String?
-  claimedAmount      Decimal       @default(0) @map("claimed_amount") @db.Decimal(12, 2)
-  status             DisputeStatus @default(SUBMITTED)
-  reviewedById       String?       @map("admin_id")
-  resolution         String?
-  reviewedAt         DateTime?     @map("resolved_at") @db.Timestamptz(6)
-  rebuttalById       String?       @map("rebuttal_by_user_id")
-  rebuttalText       String?       @map("rebuttal_text")
-  rebuttalNotes      String?       @map("rebuttal_notes")
-  rebuttalSubmittedAt DateTime?    @map("rebuttal_submitted_at") @db.Timestamptz(6)
-  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                  String        @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId       String        @map("transaction_id")
+  raisedById          String        @map("filed_by_user_id")
+  reason              String
+  description         String?
+  claimedAmount       Decimal       @default(0) @map("claimed_amount") @db.Decimal(12, 2)
+  status              DisputeStatus @default(SUBMITTED)
+  reviewedById        String?       @map("admin_id")
+  resolution          String?
+  reviewedAt          DateTime?     @map("resolved_at") @db.Timestamptz(6)
+  rebuttalById        String?       @map("rebuttal_by_user_id")
+  rebuttalText        String?       @map("rebuttal_text")
+  rebuttalNotes       String?       @map("rebuttal_notes")
+  rebuttalSubmittedAt DateTime?     @map("rebuttal_submitted_at") @db.Timestamptz(6)
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
 
   rebuttalBy  User?             @relation("transaction_disputes_rebuttal_by_user_idToUser", fields: [rebuttalById], references: [id])
   reviewedBy  User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])

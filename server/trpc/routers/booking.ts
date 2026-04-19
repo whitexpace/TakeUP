@@ -969,13 +969,12 @@ export const bookingRouter = router({
     const isWithinDisputeWindow =
       booking.status === bookingStatusSchema.enum.COMPLETED &&
       isDateWithinWindow(booking.completedAt, DISPUTE_REPORT_WINDOW_DAYS)
-    const canSubmitRebuttal =
-      Boolean(
-        latestDispute &&
-          toApiDisputeStatus(latestDispute.status) === "OPEN" &&
-          latestDispute.raisedById !== ctx.user.id &&
-          !latestDispute.rebuttalSubmittedAt,
-      )
+    const canSubmitRebuttal = Boolean(
+      latestDispute &&
+      toApiDisputeStatus(latestDispute.status) === "OPEN" &&
+      latestDispute.raisedById !== ctx.user.id &&
+      !latestDispute.rebuttalSubmittedAt,
+    )
 
     return {
       ...mapBookingRecord(booking),

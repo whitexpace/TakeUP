@@ -311,7 +311,8 @@ const mapDisputeRecord = (record: DisputeRecord, currentUserId?: string | null) 
     status === "OPEN" &&
     Boolean(currentUserId) &&
     currentUserId !== record.raisedById &&
-    (currentUserId === record.transaction.borrowerId || currentUserId === record.transaction.lenderId) &&
+    (currentUserId === record.transaction.borrowerId ||
+      currentUserId === record.transaction.lenderId) &&
     !hasRebuttal
 
   return {
@@ -399,7 +400,9 @@ const buildDisputeOpenedNotification = (input: {
   ]
     .filter(Boolean)
     .join(" "),
-  actionPath: input.bookingId ? `/account/transactions/${input.bookingId}` : "/account/disputes?tab=disputes",
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}`
+    : "/account/disputes?tab=disputes",
 })
 
 export const disputeRouter = router({

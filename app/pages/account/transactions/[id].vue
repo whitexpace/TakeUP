@@ -1016,7 +1016,10 @@ const handleReviewSubmitted = async () => {
               </p>
             </div>
 
-            <div v-if="latestDispute.hasRebuttal" class="rounded-2xl border border-cinnamon-ice bg-cream p-4">
+            <div
+              v-if="latestDispute.hasRebuttal"
+              class="rounded-2xl border border-cinnamon-ice bg-cream p-4"
+            >
               <p class="text-sm font-semibold text-noble-black">
                 Rebuttal submitted
                 <span v-if="rebuttalSubmittedByName">by {{ rebuttalSubmittedByName }}</span>
@@ -1316,7 +1319,8 @@ const handleReviewSubmitted = async () => {
             <div class="text-center">
               <h3 class="text-2xl font-bold text-noble-black">Confirm Rebuttal</h3>
               <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
-                Your rebuttal will be reviewed by the admin as part of the dispute resolution process.
+                Your rebuttal will be reviewed by the admin as part of the dispute resolution
+                process.
               </p>
             </div>
 

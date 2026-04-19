@@ -291,8 +291,7 @@ export const chatRouter = router({
     if (isConversationExpired(conv.transaction)) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message:
-          "This conversation is read-only because the transaction is under dispute review.",
+        message: "This conversation is read-only because the transaction is under dispute review.",
       })
     }
 
