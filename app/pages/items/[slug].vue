@@ -101,6 +101,7 @@ const isCalendarExpanded = ref(false)
 const isSaved = ref(false)
 const shareFeedback = ref("")
 const isSubmittingBooking = ref(false)
+const showPaymentModal = ref(false)
 const bookingErrorMessage = ref("")
 const bookingSuccessMessage = ref("")
 const hasRequestedBooking = ref(false)
@@ -919,6 +920,14 @@ const shareItem = async () => {
   }, 1800)
 }
 
+const handlePaymentSuccess = async (_data: {
+  transaction: { referenceCode: string; status: string }
+}) => {
+  showPaymentModal.value = false
+  // After successful payment, we finalize the booking
+  await performBookingCreation()
+}
+
 const resolveBookingErrorMessage = (error: unknown) => {
   const fetchError = error as {
     data?: {
@@ -953,6 +962,19 @@ const submitBookingRequest = async () => {
   )
     return
 
+  // If item is not free, we show payment modal first
+  if (!item.value.freeToBorrow) {
+    showPaymentModal.value = true
+    return
+  }
+
+  // If free, we just proceed with creation
+  await performBookingCreation()
+}
+
+const performBookingCreation = async () => {
+  if (!item.value || !selectedBookingWindow.value) return
+
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
   isSubmittingBooking.value = true
@@ -964,6 +986,7 @@ const submitBookingRequest = async () => {
         itemId: item.value.id,
         startDate: selectedBookingWindow.value.startDate.toISOString(),
         endDate: selectedBookingWindow.value.endDate.toISOString(),
+        paymentMethod: item.value.freeToBorrow ? "CASH" : "WALLET",
       },
     })
 
@@ -2696,6 +2719,90 @@ onUnmounted(() => {
 
       <p v-else class="py-20 text-center text-sm text-noble-black/60">Item not found.</p>
     </main>
+
+    <!-- Payment Modal (Wallet) -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showPaymentModal"
+          class="fixed inset-0 z-[3000] flex items-center justify-center p-4"
+        >
+          <!-- Backdrop -->
+          <div
+            class="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm"
+            @click="showPaymentModal = false"
+          ></div>
+
+          <!-- Modal Content -->
+          <div
+            class="relative bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
+          >
+            <!-- Header -->
+            <div class="px-8 pt-8 pb-4 flex items-center justify-between">
+              <div>
+                <h3 class="text-2xl font-bold text-neutral-800 font-geist">
+                  Complete Booking Request
+                </h3>
+                <p class="text-sm text-neutral-500 mt-1">
+                  Funds will be held securely until the rental is complete.
+                </p>
+              </div>
+              <button
+                class="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                @click="showPaymentModal = false"
+              >
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Booking Summary Snippet -->
+            <div class="px-8 pb-6">
+              <div class="bg-neutral-50 rounded-2xl p-4 flex gap-4 border border-neutral-100">
+                <img
+                  v-if="item?.thumbnailImage"
+                  :src="item.thumbnailImage"
+                  class="w-16 h-16 rounded-xl object-cover"
+                />
+                <div class="flex flex-col justify-center">
+                  <p class="font-bold text-neutral-800 leading-tight">{{ item?.name }}</p>
+                  <p class="text-xs text-neutral-500 mt-1">
+                    {{ formatDate(startDate) }} - {{ formatDate(endDate || startDate) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment Component -->
+            <div class="px-8 pb-8">
+              <WalletPayment
+                :amount="totalPrice"
+                related-entity-type="BOOKING_PENDING"
+                :related-entity-id="item?.id || 'pending'"
+                @success="handlePaymentSuccess"
+                @cancel="showPaymentModal = false"
+              />
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Sticky Bottom Bar (Mobile < sm) -->
     <div

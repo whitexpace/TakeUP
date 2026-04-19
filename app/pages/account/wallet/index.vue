@@ -46,14 +46,14 @@ const handleTopUp = async () => {
   }
 }
 
-const formatDate = (dateStr: string) => {
+const formatDate = (date: string | Date) => {
   return new Intl.DateTimeFormat("en-PH", {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(dateStr))
+  }).format(new Date(date))
 }
 </script>
 
@@ -320,7 +320,9 @@ const formatDate = (dateStr: string) => {
                 :class="tx.type === 'TOP_UP' ? 'text-success-green' : 'text-neutral-800'"
               >
                 {{ tx.type === "TOP_UP" ? "+" : "-" }} ₱{{
-                  tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })
+                  Number(tx.amount.toString()).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })
                 }}
               </p>
               <p class="text-[10px] text-neutral-400 font-mono">{{ tx.referenceCode }}</p>

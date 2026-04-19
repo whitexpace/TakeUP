@@ -34,6 +34,7 @@ import {
 import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
+import { creditToWallet } from "../../utils/wallet"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -836,7 +837,10 @@ export const bookingRouter = router({
         status: bookingStatusSchema.enum.PENDING,
         paymentStatus: item.freeToBorrow
           ? bookingPaymentStatusSchema.enum.NOT_REQUIRED
-          : bookingPaymentStatusSchema.enum.PENDING,
+          : input.paymentMethod === "WALLET"
+            ? bookingPaymentStatusSchema.enum.PAID
+            : bookingPaymentStatusSchema.enum.PENDING,
+        paymentProcessedAt: input.paymentMethod === "WALLET" ? now : null,
         cancellationReason: input.cancellationReason ?? null,
         updatedAt: now,
       },
@@ -1103,6 +1107,23 @@ export const bookingRouter = router({
 
         await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
       }
+
+      // Credit lender wallet on completion if it's a rental paid via wallet
+      if (
+        updatedBooking.status === bookingStatusSchema.enum.COMPLETED &&
+        existing.status !== bookingStatusSchema.enum.COMPLETED &&
+        existing.paymentMethod === PrismaPaymentMethod.WALLET
+      ) {
+        const lenderEarnings = existing.totalFee - existing.platformCommission
+        if (lenderEarnings > 0) {
+          await creditToWallet(existing.lenderId, lenderEarnings, {
+            type: "EARNING",
+            relatedEntityType: "BOOKING",
+            relatedEntityId: updatedBooking.id,
+          })
+        }
+      }
+
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: updatedBooking.itemId,
       })

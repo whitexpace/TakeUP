@@ -2,16 +2,11 @@ import { ref, computed, onMounted } from "vue"
 import type { Wallet, WalletTransaction, LinkedAccount } from "~/types/wallet"
 
 export const useWallet = () => {
-  const wallet = ref<Wallet>({
-    id: "w-1",
-    balance: 0,
-    currency: "PHP",
-    status: "ACTIVE",
-  })
-
+  const wallet = ref<Wallet | null>(null)
   const transactions = ref<WalletTransaction[]>([])
   const isBalanceVisible = ref(true)
   const isLoading = ref(false)
+  const isInitialLoading = ref(true)
 
   const linkedAccounts = ref<LinkedAccount[]>([
     { id: "la-1", type: "GCASH", accountName: "John Doe", accountNumber: "0912****567" },
@@ -19,47 +14,30 @@ export const useWallet = () => {
     { id: "la-3", type: "MAYA", accountName: "John Doe", accountNumber: "0912****567" },
   ])
 
-  // Persistent storage in localStorage for demo purposes
-  const loadFromStorage = () => {
-    const storedWallet = localStorage.getItem("takeup_wallet")
-    const storedTransactions = localStorage.getItem("takeup_transactions")
-
-    if (storedWallet) {
-      wallet.value = JSON.parse(storedWallet)
-    } else {
-      // Default initial balance
-      wallet.value.balance = 2500.0
-      saveToStorage()
-    }
-
-    if (storedTransactions) {
-      transactions.value = JSON.parse(storedTransactions)
-    } else {
-      // Mock some initial transactions
-      transactions.value = [
-        {
-          id: "t-1",
-          type: "TOP_UP",
-          method: "PSEUDO",
-          amount: 2500.0,
-          balanceBefore: 0,
-          balanceAfter: 2500.0,
-          referenceCode: "WTX-20260417-0001",
-          status: "SUCCESS",
-          createdAt: new Date().toISOString(),
-        },
-      ]
-      saveToStorage()
+  const fetchWallet = async () => {
+    try {
+      const data = await $fetch<Wallet>("/api/wallet")
+      wallet.value = data
+    } catch (error) {
+      console.error("Failed to fetch wallet:", error)
+    } finally {
+      isInitialLoading.value = false
     }
   }
 
-  const saveToStorage = () => {
-    localStorage.setItem("takeup_wallet", JSON.stringify(wallet.value))
-    localStorage.setItem("takeup_transactions", JSON.stringify(transactions.value))
+  const fetchTransactions = async () => {
+    try {
+      const data = await $fetch<WalletTransaction[]>("/api/wallet/transactions", {
+        query: { take: 20 },
+      })
+      transactions.value = data
+    } catch (error) {
+      console.error("Failed to fetch transactions:", error)
+    }
   }
 
-  onMounted(() => {
-    loadFromStorage()
+  onMounted(async () => {
+    await Promise.all([fetchWallet(), fetchTransactions()])
   })
 
   const toggleBalanceVisibility = () => {
@@ -68,42 +46,71 @@ export const useWallet = () => {
 
   const topUpPseudo = async (amount: number) => {
     isLoading.value = true
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    const balanceBefore = wallet.value.balance
-    const balanceAfter = balanceBefore + amount
-
-    const newTransaction: WalletTransaction = {
-      id: `t-${Date.now()}`,
-      type: "TOP_UP",
-      method: "PSEUDO",
-      amount,
-      balanceBefore,
-      balanceAfter,
-      referenceCode: `WTX-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(
-        Math.random() * 10000,
+    try {
+      const result = await $fetch<{ wallet: Wallet; transaction: WalletTransaction }>(
+        "/api/wallet/top-up",
+        {
+          method: "POST",
+          body: { amount },
+        },
       )
-        .toString()
-        .padStart(4, "0")}`,
-      status: "SUCCESS",
-      createdAt: new Date().toISOString(),
+      // Update local state
+      wallet.value = result.wallet
+      transactions.value.unshift(result.transaction)
+      return result
+    } catch (error) {
+      console.error("Top-up failed:", error)
+      throw error
+    } finally {
+      isLoading.value = false
     }
+  }
 
-    wallet.value.balance = balanceAfter
-    transactions.value.unshift(newTransaction)
-    saveToStorage()
+  const payWithWallet = async (
+    amount: number,
+    relatedEntityType: string,
+    relatedEntityId: string,
+  ) => {
+    isLoading.value = true
+    try {
+      const result = await $fetch<{ wallet: Wallet; transaction: WalletTransaction }>(
+        "/api/wallet/pay",
+        {
+          method: "POST",
+          body: {
+            amount,
+            relatedEntityType,
+            relatedEntityId,
+          },
+        },
+      )
+      // Update local state
+      wallet.value = result.wallet
+      transactions.value.unshift(result.transaction)
+      return result
+    } catch (error) {
+      console.error("Payment failed:", error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
 
-    isLoading.value = false
-    return { wallet: wallet.value, transaction: newTransaction }
+  const getBalanceValue = () => {
+    if (!wallet.value) return 0
+    const balance = wallet.value.balance
+    return typeof balance === "object" && balance !== null
+      ? Number(balance.toString())
+      : Number(balance)
   }
 
   const formattedBalance = computed(() => {
+    const balanceValue = getBalanceValue()
     return new Intl.NumberFormat("en-PH", {
       style: "currency",
       currency: "PHP",
       minimumFractionDigits: 2,
-    }).format(wallet.value.balance)
+    }).format(balanceValue)
   })
 
   const maskedBalance = computed(() => {
@@ -115,10 +122,15 @@ export const useWallet = () => {
     transactions,
     isBalanceVisible,
     isLoading,
+    isInitialLoading,
     linkedAccounts,
     toggleBalanceVisibility,
     topUpPseudo,
+    payWithWallet,
     formattedBalance,
     maskedBalance,
+    fetchWallet,
+    fetchTransactions,
+    balance: computed(() => getBalanceValue()),
   }
 }

@@ -14,21 +14,41 @@ const emit = defineEmits<{
   (e: "cancel"): void
 }>()
 
-const { wallet, formattedBalance, isBalanceVisible, maskedBalance, isLoading } = useWallet()
+const {
+  wallet,
+  balance,
+  formattedBalance,
+  isBalanceVisible,
+  maskedBalance,
+  isLoading,
+  payWithWallet,
+} = useWallet()
 
-const canAfford = computed(() => wallet.value.balance >= props.amount)
+const canAfford = computed(() => {
+  if (!wallet.value) return false
+  return balance.value >= props.amount
+})
 
 const handlePayment = async () => {
   if (!canAfford.value) return
 
-  // In a real app, this would call payWithWallet(props.amount)
-  // For now, we simulate success for the frontend demo
-  emit("success", {
-    transaction: {
-      referenceCode: `WTX-PAY-${Date.now()}`,
-      status: "SUCCESS",
-    },
-  })
+  try {
+    const result = await payWithWallet(
+      props.amount,
+      props.relatedEntityType || "SYSTEM",
+      props.relatedEntityId || "DEMO",
+    )
+
+    emit("success", {
+      transaction: {
+        referenceCode: result.transaction.referenceCode,
+        status: result.transaction.status,
+      },
+    })
+  } catch (error) {
+    console.error("Payment error:", error)
+    // Error is handled/logged in composable, but could add UI feedback here
+  }
 }
 </script>
 
@@ -60,7 +80,7 @@ const handlePayment = async () => {
     </div>
 
     <div
-      v-if="!canAfford"
+      v-if="!canAfford && wallet"
       class="p-4 bg-cinnabar-red/5 border border-cinnabar-red/20 rounded-2xl flex items-start gap-3"
     >
       <svg
@@ -87,6 +107,7 @@ const handlePayment = async () => {
     <div class="flex gap-3">
       <button
         class="flex-1 py-3 px-4 border border-neutral-200 rounded-xl font-bold text-neutral-600 hover:bg-neutral-50 transition-all"
+        :disabled="isLoading"
         @click="$emit('cancel')"
       >
         Cancel
@@ -96,7 +117,7 @@ const handlePayment = async () => {
         class="flex-[2] py-3 px-4 bg-blue-estate text-white rounded-xl font-bold hover:bg-blue-estate/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md active:scale-[0.98]"
         @click="handlePayment"
       >
-        Pay with Wallet
+        {{ isLoading ? "Processing..." : "Pay with Wallet" }}
       </button>
     </div>
   </div>
