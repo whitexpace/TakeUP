@@ -76,6 +76,24 @@ enum BookingStatus {
   IN_DISPUTE
 }
 
+enum ReturnStatus {
+  NOT_RETURNED
+  RETURNED
+  EARLY_RETURNED
+}
+
+enum RefundStatus {
+  NONE
+  PENDING
+  PROCESSED
+  NOT_ELIGIBLE
+  FAILED
+}
+
+enum RefundReason {
+  EARLY_RETURN
+}
+
 enum BookingPaymentStatus {
   NOT_REQUIRED
   PENDING
@@ -274,6 +292,14 @@ model Booking {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
+  // Early return and refund tracking
+  returnStatus      ReturnStatus  @default(NOT_RETURNED)
+  refundStatus      RefundStatus  @default(NONE)
+  refundAmount      Int           @default(0)
+  refundProcessedAt DateTime?
+  refundReason      RefundReason?
+  actualReturnedAt  DateTime?
+
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
   lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
@@ -285,6 +311,8 @@ model Booking {
   @@index([lenderId])
   @@index([paymentStatus])
   @@index([status])
+  @@index([returnStatus])
+  @@index([refundStatus])
 }
 
 model AppNotification {

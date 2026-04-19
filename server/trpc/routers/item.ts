@@ -1041,7 +1041,7 @@ export const itemRouter = router({
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
     await expireActiveBoosts(ctx.prisma)
     const now = new Date()
-    const item = await ctx.prisma.item.findFirst({
+    const item = (await ctx.prisma.item.findFirst({
       where: {
         id: input.id,
         OR: [
@@ -1061,13 +1061,21 @@ export const itemRouter = router({
           select: transactionReviewSelect,
         },
       },
-    })
+    })) as
+      | (ItemWithUserLike & {
+          bookings: Array<{ id: string; startDate: Date; endDate: Date; status: string }>
+          transactionReviews: Prisma.TransactionReviewGetPayload<{
+            select: typeof transactionReviewSelect
+          }>[]
+        })
+      | null
 
     if (!item) return null
 
     const isOwner = ctx.user?.id === item.lenderId
     if (!isOwner && !isPublicVisibleItem(item, now)) return null
 
+    // Increment view count without blocking the item detail response.
     ctx.prisma.item
       .update({ where: { id: item.id }, data: { viewCount: { increment: 1 } } })
       .catch(() => {})
