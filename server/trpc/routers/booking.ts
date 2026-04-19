@@ -1116,11 +1116,16 @@ export const bookingRouter = router({
       ) {
         const lenderEarnings = existing.totalFee - existing.platformCommission
         if (lenderEarnings > 0) {
-          await creditToWallet(existing.lenderId, lenderEarnings, {
-            type: "EARNING",
-            relatedEntityType: "BOOKING",
-            relatedEntityId: updatedBooking.id,
-          })
+          await creditToWallet(
+            existing.lenderId,
+            lenderEarnings,
+            {
+              type: "EARNING",
+              relatedEntityType: "BOOKING",
+              relatedEntityId: updatedBooking.id,
+            },
+            tx as Context["prisma"],
+          )
         }
       }
 
