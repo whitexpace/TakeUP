@@ -248,7 +248,7 @@ export async function creditToWallet(
         userId,
         type: context.type as PrismaWalletTransactionType,
         method: "SYSTEM",
-        direction: "CREDIT",
+        direction: "CREDIT", // Always CREDIT for earnings and refunds
         amount: decimalAmount,
         balanceBefore: currentBalance,
         balanceAfter: newBalance,
@@ -268,7 +268,6 @@ export async function creditToWallet(
   }
 
   // If a transaction client is already provided, use it.
-  // Otherwise, start a new transaction.
   if (tx) {
     return await execute(tx)
   } else {

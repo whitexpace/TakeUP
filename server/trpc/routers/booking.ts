@@ -1108,19 +1108,42 @@ export const bookingRouter = router({
         await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
       }
 
-      // Credit lender wallet on completion if it's a rental paid via wallet
+      // Wallet Payout & Refund Logic on completion
       if (
         updatedBooking.status === bookingStatusSchema.enum.COMPLETED &&
         existing.status !== bookingStatusSchema.enum.COMPLETED &&
         existing.paymentMethod === PrismaPaymentMethod.WALLET
       ) {
-        const lenderEarnings = existing.totalFee - existing.platformCommission
+        // 1. Calculate lender earnings based on ACTUAL total (after any refunds)
+        const finalFee = updatedBooking.totalFee
+        const finalCommission = updatedBooking.platformCommission
+        const lenderEarnings = finalFee - finalCommission
+
         if (lenderEarnings > 0) {
           await creditToWallet(
             existing.lenderId,
             lenderEarnings,
             {
               type: "EARNING",
+              relatedEntityType: "BOOKING",
+              relatedEntityId: updatedBooking.id,
+            },
+            tx as Context["prisma"],
+          )
+        }
+
+        // 2. Handle Early Return Refund for Borrower
+        // If an early return happened, the totalFee was already reduced in DB before completion.
+        // We need to credit the DIFFERENCE back to the borrower's wallet.
+        const originalPaid = existing.totalFee
+        const refundAmount = originalPaid - finalFee
+
+        if (refundAmount > 0) {
+          await creditToWallet(
+            existing.borrowerId,
+            refundAmount,
+            {
+              type: "REFUND",
               relatedEntityType: "BOOKING",
               relatedEntityId: updatedBooking.id,
             },
