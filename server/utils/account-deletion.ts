@@ -1,6 +1,5 @@
 import {
   BookingStatus,
-  DisputeStatus,
   PaymentStatus,
   Prisma,
   TransactionStatus,
@@ -12,12 +11,7 @@ import type {
   AccountDeletionReason,
   AccountDeletionReasonDetail,
 } from "../../shared/schemas/account"
-
-const ACTIVE_DISPUTE_STATUSES = [
-  DisputeStatus.OPEN,
-  DisputeStatus.UNDER_REVIEW,
-  DisputeStatus.APPEALED,
-] as const
+import { ACTIVE_DISPUTE_STATUSES } from "./dispute-status"
 
 const BLOCKING_TRANSACTION_STATUSES = [
   TransactionStatus.PENDING,
@@ -63,6 +57,16 @@ type PrismaLike = PrismaClient | Prisma.TransactionClient
 
 const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
   `${count} ${count === 1 ? singular : plural}`
+
+const countTransactionDisputes = (
+  prisma: Pick<PrismaLike, "transactionDispute">,
+  args: Record<string, unknown>,
+) =>
+  (
+    prisma.transactionDispute.count as unknown as (
+      query: Record<string, unknown>,
+    ) => Promise<number>
+  )(args)
 
 const formatShortDateRange = (startDate: Date, endDate: Date) => {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -302,11 +306,11 @@ const getAccountDeletionEligibilityFromClient = async (
       ],
     },
   })
-  const activeDisputeCount = await prisma.transactionDispute.count({
+  const activeDisputeCount = await countTransactionDisputes(prisma, {
     where: {
       status: { in: [...ACTIVE_DISPUTE_STATUSES] },
       OR: [
-        { filedByUserId: userId },
+        { raisedById: userId },
         { transaction: { borrowerId: userId } },
         { transaction: { lenderId: userId } },
       ],

@@ -23,6 +23,7 @@ const makeConversationSummary = (
   conversationId,
   transactionId: conversationId === CONV_ID_1 ? TX_ID_1 : TX_ID_2,
   isExpired: false,
+  closedNotice: null,
   item: { id: `item-${conversationId}`, name: `Item ${conversationId}`, thumbnailImage: null },
   otherParticipant: {
     id: `user-${conversationId}`,
@@ -50,6 +51,7 @@ const makeConversationDetail = (
   conversationId,
   transactionId: conversationId === CONV_ID_1 ? TX_ID_1 : TX_ID_2,
   isExpired: false,
+  closedNotice: null,
   item: { id: `item-${conversationId}`, name: `Item ${conversationId}`, thumbnailImage: null },
   otherParticipant: {
     id: `user-${conversationId}`,
@@ -94,7 +96,7 @@ describe("useChat", () => {
     const chat = useChat()
     await chat.loadConversations()
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/chat/conversations")
+    expect(fetchMock).toHaveBeenCalledWith("/api/chat")
     expect(chat.conversations.value).toHaveLength(2)
     expect(
       chat.sortedConversations.value.map((conversation) => conversation.conversationId),
@@ -117,10 +119,7 @@ describe("useChat", () => {
     expect(chat.activeConversation.value?.conversationId).toBe(CONV_ID_1)
     expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-1"])
     expect(chat.hasMoreMessages.value).toBe(true)
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/chat/conversation", {
-      method: "POST",
-      body: { transactionId: TX_ID_1 },
-    })
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `/api/chat/transactions/${TX_ID_1}`)
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/chat/messages", {
       params: { conversationId: CONV_ID_1 },
     })
@@ -132,6 +131,7 @@ describe("useChat", () => {
 
   it("selects an existing conversation, loads messages, and clears local unread counters", async () => {
     fetchMock
+      .mockResolvedValueOnce(makeConversationDetail(CONV_ID_2, { transactionId: TX_ID_2 }))
       .mockResolvedValueOnce({
         messages: [makeMessage("msg-1", { conversationId: CONV_ID_2 })],
         nextCursor: null,
@@ -151,6 +151,14 @@ describe("useChat", () => {
     expect(chat.totalUnreadCount.value).toBe(3)
     expect(chat.conversations.value[0]?.unreadCount).toBe(0)
     expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-1"])
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `/api/chat/conversations/${CONV_ID_2}`)
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/chat/messages", {
+      params: { conversationId: CONV_ID_2 },
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/chat/mark-read", {
+      method: "POST",
+      body: { conversationId: CONV_ID_2 },
+    })
   })
 
   it("loads more messages and prepends older pages", async () => {

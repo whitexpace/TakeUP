@@ -76,6 +76,24 @@ enum BookingStatus {
   IN_DISPUTE
 }
 
+enum ReturnStatus {
+  NOT_RETURNED
+  RETURNED
+  EARLY_RETURNED
+}
+
+enum RefundStatus {
+  NONE
+  PENDING
+  PROCESSED
+  NOT_ELIGIBLE
+  FAILED
+}
+
+enum RefundReason {
+  EARLY_RETURN
+}
+
 enum BookingPaymentStatus {
   NOT_REQUIRED
   PENDING
@@ -113,20 +131,12 @@ enum ActorRole {
   @@map("actor_role_enum")
 }
 
-enum DisputeReason {
-  LATE    @map("late")
-  DAMAGED @map("damaged")
-  LOST    @map("lost")
-
-  @@map("dispute_reason_enum")
-}
-
 enum DisputeStatus {
-  OPEN         @map("open")
-  UNDER_REVIEW @map("under_review")
-  RESOLVED     @map("resolved")
-  REJECTED     @map("rejected")
-  APPEALED     @map("appealed")
+  SUBMITTED @map("under_review")
+  OPEN      @map("open")
+  REJECTED  @map("rejected")
+  RESOLVED  @map("resolved")
+  APPEALED  @map("appealed")
 
   @@map("dispute_status_enum")
 }
@@ -274,6 +284,14 @@ model Booking {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
+  // Early return and refund tracking
+  returnStatus      ReturnStatus  @default(NOT_RETURNED)
+  refundStatus      RefundStatus  @default(NONE)
+  refundAmount      Int           @default(0)
+  refundProcessedAt DateTime?
+  refundReason      RefundReason?
+  actualReturnedAt  DateTime?
+
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
   lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
@@ -285,6 +303,8 @@ model Booking {
   @@index([lenderId])
   @@index([paymentStatus])
   @@index([status])
+  @@index([returnStatus])
+  @@index([refundStatus])
 }
 
 model AppNotification {
@@ -551,19 +571,19 @@ model RequestOffer {
 model TransactionDispute {
   id            String          @id @default(dbgenerated("(gen_random_uuid())::text"))
   transactionId String          @map("transaction_id")
-  filedByUserId String          @map("filed_by_user_id")
-  reason        DisputeReason
+  raisedById    String          @map("filed_by_user_id")
+  reason        String
   description   String?
   claimedAmount Decimal         @default(0) @map("claimed_amount") @db.Decimal(12, 2)
-  status        DisputeStatus   @default(OPEN)
-  adminId       String?         @map("admin_id")
+  status        DisputeStatus   @default(SUBMITTED)
+  reviewedById  String?         @map("admin_id")
   resolution    String?
-  outcome       DisputeOutcome?
-  resolvedAt    DateTime?       @map("resolved_at") @db.Timestamptz(6)
+  reviewedAt    DateTime?       @map("resolved_at") @db.Timestamptz(6)
   createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  outcome       DisputeOutcome?
 
-  admin       User?             @relation("transaction_disputes_admin_idToUser", fields: [adminId], references: [id])
-  filedByUser User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [filedByUserId], references: [id])
+  reviewedBy  User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
+  raisedBy    User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [raisedById], references: [id])
   transaction RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId, status, createdAt(sort: Desc)], map: "idx_disputes_txn_status")

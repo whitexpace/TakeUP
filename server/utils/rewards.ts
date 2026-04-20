@@ -1,5 +1,6 @@
-import { DisputeStatus, TransactionStatus, type Prisma } from "@prisma/client"
+import { TransactionStatus, type Prisma, type ReviewType } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
+import { isActiveDisputeStatus } from "./dispute-status"
 
 export const RewardSourceType = {
   TRANSACTION_COMPLETED: "TRANSACTION_COMPLETED",
@@ -52,12 +53,6 @@ export const DisputeOutcome = {
 
 export type DisputeOutcome = (typeof DisputeOutcome)[keyof typeof DisputeOutcome]
 
-const ACTIVE_DISPUTE_STATUSES: DisputeStatus[] = [
-  DisputeStatus.OPEN,
-  DisputeStatus.UNDER_REVIEW,
-  DisputeStatus.APPEALED,
-]
-
 const DEFAULT_REWARD_CONFIG = {
   borrowerBasePoints: 10,
   lenderBasePoints: 10,
@@ -99,39 +94,61 @@ type RewardEventLedgerEntry = {
   status: RewardEventStatus
 }
 
-type RewardProcessingDispute = {
-  id: string
-  status: DisputeStatus
-  outcome: DisputeOutcome | null
-  createdAt: Date
-  resolvedAt: Date | null
-}
+const rewardProcessingDisputeSelect = {
+  id: true,
+  status: true,
+  outcome: true,
+  createdAt: true,
+  reviewedAt: true,
+} satisfies Prisma.TransactionDisputeSelect
+
+type RewardProcessingDispute = Prisma.TransactionDisputeGetPayload<{
+  select: typeof rewardProcessingDisputeSelect
+}>
 
 type RewardParticipantRole = "borrower" | "lender"
 
-type RewardTransactionRecord = {
-  id: string
-  status: TransactionStatus
-  borrowerId: string | null
-  lenderId: string | null
-  disputes: RewardProcessingDispute[]
-  reviews: Array<{ id: string }>
-}
+const rewardTransactionSelect = {
+  id: true,
+  status: true,
+  borrowerId: true,
+  lenderId: true,
+  reviews: {
+    select: {
+      id: true,
+    },
+  },
+  disputes: {
+    select: rewardProcessingDisputeSelect,
+  },
+} satisfies Prisma.RentalTransactionSelect
 
-type RewardReviewRecord = {
-  id: string
-  reviewType: "ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"
-  reviewerUserId: string
-  transactionId: string
+type RewardTransactionRecord = Prisma.RentalTransactionGetPayload<{
+  select: typeof rewardTransactionSelect
+}>
+
+const rewardReviewSelect = {
+  id: true,
+  reviewType: true,
+  reviewerUserId: true,
+  transactionId: true,
   transaction: {
-    id: string
-    status: TransactionStatus
-    itemId: string | null
-    borrowerId: string | null
-    lenderId: string | null
-    disputes: RewardProcessingDispute[]
-  }
-}
+    select: {
+      id: true,
+      status: true,
+      itemId: true,
+      borrowerId: true,
+      lenderId: true,
+      disputes: {
+        select: rewardProcessingDisputeSelect,
+      },
+    },
+  },
+} satisfies Prisma.TransactionReviewSelect
+
+type RewardReviewRecord = Prisma.TransactionReviewGetPayload<{
+  select: typeof rewardReviewSelect
+}>
 
 type RewardClient = Prisma.TransactionClient | Prisma.DefaultPrismaClient
 
@@ -144,7 +161,7 @@ const getRoleCategory = (role: RewardParticipantRole) =>
 
 const getLatestRewardRelevantDispute = (disputes: RewardProcessingDispute[] = []) => {
   const active = disputes
-    .filter((dispute) => ACTIVE_DISPUTE_STATUSES.includes(dispute.status))
+    .filter((dispute) => isActiveDisputeStatus(dispute.status))
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     .at(0)
 
@@ -154,8 +171,8 @@ const getLatestRewardRelevantDispute = (disputes: RewardProcessingDispute[] = []
 
   return [...disputes]
     .sort((left, right) => {
-      const rightTime = right.resolvedAt?.getTime() ?? right.createdAt.getTime()
-      const leftTime = left.resolvedAt?.getTime() ?? left.createdAt.getTime()
+      const rightTime = right.reviewedAt?.getTime() ?? right.createdAt.getTime()
+      const leftTime = left.reviewedAt?.getTime() ?? left.createdAt.getTime()
       return rightTime - leftTime
     })
     .at(0)
@@ -188,7 +205,7 @@ export const getTransactionRewardDecision = ({
     }
   }
 
-  if (ACTIVE_DISPUTE_STATUSES.includes(dispute.status)) {
+  if (isActiveDisputeStatus(dispute.status)) {
     return {
       pointsDelta: basePoints,
       status: RewardEventStatus.PENDING,
@@ -247,7 +264,7 @@ export const getReviewRewardDecision = ({
     }
   }
 
-  if (ACTIVE_DISPUTE_STATUSES.includes(dispute.status)) {
+  if (isActiveDisputeStatus(dispute.status)) {
     return {
       pointsDelta: DEFAULT_REWARD_CONFIG.reviewSubmissionBonus,
       status: RewardEventStatus.PENDING,
@@ -465,26 +482,7 @@ const findRewardTransaction = async (
 ): Promise<RewardTransactionRecord | null> => {
   return prisma.rentalTransaction.findUnique({
     where: { id: transactionId },
-    select: {
-      id: true,
-      status: true,
-      borrowerId: true,
-      lenderId: true,
-      reviews: {
-        select: {
-          id: true,
-        },
-      },
-      disputes: {
-        select: {
-          id: true,
-          status: true,
-          outcome: true,
-          createdAt: true,
-          resolvedAt: true,
-        },
-      },
-    },
+    select: rewardTransactionSelect,
   })
 }
 
@@ -550,30 +548,7 @@ const findRewardReview = async (
 ): Promise<RewardReviewRecord | null> => {
   return prisma.transactionReview.findUnique({
     where: { id: reviewId },
-    select: {
-      id: true,
-      reviewType: true,
-      reviewerUserId: true,
-      transactionId: true,
-      transaction: {
-        select: {
-          id: true,
-          status: true,
-          itemId: true,
-          borrowerId: true,
-          lenderId: true,
-          disputes: {
-            select: {
-              id: true,
-              status: true,
-              outcome: true,
-              createdAt: true,
-              resolvedAt: true,
-            },
-          },
-        },
-      },
-    },
+    select: rewardReviewSelect,
   })
 }
 
@@ -598,7 +573,7 @@ const getSubmittedReviewTypesForReviewer = async (
 const getRequiredReviewTypesForRole = (
   role: RewardParticipantRole,
   hasItem: boolean,
-): Array<"ITEM_REVIEW" | "LENDER_REVIEW" | "BORROWER_REVIEW"> => {
+): ReviewType[] => {
   if (role === "borrower") {
     return hasItem ? ["ITEM_REVIEW", "LENDER_REVIEW"] : ["LENDER_REVIEW"]
   }
