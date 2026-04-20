@@ -63,7 +63,7 @@ function makeContext() {
             id: "report-1",
             transactionId: data.transactionId,
             reason: data.reason,
-            status: "OPEN",
+            status: "SUBMITTED",
             description: data.description ?? null,
             createdAt: new Date("2026-04-01T13:00:00Z"),
           }),
@@ -167,7 +167,7 @@ describe("chatRouter follow-up", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           transactionId: TX_ID,
-          filedByUserId: USER_ID,
+          raisedById: USER_ID,
           reason: "INAPPROPRIATE_CHAT",
           description: "Threatening language",
         }),

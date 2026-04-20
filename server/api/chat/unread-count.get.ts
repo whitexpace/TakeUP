@@ -1,7 +1,13 @@
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
+import { handleChatApiError } from "./handle-chat-api-error"
 
 export default defineEventHandler(async (event) => {
   const caller = appRouter.createCaller(await createContext(event))
-  return caller.chat.getUnreadCount()
+
+  try {
+    return await caller.chat.getUnreadCount()
+  } catch (error) {
+    handleChatApiError(error, "load unread chat count")
+  }
 })

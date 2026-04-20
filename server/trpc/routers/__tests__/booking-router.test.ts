@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 import { bookingRouter } from "../booking"
+import { REJECTED_DISPUTE_STATUS, SUBMITTED_DISPUTE_STATUS } from "../../../utils/dispute-status"
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const ITEM_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 const LENDER_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
 const BOOKING_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+const DAY_IN_MS = 24 * 60 * 60 * 1000
 
 const mockUser = { id: USER_ID, email: "user@up.edu.ph", name: "Test User" }
 
@@ -111,6 +113,9 @@ const makeContext = () => {
       update: vi.fn().mockResolvedValue({ id: "txn-1" }),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    conversation: {
+      upsert: vi.fn().mockResolvedValue({ id: "conv-1", transactionId: "txn-1" }),
+    },
     appNotification: {
       create: vi.fn().mockResolvedValue({ id: "notif-1" }),
     },
@@ -191,6 +196,127 @@ describe("bookingRouter", () => {
       }),
     )
     expect(result.bookings).toEqual([])
+  })
+
+  it("returns the latest dispute state and blocks resubmission while it is active", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "COMPLETED",
+        completedAt: new Date(Date.now() - 2 * DAY_IN_MS),
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "COMPLETED",
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      disputes: [
+        {
+          id: "dispute-1",
+          raisedById: USER_ID,
+          reason: "Item came back with damage.",
+          description: "The issue was found during inspection.",
+          status: SUBMITTED_DISPUTE_STATUS,
+          createdAt: new Date("2026-04-05T00:00:00.000Z"),
+          reviewedAt: null,
+          reviewedBy: null,
+        },
+      ],
+      reviews: [],
+    })
+
+    const caller = bookingRouter.createCaller(ctx as never)
+    const result = await caller.byId({ id: BOOKING_ID })
+
+    expect(result?.canRaiseDispute).toBe(false)
+    expect(result?.latestDispute).toMatchObject({
+      id: "dispute-1",
+      status: "SUBMITTED",
+      isActive: true,
+    })
+  })
+
+  it("allows a new dispute request after the latest one was rejected", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "COMPLETED",
+        completedAt: new Date(Date.now() - 2 * DAY_IN_MS),
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "COMPLETED",
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      disputes: [
+        {
+          id: "dispute-2",
+          raisedById: USER_ID,
+          reason: "Initial request was rejected.",
+          description: null,
+          status: REJECTED_DISPUTE_STATUS,
+          createdAt: new Date("2026-04-06T00:00:00.000Z"),
+          reviewedAt: new Date("2026-04-07T00:00:00.000Z"),
+          reviewedBy: {
+            id: "admin-1",
+            firstName: "Admin",
+            middleName: null,
+            lastName: "User",
+          },
+        },
+      ],
+      reviews: [],
+    })
+
+    const caller = bookingRouter.createCaller(ctx as never)
+    const result = await caller.byId({ id: BOOKING_ID })
+
+    expect(result?.canRaiseDispute).toBe(true)
+    expect(result?.latestDispute).toMatchObject({
+      id: "dispute-2",
+      status: "REJECTED",
+      isActive: false,
+    })
+  })
+
+  it("hides dispute submission once the completed transaction is older than 15 days", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "COMPLETED",
+        completedAt: new Date(Date.now() - 20 * DAY_IN_MS),
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "COMPLETED",
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      disputes: [
+        {
+          id: "dispute-3",
+          raisedById: USER_ID,
+          reason: "Older dispute request was rejected.",
+          description: null,
+          status: REJECTED_DISPUTE_STATUS,
+          createdAt: new Date("2026-04-01T00:00:00.000Z"),
+          reviewedAt: new Date("2026-04-02T00:00:00.000Z"),
+          reviewedBy: null,
+        },
+      ],
+      reviews: [],
+    })
+
+    const caller = bookingRouter.createCaller(ctx as never)
+    const result = await caller.byId({ id: BOOKING_ID })
+
+    expect(result?.canRaiseDispute).toBe(false)
+    expect(result?.latestDispute).toMatchObject({
+      id: "dispute-3",
+      status: "REJECTED",
+    })
   })
 
   it("rejects create when the requested dates fall outside listing availability", async () => {
@@ -343,6 +469,10 @@ describe("bookingRouter", () => {
         confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
       }),
     )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "txn-1",
+      status: "CONFIRMED",
+    })
 
     const caller = bookingRouter.createCaller({
       ...ctx,
@@ -369,6 +499,11 @@ describe("bookingRouter", () => {
         }),
       }),
     )
+    expect(ctx.prisma.conversation.upsert).toHaveBeenCalledWith({
+      where: { transactionId: "txn-1" },
+      update: {},
+      create: { transactionId: "txn-1" },
+    })
   })
 
   it("forbids borrowers from accepting booking requests", async () => {

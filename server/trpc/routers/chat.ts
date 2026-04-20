@@ -1,9 +1,4 @@
-import {
-  DisputeReason as PrismaDisputeReason,
-  DisputeStatus as PrismaDisputeStatus,
-  TransactionStatus as PrismaTransactionStatus,
-  type Prisma,
-} from "@prisma/client"
+import { TransactionStatus as PrismaTransactionStatus, type Prisma } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
 import { router } from "../init"
@@ -18,6 +13,7 @@ import {
   transactionConversationSchema,
 } from "../../../shared/schemas/chat"
 import { sanitizeChatMessage } from "../../../shared/chat-moderation"
+import { ACTIVE_DISPUTE_STATUSES, SUBMITTED_DISPUTE_STATUS } from "../../utils/dispute-status"
 import {
   CHAT_CLOSED_NOTICE,
   CHAT_ENABLED_TRANSACTION_STATUSES,
@@ -444,13 +440,7 @@ export const chatRouter = router({
       const existingDispute = await ctx.prisma.transactionDispute.findFirst({
         where: {
           transactionId: conversation.transaction.id,
-          status: {
-            in: [
-              PrismaDisputeStatus.OPEN,
-              PrismaDisputeStatus.UNDER_REVIEW,
-              PrismaDisputeStatus.APPEALED,
-            ],
-          },
+          status: { in: [...ACTIVE_DISPUTE_STATUSES] },
         },
         select: { id: true },
       })
@@ -468,8 +458,9 @@ export const chatRouter = router({
       return await ctx.prisma.transactionDispute.create({
         data: {
           transactionId: conversation.transaction.id,
-          filedByUserId: ctx.user.id,
-          reason: PrismaDisputeReason.INAPPROPRIATE_CHAT,
+          raisedById: ctx.user.id,
+          status: SUBMITTED_DISPUTE_STATUS,
+          reason: "INAPPROPRIATE_CHAT",
           description,
         },
         select: {

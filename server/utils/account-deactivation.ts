@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client"
+import { ACTIVE_DISPUTE_STATUSES } from "./dispute-status"
 
 export type DeactivationBlockerCode = "ACTIVE_RENTAL" | "FUTURE_CONFIRMED_BOOKING" | "OPEN_DISPUTE"
 
@@ -14,7 +15,15 @@ export type DeactivationEligibility = {
 }
 
 const ACTIVE_RENTAL_STATUSES = ["CONFIRMED", "IN_DISPUTE"] as const
-const OPEN_DISPUTE_STATUSES = ["OPEN", "UNDER_REVIEW", "APPEALED"] as const
+const countTransactionDisputes = (
+  prisma: Pick<PrismaClient, "transactionDispute">,
+  args: Record<string, unknown>,
+) =>
+  (
+    prisma.transactionDispute.count as unknown as (
+      query: Record<string, unknown>,
+    ) => Promise<number>
+  )(args)
 
 export async function getDeactivationEligibility(
   prisma: PrismaClient,
@@ -37,11 +46,11 @@ export async function getDeactivationEligibility(
         startDate: { gt: now },
       },
     }),
-    prisma.transactionDispute.count({
+    countTransactionDisputes(prisma, {
       where: {
-        status: { in: [...OPEN_DISPUTE_STATUSES] },
+        status: { in: [...ACTIVE_DISPUTE_STATUSES] },
         OR: [
-          { filedByUserId: userId },
+          { raisedById: userId },
           { transaction: { borrowerId: userId } },
           { transaction: { lenderId: userId } },
         ],

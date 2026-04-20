@@ -47,7 +47,22 @@ export const upsertTransactionReviewDraftSchema = transactionReviewDraftKeySchem
     }
   })
 
+export const reviewRatingSchema = z.number().int().min(1).max(5)
+
+export const createReviewSchema = z.object({
+  bookingId: z.string().uuid(),
+  rating: reviewRatingSchema,
+  reviewText: z.string().trim().max(1000).optional(),
+  isAnonymous: z.boolean().default(false),
+})
+
+export const bookingReviewLookupSchema = z.object({
+  bookingId: z.string().uuid(),
+})
+
 export type ReviewType = z.infer<typeof reviewTypeSchema>
 export type CreateTransactionReviewInput = z.infer<typeof createTransactionReviewSchema>
 export type TransactionReviewDraftKeyInput = z.infer<typeof transactionReviewDraftKeySchema>
 export type UpsertTransactionReviewDraftInput = z.infer<typeof upsertTransactionReviewDraftSchema>
+export type CreateReviewInput = z.infer<typeof createReviewSchema>
+export type BookingReviewLookupInput = z.infer<typeof bookingReviewLookupSchema>

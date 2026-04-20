@@ -1,11 +1,10 @@
 import { TRPCError } from "@trpc/server"
-import {
-  DisputeStatus as PrismaDisputeStatus,
-  type ItemCategory,
-  type ItemCondition,
-  type ItemStatus,
-  type Prisma,
-  type TransactionStatus,
+import type {
+  ItemCategory,
+  ItemCondition,
+  ItemStatus,
+  Prisma,
+  TransactionStatus,
 } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
@@ -28,9 +27,11 @@ import {
   buildPublicVisibleItemWhere,
   isPublicVisibleItem,
 } from "../../utils/item-visibility"
+import { expireActiveBoosts } from "../../utils/rewards"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
+import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
@@ -96,12 +97,6 @@ const itemVisibilityBookings = {
   },
 } satisfies Prisma.BookingFindManyArgs
 
-const ACTIVE_TRANSACTION_DISPUTE_STATUSES = [
-  PrismaDisputeStatus.OPEN,
-  PrismaDisputeStatus.UNDER_REVIEW,
-  PrismaDisputeStatus.APPEALED,
-] as const
-
 const TERMINAL_TRANSACTION_STATUSES = [
   "COMPLETED",
   "CANCELLED",
@@ -116,7 +111,7 @@ const myListingsWithDisputes = {
       disputes: {
         where: {
           status: {
-            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+            in: [...ACTIVE_DISPUTE_STATUSES],
           },
         },
         select: {
@@ -145,6 +140,8 @@ const itemSearchSelect = {
   id: true,
   createdAt: true,
   bookingCount: true,
+  boostScore: true,
+  boostExpiresAt: true,
   name: true,
   description: true,
   condition: true,
@@ -400,6 +397,8 @@ const mapItemTaxonomy = (
       })) ?? [],
     thumbnailImage,
     photos: orderedPhotos,
+    hasActiveBoost:
+      item.boostExpiresAt instanceof Date ? item.boostExpiresAt.getTime() > Date.now() : false,
     availability: availability.map((entry) => ({
       id: entry.id,
       startDate: entry.startDate,
@@ -661,17 +660,24 @@ const buildListWhere = (
 }
 
 const buildPaginationWhereFromCursor = (cursor: {
+  boostScore: number
   bookingCount: number
   createdAt: Date
   id: string
 }): Prisma.ItemWhereInput => ({
   OR: [
-    { bookingCount: { lt: cursor.bookingCount } },
+    { boostScore: { lt: cursor.boostScore } },
     {
+      boostScore: cursor.boostScore,
+      bookingCount: { lt: cursor.bookingCount },
+    },
+    {
+      boostScore: cursor.boostScore,
       bookingCount: cursor.bookingCount,
       createdAt: { lt: cursor.createdAt },
     },
     {
+      boostScore: cursor.boostScore,
       bookingCount: cursor.bookingCount,
       createdAt: cursor.createdAt,
       id: { lt: cursor.id },
@@ -717,7 +723,7 @@ const filterPublicVisibleItems = <T extends PublicVisibleItemRecord>(
 
 const buildPaginatedWhere = (
   where: Prisma.ItemWhereInput,
-  cursor: { bookingCount: number; createdAt: Date; id: string } | null,
+  cursor: { boostScore: number; bookingCount: number; createdAt: Date; id: string } | null,
 ) => {
   if (!cursor) return where
   return {
@@ -727,11 +733,17 @@ const buildPaginatedWhere = (
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
     const visibleRecords: PublicVisibleItemRecord[] = []
-    let scanCursor: { id: string; bookingCount: number; createdAt: Date } | null = null
+    let scanCursor: {
+      id: string
+      boostScore: number
+      bookingCount: number
+      createdAt: Date
+    } | null = null
 
     while (visibleRecords.length < 50) {
       const take = search ? SEARCH_SCAN_LIMIT : VISIBILITY_SCAN_BATCH_SIZE
@@ -760,6 +772,7 @@ export const itemRouter = router({
 
       scanCursor = {
         id: lastScannedRecord.id,
+        boostScore: lastScannedRecord.boostScore,
         bookingCount: lastScannedRecord.bookingCount,
         createdAt: lastScannedRecord.createdAt,
       }
@@ -772,6 +785,7 @@ export const itemRouter = router({
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const search = input.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -782,6 +796,7 @@ export const itemRouter = router({
     })
     let scanCursor = input.cursor
       ? {
+          boostScore: input.cursor.boostScore,
           bookingCount: input.cursor.bookingCount,
           createdAt: input.cursor.createdAt,
           id: input.cursor.id,
@@ -812,6 +827,7 @@ export const itemRouter = router({
 
       scanCursor = {
         id: lastScannedRecord.id,
+        boostScore: lastScannedRecord.boostScore,
         bookingCount: lastScannedRecord.bookingCount,
         createdAt: lastScannedRecord.createdAt,
       }
@@ -827,6 +843,7 @@ export const itemRouter = router({
         hasMore && lastRecord
           ? {
               id: lastRecord.id,
+              boostScore: lastRecord.boostScore,
               bookingCount: lastRecord.bookingCount,
               createdAt: lastRecord.createdAt,
             }
@@ -835,6 +852,7 @@ export const itemRouter = router({
   }),
 
   countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -845,7 +863,8 @@ export const itemRouter = router({
       now,
     })
     let totalCount = 0
-    let cursor: { id: string; createdAt: Date; bookingCount: number } | null = null
+    let cursor: { id: string; createdAt: Date; bookingCount: number; boostScore: number } | null =
+      null
 
     while (true) {
       const paginationWhere: Prisma.ItemWhereInput | null = cursor
@@ -876,6 +895,7 @@ export const itemRouter = router({
 
       cursor = {
         id: last.id,
+        boostScore: last.boostScore,
         bookingCount: last.bookingCount,
         createdAt: last.createdAt,
       }
@@ -1013,8 +1033,9 @@ export const itemRouter = router({
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const now = new Date()
-    const item = await ctx.prisma.item.findFirst({
+    const item = (await ctx.prisma.item.findFirst({
       where: {
         id: input.id,
         OR: [
@@ -1034,12 +1055,24 @@ export const itemRouter = router({
           select: transactionReviewSelect,
         },
       },
-    })
+    })) as
+      | (ItemWithUserLike & {
+          bookings: Array<{ id: string; startDate: Date; endDate: Date; status: string }>
+          transactionReviews: Prisma.TransactionReviewGetPayload<{
+            select: typeof transactionReviewSelect
+          }>[]
+        })
+      | null
 
     if (!item) return null
 
     const isOwner = ctx.user?.id === item.lenderId
     if (!isOwner && !isPublicVisibleItem(item, now)) return null
+
+    // Increment view count without blocking the item detail response.
+    ctx.prisma.item
+      .update({ where: { id: item.id }, data: { viewCount: { increment: 1 } } })
+      .catch(() => {})
 
     const reviews = item.transactionReviews.map(mapTransactionReview)
     const averageRating =
@@ -1187,6 +1220,7 @@ export const itemRouter = router({
   }),
 
   myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoosts(ctx.prisma)
     const { search, statuses, categories, limit, cursor } = input
     const userId = ctx.user.id
 
@@ -1194,7 +1228,7 @@ export const itemRouter = router({
       disputes: {
         some: {
           status: {
-            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+            in: [...ACTIVE_DISPUTE_STATUSES],
           },
         },
       },
@@ -1328,22 +1362,20 @@ export const itemRouter = router({
     })
 
     if (existingLike) {
-      // Unlike: delete the like
       await ctx.prisma.like.delete({
-        where: {
-          userId_itemId: {
-            userId,
-            itemId,
-          },
-        },
+        where: { userId_itemId: { userId, itemId } },
+      })
+      await ctx.prisma.item.update({
+        where: { id: itemId },
+        data: { likeCount: { decrement: 1 } },
       })
     } else {
-      // Like: create the like
       await ctx.prisma.like.create({
-        data: {
-          userId,
-          itemId,
-        },
+        data: { userId, itemId },
+      })
+      await ctx.prisma.item.update({
+        where: { id: itemId },
+        data: { likeCount: { increment: 1 } },
       })
     }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TransactionListItem } from "../composables/use-transactions"
 import type { ReviewType } from "../../shared/schemas/review"
+import { isChatAvailableForTransactionStatus } from "../../shared/chat-rules"
 
 const props = defineProps<{
   transaction: TransactionListItem
@@ -10,6 +11,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   writeReview: [payload: { transaction: TransactionListItem; reviewType: ReviewType }]
 }>()
+
+const router = useRouter()
 
 const formatPeso = (value: number) =>
   `₱${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
@@ -73,8 +76,19 @@ const detailPath = computed(() =>
     : `/account/transactions/${props.transaction.id}`,
 )
 
+const canOpenChat = computed(() => isChatAvailableForTransactionStatus(props.transaction.status))
+
 const handleWriteReview = (reviewType: ReviewType) => {
   emit("writeReview", { transaction: props.transaction, reviewType })
+}
+
+const handleOpenChat = async () => {
+  if (!canOpenChat.value) return
+
+  await router.push({
+    path: "/chat",
+    query: { transactionId: props.transaction.id },
+  })
 }
 </script>
 
@@ -89,6 +103,26 @@ const handleWriteReview = (reviewType: ReviewType) => {
       </span>
 
       <div class="flex items-center gap-2 flex-wrap">
+        <button
+          v-if="canOpenChat"
+          class="inline-flex items-center gap-1.5 rounded-md border border-blue-estate/15 bg-blue-estate/5 px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none text-blue-estate hover:bg-blue-estate hover:text-white transition-colors"
+          @click.stop="handleOpenChat"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          Chat
+        </button>
         <button
           v-for="action in transaction.reviewState.actions.filter((entry) => entry.canSubmit)"
           :key="action.reviewType"
