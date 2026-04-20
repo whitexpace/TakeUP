@@ -192,6 +192,16 @@ describe("disputeRouter", () => {
         }),
       }),
     )
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: OTHER_USER_ID,
+          actorUserId: USER_ID,
+          bookingId: BOOKING_ID,
+          type: "DISPUTE_SUBMITTED",
+        }),
+      }),
+    )
     expect(result.status).toBe("SUBMITTED")
   })
 

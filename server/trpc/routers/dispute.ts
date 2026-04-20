@@ -249,6 +249,21 @@ const getWindowStart = (days: number) => new Date(Date.now() - days * DAY_IN_MS)
 const isDateWithinWindow = (value: Date | null, days: number) =>
   Boolean(value && value.getTime() >= getWindowStart(days).getTime())
 
+const getCounterpartyUserId = (
+  transaction: { borrowerId: string | null; lenderId: string | null },
+  actorUserId: string,
+) => {
+  if (transaction.borrowerId === actorUserId) {
+    return transaction.lenderId
+  }
+
+  if (transaction.lenderId === actorUserId) {
+    return transaction.borrowerId
+  }
+
+  return null
+}
+
 const getThumbnailImage = (
   item: { images?: Array<{ path: string; isPrimary?: boolean }> } | null,
 ) => item?.images?.find((image) => image.isPrimary)?.path ?? item?.images?.[0]?.path ?? null
@@ -383,6 +398,28 @@ const buildAppealResolution = (
 
 const getSubmittedConflictMessage = () => "An active dispute already exists for this transaction."
 
+const buildDisputeSubmittedNotification = (input: {
+  transactionReference: string
+  reason: string
+  description: string | null
+  raisedByName: string
+  bookingId: string | null
+}) => ({
+  type: "DISPUTE_SUBMITTED" as const,
+  title: "A dispute concern was submitted",
+  body: [
+    `${input.raisedByName} reported an issue for transaction ${input.transactionReference}.`,
+    `Reason: ${input.reason}`,
+    input.description ? `Details: ${input.description}` : null,
+    "Admin review is pending. We'll notify you if a formal dispute is opened.",
+  ]
+    .filter(Boolean)
+    .join(" "),
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}`
+    : "/account/disputes?tab=disputes",
+})
+
 const buildDisputeOpenedNotification = (input: {
   transactionReference: string
   reason: string
@@ -485,7 +522,7 @@ export const disputeRouter = router({
           })
         }
 
-        return await tx.transactionDispute.create({
+        const createdDispute = await tx.transactionDispute.create({
           data: {
             transactionId: input.transactionId,
             raisedById: ctx.user.id,
@@ -495,6 +532,33 @@ export const disputeRouter = router({
           },
           select: disputeRecordSelect,
         })
+
+        const counterpartyUserId = getCounterpartyUserId(
+          createdDispute.transaction,
+          createdDispute.raisedById,
+        )
+
+        if (counterpartyUserId) {
+          await tx.appNotification.create({
+            data: {
+              recipientUserId: counterpartyUserId,
+              actorUserId: createdDispute.raisedById,
+              bookingId: createdDispute.transaction.bookingId,
+              ...buildDisputeSubmittedNotification({
+                transactionReference: formatReference(
+                  createdDispute.transaction.id,
+                  createdDispute.transaction.bookingId,
+                ),
+                reason: createdDispute.reason,
+                description: createdDispute.description,
+                raisedByName: formatDisplayName(createdDispute.raisedBy),
+                bookingId: createdDispute.transaction.bookingId,
+              }),
+            },
+          })
+        }
+
+        return createdDispute
       }, DISPUTE_TRANSACTION_OPTIONS)
 
       return mapDisputeRecord(createdDispute)
@@ -899,10 +963,7 @@ export const disputeRouter = router({
       })) as DisputeRecord | null
 
       if (input.decision === "APPROVE" && dispute) {
-        const counterpartyUserId =
-          dispute.transaction.borrowerId === dispute.raisedById
-            ? dispute.transaction.lenderId
-            : dispute.transaction.borrowerId
+        const counterpartyUserId = getCounterpartyUserId(dispute.transaction, dispute.raisedById)
 
         if (counterpartyUserId) {
           await tx.appNotification.create({
