@@ -1,4 +1,4 @@
-import { TransactionStatus as PrismaTransactionStatus, type Prisma } from "@prisma/client"
+import { Prisma, TransactionStatus as PrismaTransactionStatus } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
 import { router } from "../init"
@@ -75,6 +75,16 @@ const conversationListInclude = {
   },
 } as const
 
+const messageBaseSelect = {
+  id: true,
+  conversationId: true,
+  senderUserId: true,
+  body: true,
+  isRead: true,
+  readAt: true,
+  createdAt: true,
+} as const
+
 type ChatTransactionRecord = Prisma.RentalTransactionGetPayload<{
   select: typeof transactionSummarySelect
 }>
@@ -86,6 +96,14 @@ type ConversationWithTransaction = Prisma.ConversationGetPayload<{
 type ConversationListEntry = Prisma.ConversationGetPayload<{
   include: typeof conversationListInclude
 }>
+
+type BaseMessageRecord = Prisma.MessageGetPayload<{
+  select: typeof messageBaseSelect
+}>
+
+type ChatMessageRecord = BaseMessageRecord & {
+  imageUrl: string | null
+}
 
 type MessageGroupByRow = {
   conversationId: string
@@ -217,6 +235,30 @@ const upsertConversationForTransaction = async (prisma: Context["prisma"], trans
     create: { transactionId },
     select: { id: true, transactionId: true },
   })
+
+const hydrateMessageImageUrls = async (
+  prisma: Context["prisma"],
+  messages: BaseMessageRecord[],
+): Promise<ChatMessageRecord[]> => {
+  if (messages.length === 0) {
+    return []
+  }
+
+  const imageRows = await prisma.$queryRaw<Array<{ id: string; imageUrl: string | null }>>(
+    Prisma.sql`
+      SELECT "id", "image_url" AS "imageUrl"
+      FROM "messages"
+      WHERE "id" IN (${Prisma.join(messages.map((message) => message.id))})
+    `,
+  )
+
+  const imageUrlByMessageId = new Map(imageRows.map((row) => [row.id, row.imageUrl] as const))
+
+  return messages.map((message) => ({
+    ...message,
+    imageUrl: imageUrlByMessageId.get(message.id) ?? null,
+  }))
+}
 
 const getConversationByTransaction = async (
   prisma: Context["prisma"],
@@ -353,23 +395,15 @@ export const chatRouter = router({
       where,
       orderBy: { createdAt: "desc" },
       take: input.limit + 1,
-      select: {
-        id: true,
-        conversationId: true,
-        senderUserId: true,
-        body: true,
-        imageUrl: true,
-        isRead: true,
-        readAt: true,
-        createdAt: true,
-      },
+      select: messageBaseSelect,
     })
 
     const hasMore = messages.length > input.limit
     const items = hasMore ? messages.slice(0, input.limit) : messages
+    const hydratedItems = await hydrateMessageImageUrls(ctx.prisma, items)
 
     return {
-      messages: items.reverse(),
+      messages: hydratedItems.reverse(),
       nextCursor: hasMore ? (items[0]?.id ?? null) : null,
       hasMore,
     }
@@ -388,24 +422,29 @@ export const chatRouter = router({
       })
     }
 
-    return await ctx.prisma.message.create({
+    const message = await ctx.prisma.message.create({
       data: {
         conversationId: input.conversationId,
         senderUserId: ctx.user.id,
         body: sanitizeChatMessage(input.body),
-        imageUrl: input.imageUrl ?? null,
       },
-      select: {
-        id: true,
-        conversationId: true,
-        senderUserId: true,
-        body: true,
-        imageUrl: true,
-        isRead: true,
-        readAt: true,
-        createdAt: true,
-      },
+      select: messageBaseSelect,
     })
+
+    if (input.imageUrl) {
+      await ctx.prisma.$executeRaw(
+        Prisma.sql`
+          UPDATE "messages"
+          SET "image_url" = ${input.imageUrl}
+          WHERE "id" = ${message.id}
+        `,
+      )
+    }
+
+    return {
+      ...message,
+      imageUrl: input.imageUrl ?? null,
+    }
   }),
 
   markAsRead: protectedProcedure.input(markAsReadSchema).mutation(async ({ ctx, input }) => {

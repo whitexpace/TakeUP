@@ -46,6 +46,8 @@ function makeContext() {
   return {
     user: mockUser,
     prisma: {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      $executeRaw: vi.fn().mockResolvedValue(1),
       rentalTransaction: {
         findUnique: vi.fn().mockResolvedValue(makeTransaction()),
       },
@@ -102,6 +104,8 @@ function makeContext() {
         findFirst: ReturnType<typeof vi.fn>
         create: ReturnType<typeof vi.fn>
       }
+      $queryRaw: ReturnType<typeof vi.fn>
+      $executeRaw: ReturnType<typeof vi.fn>
       message: {
         findUnique: ReturnType<typeof vi.fn>
         findMany: ReturnType<typeof vi.fn>
@@ -148,10 +152,11 @@ describe("chatRouter follow-up", () => {
     expect(ctx.prisma.message.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          imageUrl: "https://example.com/chat.jpg",
+          body: "Photo attached",
         }),
       }),
     )
+    expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
     expect(result.imageUrl).toBe("https://example.com/chat.jpg")
   })
 
