@@ -125,6 +125,7 @@ export const useChat = () => {
             conversationId: matchingConversation.conversationId,
             transactionId: matchingConversation.transactionId,
             isExpired: matchingConversation.isExpired,
+            closedNotice: matchingConversation.closedNotice,
             item: matchingConversation.item,
             otherParticipant: matchingConversation.otherParticipant,
           }
@@ -264,7 +265,7 @@ export const useChat = () => {
         await loadConversations()
       }
 
-      return msg
+      return message
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Failed to send message")
       error.value = message

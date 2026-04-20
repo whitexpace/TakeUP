@@ -89,12 +89,6 @@ type MessageGroupByRow = {
   _count: { id: number }
 }
 
-/** Chat becomes read-only whenever the linked transaction has a formally opened dispute. */
-function isConversationExpired(transaction: {
-  status: string
-  disputes?: Array<{ status: string }>
-}): boolean {
-  return (transaction.disputes ?? []).some((d) => d.status === "OPEN")
 const prismaTransactionStatuses = PrismaTransactionStatus as Record<string, PrismaTransactionStatus>
 const chatEnabledTransactionStatuses = CHAT_ENABLED_TRANSACTION_STATUSES.map(
   (status) => prismaTransactionStatuses[status],
@@ -386,7 +380,7 @@ export const chatRouter = router({
     if (isConversationExpired(conversation.transaction)) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "This conversation is read-only because the transaction is under dispute review.",
+        message: CHAT_CLOSED_NOTICE,
       })
     }
 

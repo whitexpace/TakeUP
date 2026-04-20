@@ -1,11 +1,13 @@
 import { getOrCreateWallet, creditToWallet } from "../../utils/wallet"
-import { prisma } from "../../utils/prisma"
+import { asWalletPrisma, prisma } from "../../utils/prisma"
 
 /**
  * Self-healing helper to ensure test data is correct.
  * Simplified version to avoid timeouts.
  */
 export async function runWalletSelfHealing(userId: string) {
+  const walletPrisma = asWalletPrisma(prisma)
+
   // We only look for the most recent completed bookings to keep it fast
   const relevantBookings = await prisma.booking.findMany({
     where: {
@@ -22,7 +24,7 @@ export async function runWalletSelfHealing(userId: string) {
   for (const b of relevantBookings) {
     // 1A. As Borrower: Fix missing Refund
     if (b.borrowerId === userId && b.refundAmount > 0) {
-      const hasRefund = await prisma.walletTransaction.findFirst({
+      const hasRefund = await walletPrisma.walletTransaction.findFirst({
         where: { userId, relatedEntityId: b.id, type: "REFUND" },
       })
 
@@ -37,7 +39,7 @@ export async function runWalletSelfHealing(userId: string) {
 
     // 1B. As Lender: Fix missing Earning
     if (b.lenderId === userId) {
-      const hasEarning = await prisma.walletTransaction.findFirst({
+      const hasEarning = await walletPrisma.walletTransaction.findFirst({
         where: { userId, relatedEntityId: b.id, type: "EARNING" },
       })
 

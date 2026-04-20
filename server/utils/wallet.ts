@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client"
-import type { WalletTransactionType as PrismaWalletTransactionType } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
-import { prisma as globalPrisma } from "./prisma"
+import { asWalletPrisma, prisma as globalPrisma, type WalletPrismaAdapter } from "./prisma"
 
 export const WalletStatus = {
   ACTIVE: "ACTIVE",
@@ -37,6 +36,9 @@ export const WalletTransactionStatus = {
   PENDING: "PENDING",
 } as const
 
+type PrismaWalletTransactionType =
+  (typeof WalletTransactionType)[keyof typeof WalletTransactionType]
+
 interface WalletLockResult {
   id: string
   balance: string | number | Prisma.Decimal
@@ -68,7 +70,7 @@ function generateReferenceCode(type: string): string {
  * Get or create a wallet for a user.
  */
 export async function getOrCreateWallet(userId: string, tx?: Prisma.TransactionClient) {
-  const prisma = tx || globalPrisma
+  const prisma = asWalletPrisma(tx || globalPrisma)
   const wallet = await prisma.wallet.findUnique({
     where: { userId },
   })
@@ -97,7 +99,8 @@ export async function topUpPseudo(userId: string, amount: number) {
   }
 
   return await globalPrisma.$transaction(async (tx) => {
-    const wallets = await tx.$queryRaw<WalletLockResult[]>`
+    const walletTx = asWalletPrisma(tx)
+    const wallets = await walletTx.$queryRaw<WalletLockResult[]>`
       SELECT id, balance FROM wallets WHERE user_id = ${userId} FOR UPDATE
     `
 
@@ -105,7 +108,7 @@ export async function topUpPseudo(userId: string, amount: number) {
     let currentBalance: Prisma.Decimal
 
     if (wallets.length === 0) {
-      const newWallet = await tx.wallet.create({
+      const newWallet = await walletTx.wallet.create({
         data: { userId, balance: 0, currency: "PHP", status: "ACTIVE" },
       })
       walletId = newWallet.id
@@ -121,7 +124,7 @@ export async function topUpPseudo(userId: string, amount: number) {
     const newBalance = currentBalance.plus(decimalAmount)
     const referenceCode = generateReferenceCode("TOP_UP")
 
-    const transaction = await tx.walletTransaction.create({
+    const transaction = await walletTx.walletTransaction.create({
       data: {
         walletId,
         userId,
@@ -136,7 +139,7 @@ export async function topUpPseudo(userId: string, amount: number) {
       },
     })
 
-    const updatedWallet = await tx.wallet.update({
+    const updatedWallet = await walletTx.wallet.update({
       where: { id: walletId },
       data: { balance: newBalance },
     })
@@ -161,7 +164,8 @@ export async function payWithWallet(
   }
 
   return await globalPrisma.$transaction(async (tx) => {
-    const wallets = await tx.$queryRaw<WalletPaymentLockResult[]>`
+    const walletTx = asWalletPrisma(tx)
+    const wallets = await walletTx.$queryRaw<WalletPaymentLockResult[]>`
       SELECT id, balance, status FROM wallets WHERE user_id = ${userId} FOR UPDATE
     `
 
@@ -180,7 +184,7 @@ export async function payWithWallet(
     const newBalance = currentBalance.minus(decimalAmount)
     const referenceCode = generateReferenceCode("PAYMENT")
 
-    const transaction = await tx.walletTransaction.create({
+    const transaction = await walletTx.walletTransaction.create({
       data: {
         walletId: wallet.id,
         userId,
@@ -197,7 +201,7 @@ export async function payWithWallet(
       },
     })
 
-    const updatedWallet = await tx.wallet.update({
+    const updatedWallet = await walletTx.wallet.update({
       where: { id: wallet.id },
       data: { balance: newBalance },
     })
@@ -217,8 +221,9 @@ export async function creditToWallet(
 ) {
   if (amount <= 0) return null
 
-  const execute = async (client: Prisma.TransactionClient) => {
-    const wallets = await client.$queryRaw<WalletLockResult[]>`
+  const execute = async (client: Prisma.TransactionClient & WalletPrismaAdapter) => {
+    const walletClient = asWalletPrisma(client)
+    const wallets = await walletClient.$queryRaw<WalletLockResult[]>`
       SELECT id, balance FROM wallets WHERE user_id = ${userId} FOR UPDATE
     `
 
@@ -226,7 +231,7 @@ export async function creditToWallet(
     let currentBalance: Prisma.Decimal
 
     if (wallets.length === 0) {
-      const newWallet = await client.wallet.create({
+      const newWallet = await walletClient.wallet.create({
         data: { userId, balance: 0, currency: "PHP", status: "ACTIVE" },
       })
       walletId = newWallet.id
@@ -242,7 +247,7 @@ export async function creditToWallet(
     const newBalance = currentBalance.plus(decimalAmount)
     const referenceCode = generateReferenceCode(context.type)
 
-    const transaction = await client.walletTransaction.create({
+    const transaction = await walletClient.walletTransaction.create({
       data: {
         walletId,
         userId,
@@ -259,7 +264,7 @@ export async function creditToWallet(
       },
     })
 
-    const updatedWallet = await client.wallet.update({
+    const updatedWallet = await walletClient.wallet.update({
       where: { id: walletId },
       data: { balance: newBalance },
     })
@@ -269,10 +274,10 @@ export async function creditToWallet(
 
   // If a transaction client is already provided, use it.
   if (tx) {
-    return await execute(tx)
+    return await execute(asWalletPrisma(tx))
   } else {
     return await globalPrisma.$transaction(async (newTx) => {
-      return await execute(newTx)
+      return await execute(asWalletPrisma(newTx))
     })
   }
 }
@@ -284,7 +289,7 @@ export async function getWalletTransactions(
   userId: string,
   options: { skip?: number; take?: number } = {},
 ) {
-  return await globalPrisma.walletTransaction.findMany({
+  return await asWalletPrisma(globalPrisma).walletTransaction.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     skip: options.skip,

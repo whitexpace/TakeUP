@@ -1,4 +1,53 @@
+import type { Prisma } from "@prisma/client"
 import { PrismaClient } from "@prisma/client"
+
+export type WalletRecord = {
+  id: string
+  userId: string
+  currency: string
+  balance: Prisma.Decimal
+  status: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export type WalletTransactionRecord = {
+  id: string
+  walletId: string
+  userId: string
+  type: string
+  method: string
+  direction: string
+  amount: Prisma.Decimal
+  balanceBefore: Prisma.Decimal
+  balanceAfter: Prisma.Decimal
+  referenceCode: string
+  relatedEntityType: string | null
+  relatedEntityId: string | null
+  status: string
+  metadata: Prisma.JsonValue
+  createdAt: Date
+  updatedAt: Date
+}
+
+type WalletDelegate = {
+  findUnique(args: unknown): Promise<WalletRecord | null>
+  create(args: unknown): Promise<WalletRecord>
+  update(args: unknown): Promise<WalletRecord>
+}
+
+type WalletTransactionDelegate = {
+  findFirst(args: unknown): Promise<WalletTransactionRecord | null>
+  findMany(args: unknown): Promise<WalletTransactionRecord[]>
+  create(args: unknown): Promise<WalletTransactionRecord>
+}
+
+export type WalletPrismaAdapter = {
+  wallet: WalletDelegate
+  walletTransaction: WalletTransactionDelegate
+}
+
+export const asWalletPrisma = <T>(client: T) => client as T & WalletPrismaAdapter
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 const runtimeDatabaseUrl = process.env.DATABASE_URL

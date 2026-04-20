@@ -36,6 +36,7 @@ import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
 import { creditToWallet } from "../../utils/wallet"
+import { asWalletPrisma } from "../../utils/prisma"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -1277,7 +1278,8 @@ export const bookingRouter = router({
 
         // 2. Fallback Refund logic for Borrower
         if (refundAmount > 0) {
-          const existingRefund = await (tx as Context["prisma"]).walletTransaction.findFirst({
+          const walletTx = asWalletPrisma(tx as Prisma.TransactionClient)
+          const existingRefund = await walletTx.walletTransaction.findFirst({
             where: {
               userId: existing.borrowerId,
               type: "REFUND",

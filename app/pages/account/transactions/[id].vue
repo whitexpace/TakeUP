@@ -627,6 +627,8 @@ const submitRebuttal = async () => {
   } finally {
     isSubmittingRebuttal.value = false
   }
+}
+
 const openChat = async () => {
   if (!booking.value.transactionId || !canOpenChat.value) return
 
@@ -1713,6 +1715,23 @@ onBeforeUnmount(() => {
                 @click="rebuttalModalStep = 'form'"
               >
                 Back
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Early Return Modal with Refund Preview -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
         v-if="isEarlyReturnModalOpen"
         class="fixed inset-0 z-[1000] flex items-center justify-center p-4 overflow-y-auto"
       >
