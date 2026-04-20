@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "~~/server/trpc/routers"
 import type { ReviewType } from "~~/shared/schemas/review"
@@ -240,6 +240,16 @@ const isReviewModalOpen = ref(false)
 const selectedTransactionForReview = ref<TransactionListItem | null>(null)
 const selectedReviewType = ref<ReviewType | null>(null)
 const pageActionError = ref("")
+const showRewardPopup = ref(false)
+let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
+const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
+
+type SubmittedReviewPayload = {
+  transactionId: string
+  reviewType: ReviewType
+  currentUserRole: "BORROWER" | "LENDER"
+  itemId: string | null
+}
 
 const reviewContext = computed(() => {
   if (!selectedTransactionForReview.value) return null
@@ -291,7 +301,48 @@ const closeReviewModal = () => {
   selectedReviewType.value = null
 }
 
-const handleReviewSubmitted = async () => {
+const triggerRewardPopup = () => {
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
+  }
+
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(REVIEW_REWARD_POPUP_STORAGE_KEY, "1")
+  }
+
+  showRewardPopup.value = true
+  rewardPopupTimeout = setTimeout(() => {
+    showRewardPopup.value = false
+    rewardPopupTimeout = null
+  }, 1800)
+}
+
+const shouldShowRewardPopup = (payload: SubmittedReviewPayload) => {
+  if (payload.currentUserRole === "LENDER") {
+    return true
+  }
+
+  const actions = selectedTransactionForReview.value?.reviewState.actions ?? []
+  const requiredTypes: ReviewType[] = ["LENDER_REVIEW"]
+
+  if (payload.itemId) {
+    requiredTypes.push("ITEM_REVIEW")
+  }
+
+  return requiredTypes.every((reviewType) => {
+    if (reviewType === payload.reviewType) {
+      return true
+    }
+
+    return actions.find((action) => action.reviewType === reviewType)?.hasSubmitted ?? false
+  })
+}
+
+const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
+  if (shouldShowRewardPopup(payload)) {
+    triggerRewardPopup()
+  }
+
   await Promise.all([
     refreshTransactions(),
     refreshDrafts(),
@@ -316,6 +367,12 @@ const refreshCurrentTab = async () => {
 
 watch(activeTab, async () => {
   await refreshCurrentTab()
+})
+
+onBeforeUnmount(() => {
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
+  }
 })
 </script>
 
@@ -871,5 +928,24 @@ watch(activeTab, async () => {
       @close="closeReviewModal"
       @submitted="handleReviewSubmitted"
     />
+
+    <Transition
+      enter-active-class="transition duration-500 ease-out"
+      enter-from-class="opacity-0 scale-75 translate-y-3"
+      enter-to-class="opacity-100 scale-100 translate-y-0"
+      leave-active-class="transition duration-300 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-90"
+    >
+      <div
+        v-if="showRewardPopup"
+        class="pointer-events-none fixed inset-0 z-[140] flex items-center justify-center px-4"
+      >
+        <div class="rounded-full bg-emerald-500 px-7 py-4 text-center text-white shadow-2xl">
+          <p class="text-3xl font-black tracking-tight">+5 points</p>
+          <p class="text-sm font-medium text-white/90">Review bonus earned</p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>

@@ -540,10 +540,6 @@ export const processTransactionRewards = async (prisma: RewardClient, transactio
   })
 
   await syncManyUserRewardLedgers(prisma, [transaction.borrowerId, transaction.lenderId])
-
-  for (const review of transaction.reviews ?? []) {
-    await processReviewRewards(prisma, review.id)
-  }
 }
 
 const findRewardReview = async (

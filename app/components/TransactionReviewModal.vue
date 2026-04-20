@@ -18,20 +18,21 @@ type ReviewContext = {
   targetUserId: string | null
 }
 
-const props = withDefaults(
-  defineProps<{
-    open?: boolean
-    context?: ReviewContext | null
-  }>(),
-  {
-    open: false,
-    context: null,
-  },
-)
+type SubmittedReviewPayload = {
+  transactionId: string
+  reviewType: ReviewType
+  currentUserRole: "BORROWER" | "LENDER"
+  itemId: string | null
+}
+
+const props = defineProps<{
+  open: boolean
+  context: ReviewContext | null
+}>()
 
 const emit = defineEmits<{
   close: []
-  submitted: []
+  submitted: [payload: SubmittedReviewPayload]
 }>()
 
 const supabase = useSupabaseClient()
@@ -608,7 +609,12 @@ const submitReview = async () => {
     persistedDraftImages.value = []
     clearLocalDraft()
 
-    emit("submitted")
+    emit("submitted", {
+      transactionId: props.context.transactionId,
+      reviewType: props.context.reviewType,
+      currentUserRole: props.context.currentUserRole,
+      itemId: props.context.itemId,
+    })
     emit("close")
   } catch (error) {
     const payload = (error as { data?: { message?: string; statusMessage?: string } })?.data
