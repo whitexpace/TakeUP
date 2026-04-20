@@ -97,7 +97,7 @@ describe("notificationRouter", () => {
       read: false,
       title: "A dispute concern was approved",
       body: "An admin approved the dispute concern for transaction C99AC81A-44C1-42. Reason: Damage / Missing parts A formal dispute is now open and under admin review.",
-      actionPath: "/account/transactions/booking-approved",
+      actionPath: "/account/transactions/booking-approved?action=rebuttal",
     })
     expect(notifications[1]).toMatchObject({
       id: "dispute-rebuttal-submitted",
@@ -111,7 +111,7 @@ describe("notificationRouter", () => {
       read: false,
       title: "New dispute on your transaction",
       body: 'Npguarin U. reported "Damage / Missing parts". Review the dispute and submit your rebuttal if needed.',
-      actionPath: "/account/transactions/booking-legacy",
+      actionPath: "/account/transactions/booking-legacy?action=rebuttal",
     })
   })
 

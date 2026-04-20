@@ -114,8 +114,7 @@ const mapNotification = (notification: {
   type: notification.type,
   ...normalizeNotificationContent(notification),
   actionPath:
-    (notification.type === "DISPUTE_OPENED" &&
-      notification.title === "A formal dispute has been opened") ||
+    notification.type === "DISPUTE_OPENED" ||
     (DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED &&
       notification.type === "DISPUTE_SUBMITTED" &&
       notification.title === "A dispute concern was submitted")
