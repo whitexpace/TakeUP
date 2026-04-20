@@ -35,6 +35,7 @@ import { isActiveDisputeStatus, toApiDisputeStatus } from "../../utils/dispute-s
 import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
+import { creditToWallet } from "../../utils/wallet"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -133,6 +134,7 @@ const bookingEditableSelect = {
   completedAt: true,
   disputeOpenedAt: true,
   paymentProcessedAt: true,
+  refundAmount: true,
   item: {
     select: {
       id: true,
@@ -160,6 +162,7 @@ const bookingTransactionSelect = {
   platformCommission: true,
   status: true,
   paymentStatus: true,
+  refundAmount: true,
   confirmedAt: true,
   returnedAt: true,
   cancellationReason: true,
@@ -867,7 +870,10 @@ export const bookingRouter = router({
         status: bookingStatusSchema.enum.PENDING,
         paymentStatus: item.freeToBorrow
           ? bookingPaymentStatusSchema.enum.NOT_REQUIRED
-          : bookingPaymentStatusSchema.enum.PENDING,
+          : input.paymentMethod === "WALLET"
+            ? bookingPaymentStatusSchema.enum.PAID
+            : bookingPaymentStatusSchema.enum.PENDING,
+        paymentProcessedAt: input.paymentMethod === "WALLET" ? now : null,
         cancellationReason: input.cancellationReason ?? null,
         updatedAt: now,
       },
@@ -904,6 +910,18 @@ export const bookingRouter = router({
 
     if (!booking) {
       return null
+    }
+
+    // --- PROACTIVE DATA REPAIR ---
+    // If totalFee < refundAmount, the record is in a corrupted 'net' state.
+    // We restore it to 'gross' (Net + Refund) to ensure correct UI and Payouts.
+    if (booking.refundAmount > 0 && booking.totalFee < booking.refundAmount) {
+      const correctGross = booking.totalFee + booking.refundAmount
+      await bookingPrisma.booking.update({
+        where: { id: booking.id },
+        data: { totalFee: correctGross },
+      })
+      booking.totalFee = correctGross
     }
 
     assertParticipantAccess(booking, ctx.user.id)
@@ -1189,6 +1207,58 @@ export const bookingRouter = router({
 
         await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
       }
+
+      // Wallet Payout & Refund Logic on completion
+      if (
+        updatedBooking.status === bookingStatusSchema.enum.COMPLETED &&
+        existing.status !== bookingStatusSchema.enum.COMPLETED &&
+        existing.paymentMethod === PrismaPaymentMethod.WALLET
+      ) {
+        const originalTotalFee = updatedBooking.totalFee
+        const commission = updatedBooking.platformCommission
+        const refundAmount = updatedBooking.refundAmount ?? 0
+        const lenderEarnings = originalTotalFee - commission - refundAmount
+
+        // 1. Calculate lender earnings
+        if (lenderEarnings > 0) {
+          await creditToWallet(
+            existing.lenderId,
+            lenderEarnings,
+            {
+              type: "EARNING",
+              relatedEntityType: "BOOKING",
+              relatedEntityId: updatedBooking.id,
+            },
+            tx as Context["prisma"],
+          )
+        }
+
+        // 2. Fallback Refund logic for Borrower
+        if (refundAmount > 0) {
+          const existingRefund = await (tx as Context["prisma"]).walletTransaction.findFirst({
+            where: {
+              userId: existing.borrowerId,
+              type: "REFUND",
+              relatedEntityType: "BOOKING",
+              relatedEntityId: updatedBooking.id,
+            },
+          })
+
+          if (!existingRefund) {
+            await creditToWallet(
+              existing.borrowerId,
+              refundAmount,
+              {
+                type: "REFUND",
+                relatedEntityType: "BOOKING",
+                relatedEntityId: updatedBooking.id,
+              },
+              tx as Context["prisma"],
+            )
+          }
+        }
+      }
+
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: updatedBooking.itemId,
       })
@@ -1448,6 +1518,20 @@ export const bookingRouter = router({
                 feeAmount: 0,
               },
             })
+
+            // Wallet Credit for Early Return Refund
+            if (existing.paymentMethod === PrismaPaymentMethod.WALLET) {
+              await creditToWallet(
+                existing.borrowerId,
+                refundCalc.refundAmount,
+                {
+                  type: "REFUND",
+                  relatedEntityType: "BOOKING",
+                  relatedEntityId: updatedBooking.id,
+                },
+                tx as Context["prisma"],
+              )
+            }
           }
         }
 
