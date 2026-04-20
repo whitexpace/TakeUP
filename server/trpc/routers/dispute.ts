@@ -430,6 +430,18 @@ const buildDisputeOpenedNotification = (input: {
     : "/account/disputes?tab=disputes",
 })
 
+const buildDisputeRebuttalSubmittedNotification = (input: {
+  transactionReference: string
+  bookingId: string | null
+}) => ({
+  type: "DISPUTE_REBUTTAL_SUBMITTED" as const,
+  title: "A rebuttal was submitted",
+  body: `A rebuttal was submitted for transaction ${input.transactionReference}.`,
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}`
+    : "/account/disputes?tab=disputes",
+})
+
 export const disputeRouter = router({
   submit: protectedProcedure.input(submitDisputeSchema).mutation(async ({ ctx, input }) => {
     const disputePrisma = getDisputePrisma(ctx)
@@ -912,10 +924,29 @@ export const disputeRouter = router({
           })
         }
 
-        return (await tx.transactionDispute.findUnique({
+        const rebuttedDispute = (await tx.transactionDispute.findUnique({
           where: { id: input.id },
           select: disputeRecordSelect,
         })) as DisputeRecord | null
+
+        if (rebuttedDispute) {
+          await tx.appNotification.create({
+            data: {
+              recipientUserId: rebuttedDispute.raisedById,
+              actorUserId: ctx.user.id,
+              bookingId: rebuttedDispute.transaction.bookingId,
+              ...buildDisputeRebuttalSubmittedNotification({
+                transactionReference: formatReference(
+                  rebuttedDispute.transaction.id,
+                  rebuttedDispute.transaction.bookingId,
+                ),
+                bookingId: rebuttedDispute.transaction.bookingId,
+              }),
+            },
+          })
+        }
+
+        return rebuttedDispute
       }, DISPUTE_TRANSACTION_OPTIONS)
 
       if (!rebuttedDispute) {

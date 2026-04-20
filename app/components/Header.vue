@@ -150,6 +150,8 @@ const getNotificationAccent = (
       case "DISPUTE_SUBMITTED":
       case "DISPUTE_OPENED":
         return "Review dispute"
+      case "DISPUTE_REBUTTAL_SUBMITTED":
+        return "View rebuttal"
       case "BOOKING_RETURN_REQUESTED":
         return "View return"
       default:

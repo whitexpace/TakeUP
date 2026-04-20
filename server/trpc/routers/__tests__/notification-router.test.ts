@@ -10,6 +10,19 @@ const mockContext = () => ({
     appNotification: {
       findMany: vi.fn().mockResolvedValue([
         {
+          id: "dispute-rebuttal-submitted",
+          type: "DISPUTE_REBUTTAL_SUBMITTED",
+          title: "A rebuttal was submitted",
+          body: "A rebuttal was submitted for transaction C99AC81A-44C1-42.",
+          actionPath: "/account/transactions/booking-rebuttal",
+          readAt: null,
+          createdAt: new Date("2026-03-27T00:00:00.000Z"),
+          actorUser: {
+            firstName: "Lend",
+            lastName: "Er",
+          },
+        },
+        {
           id: "legacy-dispute-submitted",
           type: "DISPUTE_SUBMITTED",
           title: "A dispute concern was submitted",
@@ -47,7 +60,7 @@ const mockContext = () => ({
         createdAt: new Date("2026-03-25T00:00:00.000Z"),
         actorUser: null,
       }),
-      updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+      updateMany: vi.fn().mockResolvedValue({ count: 3 }),
     },
   },
   user: { id: USER_ID, email: "user@up.edu.ph", name: "User" },
@@ -65,8 +78,15 @@ describe("notificationRouter", () => {
         where: { recipientUserId: USER_ID },
       }),
     )
-    expect(notifications).toHaveLength(2)
+    expect(notifications).toHaveLength(3)
     expect(notifications[0]).toMatchObject({
+      id: "dispute-rebuttal-submitted",
+      read: false,
+      title: "New rebuttal on your dispute",
+      body: "Lend E. submitted a rebuttal. Open the transaction to review their response.",
+      actionPath: "/account/transactions/booking-rebuttal",
+    })
+    expect(notifications[1]).toMatchObject({
       id: "legacy-dispute-submitted",
       read: false,
       title: "New dispute on your transaction",
@@ -103,6 +123,6 @@ describe("notificationRouter", () => {
         },
       }),
     )
-    expect(result).toEqual({ count: 2 })
+    expect(result).toEqual({ count: 3 })
   })
 })

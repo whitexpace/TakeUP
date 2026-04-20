@@ -61,6 +61,15 @@ const normalizeNotificationContent = (notification: {
     }
   }
 
+  if (notification.type === "DISPUTE_REBUTTAL_SUBMITTED") {
+    const actorName = formatActorName(notification.actorUser)
+
+    return {
+      title: "New rebuttal on your dispute",
+      body: `${actorName} submitted a rebuttal. Open the transaction to review their response.`,
+    }
+  }
+
   return {
     title: notification.title,
     body: notification.body,

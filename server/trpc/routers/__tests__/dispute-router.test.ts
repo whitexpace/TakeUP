@@ -550,6 +550,17 @@ describe("disputeRouter", () => {
         rebuttalText: "The item was returned on time and in the agreed condition.",
       }),
     })
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: USER_ID,
+          actorUserId: OTHER_USER_ID,
+          bookingId: BOOKING_ID,
+          type: "DISPUTE_REBUTTAL_SUBMITTED",
+          actionPath: `/account/transactions/${BOOKING_ID}`,
+        }),
+      }),
+    )
     expect(result.hasRebuttal).toBe(true)
     expect(result.canSubmitRebuttal).toBe(false)
   })
