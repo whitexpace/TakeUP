@@ -881,6 +881,18 @@ export const bookingRouter = router({
       return null
     }
 
+    // --- PROACTIVE DATA REPAIR ---
+    // If totalFee < refundAmount, the record is in a corrupted 'net' state.
+    // We restore it to 'gross' (Net + Refund) to ensure correct UI and Payouts.
+    if (booking.refundAmount > 0 && booking.totalFee < booking.refundAmount) {
+      const correctGross = booking.totalFee + booking.refundAmount
+      await bookingPrisma.booking.update({
+        where: { id: booking.id },
+        data: { totalFee: correctGross },
+      })
+      booking.totalFee = correctGross
+    }
+
     assertParticipantAccess(booking, ctx.user.id)
     const transaction = await ctx.prisma.rentalTransaction.findUnique({
       where: { bookingId: input.id },
@@ -1379,7 +1391,6 @@ export const bookingRouter = router({
           returnedAt: now,
           refundStatus: refundCalc.eligible ? RefundStatus.PROCESSED : RefundStatus.NOT_ELIGIBLE,
           refundAmount: refundCalc.refundAmount,
-          totalFee: refundCalc.totalPaidAmount - refundCalc.refundAmount, // Update total fee to final amount
           refundProcessedAt: refundCalc.eligible ? now : null,
           refundReason: RefundReason.EARLY_RETURN,
         }
