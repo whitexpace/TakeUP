@@ -8,9 +8,12 @@ import {
   fetchMessagesSchema,
   getOrCreateConversationSchema,
   markAsReadSchema,
+  reportConversationSchema,
   sendMessageSchema,
   transactionConversationSchema,
 } from "../../../shared/schemas/chat"
+import { sanitizeChatMessage } from "../../../shared/chat-moderation"
+import { ACTIVE_DISPUTE_STATUSES, SUBMITTED_DISPUTE_STATUS } from "../../utils/dispute-status"
 import {
   CHAT_CLOSED_NOTICE,
   CHAT_ENABLED_TRANSACTION_STATUSES,
@@ -355,6 +358,7 @@ export const chatRouter = router({
         conversationId: true,
         senderUserId: true,
         body: true,
+        imageUrl: true,
         isRead: true,
         readAt: true,
         createdAt: true,
@@ -388,13 +392,15 @@ export const chatRouter = router({
       data: {
         conversationId: input.conversationId,
         senderUserId: ctx.user.id,
-        body: input.body.trim(),
+        body: sanitizeChatMessage(input.body),
+        imageUrl: input.imageUrl ?? null,
       },
       select: {
         id: true,
         conversationId: true,
         senderUserId: true,
         body: true,
+        imageUrl: true,
         isRead: true,
         readAt: true,
         createdAt: true,
@@ -422,6 +428,51 @@ export const chatRouter = router({
 
     return { markedCount: result.count }
   }),
+
+  reportConversation: protectedProcedure
+    .input(reportConversationSchema)
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await getConversationWithTransaction(ctx.prisma, input.conversationId)
+
+      assertParticipant(conversation.transaction, ctx.user.id)
+      assertChatAvailableForTransaction(conversation.transaction)
+
+      const existingDispute = await ctx.prisma.transactionDispute.findFirst({
+        where: {
+          transactionId: conversation.transaction.id,
+          status: { in: [...ACTIVE_DISPUTE_STATUSES] },
+        },
+        select: { id: true },
+      })
+
+      if (existingDispute) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A report is already open for this conversation.",
+        })
+      }
+
+      const description =
+        input.description && input.description.length > 0 ? input.description : null
+
+      return await ctx.prisma.transactionDispute.create({
+        data: {
+          transactionId: conversation.transaction.id,
+          raisedById: ctx.user.id,
+          status: SUBMITTED_DISPUTE_STATUS,
+          reason: "INAPPROPRIATE_CHAT",
+          description,
+        },
+        select: {
+          id: true,
+          transactionId: true,
+          reason: true,
+          status: true,
+          description: true,
+          createdAt: true,
+        },
+      })
+    }),
 
   getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user.id

@@ -21,7 +21,6 @@ const CHAT_ENABLED_TRANSACTION_STATUS_VALUES = [...CHAT_ENABLED_TRANSACTION_STAT
 export const CHAT_CLOSED_NOTICE =
   "Chat is closed due to an active dispute. Please wait for admin resolution."
 
-// In the current schema, CONFIRMED is the accepted booking state.
 export const isChatAvailableForBookingStatus = (status: string | null | undefined) => {
   if (!status) return false
   const normalizedStatus = status.toUpperCase()
