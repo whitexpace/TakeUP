@@ -137,6 +137,7 @@ enum DisputeStatus {
   REJECTED  @map("rejected")
   RESOLVED  @map("resolved")
   APPEALED  @map("appealed")
+  CLOSED    @map("closed")
 
   @@map("dispute_status_enum")
 }
@@ -149,11 +150,24 @@ enum DisputeOutcome {
   NO_FAULT
 }
 
+enum DisputeFinalDecision {
+  APPROVED
+  REJECTED
+}
+
+enum DisputeActionType {
+  WARNING
+  POINT_DEDUCTION
+  SUSPENSION
+  BAN
+}
+
 enum NotificationType {
   BOOKING_RETURN_REQUESTED
   DISPUTE_SUBMITTED
   DISPUTE_OPENED
   DISPUTE_REBUTTAL_SUBMITTED
+  DISPUTE_RESOLVED
 }
 
 enum AccountType {
@@ -165,6 +179,7 @@ enum AccountType {
 enum UserStatus {
   ACTIVE
   SUSPENDED
+  BANNED
   PENDING
   DEACTIVATED
 }
@@ -481,21 +496,24 @@ model User {
   itemBoosts                      ItemBoost[]
   lender                          Lender?
   likes                           Like[]
-  lentTransactions                RentalTransaction[]      @relation("transactions_lender_user_idToUser")
-  borrowedTransactions            RentalTransaction[]      @relation("transactions_borrower_user_idToUser")
-  requestPosts                    RequestPost[]
-  rewardEvents                    RewardEvent[]
-  rewards                         UserReward?
-  sentMessages                    Message[]
   transactionDisputesAdmin        TransactionDispute[]     @relation("transaction_disputes_admin_idToUser")
+  transactionDisputesFinalized    TransactionDispute[]     @relation("transaction_disputes_final_decision_by_user_idToUser")
   transactionDisputesFiled        TransactionDispute[]     @relation("transaction_disputes_filed_by_user_idToUser")
   transactionDisputesRebuttal     TransactionDispute[]     @relation("transaction_disputes_rebuttal_by_user_idToUser")
+  transactionDisputeActionsApplied  TransactionDisputeAction[] @relation("transaction_dispute_actions_applied_by_user_idToUser")
+  transactionDisputeActionsTargeted TransactionDisputeAction[] @relation("transaction_dispute_actions_target_user_idToUser")
   transactionPaymentsPayee        TransactionPayment[]     @relation("transaction_payments_payee_user_idToUser")
   transactionPaymentsPayer        TransactionPayment[]     @relation("transaction_payments_payer_user_idToUser")
   transactionReviewDraftsReviewer TransactionReviewDraft[] @relation("transaction_review_drafts_reviewer_user_idToUser")
   transactionReviewsReviewee      TransactionReview[]      @relation("transaction_reviews_reviewee_user_idToUser")
   transactionReviewsReviewer      TransactionReview[]      @relation("transaction_reviews_reviewer_user_idToUser")
   transactionStatusLogsChanged    TransactionStatusLog[]
+  borrowedTransactions            RentalTransaction[]      @relation("transactions_borrower_user_idToUser")
+  lentTransactions                RentalTransaction[]      @relation("transactions_lender_user_idToUser")
+  requestPosts                    RequestPost[]
+  rewardEvents                    RewardEvent[]
+  rewards                         UserReward?
+  sentMessages                    Message[]
   wallet                          Wallet?
   walletTransactions              WalletTransaction[]
 }
@@ -662,19 +680,47 @@ model TransactionDispute {
   reviewedById        String?           @map("admin_id")
   resolution          String?
   reviewedAt          DateTime?         @map("resolved_at") @db.Timestamptz(6)
+  outcome             DisputeOutcome?
+  finalDecision       DisputeFinalDecision? @map("final_decision")
+  finalDecisionNotes  String?               @map("final_decision_notes")
+  finalDecisionById   String?               @map("final_decided_by_user_id")
+  finalDecisionAt     DateTime?             @map("final_decided_at") @db.Timestamptz(6)
+  requiredActionCount Int                   @default(0) @map("required_action_count")
+  closedAt            DateTime?             @map("closed_at") @db.Timestamptz(6)
   rebuttalById        String?           @map("rebuttal_by_user_id")
   rebuttalText        String?           @map("rebuttal_text")
   rebuttalNotes       String?           @map("rebuttal_notes")
   rebuttalSubmittedAt DateTime?         @map("rebuttal_submitted_at") @db.Timestamptz(6)
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actions             TransactionDisputeAction[]
   rebuttalBy          User?             @relation("transaction_disputes_rebuttal_by_user_idToUser", fields: [rebuttalById], references: [id])
-  outcome             DisputeOutcome?
+  finalDecisionBy     User?             @relation("transaction_disputes_final_decision_by_user_idToUser", fields: [finalDecisionById], references: [id])
   reviewedBy          User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
   raisedBy            User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [raisedById], references: [id])
   transaction         RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId, status, createdAt(sort: Desc)], map: "idx_disputes_txn_status")
   @@map("transaction_disputes")
+}
+
+model TransactionDisputeAction {
+  id           String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  disputeId    String            @map("dispute_id")
+  type         DisputeActionType
+  targetUserId String            @map("target_user_id")
+  pointsDelta  Int?              @map("points_delta")
+  note         String?
+  appliedById  String            @map("applied_by_user_id")
+  appliedAt    DateTime          @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  appliedBy  User               @relation("transaction_dispute_actions_applied_by_user_idToUser", fields: [appliedById], references: [id], onDelete: Restrict)
+  dispute    TransactionDispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  targetUser User               @relation("transaction_dispute_actions_target_user_idToUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([disputeId, appliedAt(sort: Desc)], map: "idx_dispute_actions_dispute_applied")
+  @@index([targetUserId, appliedAt(sort: Desc)], map: "idx_dispute_actions_target_applied")
+  @@map("transaction_dispute_actions")
 }
 
 model TransactionPayment {

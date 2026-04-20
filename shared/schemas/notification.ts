@@ -9,6 +9,7 @@ export const appNotificationTypeSchema = z.enum([
   "DISPUTE_SUBMITTED",
   "DISPUTE_OPENED",
   "DISPUTE_REBUTTAL_SUBMITTED",
+  "DISPUTE_RESOLVED",
 ])
 
 export const listNotificationsSchema = z

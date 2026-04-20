@@ -21,7 +21,7 @@ type AuthUserRow = {
   id: string
   email: string
   name: string
-  status: "ACTIVE" | "SUSPENDED" | "PENDING" | "DEACTIVATED"
+  status: "ACTIVE" | "SUSPENDED" | "BANNED" | "PENDING" | "DEACTIVATED"
 }
 
 async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promise<AuthUserRow> {

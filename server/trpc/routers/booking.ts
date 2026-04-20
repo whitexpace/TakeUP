@@ -194,6 +194,11 @@ type BookingDetailTransaction = {
     status: string
     createdAt: Date
     reviewedAt: Date | null
+    finalDecision: "APPROVED" | "REJECTED" | null
+    finalDecisionNotes: string | null
+    finalDecisionAt: Date | null
+    requiredActionCount: number
+    closedAt: Date | null
     rebuttalById: string | null
     rebuttalText: string | null
     rebuttalNotes: string | null
@@ -962,6 +967,11 @@ export const bookingRouter = router({
             status: true,
             createdAt: true,
             reviewedAt: true,
+            finalDecision: true,
+            finalDecisionNotes: true,
+            finalDecisionAt: true,
+            requiredActionCount: true,
+            closedAt: true,
             rebuttalById: true,
             rebuttalText: true,
             rebuttalNotes: true,
@@ -996,6 +1006,7 @@ export const bookingRouter = router({
     const latestDispute = transaction?.disputes[0] ?? null
     const hasActiveDispute =
       transaction?.disputes.some((dispute) => isActiveDisputeStatus(dispute.status)) ?? false
+    const hasAnyDispute = (transaction?.disputes.length ?? 0) > 0
     const visibleLatestDispute =
       latestDispute &&
       (latestDispute.raisedById === ctx.user.id ||
@@ -1008,6 +1019,8 @@ export const bookingRouter = router({
     const canSubmitRebuttal = Boolean(
       visibleLatestDispute &&
       isRebuttalEnabledDisputeStatus(visibleLatestDispute.status) &&
+      !visibleLatestDispute.finalDecisionAt &&
+      !visibleLatestDispute.closedAt &&
       visibleLatestDispute.raisedById !== ctx.user.id &&
       !visibleLatestDispute.rebuttalSubmittedAt,
     )
@@ -1018,7 +1031,7 @@ export const bookingRouter = router({
       canRaiseDispute:
         Boolean(transaction?.id && (transaction.borrowerId || transaction.lenderId)) &&
         isWithinDisputeWindow &&
-        !hasActiveDispute,
+        !hasAnyDispute,
       latestDispute: visibleLatestDispute
         ? {
             id: visibleLatestDispute.id,
@@ -1028,6 +1041,11 @@ export const bookingRouter = router({
             status: toUserFacingDisputeStatus(visibleLatestDispute.status),
             createdAt: visibleLatestDispute.createdAt,
             reviewedAt: visibleLatestDispute.reviewedAt,
+            finalDecision: visibleLatestDispute.finalDecision,
+            finalDecisionNotes: visibleLatestDispute.finalDecisionNotes,
+            finalDecisionAt: visibleLatestDispute.finalDecisionAt,
+            requiredActionCount: visibleLatestDispute.requiredActionCount,
+            closedAt: visibleLatestDispute.closedAt,
             rebuttalById: visibleLatestDispute.rebuttalById,
             rebuttalText: visibleLatestDispute.rebuttalText,
             rebuttalNotes: visibleLatestDispute.rebuttalNotes,

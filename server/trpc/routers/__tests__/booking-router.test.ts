@@ -337,8 +337,7 @@ describe("bookingRouter", () => {
     })
     expect(result?.reviewState.canSubmitAny).toBe(false)
   })
-
-  it("allows a new dispute request after the latest one was rejected", async () => {
+  it("keeps dispute submission disabled after a rejected concern already exists", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce(
       makeBooking({
@@ -374,7 +373,7 @@ describe("bookingRouter", () => {
     const caller = bookingRouter.createCaller(ctx as never)
     const result = await caller.byId({ id: BOOKING_ID })
 
-    expect(result?.canRaiseDispute).toBe(true)
+    expect(result?.canRaiseDispute).toBe(false)
     expect(result?.latestDispute).toMatchObject({
       id: "dispute-2",
       status: "REJECTED",

@@ -57,6 +57,12 @@ const setActiveTab = async (tab: DisputesTab) => {
 const formatDate = (date: Date | string) =>
   new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
+const finalDecisionLabel = (decision: MyDispute["finalDecision"]) => {
+  if (decision === "APPROVED") return "Dispute approved"
+  if (decision === "REJECTED") return "Dispute rejected"
+  return "Pending final judgment"
+}
+
 const statusLabel = (status: MyDispute["status"]) => {
   switch (status) {
     case "SUBMITTED":
@@ -67,8 +73,8 @@ const statusLabel = (status: MyDispute["status"]) => {
       return "Rejected"
     case "APPEALED":
       return "Appealed"
-    case "RESOLVED":
-      return "Resolved"
+    case "CLOSED":
+      return "Closed"
   }
 }
 
@@ -82,7 +88,7 @@ const statusClasses = (status: MyDispute["status"]) => {
       return "bg-noble-black/5 text-noble-black/70 border border-cinnamon-ice"
     case "APPEALED":
       return "bg-blue-estate/10 text-blue-estate border border-blue-estate/20"
-    case "RESOLVED":
+    case "CLOSED":
       return "bg-green-100 text-green-700 border border-green-200"
   }
 }
@@ -673,6 +679,21 @@ const submitAppeal = async () => {
             >
               {{ dispute.description }}
             </p>
+
+            <div
+              v-if="dispute.finalDecision"
+              class="mt-4 rounded-2xl bg-cream px-4 py-3 text-sm text-noble-black/70"
+            >
+              <p class="font-bold text-noble-black">
+                {{ finalDecisionLabel(dispute.finalDecision) }}
+              </p>
+              <p v-if="dispute.finalDecisionNotes" class="mt-2 line-clamp-3 leading-relaxed">
+                {{ dispute.finalDecisionNotes }}
+              </p>
+              <p v-if="dispute.closedAt" class="mt-2 text-xs text-noble-black/45">
+                Closed {{ formatDate(dispute.closedAt) }}
+              </p>
+            </div>
 
             <div class="mt-4 flex flex-wrap items-center gap-3">
               <NuxtLink

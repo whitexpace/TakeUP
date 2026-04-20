@@ -5,15 +5,18 @@ import { router } from "../init"
 import { adminProcedure, protectedProcedure } from "../procedures"
 import {
   appealDisputeSchema,
+  closeDisputeSchema,
   disputeIdSchema,
+  finalJudgmentSchema,
   listDisputesSchema,
   reviewDisputeSchema,
   submitRebuttalSchema,
   submitDisputeSchema,
+  type DisputeActionInput,
 } from "../../../shared/schemas/dispute"
 import {
-  ACTIVE_DISPUTE_STATUSES,
   DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED,
+  CLOSED_DISPUTE_STATUS,
   OPEN_DISPUTE_STATUS,
   REBUTTABLE_DISPUTE_STATUSES,
   REJECTED_DISPUTE_STATUS,
@@ -31,6 +34,11 @@ const disputeItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
 const DISPUTE_REPORT_WINDOW_DAYS = 15
 const DISPUTE_APPEAL_WINDOW_DAYS = 15
 const DAY_IN_MS = 24 * 60 * 60 * 1000
+const APPEALED_DISPUTE_STATUS = fromApiDisputeStatus("APPEALED")
+const ACTIVE_USER_STATUS = "ACTIVE"
+const PENDING_USER_STATUS = "PENDING"
+const SUSPENDED_USER_STATUS = "SUSPENDED"
+const BANNED_USER_STATUS = "BANNED"
 
 const participantUserSelect = {
   id: true,
@@ -39,7 +47,24 @@ const participantUserSelect = {
   middleName: true,
   lastName: true,
   email: true,
-}
+  status: true,
+  points: true,
+} as const
+
+const disputeActionSelect = {
+  id: true,
+  type: true,
+  targetUserId: true,
+  pointsDelta: true,
+  note: true,
+  appliedAt: true,
+  targetUser: {
+    select: participantUserSelect,
+  },
+  appliedBy: {
+    select: participantUserSelect,
+  },
+} as const
 
 const disputeRecordSelect = {
   id: true,
@@ -50,6 +75,11 @@ const disputeRecordSelect = {
   resolution: true,
   status: true,
   reviewedAt: true,
+  finalDecision: true,
+  finalDecisionNotes: true,
+  finalDecisionAt: true,
+  requiredActionCount: true,
+  closedAt: true,
   rebuttalById: true,
   rebuttalText: true,
   rebuttalNotes: true,
@@ -63,6 +93,13 @@ const disputeRecordSelect = {
   },
   reviewedBy: {
     select: participantUserSelect,
+  },
+  finalDecisionBy: {
+    select: participantUserSelect,
+  },
+  actions: {
+    orderBy: [{ appliedAt: "desc" }, { id: "desc" }],
+    select: disputeActionSelect,
   },
   transaction: {
     select: {
@@ -92,7 +129,137 @@ const disputeRecordSelect = {
       },
     },
   },
-}
+} as const
+
+const disputeAccessTransactionSelect = {
+  id: true,
+  bookingId: true,
+  borrowerId: true,
+  lenderId: true,
+  itemId: true,
+} as const
+
+const disputeBookingSelect = {
+  id: true,
+  status: true,
+  completedAt: true,
+} as const
+
+const reportableBookingSelect = {
+  id: true,
+  completedAt: true,
+  borrowerId: true,
+  lenderId: true,
+  item: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+  borrower: {
+    select: {
+      user: {
+        select: participantUserSelect,
+      },
+    },
+  },
+  lender: {
+    select: {
+      user: {
+        select: participantUserSelect,
+      },
+    },
+  },
+} as const
+
+const reportableTransactionSelect = {
+  id: true,
+  bookingId: true,
+  disputes: {
+    select: {
+      id: true,
+    },
+  },
+} as const
+
+const disputeStatusRecordSelect = {
+  id: true,
+  status: true,
+  finalDecisionAt: true,
+  closedAt: true,
+} as const
+
+const appealCandidateSelect = {
+  id: true,
+  status: true,
+  reviewedAt: true,
+  resolution: true,
+  transaction: {
+    select: {
+      borrowerId: true,
+      lenderId: true,
+    },
+  },
+} as const
+
+const rebuttalCandidateSelect = {
+  id: true,
+  status: true,
+  raisedById: true,
+  rebuttalSubmittedAt: true,
+  finalDecisionAt: true,
+  closedAt: true,
+  transaction: {
+    select: {
+      borrowerId: true,
+      lenderId: true,
+    },
+  },
+} as const
+
+const finalJudgmentCandidateSelect = {
+  id: true,
+  status: true,
+  transactionId: true,
+  finalDecisionAt: true,
+  closedAt: true,
+  transaction: {
+    select: {
+      borrowerId: true,
+      lenderId: true,
+    },
+  },
+} as const
+
+const closeCandidateSelect = {
+  id: true,
+  status: true,
+  transactionId: true,
+  finalDecision: true,
+  finalDecisionNotes: true,
+  finalDecisionAt: true,
+  requiredActionCount: true,
+  closedAt: true,
+  transaction: {
+    select: {
+      id: true,
+      bookingId: true,
+      borrowerId: true,
+      lenderId: true,
+    },
+  },
+  actions: {
+    select: {
+      id: true,
+    },
+  },
+} as const
+
+const participantStateSelect = {
+  id: true,
+  status: true,
+  points: true,
+} as const
 
 type DisputeParticipant = {
   id: string
@@ -101,6 +268,19 @@ type DisputeParticipant = {
   middleName: string | null
   lastName: string
   email: string
+  status: string
+  points: number
+}
+
+type DisputeActionRecord = {
+  id: string
+  type: "WARNING" | "POINT_DEDUCTION" | "SUSPENSION" | "BAN"
+  targetUserId: string
+  pointsDelta: number | null
+  note: string | null
+  appliedAt: Date
+  targetUser: DisputeParticipant | null
+  appliedBy: DisputeParticipant | null
 }
 
 type DisputeRecord = {
@@ -112,6 +292,11 @@ type DisputeRecord = {
   resolution: string | null
   status: string
   reviewedAt: Date | null
+  finalDecision: "APPROVED" | "REJECTED" | null
+  finalDecisionNotes: string | null
+  finalDecisionAt: Date | null
+  requiredActionCount: number
+  closedAt: Date | null
   rebuttalById: string | null
   rebuttalText: string | null
   rebuttalNotes: string | null
@@ -120,6 +305,8 @@ type DisputeRecord = {
   raisedBy: DisputeParticipant | null
   rebuttalBy: DisputeParticipant | null
   reviewedBy: DisputeParticipant | null
+  finalDecisionBy: DisputeParticipant | null
+  actions: DisputeActionRecord[]
   transaction: {
     id: string
     bookingId: string | null
@@ -153,11 +340,6 @@ type DisputeBookingRecord = {
   completedAt: Date | null
 }
 
-type DisputeStatusRecord = {
-  id: string
-  status: string
-}
-
 type ReportableBookingRecord = {
   id: string
   completedAt: Date | null
@@ -181,6 +363,13 @@ type ReportableTransactionRecord = {
   disputes: Array<{ id: string }>
 }
 
+type DisputeStatusRecord = {
+  id: string
+  status: string
+  finalDecisionAt: Date | null
+  closedAt: Date | null
+}
+
 type DisputeAppealCandidateRecord = {
   id: string
   status: string
@@ -197,16 +386,55 @@ type DisputeRebuttalCandidateRecord = {
   status: string
   raisedById: string
   rebuttalSubmittedAt: Date | null
+  finalDecisionAt: Date | null
+  closedAt: Date | null
   transaction: {
     borrowerId: string | null
     lenderId: string | null
   }
 }
 
+type DisputeFinalJudgmentCandidateRecord = {
+  id: string
+  status: string
+  transactionId: string
+  finalDecisionAt: Date | null
+  closedAt: Date | null
+  transaction: {
+    borrowerId: string | null
+    lenderId: string | null
+  }
+}
+
+type DisputeCloseCandidateRecord = {
+  id: string
+  status: string
+  transactionId: string
+  finalDecision: "APPROVED" | "REJECTED" | null
+  finalDecisionNotes: string | null
+  finalDecisionAt: Date | null
+  requiredActionCount: number
+  closedAt: Date | null
+  transaction: {
+    id: string
+    bookingId: string | null
+    borrowerId: string | null
+    lenderId: string | null
+  }
+  actions: Array<{ id: string }>
+}
+
+type DisputeParticipantState = {
+  id: string
+  status: string
+  points: number
+}
+
 type DisputeTransactionClient = {
   rentalTransaction: {
     findUnique(args: Record<string, unknown>): Promise<DisputeAccessTransaction | null>
     findMany(args: Record<string, unknown>): Promise<ReportableTransactionRecord[]>
+    update(args: Record<string, unknown>): Promise<unknown>
   }
   booking: {
     findUnique(args: Record<string, unknown>): Promise<DisputeBookingRecord | null>
@@ -216,12 +444,30 @@ type DisputeTransactionClient = {
     findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
     create(args: Record<string, unknown>): Promise<DisputeRecord>
     findMany(args: Record<string, unknown>): Promise<DisputeRecord[]>
-    findUnique(args: Record<string, unknown>): Promise<DisputeRecord | DisputeStatusRecord | null>
+    findUnique(
+      args: Record<string, unknown>,
+    ): Promise<
+      | DisputeRecord
+      | DisputeStatusRecord
+      | DisputeAppealCandidateRecord
+      | DisputeRebuttalCandidateRecord
+      | DisputeFinalJudgmentCandidateRecord
+      | DisputeCloseCandidateRecord
+      | null
+    >
+    updateMany(args: Record<string, unknown>): Promise<{ count: number }>
+  }
+  transactionDisputeAction: {
+    create(args: Record<string, unknown>): Promise<unknown>
+  }
+  user: {
+    findMany(args: Record<string, unknown>): Promise<DisputeParticipantState[]>
     updateMany(args: Record<string, unknown>): Promise<{ count: number }>
   }
   appNotification: {
     create(args: Record<string, unknown>): Promise<unknown>
   }
+  $executeRaw?(query: Prisma.Sql): Promise<unknown>
 }
 
 type DisputePrismaClient = DisputeTransactionClient & {
@@ -287,19 +533,7 @@ const formatDisplayName = (
   return lastInitial ? `${user.firstName} ${lastInitial}.` : user.firstName
 }
 
-const mapParticipant = (
-  user:
-    | {
-        id: string
-        username: string
-        firstName: string
-        middleName: string | null
-        lastName: string
-        email: string
-      }
-    | null
-    | undefined,
-) =>
+const mapParticipant = (user: DisputeParticipant | null | undefined) =>
   user
     ? {
         id: user.id,
@@ -308,9 +542,25 @@ const mapParticipant = (
         firstName: user.firstName,
         middleName: user.middleName,
         lastName: user.lastName,
+        status: user.status,
+        points: user.points,
         displayName: formatDisplayName(user),
       }
     : null
+
+const formatFinalDecisionLabel = (decision: "APPROVED" | "REJECTED") =>
+  decision === "APPROVED" ? "approved" : "rejected"
+
+const mapDisputeActionRecord = (action: DisputeActionRecord) => ({
+  id: action.id,
+  type: action.type,
+  targetUserId: action.targetUserId,
+  pointsDelta: action.pointsDelta,
+  note: action.note,
+  appliedAt: action.appliedAt,
+  targetUser: mapParticipant(action.targetUser),
+  appliedBy: mapParticipant(action.appliedBy),
+})
 
 const mapDisputeRecord = (
   record: DisputeRecord,
@@ -328,11 +578,14 @@ const mapDisputeRecord = (
   const borrower = mapParticipant(record.transaction.borrower)
   const lender = mapParticipant(record.transaction.lender)
   const counterpart = viewerRole === "BORROWER" ? lender : viewerRole === "LENDER" ? borrower : null
+  const hasRebuttal = Boolean(record.rebuttalSubmittedAt && record.rebuttalText)
+  const hasFinalDecision = Boolean(record.finalDecision && record.finalDecisionAt)
   const canAppeal =
     rawStatus === "REJECTED" && isDateWithinWindow(record.reviewedAt, DISPUTE_APPEAL_WINDOW_DAYS)
-  const hasRebuttal = Boolean(record.rebuttalSubmittedAt && record.rebuttalText)
   const canSubmitRebuttal =
     isRebuttalEnabledDisputeStatus(record.status) &&
+    !hasFinalDecision &&
+    !record.closedAt &&
     Boolean(currentUserId) &&
     currentUserId !== record.raisedById &&
     (currentUserId === record.transaction.borrowerId ||
@@ -350,6 +603,11 @@ const mapDisputeRecord = (
     resolution: record.resolution,
     createdAt: record.createdAt,
     reviewedAt: record.reviewedAt,
+    finalDecision: record.finalDecision,
+    finalDecisionNotes: record.finalDecisionNotes,
+    finalDecisionAt: record.finalDecisionAt,
+    requiredActionCount: record.requiredActionCount,
+    closedAt: record.closedAt,
     raisedByRole:
       record.raisedById === record.transaction.borrowerId
         ? "BORROWER"
@@ -360,6 +618,7 @@ const mapDisputeRecord = (
     counterpartName: counterpart?.displayName ?? "Former user",
     raisedBy: mapParticipant(record.raisedBy),
     reviewedBy: mapParticipant(record.reviewedBy),
+    finalDecisionBy: mapParticipant(record.finalDecisionBy),
     item: record.transaction.item
       ? {
           id: record.transaction.item.id,
@@ -371,7 +630,17 @@ const mapDisputeRecord = (
       borrower,
       lender,
     },
-    canReview: rawStatus === "SUBMITTED",
+    resolutionTargets: [borrower, lender].filter(
+      (participant): participant is NonNullable<typeof participant> => participant !== null,
+    ),
+    actions: (record.actions ?? []).map(mapDisputeActionRecord),
+    canReview: rawStatus === "SUBMITTED" || rawStatus === "APPEALED",
+    canResolve: rawStatus === "OPEN" && !hasFinalDecision,
+    canClose:
+      rawStatus === "OPEN" &&
+      hasFinalDecision &&
+      !record.closedAt &&
+      (record.actions ?? []).length === record.requiredActionCount,
     canAppeal,
     canSubmitRebuttal,
     hasRebuttal,
@@ -405,7 +674,7 @@ const buildAppealResolution = (
     .filter(Boolean)
     .join("\n\n")
 
-const getSubmittedConflictMessage = () => "An active dispute already exists for this transaction."
+const getSubmittedConflictMessage = () => "A dispute has already been filed for this transaction."
 
 const buildDisputeOpenedNotification = (input: {
   transactionReference: string
@@ -442,6 +711,230 @@ const buildDisputeRebuttalSubmittedNotification = (input: {
     : "/account/disputes?tab=disputes",
 })
 
+const buildDisputeResolvedNotification = (input: {
+  transactionReference: string
+  decision: "APPROVED" | "REJECTED"
+  decisionNotes: string | null
+  bookingId: string | null
+}) => ({
+  type: "DISPUTE_RESOLVED" as const,
+  title: "A dispute has been closed",
+  body: [
+    `An admin ${formatFinalDecisionLabel(input.decision)} the dispute for transaction ${input.transactionReference}.`,
+    input.decisionNotes ? `Summary: ${input.decisionNotes}` : null,
+    "This case is now closed and the transaction chat stays read-only.",
+  ]
+    .filter(Boolean)
+    .join(" "),
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}`
+    : "/account/disputes?tab=disputes",
+})
+
+const validateDisputeActions = (actions: DisputeActionInput[], allowedTargetIds: Set<string>) => {
+  const seen = new Set<string>()
+  const restrictionTypesByTarget = new Map<string, Set<DisputeActionInput["type"]>>()
+
+  for (const action of actions) {
+    if (!allowedTargetIds.has(action.targetUserId)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Disciplinary actions can only target the borrower or lender in this dispute.",
+      })
+    }
+
+    const key = `${action.type}:${action.targetUserId}`
+    if (seen.has(key)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Duplicate disciplinary actions for the same user are not allowed.",
+      })
+    }
+    seen.add(key)
+
+    const restrictionTypes = restrictionTypesByTarget.get(action.targetUserId) ?? new Set()
+    if (
+      (action.type === "BAN" && restrictionTypes.has("SUSPENSION")) ||
+      (action.type === "SUSPENSION" && restrictionTypes.has("BAN"))
+    ) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Do not combine suspension and ban for the same user in one resolution.",
+      })
+    }
+
+    restrictionTypes.add(action.type)
+    restrictionTypesByTarget.set(action.targetUserId, restrictionTypes)
+  }
+}
+
+const applyDisputeActions = async (
+  tx: DisputeTransactionClient,
+  input: {
+    disputeId: string
+    appliedById: string
+    actions: DisputeActionInput[]
+    participants: DisputeParticipantState[]
+  },
+) => {
+  const participantStateById = new Map(
+    input.participants.map((participant) => [
+      participant.id,
+      { status: participant.status, points: participant.points },
+    ]),
+  )
+
+  for (const action of input.actions) {
+    const targetState = participantStateById.get(action.targetUserId)
+
+    if (!targetState) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "One of the selected disciplinary targets is no longer available.",
+      })
+    }
+
+    if (action.type === "POINT_DEDUCTION") {
+      const points = action.points ?? 0
+
+      if (targetState.points < points) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Point deductions cannot reduce a user below zero points.",
+        })
+      }
+
+      const pointUpdate = await tx.user.updateMany({
+        where: {
+          id: action.targetUserId,
+          points: {
+            gte: points,
+          },
+        },
+        data: {
+          points: {
+            decrement: points,
+          },
+        },
+      })
+
+      if (pointUpdate.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "The target user's points changed. Refresh and try the resolution again.",
+        })
+      }
+
+      targetState.points -= points
+    }
+
+    if (action.type === "SUSPENSION") {
+      if (targetState.status === BANNED_USER_STATUS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot suspend an account that is already banned.",
+        })
+      }
+
+      if (targetState.status === SUSPENDED_USER_STATUS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot suspend an account that is already suspended.",
+        })
+      }
+
+      const suspendUpdate = await tx.user.updateMany({
+        where: {
+          id: action.targetUserId,
+          status: {
+            in: [ACTIVE_USER_STATUS, PENDING_USER_STATUS],
+          },
+        },
+        data: {
+          status: SUSPENDED_USER_STATUS,
+        },
+      })
+
+      if (suspendUpdate.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "The target account state changed. Refresh and try again.",
+        })
+      }
+
+      targetState.status = SUSPENDED_USER_STATUS
+    }
+
+    if (action.type === "BAN") {
+      if (targetState.status === BANNED_USER_STATUS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot ban an account that is already banned.",
+        })
+      }
+
+      const banUpdate = await tx.user.updateMany({
+        where: {
+          id: action.targetUserId,
+          status: {
+            not: BANNED_USER_STATUS,
+          },
+        },
+        data: {
+          status: BANNED_USER_STATUS,
+        },
+      })
+
+      if (banUpdate.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "The target account state changed. Refresh and try again.",
+        })
+      }
+
+      targetState.status = BANNED_USER_STATUS
+    }
+
+    await tx.transactionDisputeAction.create({
+      data: {
+        disputeId: input.disputeId,
+        type: action.type,
+        targetUserId: action.targetUserId,
+        pointsDelta: action.type === "POINT_DEDUCTION" ? -(action.points ?? 0) : null,
+        note: normalizeOptionalText(action.note),
+        appliedById: input.appliedById,
+      },
+    })
+  }
+}
+
+const syncClosedTransactionStatus = async (
+  tx: DisputeTransactionClient,
+  input: {
+    transactionId: string
+    adminUserId: string
+    remarks: string
+  },
+) => {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT set_transaction_status(
+        CAST(${input.transactionId} AS text),
+        CAST(${"completed"} AS transaction_status_enum),
+        CAST(${input.adminUserId} AS text),
+        CAST(${"admin"} AS actor_role_enum),
+        CAST(${input.remarks} AS text)
+      )`,
+    )
+    return
+  }
+
+  await tx.rentalTransaction.update({
+    where: { id: input.transactionId },
+    data: { status: "COMPLETED" },
+  })
+}
+
 export const disputeRouter = router({
   submit: protectedProcedure.input(submitDisputeSchema).mutation(async ({ ctx, input }) => {
     const disputePrisma = getDisputePrisma(ctx)
@@ -450,13 +943,7 @@ export const disputeRouter = router({
       const createdDispute = await disputePrisma.$transaction(async (tx) => {
         const transaction = await tx.rentalTransaction.findUnique({
           where: { id: input.transactionId },
-          select: {
-            id: true,
-            bookingId: true,
-            borrowerId: true,
-            lenderId: true,
-            itemId: true,
-          },
+          select: disputeAccessTransactionSelect,
         })
 
         if (
@@ -487,11 +974,7 @@ export const disputeRouter = router({
 
         const booking = await tx.booking.findUnique({
           where: { id: transaction.bookingId },
-          select: {
-            id: true,
-            status: true,
-            completedAt: true,
-          },
+          select: disputeBookingSelect,
         })
 
         if (
@@ -505,17 +988,14 @@ export const disputeRouter = router({
           })
         }
 
-        const existingActiveDispute = await tx.transactionDispute.findFirst({
+        const existingDispute = await tx.transactionDispute.findFirst({
           where: {
             transactionId: input.transactionId,
-            status: {
-              in: [...ACTIVE_DISPUTE_STATUSES],
-            },
           },
           select: { id: true },
         })
 
-        if (existingActiveDispute) {
+        if (existingDispute) {
           throw new TRPCError({
             code: "CONFLICT",
             message: getSubmittedConflictMessage(),
@@ -624,32 +1104,7 @@ export const disputeRouter = router({
         OR: [{ borrowerId: ctx.user.id }, { lenderId: ctx.user.id }],
       },
       orderBy: [{ completedAt: "desc" }, { id: "desc" }],
-      select: {
-        id: true,
-        completedAt: true,
-        borrowerId: true,
-        lenderId: true,
-        item: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        borrower: {
-          select: {
-            user: {
-              select: participantUserSelect,
-            },
-          },
-        },
-        lender: {
-          select: {
-            user: {
-              select: participantUserSelect,
-            },
-          },
-        },
-      },
+      select: reportableBookingSelect,
     })
 
     const bookingIds = reportableBookings.map((booking) => booking.id)
@@ -666,20 +1121,7 @@ export const disputeRouter = router({
           in: bookingIds,
         },
       },
-      select: {
-        id: true,
-        bookingId: true,
-        disputes: {
-          where: {
-            status: {
-              in: [...ACTIVE_DISPUTE_STATUSES],
-            },
-          },
-          select: {
-            id: true,
-          },
-        },
-      },
+      select: reportableTransactionSelect,
     })
 
     const transactionMap = new Map(
@@ -756,23 +1198,11 @@ export const disputeRouter = router({
 
   appeal: protectedProcedure.input(appealDisputeSchema).mutation(async ({ ctx, input }) => {
     const disputePrisma = getDisputePrisma(ctx)
-    const appealedStatus = fromApiDisputeStatus("APPEALED")
 
     const appealedDispute = await disputePrisma.$transaction(async (tx) => {
       const dispute = (await tx.transactionDispute.findUnique({
         where: { id: input.id },
-        select: {
-          id: true,
-          status: true,
-          reviewedAt: true,
-          resolution: true,
-          transaction: {
-            select: {
-              borrowerId: true,
-              lenderId: true,
-            },
-          },
-        },
+        select: appealCandidateSelect,
       })) as DisputeAppealCandidateRecord | null
 
       if (!dispute) {
@@ -808,7 +1238,7 @@ export const disputeRouter = router({
           status: REJECTED_DISPUTE_STATUS,
         },
         data: {
-          status: appealedStatus,
+          status: APPEALED_DISPUTE_STATUS,
           resolution: buildAppealResolution(
             dispute.resolution,
             input.appealReason,
@@ -848,18 +1278,7 @@ export const disputeRouter = router({
       const rebuttedDispute = await disputePrisma.$transaction(async (tx) => {
         const dispute = (await tx.transactionDispute.findUnique({
           where: { id: input.id },
-          select: {
-            id: true,
-            status: true,
-            raisedById: true,
-            rebuttalSubmittedAt: true,
-            transaction: {
-              select: {
-                borrowerId: true,
-                lenderId: true,
-              },
-            },
-          },
+          select: rebuttalCandidateSelect,
         })) as DisputeRebuttalCandidateRecord | null
 
         if (!dispute) {
@@ -886,7 +1305,11 @@ export const disputeRouter = router({
           })
         }
 
-        if (!isRebuttalEnabledDisputeStatus(dispute.status)) {
+        if (
+          !isRebuttalEnabledDisputeStatus(dispute.status) ||
+          Boolean(dispute.finalDecisionAt) ||
+          Boolean(dispute.closedAt)
+        ) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Rebuttals can only be submitted while the dispute is open.",
@@ -906,6 +1329,8 @@ export const disputeRouter = router({
             status: {
               in: [...REBUTTABLE_DISPUTE_STATUSES],
             },
+            finalDecisionAt: null,
+            closedAt: null,
             rebuttalSubmittedAt: null,
           },
           data: {
@@ -959,6 +1384,222 @@ export const disputeRouter = router({
       return mapDisputeRecord(rebuttedDispute, ctx.user.id, { userFacing: true })
     }),
 
+  finalJudgment: adminProcedure.input(finalJudgmentSchema).mutation(async ({ ctx, input }) => {
+    const disputePrisma = getDisputePrisma(ctx)
+
+    const resolvedDispute = await disputePrisma.$transaction(async (tx) => {
+      const dispute = (await tx.transactionDispute.findUnique({
+        where: { id: input.id },
+        select: finalJudgmentCandidateSelect,
+      })) as DisputeFinalJudgmentCandidateRecord | null
+
+      if (!dispute) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Dispute not found.",
+        })
+      }
+
+      if (dispute.status !== OPEN_DISPUTE_STATUS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only open disputes can receive a final judgment.",
+        })
+      }
+
+      if (dispute.finalDecisionAt || dispute.closedAt) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "A final judgment has already been recorded for this dispute.",
+        })
+      }
+
+      const participantIds = [dispute.transaction.borrowerId, dispute.transaction.lenderId].filter(
+        (participantId): participantId is string => Boolean(participantId),
+      )
+
+      validateDisputeActions(input.actions, new Set(participantIds))
+
+      const participants = await tx.user.findMany({
+        where: {
+          id: {
+            in: participantIds,
+          },
+        },
+        select: participantStateSelect,
+      })
+
+      if (participants.length !== participantIds.length) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "One or more dispute participants could not be loaded for resolution.",
+        })
+      }
+
+      const judgedAt = new Date()
+      const updateResult = await tx.transactionDispute.updateMany({
+        where: {
+          id: input.id,
+          status: OPEN_DISPUTE_STATUS,
+          finalDecisionAt: null,
+          closedAt: null,
+        },
+        data: {
+          finalDecision: input.decision,
+          finalDecisionNotes: input.decisionNotes.trim(),
+          finalDecisionById: ctx.user.id,
+          finalDecisionAt: judgedAt,
+          requiredActionCount: input.actions.length,
+        },
+      })
+
+      if (updateResult.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This dispute changed while you were reviewing it. Refresh and try again.",
+        })
+      }
+
+      await applyDisputeActions(tx, {
+        disputeId: input.id,
+        appliedById: ctx.user.id,
+        actions: input.actions,
+        participants,
+      })
+
+      return (await tx.transactionDispute.findUnique({
+        where: { id: input.id },
+        select: disputeRecordSelect,
+      })) as DisputeRecord | null
+    }, DISPUTE_TRANSACTION_OPTIONS)
+
+    if (!resolvedDispute) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Dispute not found.",
+      })
+    }
+
+    return mapDisputeRecord(resolvedDispute)
+  }),
+
+  close: adminProcedure.input(closeDisputeSchema).mutation(async ({ ctx, input }) => {
+    const disputePrisma = getDisputePrisma(ctx)
+
+    const closedDispute = await disputePrisma.$transaction(async (tx) => {
+      const dispute = (await tx.transactionDispute.findUnique({
+        where: { id: input.id },
+        select: closeCandidateSelect,
+      })) as DisputeCloseCandidateRecord | null
+
+      if (!dispute) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Dispute not found.",
+        })
+      }
+
+      if (dispute.closedAt || dispute.status === CLOSED_DISPUTE_STATUS) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This dispute has already been closed.",
+        })
+      }
+
+      if (dispute.status !== OPEN_DISPUTE_STATUS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only open disputes can be closed.",
+        })
+      }
+
+      if (!dispute.finalDecision || !dispute.finalDecisionAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Record a final judgment before closing this dispute.",
+        })
+      }
+
+      if (dispute.actions.length !== dispute.requiredActionCount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "All selected disciplinary actions must complete before closure.",
+        })
+      }
+
+      const closedAt = new Date()
+      const updateResult = await tx.transactionDispute.updateMany({
+        where: {
+          id: input.id,
+          status: OPEN_DISPUTE_STATUS,
+          finalDecisionAt: {
+            not: null,
+          },
+          closedAt: null,
+        },
+        data: {
+          status: CLOSED_DISPUTE_STATUS,
+          closedAt,
+        },
+      })
+
+      if (updateResult.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This dispute changed before it could be closed. Refresh and try again.",
+        })
+      }
+
+      await syncClosedTransactionStatus(tx, {
+        transactionId: dispute.transactionId,
+        adminUserId: ctx.user.id,
+        remarks: `Dispute ${input.id} closed by admin.`,
+      })
+
+      const notification = buildDisputeResolvedNotification({
+        transactionReference: formatReference(
+          dispute.transaction.id,
+          dispute.transaction.bookingId,
+        ),
+        decision: dispute.finalDecision,
+        decisionNotes: dispute.finalDecisionNotes,
+        bookingId: dispute.transaction.bookingId,
+      })
+      const recipientIds = Array.from(
+        new Set(
+          [dispute.transaction.borrowerId, dispute.transaction.lenderId].filter(
+            (recipientId): recipientId is string => Boolean(recipientId),
+          ),
+        ),
+      )
+
+      for (const recipientUserId of recipientIds) {
+        await tx.appNotification.create({
+          data: {
+            recipientUserId,
+            actorUserId: ctx.user.id,
+            bookingId: dispute.transaction.bookingId,
+            ...notification,
+          },
+        })
+      }
+
+      return (await tx.transactionDispute.findUnique({
+        where: { id: input.id },
+        select: disputeRecordSelect,
+      })) as DisputeRecord | null
+    }, DISPUTE_TRANSACTION_OPTIONS)
+
+    if (!closedDispute) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Dispute not found.",
+      })
+    }
+
+    return mapDisputeRecord(closedDispute)
+  }),
+
   review: adminProcedure.input(reviewDisputeSchema).mutation(async ({ ctx, input }) => {
     const disputePrisma = getDisputePrisma(ctx)
     const nextStatus = input.decision === "APPROVE" ? OPEN_DISPUTE_STATUS : REJECTED_DISPUTE_STATUS
@@ -968,7 +1609,11 @@ export const disputeRouter = router({
       const updateResult = await tx.transactionDispute.updateMany({
         where: {
           id: input.id,
-          status: SUBMITTED_DISPUTE_STATUS,
+          status: {
+            in: [SUBMITTED_DISPUTE_STATUS, APPEALED_DISPUTE_STATUS],
+          },
+          finalDecisionAt: null,
+          closedAt: null,
         },
         data: {
           status: nextStatus,
@@ -980,7 +1625,7 @@ export const disputeRouter = router({
       if (updateResult.count === 0) {
         const existing = (await tx.transactionDispute.findUnique({
           where: { id: input.id },
-          select: { id: true, status: true },
+          select: disputeStatusRecordSelect,
         })) as DisputeStatusRecord | null
 
         if (!existing) {
@@ -992,7 +1637,8 @@ export const disputeRouter = router({
 
         throw new TRPCError({
           code: "CONFLICT",
-          message: "Only disputes that are under review can be approved or rejected.",
+          message:
+            "Only disputes that are under review or under appeal can be approved or rejected.",
         })
       }
 

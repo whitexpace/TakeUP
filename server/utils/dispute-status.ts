@@ -3,6 +3,7 @@ import type { DisputeStatus as ApiDisputeStatus } from "../../shared/schemas/dis
 
 const runtimeDisputeStatuses = DisputeStatus as Record<string, string>
 const APPEALED_RUNTIME_STATUS = (runtimeDisputeStatuses.APPEALED ?? "APPEALED") as DisputeStatus
+const CLOSED_RUNTIME_STATUS = (runtimeDisputeStatuses.CLOSED ?? "CLOSED") as DisputeStatus
 const RESOLVED_RUNTIME_STATUS = (runtimeDisputeStatuses.RESOLVED ?? "RESOLVED") as DisputeStatus
 
 export const SUBMITTED_DISPUTE_STATUS = (runtimeDisputeStatuses.SUBMITTED ??
@@ -12,6 +13,7 @@ export const SUBMITTED_DISPUTE_STATUS = (runtimeDisputeStatuses.SUBMITTED ??
 export const OPEN_DISPUTE_STATUS = (runtimeDisputeStatuses.OPEN ?? "OPEN") as DisputeStatus
 export const REJECTED_DISPUTE_STATUS = (runtimeDisputeStatuses.REJECTED ??
   "REJECTED") as DisputeStatus
+export const CLOSED_DISPUTE_STATUS = CLOSED_RUNTIME_STATUS
 
 export const ACTIVE_DISPUTE_STATUSES = [
   SUBMITTED_DISPUTE_STATUS,
@@ -38,8 +40,8 @@ export const fromApiDisputeStatus = (status: ApiDisputeStatus): DisputeStatus =>
       return REJECTED_DISPUTE_STATUS
     case "APPEALED":
       return APPEALED_RUNTIME_STATUS
-    case "RESOLVED":
-      return RESOLVED_RUNTIME_STATUS
+    case "CLOSED":
+      return CLOSED_RUNTIME_STATUS
     case "SUBMITTED":
     default:
       return SUBMITTED_DISPUTE_STATUS
@@ -59,8 +61,8 @@ export const toApiDisputeStatus = (status: string): ApiDisputeStatus => {
     return "REJECTED"
   }
 
-  if (status === RESOLVED_RUNTIME_STATUS) {
-    return "RESOLVED"
+  if (status === CLOSED_RUNTIME_STATUS || status === RESOLVED_RUNTIME_STATUS) {
+    return "CLOSED"
   }
 
   return "SUBMITTED"
