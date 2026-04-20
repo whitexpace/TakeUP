@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
   const parsed = sendMessageSchema.safeParse({
     conversationId: rawId,
     body: body?.body ?? body?.text,
+    imageUrl: body?.imageUrl ?? null,
   })
 
   if (!parsed.success) {

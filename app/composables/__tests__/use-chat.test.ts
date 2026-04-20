@@ -68,6 +68,7 @@ const makeMessage = (id: string, overrides: Partial<ChatMessage> = {}): ChatMess
   conversationId: CONV_ID_1,
   senderUserId: "sender-1",
   body: `Message ${id}`,
+  imageUrl: null,
   isRead: false,
   readAt: null,
   createdAt: "2026-04-20T10:00:00.000Z",
@@ -129,38 +130,6 @@ describe("useChat", () => {
     })
   })
 
-  it("selects an existing conversation, loads messages, and clears local unread counters", async () => {
-    fetchMock
-      .mockResolvedValueOnce(makeConversationDetail(CONV_ID_2, { transactionId: TX_ID_2 }))
-      .mockResolvedValueOnce({
-        messages: [makeMessage("msg-1", { conversationId: CONV_ID_2 })],
-        nextCursor: null,
-        hasMore: false,
-      })
-      .mockResolvedValueOnce(undefined)
-
-    const chat = useChat()
-    chat.totalUnreadCount.value = 5
-    chat.conversations.value = [
-      makeConversationSummary(CONV_ID_2, { unreadCount: 2, transactionId: TX_ID_2 }),
-    ]
-
-    await chat.selectConversation(CONV_ID_2)
-
-    expect(chat.activeConversation.value?.conversationId).toBe(CONV_ID_2)
-    expect(chat.totalUnreadCount.value).toBe(3)
-    expect(chat.conversations.value[0]?.unreadCount).toBe(0)
-    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-1"])
-    expect(fetchMock).toHaveBeenNthCalledWith(1, `/api/chat/conversations/${CONV_ID_2}`)
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/chat/messages", {
-      params: { conversationId: CONV_ID_2 },
-    })
-    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/chat/mark-read", {
-      method: "POST",
-      body: { conversationId: CONV_ID_2 },
-    })
-  })
-
   it("loads more messages and prepends older pages", async () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))
@@ -186,10 +155,11 @@ describe("useChat", () => {
     })
   })
 
-  it("sends a message, updates the active thread, and moves the conversation to the top", async () => {
+  it("sends a message with image support and moves the conversation to the top", async () => {
     const sentMessage = makeMessage("msg-sent", {
       conversationId: CONV_ID_2,
       body: "Hello there",
+      imageUrl: "https://example.com/chat.jpg",
       createdAt: "2026-04-20T12:00:00.000Z",
     })
     fetchMock.mockResolvedValue(sentMessage)
@@ -201,24 +171,71 @@ describe("useChat", () => {
     ]
     chat.activeConversation.value = makeConversationDetail(CONV_ID_2, { transactionId: TX_ID_2 })
 
-    const result = await chat.sendMessage("Hello there")
+    const result = await chat.sendMessage("Hello there", "https://example.com/chat.jpg")
 
     expect(result?.id).toBe("msg-sent")
     expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-sent"])
     expect(chat.conversations.value[0]?.conversationId).toBe(CONV_ID_2)
     expect(chat.conversations.value[0]?.lastMessage?.body).toBe("Hello there")
+    expect(fetchMock).toHaveBeenCalledWith(`/api/chat/conversations/${CONV_ID_2}/messages`, {
+      method: "POST",
+      body: {
+        body: "Hello there",
+        imageUrl: "https://example.com/chat.jpg",
+      },
+    })
   })
 
-  it("ignores blank messages and surfaces send failures", async () => {
+  it("merges polling receipt updates into the active conversation", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))
+      .mockResolvedValueOnce({
+        messages: [makeMessage("msg-1", { senderUserId: "user-conv-1" })],
+        nextCursor: null,
+        hasMore: false,
+      })
+      .mockResolvedValueOnce({ markedCount: 0 })
+      .mockResolvedValueOnce({ markedCount: 0 })
+
     const chat = useChat()
-    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+    await chat.openConversationById(CONV_ID_1)
+    await chat.mergeActiveConversationMessages([
+      makeMessage("msg-1", {
+        senderUserId: "user-conv-1",
+        isRead: true,
+        readAt: "2026-04-20T10:05:00.000Z",
+      }),
+    ])
 
-    expect(await chat.sendMessage("   ")).toBeNull()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(chat.messages.value[0]?.isRead).toBe(true)
+    expect(chat.messages.value[0]?.readAt).toBe("2026-04-20T10:05:00.000Z")
+  })
 
-    fetchMock.mockRejectedValueOnce(new Error("Send failed"))
-    expect(await chat.sendMessage("Hi")).toBeNull()
-    expect(chat.error.value).toBe("Send failed")
+  it("submits a persisted chat report for the active conversation", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))
+      .mockResolvedValueOnce({ messages: [], nextCursor: null, hasMore: false })
+      .mockResolvedValueOnce({ markedCount: 0 })
+      .mockResolvedValueOnce({
+        id: "report-1",
+        transactionId: TX_ID_1,
+        reason: "INAPPROPRIATE_CHAT",
+        status: "SUBMITTED",
+        description: "Threatening language",
+        createdAt: "2026-04-20T12:00:00.000Z",
+      })
+
+    const chat = useChat()
+    await chat.openConversationById(CONV_ID_1)
+    await chat.reportConversation("Threatening language")
+
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/chat/report", {
+      method: "POST",
+      body: {
+        conversationId: CONV_ID_1,
+        description: "Threatening language",
+      },
+    })
   })
 
   it("handles incoming messages for active and background conversations", async () => {

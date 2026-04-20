@@ -1,13 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted, watch } from "vue"
-import { useNotifications } from "../composables/use-notifications"
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 import { useChat } from "../composables/use-chat"
 import type { ChatMessage } from "../composables/use-chat"
+import { useNotifications } from "../composables/use-notifications"
+import { insertTextAtSelection } from "../utils/chat-composer"
+import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
 import { CHAT_CLOSED_NOTICE } from "../../shared/chat-rules"
+import { containsModeratedContent } from "../../shared/chat-moderation"
 
 definePageMeta({
   layout: false,
 })
+
+const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
+const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
 
 const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
   useNotifications()
@@ -20,54 +26,137 @@ const {
   isLoadingMessages,
   isOpeningConversation,
   isSending,
+  isReporting,
   error,
   hasMoreMessages,
   loadConversations,
   openConversation,
   sendMessage: sendChatMessage,
+  reportConversation,
   loadUnreadCount,
-  onIncomingMessage,
+  mergeActiveConversationMessages,
   closeConversation,
   loadMoreMessages,
 } = useChat()
 
 const route = useRoute()
 const router = useRouter()
+const supabase = useSupabaseClient()
+const runtimeConfig = useRuntimeConfig()
 
-// --- State Management ---
 const isMobile = ref(false)
 const searchQuery = ref("")
 const newMessage = ref("")
 const showWarning = ref(false)
+const showEmojiPicker = ref(false)
+const showReportModal = ref(false)
+const reportDescription = ref("")
+const reportError = ref<string | null>(null)
+const reportSuccessMessage = ref<string | null>(null)
+const composerError = ref<string | null>(null)
+const isUploadingImage = ref(false)
+const pendingImageFile = ref<File | null>(null)
+const pendingImagePreviewUrl = ref<string | null>(null)
 
-// Refs for DOM elements
 const chatAreaRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const photoInputRef = ref<HTMLInputElement | null>(null)
+const emojiMenuRef = ref<HTMLElement | null>(null)
+
+const routeTransactionId = computed(() => {
+  const transactionId = route.query.transactionId
+  return typeof transactionId === "string" ? transactionId : null
+})
+
+const filteredConversations = computed(() =>
+  sortedConversations.value.filter((conversation) => {
+    if (!searchQuery.value) return true
+    const query = searchQuery.value.toLowerCase()
+    const name = getParticipantName(conversation.otherParticipant).toLowerCase()
+    const itemName = conversation.item?.name?.toLowerCase() ?? ""
+    return name.includes(query) || itemName.includes(query)
+  }),
+)
+
+const canSendMessage = computed(
+  () =>
+    Boolean(newMessage.value.trim()) &&
+    !isSending.value &&
+    !isUploadingImage.value &&
+    !activeConversation.value?.isExpired,
+)
+
+const lastOutgoingMessageId = computed(() =>
+  getLastOutgoingMessageId(messages.value, activeConversation.value?.otherParticipant?.id),
+)
+
+const avatarColors = ["bg-burning-orange", "bg-blue-estate", "bg-cinnamon-ice"]
 
 const getInitials = (name: string) =>
   name
     .split(" ")
-    .map((n) => n[0])
+    .map((part) => part[0])
     .join("")
     .toUpperCase()
 
-const getParticipantName = (p: { firstName: string; lastName: string } | null) =>
-  p ? `${p.firstName} ${p.lastName}` : "Unknown"
+const getParticipantName = (participant: { firstName: string; lastName: string } | null) =>
+  participant ? `${participant.firstName} ${participant.lastName}` : "Unknown"
 
-// --- Utilities ---
+const getAvatarColor = (id: string) => {
+  let hash = 0
+  for (const character of id) hash = character.charCodeAt(0) + ((hash << 5) - hash)
+  return avatarColors[Math.abs(hash) % avatarColors.length]
+}
+
+const getFetchErrorMessage = (value: unknown, fallback: string) => {
+  const maybeError = value as {
+    data?: { message?: string; statusMessage?: string }
+    message?: string
+    statusMessage?: string
+  }
+
+  return (
+    maybeError?.data?.message ||
+    maybeError?.data?.statusMessage ||
+    maybeError?.statusMessage ||
+    maybeError?.message ||
+    fallback
+  )
+}
+
 const checkMobile = () => {
   isMobile.value = window.innerWidth < 1024
 }
+
 const scrollToBottom = () => {
   nextTick(() => {
-    if (chatAreaRef.value) chatAreaRef.value.scrollTop = chatAreaRef.value.scrollHeight
+    if (chatAreaRef.value) {
+      chatAreaRef.value.scrollTop = chatAreaRef.value.scrollHeight
+    }
   })
 }
+
 const adjustTextareaHeight = () => {
-  const el = textareaRef.value
-  if (!el) return
-  el.style.height = "auto"
-  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+  const element = textareaRef.value
+  if (!element) return
+  element.style.height = "auto"
+  element.style.height = `${Math.min(element.scrollHeight, 140)}px`
+}
+
+const clearComposerImage = () => {
+  pendingImageFile.value = null
+  if (pendingImagePreviewUrl.value) {
+    URL.revokeObjectURL(pendingImagePreviewUrl.value)
+    pendingImagePreviewUrl.value = null
+  }
+}
+
+const resetComposer = () => {
+  newMessage.value = ""
+  composerError.value = null
+  showEmojiPicker.value = false
+  clearComposerImage()
+  nextTick(adjustTextareaHeight)
 }
 
 const formatTimestamp = (dateStr: string | Date) => {
@@ -76,6 +165,7 @@ const formatTimestamp = (dateStr: string | Date) => {
   const isToday = date.toDateString() === now.toDateString()
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
+
   if (isToday) return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   if (yesterday.toDateString() === date.toDateString()) return "Yesterday"
   return date.toLocaleDateString([], { month: "short", day: "numeric" })
@@ -87,68 +177,91 @@ const formatDetailedTime = (dateStr: string | Date) => {
   const isToday = date.toDateString() === now.toDateString()
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
-  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  if (isToday) return timeStr
-  if (yesterday.toDateString() === date.toDateString()) return `Yesterday, ${timeStr}`
-  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })}, ${timeStr}`
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+
+  if (isToday) return time
+  if (yesterday.toDateString() === date.toDateString()) return `Yesterday, ${time}`
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`
 }
 
-// --- Sensitive info detection ---
-const PHONE_REGEX =
-  /(?:\+63|0)?9\d{9}\b|(?:\+?\d{1,4}[-.\s]?)?\(?\d{3,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}/g
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
-const containsSensitiveInfo = (text: string) =>
-  text.match(PHONE_REGEX) !== null || text.match(EMAIL_REGEX) !== null
-type MessageSegment = { type: "text"; value: string } | { type: "masked"; value: string }
-
-const buildMessageSegments = (body: string): MessageSegment[] => {
-  const matches = [...body.matchAll(new RegExp(`${PHONE_REGEX.source}|${EMAIL_REGEX.source}`, "g"))]
-
-  if (matches.length === 0) {
-    return [{ type: "text", value: body }]
-  }
-
-  const segments: MessageSegment[] = []
-  let currentIndex = 0
-
-  for (const match of matches) {
-    const matchText = match[0]
-    const matchIndex = match.index ?? 0
-
-    if (matchIndex > currentIndex) {
-      segments.push({
-        type: "text",
-        value: body.slice(currentIndex, matchIndex),
-      })
-    }
-
-    segments.push({
-      type: "masked",
-      value: "·".repeat(Math.max(matchText.length * 2, 6)),
-    })
-
-    currentIndex = matchIndex + matchText.length
-  }
-
-  if (currentIndex < body.length) {
-    segments.push({
-      type: "text",
-      value: body.slice(currentIndex),
-    })
-  }
-
-  return segments
+const getChatPreview = (conversation: (typeof sortedConversations.value)[0]) => {
+  if (!conversation.lastMessage) return "Start a conversation"
+  return conversation.lastMessage.body.replace(/<[^>]*>?/gm, "").slice(0, 60)
 }
 
-// --- Actions ---
-const routeTransactionId = computed(() => {
-  const transactionId = route.query.transactionId
-  return typeof transactionId === "string" ? transactionId : null
-})
+const getChatTime = (conversation: (typeof sortedConversations.value)[0]) => {
+  if (!conversation.lastMessage) return ""
+  return formatTimestamp(conversation.lastMessage.createdAt)
+}
 
 const openConversationFromRoute = async (transactionId: string) => {
   await openConversation(transactionId)
   scrollToBottom()
+}
+
+const triggerPhotoPicker = () => {
+  if (activeConversation.value?.isExpired) return
+  photoInputRef.value?.click()
+}
+
+const handlePhotoSelected = (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0] ?? null
+  if (input) input.value = ""
+  if (!file) return
+
+  if (!file.type.startsWith("image/")) {
+    composerError.value = "Only image files can be attached in chat."
+    return
+  }
+
+  if (file.size > MAX_CHAT_IMAGE_BYTES) {
+    composerError.value = "Chat photos must be 5 MB or smaller."
+    return
+  }
+
+  composerError.value = null
+  clearComposerImage()
+  pendingImageFile.value = file
+  pendingImagePreviewUrl.value = URL.createObjectURL(file)
+  nextTick(adjustTextareaHeight)
+}
+
+const uploadChatImage = async (file: File) => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const accessToken = session?.access_token
+  if (!accessToken) {
+    throw new Error("You must be signed in to upload a chat photo.")
+  }
+
+  const signedUpload = await $fetch<{ token: string; path: string; publicUrl: string }>(
+    "/api/chat/upload-url",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: {
+        fileName: file.name,
+      },
+    },
+  )
+
+  const { error: uploadError } = await supabase.storage
+    .from(runtimeConfig.public.chatImageBucket)
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
+      upsert: true,
+      contentType: file.type || "application/octet-stream",
+    })
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Unable to upload your chat photo.")
+  }
+
+  return signedUpload.publicUrl
 }
 
 const handleSelectChat = async (transactionId: string) => {
@@ -161,8 +274,7 @@ const handleSelectChat = async (transactionId: string) => {
 }
 
 const handleCloseChat = async () => {
-  newMessage.value = ""
-  nextTick(adjustTextareaHeight)
+  resetComposer()
 
   if (routeTransactionId.value) {
     await router.replace({ path: "/chat" })
@@ -173,89 +285,131 @@ const handleCloseChat = async () => {
 }
 
 const handleSendMessage = async () => {
-  if (!newMessage.value.trim() || !activeConversation.value || activeConversation.value.isExpired) {
+  if (!canSendMessage.value || !activeConversation.value) {
     return
   }
 
   const body = newMessage.value
-  const hasSensitive = containsSensitiveInfo(body)
+  const shouldWarn = containsModeratedContent(body)
+  composerError.value = null
 
-  if (hasSensitive) {
-    showWarning.value = true
-    setTimeout(() => (showWarning.value = false), 8000)
+  try {
+    let imageUrl: string | null = null
+    if (pendingImageFile.value) {
+      isUploadingImage.value = true
+      imageUrl = await uploadChatImage(pendingImageFile.value)
+    }
+
+    const sentMessage = await sendChatMessage(body, imageUrl)
+    if (!sentMessage) return
+
+    if (shouldWarn) {
+      showWarning.value = true
+      window.setTimeout(() => {
+        showWarning.value = false
+      }, 8000)
+    }
+
+    resetComposer()
+    scrollToBottom()
+  } catch (uploadError) {
+    composerError.value = getFetchErrorMessage(uploadError, "Unable to send your message.")
+  } finally {
+    isUploadingImage.value = false
+  }
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault()
+    void handleSendMessage()
+  }
+}
+
+const handleComposerInput = () => {
+  composerError.value = null
+  adjustTextareaHeight()
+}
+
+const toggleEmojiPicker = () => {
+  if (activeConversation.value?.isExpired) return
+  showEmojiPicker.value = !showEmojiPicker.value
+}
+
+const handleEmojiSelect = (emoji: string) => {
+  const element = textareaRef.value
+  const selectionStart = element?.selectionStart ?? newMessage.value.length
+  const selectionEnd = element?.selectionEnd ?? newMessage.value.length
+  const result = insertTextAtSelection(newMessage.value, emoji, selectionStart, selectionEnd)
+
+  newMessage.value = result.value
+  showEmojiPicker.value = false
+
+  nextTick(() => {
+    adjustTextareaHeight()
+    element?.focus()
+    element?.setSelectionRange(result.selectionStart, result.selectionEnd)
+  })
+}
+
+const openReportModal = () => {
+  reportError.value = null
+  reportDescription.value = ""
+  showReportModal.value = true
+}
+
+const closeReportModal = () => {
+  showReportModal.value = false
+  reportError.value = null
+}
+
+const handleSubmitReport = async () => {
+  reportError.value = null
+  const report = await reportConversation(reportDescription.value)
+
+  if (!report) {
+    reportError.value = error.value ?? "Unable to submit the chat report."
+    return
   }
 
-  const sentMessage = await sendChatMessage(body)
-  if (!sentMessage) return
-
-  newMessage.value = ""
-  nextTick(adjustTextareaHeight)
-  scrollToBottom()
+  closeReportModal()
+  reportSuccessMessage.value =
+    "Chat report submitted. Our team can now review this transaction dispute."
+  window.setTimeout(() => {
+    reportSuccessMessage.value = null
+  }, 6000)
 }
 
-const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault()
-    handleSendMessage()
+const handleDocumentClick = (event: MouseEvent) => {
+  if (!showEmojiPicker.value) return
+  const target = event.target as Node | null
+  if (target && emojiMenuRef.value?.contains(target)) {
+    return
   }
+  showEmojiPicker.value = false
 }
 
-// --- Computed ---
-const filteredConversations = computed(() =>
-  sortedConversations.value.filter((c) => {
-    if (!searchQuery.value) return true
-    const q = searchQuery.value.toLowerCase()
-    const name = getParticipantName(c.otherParticipant).toLowerCase()
-    const itemName = c.item?.name?.toLowerCase() ?? ""
-    return name.includes(q) || itemName.includes(q)
-  }),
-)
-
-const getChatPreview = (conv: (typeof sortedConversations.value)[0]) => {
-  if (!conv.lastMessage) return "Start a conversation"
-  return conv.lastMessage.body.replace(/<[^>]*>?/gm, "").slice(0, 60)
-}
-
-const getChatTime = (conv: (typeof sortedConversations.value)[0]) => {
-  if (!conv.lastMessage) return ""
-  return formatTimestamp(conv.lastMessage.createdAt)
-}
-
-const avatarColors = ["bg-burning-orange", "bg-blue-estate", "bg-cinnamon-ice"]
-const getAvatarColor = (id: string) => {
-  let hash = 0
-  for (const ch of id) hash = ch.charCodeAt(0) + ((hash << 5) - hash)
-  return avatarColors[Math.abs(hash) % avatarColors.length]
-}
-
-// Watch messages to auto-scroll
-watch(messages, () => scrollToBottom(), { deep: true })
-
-// --- Polling for new messages ---
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const startPolling = () => {
   if (pollTimer) return
   pollTimer = setInterval(async () => {
     if (!activeConversation.value) return
+
     try {
-      const params: Record<string, string> = {
-        conversationId: activeConversation.value.conversationId,
-      }
       const data = await $fetch<{
         messages: ChatMessage[]
         nextCursor: string | null
         hasMore: boolean
-      }>("/api/chat/messages", { params })
-      // Find new messages not in current list
-      const existingIds = new Set(messages.value.map((m) => m.id))
-      for (const msg of data.messages) {
-        if (!existingIds.has(msg.id)) {
-          onIncomingMessage(msg)
-        }
-      }
+      }>("/api/chat/messages", {
+        params: {
+          conversationId: activeConversation.value.conversationId,
+        },
+      })
+
+      await mergeActiveConversationMessages(data.messages)
     } catch {
-      // Silently ignore polling errors
+      // Ignore transient polling errors.
     }
   }, 5000)
 }
@@ -267,21 +421,11 @@ const stopPolling = () => {
   }
 }
 
-onMounted(async () => {
-  checkMobile()
-  window.addEventListener("resize", checkMobile)
-  await Promise.all([loadNotifications(), loadConversations(), loadUnreadCount()])
-
-  if (routeTransactionId.value) {
-    await openConversationFromRoute(routeTransactionId.value)
-  }
-
-  startPolling()
-})
+watch(messages, () => scrollToBottom(), { deep: true })
+watch([newMessage, pendingImagePreviewUrl], () => nextTick(adjustTextareaHeight))
 
 watch(routeTransactionId, async (transactionId, previousTransactionId) => {
-  newMessage.value = ""
-  nextTick(adjustTextareaHeight)
+  resetComposer()
 
   if (transactionId) {
     await openConversationFromRoute(transactionId)
@@ -293,42 +437,58 @@ watch(routeTransactionId, async (transactionId, previousTransactionId) => {
   }
 })
 
+onMounted(async () => {
+  checkMobile()
+  window.addEventListener("resize", checkMobile)
+  document.addEventListener("click", handleDocumentClick)
+
+  await Promise.all([loadNotifications(), loadConversations(), loadUnreadCount()])
+
+  if (routeTransactionId.value) {
+    await openConversationFromRoute(routeTransactionId.value)
+  }
+
+  startPolling()
+  nextTick(adjustTextareaHeight)
+})
+
 onUnmounted(() => {
   window.removeEventListener("resize", checkMobile)
+  document.removeEventListener("click", handleDocumentClick)
   stopPolling()
+  clearComposerImage()
 })
 </script>
 
 <template>
-  <div class="h-screen flex flex-col font-geist text-noble-black overflow-hidden bg-white pt-14">
+  <div class="h-screen flex flex-col overflow-hidden bg-white pt-14 font-geist text-noble-black">
     <Header
       :notifications="notifications"
       @mark-notification-read="markNotificationRead"
       @mark-all-notifications-read="markAllNotificationsRead"
     />
 
-    <div class="flex-1 flex overflow-hidden relative">
-      <!-- Sidebar -->
+    <div class="relative flex flex-1 overflow-hidden">
       <aside
-        class="w-full lg:w-80 border-r border-cinnamon-ice/20 flex flex-col shrink-0 bg-white transition-all duration-300 overflow-hidden"
+        class="relative flex w-full shrink-0 flex-col overflow-hidden border-r border-cinnamon-ice/20 bg-white transition-all duration-300 lg:w-80"
         :class="[
-          isMobile && routeTransactionId
-            ? '-translate-x-full absolute inset-0'
-            : 'translate-x-0 relative',
+          isMobile && routeTransactionId ? '-translate-x-full absolute inset-0' : 'translate-x-0',
         ]"
       >
-        <div class="p-4 flex items-center justify-between">
-          <h1 class="text-2xl font-geist font-bold">Inbox</h1>
+        <div class="flex items-center justify-between p-4">
+          <h1 class="text-2xl font-bold">Inbox</h1>
         </div>
+
         <div class="px-4 pb-4">
-          <div class="relative group">
+          <div class="group relative">
             <input
               v-model="searchQuery"
               type="text"
               placeholder="Search conversations..."
-              class="w-full bg-cream/50 border border-cinnamon-ice/30 rounded-full py-2 pl-11 pr-4 text-[14px] font-geist outline-none focus:border-burning-orange/50 focus:bg-white transition-all duration-300"
-            /><svg
-              class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/30 group-focus-within:text-burning-orange transition-colors"
+              class="w-full rounded-full border border-cinnamon-ice/30 bg-cream/50 py-2 pl-11 pr-4 text-[14px] outline-none transition-all duration-300 focus:border-burning-orange/50 focus:bg-white"
+            />
+            <svg
+              class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
               xmlns="http://www.w3.org/2000/svg"
               width="16"
               height="16"
@@ -342,24 +502,24 @@ onUnmounted(() => {
             </svg>
           </div>
         </div>
-        <div class="flex-1 overflow-y-auto custom-chat-scrollbar">
-          <!-- Loading -->
-          <div v-if="isLoadingConversations" class="p-4 space-y-4">
-            <div v-for="i in 6" :key="i" class="flex gap-3 animate-pulse">
-              <div class="w-12 h-12 bg-cream rounded-full"></div>
+
+        <div class="custom-chat-scrollbar flex-1 overflow-y-auto">
+          <div v-if="isLoadingConversations" class="space-y-4 p-4">
+            <div v-for="index in 6" :key="index" class="flex animate-pulse gap-3">
+              <div class="h-12 w-12 rounded-full bg-cream"></div>
               <div class="flex-1 space-y-2 py-1">
-                <div class="h-3 bg-cream rounded w-3/4"></div>
-                <div class="h-2 bg-cream rounded w-1/2"></div>
+                <div class="h-3 w-3/4 rounded bg-cream"></div>
+                <div class="h-2 w-1/2 rounded bg-cream"></div>
               </div>
             </div>
           </div>
-          <!-- Error -->
+
           <div
             v-else-if="error && !sortedConversations.length && !routeTransactionId"
-            class="p-12 text-center flex flex-col items-center"
+            class="flex flex-col items-center p-12 text-center"
           >
             <div
-              class="w-16 h-16 bg-cinnabar-red/5 rounded-full flex items-center justify-center mb-4 text-cinnabar-red/60"
+              class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-cinnabar-red/5 text-cinnabar-red/60"
             >
               <svg
                 width="24"
@@ -374,132 +534,131 @@ onUnmounted(() => {
                 <line x1="12" x2="12.01" y1="16" y2="16" />
               </svg>
             </div>
-            <p class="text-sm font-medium text-noble-black/60 mb-4">Failed to load conversations</p>
+            <p class="mb-4 text-sm font-medium text-noble-black/60">Failed to load conversations</p>
             <button
-              class="text-xs font-bold text-blue-estate hover:text-burning-orange transition-colors uppercase tracking-wider"
+              class="text-xs font-bold uppercase tracking-wider text-blue-estate transition-colors hover:text-burning-orange"
               @click="loadConversations"
             >
               Retry
             </button>
           </div>
-          <!-- Empty -->
+
           <template v-else>
             <div
               v-if="sortedConversations.length === 0 && !isLoadingConversations"
-              class="p-12 text-center flex flex-col items-center opacity-40"
+              class="flex flex-col items-center p-12 text-center opacity-40"
             >
-              <p class="text-sm font-bold mb-1">No conversations yet</p>
+              <p class="mb-1 text-sm font-bold">No conversations yet</p>
               <p class="text-xs">Conversations appear once a booking has been accepted.</p>
             </div>
-            <!-- Conversation list -->
+
             <div
-              v-for="conv in filteredConversations"
+              v-for="conversation in filteredConversations"
               v-else
-              :key="conv.conversationId"
-              class="px-4 py-3 cursor-pointer transition-all duration-200 relative group"
+              :key="conversation.conversationId"
+              class="group relative cursor-pointer px-4 py-3 transition-all duration-200"
               :class="[
-                routeTransactionId === conv.transactionId ||
-                activeConversation?.transactionId === conv.transactionId
+                routeTransactionId === conversation.transactionId ||
+                activeConversation?.transactionId === conversation.transactionId
                   ? 'bg-cream'
                   : 'hover:bg-cream/40',
               ]"
-              @click="handleSelectChat(conv.transactionId)"
+              @click="handleSelectChat(conversation.transactionId)"
             >
               <div class="flex items-start gap-3">
                 <div
-                  v-if="conv.otherParticipant?.avatarUrl"
-                  class="w-12 h-12 rounded-full shrink-0 overflow-hidden"
+                  v-if="conversation.otherParticipant?.avatarUrl"
+                  class="h-12 w-12 shrink-0 overflow-hidden rounded-full"
                 >
                   <img
-                    :src="conv.otherParticipant.avatarUrl"
-                    :alt="getParticipantName(conv.otherParticipant)"
-                    class="w-full h-full object-cover"
+                    :src="conversation.otherParticipant.avatarUrl"
+                    :alt="getParticipantName(conversation.otherParticipant)"
+                    class="h-full w-full object-cover"
                   />
                 </div>
                 <div
                   v-else
-                  class="w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-sm"
-                  :class="getAvatarColor(conv.otherParticipant?.id ?? conv.conversationId)"
+                  class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm"
+                  :class="
+                    getAvatarColor(conversation.otherParticipant?.id ?? conversation.conversationId)
+                  "
                 >
-                  {{ getInitials(getParticipantName(conv.otherParticipant)) }}
+                  {{ getInitials(getParticipantName(conversation.otherParticipant)) }}
                 </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex justify-between items-start mb-0.5">
+
+                <div class="min-w-0 flex-1">
+                  <div class="mb-0.5 flex items-start justify-between">
                     <span
-                      class="font-bold text-[15px] truncate"
-                      :class="{ 'text-burning-orange': conv.unreadCount > 0 }"
-                      >{{ getParticipantName(conv.otherParticipant) }}</span
+                      class="truncate text-[15px] font-bold"
+                      :class="{ 'text-burning-orange': conversation.unreadCount > 0 }"
                     >
-                    <span class="text-[11px] text-noble-black/40 shrink-0 whitespace-nowrap ml-2">
-                      {{ getChatTime(conv) }}
+                      {{ getParticipantName(conversation.otherParticipant) }}
+                    </span>
+                    <span class="ml-2 shrink-0 whitespace-nowrap text-[11px] text-noble-black/40">
+                      {{ getChatTime(conversation) }}
                     </span>
                   </div>
                   <div
-                    v-if="conv.item"
-                    class="text-[12px] text-noble-black/50 mb-1 truncate italic"
+                    v-if="conversation.item"
+                    class="mb-1 truncate text-[12px] italic text-noble-black/50"
                   >
-                    {{ conv.item.name }}
+                    {{ conversation.item.name }}
                   </div>
                   <p
-                    class="text-[13px] text-noble-black/60 truncate"
-                    :class="{ 'font-semibold text-noble-black/80': conv.unreadCount > 0 }"
+                    class="truncate text-[13px] text-noble-black/60"
+                    :class="{ 'font-semibold text-noble-black/80': conversation.unreadCount > 0 }"
                   >
-                    {{ getChatPreview(conv) }}
+                    {{ getChatPreview(conversation) }}
                   </p>
                 </div>
               </div>
+
               <div
-                v-if="conv.unreadCount > 0"
-                class="absolute right-4 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-burning-orange rounded-full shadow-sm"
+                v-if="conversation.unreadCount > 0"
+                class="absolute right-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-burning-orange shadow-sm"
               ></div>
             </div>
           </template>
         </div>
       </aside>
 
-      <!-- Main Chat Area -->
       <main
-        class="flex-1 flex flex-col bg-cream relative overflow-hidden transition-all duration-300"
+        class="relative flex flex-1 flex-col overflow-hidden bg-cream transition-all duration-300"
         :class="[
-          isMobile && !routeTransactionId
-            ? 'translate-x-full absolute inset-0'
-            : 'translate-x-0 relative',
+          isMobile && !routeTransactionId ? 'translate-x-full absolute inset-0' : 'translate-x-0',
         ]"
       >
         <div
           v-if="isOpeningConversation && !activeConversation"
-          class="flex-1 flex flex-col items-center justify-center space-y-4"
+          class="flex flex-1 flex-col items-center justify-center space-y-4"
         >
           <div
-            class="w-12 h-12 border-4 border-cinnamon-ice/20 border-t-burning-orange rounded-full animate-spin"
+            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
           ></div>
           <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
             Opening conversation...
           </p>
         </div>
 
-        <!-- Loading messages -->
         <div
           v-else-if="isLoadingMessages && !messages.length"
-          class="flex-1 flex flex-col items-center justify-center space-y-4"
+          class="flex flex-1 flex-col items-center justify-center space-y-4"
         >
           <div
-            class="w-12 h-12 border-4 border-cinnamon-ice/20 border-t-burning-orange rounded-full animate-spin"
+            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
           ></div>
           <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
             Loading messages...
           </p>
         </div>
 
-        <!-- Active conversation -->
         <template v-else-if="activeConversation">
-          <!-- Chat header -->
           <div
-            class="h-16 bg-white border-b border-cinnamon-ice/20 flex items-center justify-between px-4 lg:px-6 shrink-0 shadow-sm z-10"
+            class="z-10 flex h-16 shrink-0 items-center justify-between border-b border-cinnamon-ice/20 bg-white px-4 shadow-sm lg:px-6"
           >
             <div class="flex items-center gap-3">
               <button
-                class="lg:hidden p-2 -ml-2 hover:bg-cream rounded-full transition-colors"
+                class="-ml-2 rounded-full p-2 transition-colors hover:bg-cream lg:hidden"
                 @click="handleCloseChat"
               >
                 <svg
@@ -514,19 +673,20 @@ onUnmounted(() => {
                   <path d="m15 18-6-6 6-6" />
                 </svg>
               </button>
+
               <div
                 v-if="activeConversation.otherParticipant?.avatarUrl"
-                class="w-10 h-10 rounded-full overflow-hidden"
+                class="h-10 w-10 overflow-hidden rounded-full"
               >
                 <img
                   :src="activeConversation.otherParticipant.avatarUrl"
                   :alt="getParticipantName(activeConversation.otherParticipant)"
-                  class="w-full h-full object-cover"
+                  class="h-full w-full object-cover"
                 />
               </div>
               <div
                 v-else
-                class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white"
                 :class="
                   getAvatarColor(
                     activeConversation.otherParticipant?.id ?? activeConversation.conversationId,
@@ -535,8 +695,9 @@ onUnmounted(() => {
               >
                 {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
               </div>
+
               <div class="flex flex-col">
-                <span class="font-bold text-[15px] leading-tight">{{
+                <span class="text-[15px] font-bold leading-tight">{{
                   getParticipantName(activeConversation.otherParticipant)
                 }}</span>
                 <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
@@ -544,34 +705,48 @@ onUnmounted(() => {
                 }}</span>
               </div>
             </div>
-            <NuxtLink
-              v-if="activeConversation.item"
-              :to="`/items/${activeConversation.item.id}`"
-              class="hidden sm:block bg-burning-orange text-white text-[13px] font-bold px-4 py-2 rounded-full hover:bg-burning-orange/90 transition-all duration-300 shadow-sm active:scale-95"
-            >
-              View Item
-            </NuxtLink>
+
+            <div class="flex items-center gap-2">
+              <button
+                class="rounded-full border border-cinnamon-ice/40 px-3 py-2 text-[12px] font-semibold text-noble-black/60 transition-colors hover:border-cinnabar-red/30 hover:text-cinnabar-red disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isReporting"
+                @click="openReportModal"
+              >
+                {{ isReporting ? "Reporting..." : "Report" }}
+              </button>
+              <NuxtLink
+                v-if="activeConversation.item"
+                :to="`/items/${activeConversation.item.id}`"
+                class="hidden rounded-full bg-burning-orange px-4 py-2 text-[13px] font-bold text-white shadow-sm transition-all duration-300 hover:bg-burning-orange/90 sm:block"
+              >
+                View Item
+              </NuxtLink>
+            </div>
           </div>
 
-          <!-- Expired banner -->
           <div
             v-if="activeConversation.isExpired"
-            class="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center"
+            class="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center"
           >
-            <p class="text-xs text-amber-700 font-medium">
+            <p class="text-xs font-medium text-amber-700">
               {{ activeConversation.closedNotice ?? CHAT_CLOSED_NOTICE }}
             </p>
           </div>
 
-          <!-- Messages area -->
+          <div
+            v-if="reportSuccessMessage"
+            class="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center"
+          >
+            <p class="text-xs font-medium text-emerald-700">{{ reportSuccessMessage }}</p>
+          </div>
+
           <div
             ref="chatAreaRef"
-            class="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-chat-scrollbar"
+            class="custom-chat-scrollbar flex flex-1 flex-col gap-6 overflow-y-auto p-6"
           >
-            <!-- Load more button -->
             <div v-if="hasMoreMessages" class="flex justify-center">
               <button
-                class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 hover:text-burning-orange transition-colors"
+                class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 transition-colors hover:text-burning-orange"
                 :disabled="isLoadingMessages"
                 @click="loadMoreMessages"
               >
@@ -579,12 +754,11 @@ onUnmounted(() => {
               </button>
             </div>
 
-            <!-- Empty messages -->
             <div
               v-if="messages.length === 0 && !isLoadingMessages"
-              class="flex-1 flex flex-col items-center justify-center text-center opacity-40 py-12"
+              class="flex flex-1 flex-col items-center justify-center py-12 text-center opacity-40"
             >
-              <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4">
+              <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">
                 <svg
                   width="24"
                   height="24"
@@ -600,121 +774,187 @@ onUnmounted(() => {
               <p class="text-xs">Start the conversation</p>
             </div>
 
-            <!-- Message bubbles -->
             <template v-else>
               <div class="flex justify-center">
                 <span
-                  class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 bg-white/40 px-3 py-1 rounded-full"
+                  class="rounded-full bg-white/40 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-noble-black/30"
                   >Today</span
                 >
               </div>
+
               <div
-                v-for="(msg, index) in messages"
-                :key="msg.id"
-                class="flex flex-col max-w-[85%] lg:max-w-[75%]"
+                v-for="message in messages"
+                :key="message.id"
+                class="flex max-w-[85%] flex-col lg:max-w-[75%]"
                 :class="[
-                  msg.senderUserId !== activeConversation.otherParticipant?.id
+                  message.senderUserId !== activeConversation.otherParticipant?.id
                     ? 'self-end items-end'
                     : 'self-start items-start',
                 ]"
               >
                 <div
-                  class="px-4 py-2.5 rounded-2xl text-[14px] shadow-sm leading-relaxed relative"
+                  class="relative rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm"
                   :class="[
-                    msg.senderUserId !== activeConversation.otherParticipant?.id
-                      ? 'bg-blue-estate text-white rounded-tr-none'
-                      : 'bg-white text-noble-black border border-cinnamon-ice/30 rounded-tl-none',
+                    message.senderUserId !== activeConversation.otherParticipant?.id
+                      ? 'rounded-tr-none bg-blue-estate text-white'
+                      : 'rounded-tl-none border border-cinnamon-ice/30 bg-white text-noble-black',
                   ]"
                 >
-                  <template
-                    v-for="(segment, segmentIndex) in buildMessageSegments(msg.body)"
-                    :key="`${msg.id}-${segmentIndex}`"
-                  >
-                    <span v-if="segment.type === 'text'" class="whitespace-pre-wrap break-words">
-                      {{ segment.value }}
-                    </span>
-                    <span
-                      v-else
-                      class="mx-1 inline-block select-none rounded-full px-4 text-transparent"
-                      style="
-                        filter: blur(12px);
-                        background: rgba(255, 255, 255, 0.7);
-                        pointer-events: none;
-                      "
-                    >
-                      {{ segment.value }}
-                    </span>
-                  </template>
+                  <img
+                    v-if="message.imageUrl"
+                    :src="message.imageUrl"
+                    alt="Chat attachment"
+                    class="mb-3 max-h-64 w-full rounded-2xl object-cover"
+                  />
+                  <p class="whitespace-pre-wrap break-words">{{ message.body }}</p>
                 </div>
-                <div class="mt-1 flex items-center gap-2">
-                  <span
-                    v-if="index === messages.length - 1"
-                    class="text-[10px] text-noble-black/40 font-medium"
-                    >{{ formatDetailedTime(msg.createdAt) }}</span
-                  >
-                  <div
-                    v-if="
-                      msg.senderUserId !== activeConversation.otherParticipant?.id && msg.isRead
-                    "
-                    class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[6px] text-white font-bold transition-all duration-500 scale-100"
-                    :class="getAvatarColor(activeConversation.otherParticipant?.id ?? '')"
-                  >
-                    {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
-                  </div>
-                </div>
+
+                <span
+                  v-if="message.senderUserId === activeConversation.otherParticipant?.id"
+                  class="mt-1 text-[10px] font-medium text-noble-black/40"
+                >
+                  {{ formatDetailedTime(message.createdAt) }}
+                </span>
+                <span
+                  v-else-if="message.id === lastOutgoingMessageId"
+                  class="mt-1 text-[10px] font-medium text-noble-black/40"
+                >
+                  {{ message.isRead ? "Seen" : "Sent" }} ·
+                  {{ formatDetailedTime(message.createdAt) }}
+                </span>
+                <span v-else class="mt-1 text-[10px] font-medium text-noble-black/40">
+                  {{ formatDetailedTime(message.createdAt) }}
+                </span>
               </div>
             </template>
           </div>
 
-          <!-- Sensitive info warning -->
           <transition name="fade">
             <div v-if="showWarning" class="mx-6 mb-2">
-              <p class="text-[11px] text-noble-black/40 text-center leading-normal">
-                For your safety and privacy, we've censored information that appears to be personal
-                contact details. <br />Please keep all communication within the TakeUP chat
-                platform.
+              <p class="text-center text-[11px] leading-normal text-noble-black/40">
+                Personal contact details and profanity are automatically censored in chat and inbox
+                previews. Please keep all communication inside TakeUP.
               </p>
             </div>
           </transition>
 
-          <!-- Message input -->
-          <div class="bg-white p-4 border-t border-cinnamon-ice/20 shrink-0 relative">
+          <div class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4">
+            <div
+              v-if="pendingImagePreviewUrl"
+              class="mb-3 flex items-start gap-3 rounded-2xl border border-cinnamon-ice/20 bg-cream/70 p-3"
+            >
+              <img
+                :src="pendingImagePreviewUrl"
+                alt="Pending chat upload"
+                class="h-20 w-20 rounded-xl object-cover"
+              />
+              <div class="flex flex-1 flex-col gap-2">
+                <p class="text-xs font-semibold text-noble-black/70">Photo ready to send</p>
+                <button
+                  class="w-fit rounded-full border border-cinnamon-ice/30 px-3 py-1 text-[11px] font-semibold text-noble-black/60 transition-colors hover:border-cinnabar-red/30 hover:text-cinnabar-red"
+                  type="button"
+                  @click="clearComposerImage"
+                >
+                  Remove photo
+                </button>
+              </div>
+            </div>
+
             <div class="flex items-end gap-2 lg:gap-3">
               <div
-                class="flex-1 bg-cream border border-cinnamon-ice/20 rounded-[22px] transition-all duration-300 relative flex items-end"
+                class="relative flex flex-1 items-end rounded-[24px] border border-cinnamon-ice/20 bg-cream transition-all duration-300"
                 :class="
                   activeConversation.isExpired
-                    ? 'opacity-70 bg-stone-100 border-stone-200'
+                    ? 'border-stone-200 bg-stone-100 opacity-70'
                     : 'focus-within:border-burning-orange/50'
                 "
               >
+                <button
+                  class="mb-1 ml-2 rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                  type="button"
+                  :disabled="activeConversation.isExpired || isUploadingImage"
+                  @click="triggerPhotoPicker"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <circle cx="8.5" cy="10" r="1.5" />
+                    <path d="m21 15-4.2-4.2a1 1 0 0 0-1.4 0L9 17" />
+                  </svg>
+                </button>
+
                 <textarea
                   ref="textareaRef"
                   v-model="newMessage"
                   rows="1"
+                  :disabled="activeConversation.isExpired || isUploadingImage"
                   :placeholder="
                     activeConversation.isExpired
                       ? 'Chat is closed while the dispute is active.'
                       : 'Type your message...'
                   "
-                  class="w-full bg-transparent py-2.5 px-4 lg:px-6 pr-14 text-[14px] font-geist outline-none placeholder:text-noble-black/30 resize-none overflow-y-auto custom-chat-scrollbar leading-relaxed"
-                  style="min-height: 42px; max-height: 120px"
-                  :disabled="activeConversation.isExpired"
+                  class="custom-chat-scrollbar w-full resize-none bg-transparent px-2 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-noble-black/30"
+                  style="min-height: 44px; max-height: 140px"
+                  @input="handleComposerInput"
                   @keydown="handleKeydown"
                 ></textarea>
+
+                <div ref="emojiMenuRef" class="relative mb-1 mr-2">
+                  <button
+                    class="rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    :disabled="activeConversation.isExpired"
+                    @click.stop="toggleEmojiPicker"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                      <line x1="9" x2="9.01" y1="9" y2="9" />
+                      <line x1="15" x2="15.01" y1="9" y2="9" />
+                    </svg>
+                  </button>
+
+                  <div
+                    v-if="showEmojiPicker"
+                    class="absolute bottom-12 right-0 z-20 grid w-52 grid-cols-4 gap-2 rounded-2xl border border-cinnamon-ice/20 bg-white p-3 shadow-xl"
+                  >
+                    <button
+                      v-for="emoji in EMOJI_OPTIONS"
+                      :key="emoji"
+                      class="rounded-xl px-2 py-2 text-lg transition-colors hover:bg-cream"
+                      type="button"
+                      @click="handleEmojiSelect(emoji)"
+                    >
+                      {{ emoji }}
+                    </button>
+                  </div>
+                </div>
               </div>
+
               <button
-                class="p-2.5 mb-1 text-white rounded-full shadow-md transition-all duration-300 shrink-0"
+                class="mb-1 shrink-0 rounded-full p-2.5 text-white shadow-md transition-all duration-300"
                 :class="[
                   activeConversation.isExpired
-                    ? 'bg-stone-300 cursor-not-allowed'
-                    : 'bg-burning-orange hover:bg-burning-orange/90 active:scale-95',
-                  {
-                    'opacity-50 grayscale cursor-not-allowed':
-                      activeConversation.isExpired || !newMessage.trim() || isSending,
-                  },
+                    ? 'cursor-not-allowed bg-stone-300'
+                    : 'bg-burning-orange hover:bg-burning-orange/90',
+                  { 'cursor-not-allowed opacity-50 grayscale': !canSendMessage },
                 ]"
-                :disabled="activeConversation.isExpired || !newMessage.trim() || isSending"
+                :disabled="!canSendMessage"
                 @click="handleSendMessage"
               >
                 <svg
@@ -731,15 +971,30 @@ onUnmounted(() => {
                 </svg>
               </button>
             </div>
+
+            <input
+              ref="photoInputRef"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="handlePhotoSelected"
+            />
+
+            <p v-if="isUploadingImage" class="mt-2 text-[11px] text-noble-black/40">
+              Uploading photo...
+            </p>
+            <p v-if="composerError" class="mt-2 text-[11px] text-cinnabar-red">
+              {{ composerError }}
+            </p>
           </div>
         </template>
 
         <div
           v-else-if="error"
-          class="flex-1 flex flex-col items-center justify-center bg-cream text-center px-6"
+          class="flex flex-1 flex-col items-center justify-center bg-cream px-6 text-center"
         >
           <div
-            class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-cinnamon-ice/20 text-cinnabar-red/70"
+            class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-cinnamon-ice/20 bg-white text-cinnabar-red/70 shadow-sm"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -755,26 +1010,16 @@ onUnmounted(() => {
               <line x1="12" x2="12.01" y1="16" y2="16" />
             </svg>
           </div>
-          <h2 class="text-xl font-bold mb-2">Unable to open chat</h2>
-          <p class="text-sm text-noble-black/60 max-w-sm">
-            {{ error }}
-          </p>
-          <button
-            v-if="routeTransactionId"
-            class="mt-5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-noble-black shadow-sm border border-cinnamon-ice/30"
-            @click="handleCloseChat"
-          >
-            Back to inbox
-          </button>
+          <h2 class="mb-2 text-xl font-bold">Unable to open chat</h2>
+          <p class="max-w-sm text-sm text-noble-black/60">{{ error }}</p>
         </div>
 
-        <!-- No chat selected -->
         <div
-          v-else-if="!isMobile"
-          class="flex-1 flex flex-col items-center justify-center bg-cream text-center px-6 opacity-40"
+          v-else
+          class="flex flex-1 flex-col items-center justify-center bg-cream px-6 text-center opacity-50"
         >
           <div
-            class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-cinnamon-ice/20"
+            class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -788,44 +1033,57 @@ onUnmounted(() => {
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </div>
-          <h2 class="text-xl font-bold mb-2">Select a conversation</h2>
-          <p class="text-sm">Choose a chat from the inbox to start messaging.</p>
+          <h2 class="mb-2 text-xl font-bold">Select a conversation</h2>
+          <p class="max-w-sm text-sm text-noble-black/60">
+            Choose a thread from the inbox to continue chatting.
+          </p>
         </div>
       </main>
     </div>
+
+    <transition name="fade">
+      <div
+        v-if="showReportModal"
+        class="fixed inset-0 z-40 flex items-center justify-center bg-noble-black/35 px-4"
+      >
+        <div class="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
+          <h2 class="text-lg font-bold">Report This Chat</h2>
+          <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
+            Submit a report for inappropriate chat behavior. This creates a transaction dispute tied
+            to the current conversation.
+          </p>
+          <label
+            class="mt-4 block text-sm font-semibold text-noble-black/70"
+            for="chat-report-description"
+          >
+            Additional details (optional)
+          </label>
+          <textarea
+            id="chat-report-description"
+            v-model="reportDescription"
+            rows="4"
+            maxlength="1000"
+            class="mt-2 w-full rounded-2xl border border-cinnamon-ice/30 bg-cream/40 px-4 py-3 text-sm outline-none transition-colors focus:border-cinnabar-red/40 focus:bg-white"
+            placeholder="Describe what happened in this conversation."
+          ></textarea>
+          <p v-if="reportError" class="mt-3 text-sm text-cinnabar-red">{{ reportError }}</p>
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              class="rounded-full border border-cinnamon-ice/30 px-4 py-2 text-sm font-semibold text-noble-black/60 transition-colors hover:border-cinnamon-ice/50 hover:text-noble-black"
+              @click="closeReportModal"
+            >
+              Cancel
+            </button>
+            <button
+              class="rounded-full bg-cinnabar-red px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-cinnabar-red/90 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="isReporting"
+              @click="handleSubmitReport"
+            >
+              {{ isReporting ? "Submitting..." : "Submit Report" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.custom-chat-scrollbar::-webkit-scrollbar {
-  width: 5px;
-}
-
-.custom-chat-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-chat-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(219, 187, 167, 0.4) !important;
-  border-radius: 20px;
-}
-
-.custom-chat-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(219, 187, 167, 0.7) !important;
-}
-
-/* Firefox support */
-.custom-chat-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(219, 187, 167, 0.4) transparent;
-}
-</style>
