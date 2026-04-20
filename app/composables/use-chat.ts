@@ -1,10 +1,12 @@
-import { ref, computed } from "vue"
+import { computed, ref } from "vue"
+import { mergeChatMessages } from "../utils/chat-message-utils"
 
 export type ChatMessage = {
   id: string
   conversationId: string
   senderUserId: string
   body: string
+  imageUrl: string | null
   isRead: boolean
   readAt: string | null
   createdAt: string
@@ -24,12 +26,16 @@ export type ChatItem = {
   thumbnailImage: string | null
 }
 
-export type ConversationSummary = {
+type ConversationBase = {
   conversationId: string
   transactionId: string
   isExpired: boolean
+  closedNotice: string | null
   item: ChatItem | null
   otherParticipant: ChatParticipant | null
+}
+
+export type ConversationSummary = ConversationBase & {
   lastMessage: {
     id: string
     body: string
@@ -40,12 +46,15 @@ export type ConversationSummary = {
   unreadCount: number
 }
 
-export type ConversationDetail = {
-  conversationId: string
+export type ConversationDetail = ConversationBase
+
+export type ChatConversationReport = {
+  id: string
   transactionId: string
-  isExpired: boolean
-  item: ChatItem | null
-  otherParticipant: ChatParticipant | null
+  reason: string
+  status: string
+  description: string | null
+  createdAt: string
 }
 
 type FetchErrorData = {
@@ -71,97 +80,202 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback
 }
 
+const resetConversationState = (
+  messages: { value: ChatMessage[] },
+  nextCursor: { value: string | null },
+  hasMoreMessages: { value: boolean },
+) => {
+  messages.value = []
+  nextCursor.value = null
+  hasMoreMessages.value = false
+}
+
 export const useChat = () => {
   const conversations = ref<ConversationSummary[]>([])
   const activeConversation = ref<ConversationDetail | null>(null)
   const messages = ref<ChatMessage[]>([])
   const isLoadingConversations = ref(false)
   const isLoadingMessages = ref(false)
+  const isOpeningConversation = ref(false)
   const isSending = ref(false)
+  const isReporting = ref(false)
   const error = ref<string | null>(null)
   const hasMoreMessages = ref(false)
   const nextCursor = ref<string | null>(null)
   const totalUnreadCount = ref(0)
 
+  const updateConversationFromMessage = (message: ChatMessage, markUnread: boolean) => {
+    const conversation = conversations.value.find(
+      (entry) => entry.conversationId === message.conversationId,
+    )
+
+    if (!conversation) {
+      void loadConversations()
+      return
+    }
+
+    const shouldReplaceLastMessage =
+      !conversation.lastMessage ||
+      conversation.lastMessage.id === message.id ||
+      new Date(message.createdAt).getTime() >=
+        new Date(conversation.lastMessage.createdAt).getTime()
+
+    if (shouldReplaceLastMessage) {
+      conversation.lastMessage = {
+        id: message.id,
+        body: message.body,
+        senderUserId: message.senderUserId,
+        createdAt: message.createdAt,
+        isRead: message.isRead,
+      }
+    }
+
+    if (markUnread) {
+      conversation.unreadCount += 1
+    }
+
+    const index = conversations.value.indexOf(conversation)
+    if (index > 0) {
+      conversations.value.splice(index, 1)
+      conversations.value.unshift(conversation)
+    }
+  }
+
+  const syncLocalReadState = async (conversationId: string) => {
+    await markAsRead(conversationId)
+
+    const conversation = conversations.value.find(
+      (entry) => entry.conversationId === conversationId,
+    )
+    if (!conversation) {
+      return
+    }
+
+    totalUnreadCount.value = Math.max(0, totalUnreadCount.value - conversation.unreadCount)
+    conversation.unreadCount = 0
+
+    const otherParticipantId = activeConversation.value?.otherParticipant?.id
+    if (activeConversation.value?.conversationId === conversationId && otherParticipantId) {
+      const readAt = new Date().toISOString()
+      messages.value = messages.value.map((message) =>
+        message.senderUserId === otherParticipantId && !message.isRead
+          ? { ...message, isRead: true, readAt: message.readAt ?? readAt }
+          : message,
+      )
+    }
+  }
+
+  const mergeActiveConversationMessages = async (incoming: ChatMessage[]) => {
+    if (!activeConversation.value || incoming.length === 0) {
+      return
+    }
+
+    const knownIds = new Set(messages.value.map((message) => message.id))
+    messages.value = mergeChatMessages(messages.value, incoming)
+
+    for (const message of incoming) {
+      updateConversationFromMessage(message, false)
+    }
+
+    const hasNewIncomingMessage = incoming.some((message) => !knownIds.has(message.id))
+    if (hasNewIncomingMessage) {
+      await syncLocalReadState(activeConversation.value.conversationId)
+    }
+  }
+
   const loadConversations = async () => {
     if (isLoadingConversations.value) return
+
     isLoadingConversations.value = true
     error.value = null
+
     try {
-      const data = await $fetch<ConversationSummary[]>("/api/chat/conversations")
+      const data = await $fetch<ConversationSummary[]>("/api/chat")
       conversations.value = data
-    } catch (e: unknown) {
-      error.value = getErrorMessage(e, "Failed to load conversations")
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to load conversations.")
       conversations.value = []
     } finally {
       isLoadingConversations.value = false
     }
   }
 
-  const openConversation = async (transactionId: string) => {
-    error.value = null
-    try {
-      const data = await $fetch<ConversationDetail>("/api/chat/conversation", {
-        method: "POST",
-        body: { transactionId },
-      })
-      activeConversation.value = data
-      messages.value = []
-      nextCursor.value = null
-      hasMoreMessages.value = false
-      await loadMessages(data.conversationId)
-      await markAsRead(data.conversationId)
-    } catch (e: unknown) {
-      error.value = getErrorMessage(e, "Failed to open conversation")
-    }
-  }
-
-  const selectConversation = async (conversationId: string) => {
-    const conv = conversations.value.find((c) => c.conversationId === conversationId)
-    if (!conv) return
-    activeConversation.value = {
-      conversationId: conv.conversationId,
-      transactionId: conv.transactionId,
-      isExpired: conv.isExpired,
-      item: conv.item,
-      otherParticipant: conv.otherParticipant,
-    }
-    messages.value = []
-    nextCursor.value = null
-    hasMoreMessages.value = false
-    await loadMessages(conversationId)
-    await markAsRead(conversationId)
-    // Update local unread count
-    const c = conversations.value.find((x) => x.conversationId === conversationId)
-    if (c) {
-      totalUnreadCount.value = Math.max(0, totalUnreadCount.value - c.unreadCount)
-      c.unreadCount = 0
-    }
-  }
-
   const loadMessages = async (conversationId: string, cursor?: string) => {
     isLoadingMessages.value = true
+
     try {
       const params: Record<string, string> = { conversationId }
       if (cursor) params.cursor = cursor
+
       const data = await $fetch<{
         messages: ChatMessage[]
         nextCursor: string | null
         hasMore: boolean
       }>("/api/chat/messages", { params })
+
       if (cursor) {
-        // Prepend older messages
-        messages.value = [...data.messages, ...messages.value]
+        messages.value = mergeChatMessages(data.messages, messages.value)
       } else {
         messages.value = data.messages
       }
+
       nextCursor.value = data.nextCursor
       hasMoreMessages.value = data.hasMore
-    } catch (e: unknown) {
-      error.value = getErrorMessage(e, "Failed to load messages")
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to load messages.")
     } finally {
       isLoadingMessages.value = false
     }
+  }
+
+  const openConversation = async (transactionId: string) => {
+    if (!transactionId) return
+
+    isOpeningConversation.value = true
+    error.value = null
+
+    try {
+      const data = await $fetch<ConversationDetail>(
+        `/api/chat/transactions/${encodeURIComponent(transactionId)}`,
+      )
+
+      activeConversation.value = data
+      resetConversationState(messages, nextCursor, hasMoreMessages)
+      await loadMessages(data.conversationId)
+      await syncLocalReadState(data.conversationId)
+    } catch (err: unknown) {
+      activeConversation.value = null
+      resetConversationState(messages, nextCursor, hasMoreMessages)
+      error.value = getErrorMessage(err, "Failed to open conversation.")
+    } finally {
+      isOpeningConversation.value = false
+    }
+  }
+
+  const openConversationById = async (conversationId: string) => {
+    if (!conversationId) return
+
+    isOpeningConversation.value = true
+    error.value = null
+
+    try {
+      const data = await $fetch<ConversationDetail>(
+        `/api/chat/conversations/${encodeURIComponent(conversationId)}`,
+      )
+
+      activeConversation.value = data
+      resetConversationState(messages, nextCursor, hasMoreMessages)
+      await loadMessages(data.conversationId)
+      await syncLocalReadState(data.conversationId)
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to open conversation.")
+    } finally {
+      isOpeningConversation.value = false
+    }
+  }
+
+  const selectConversation = async (conversationId: string) => {
+    await openConversationById(conversationId)
   }
 
   const loadMoreMessages = async () => {
@@ -169,48 +283,60 @@ export const useChat = () => {
     await loadMessages(activeConversation.value.conversationId, nextCursor.value)
   }
 
-  const sendMessage = async (body: string) => {
-    if (!activeConversation.value || isSending.value) return null
+  const sendMessage = async (body: string, imageUrl?: string | null) => {
+    if (!activeConversation.value || isSending.value || activeConversation.value.isExpired) {
+      return null
+    }
+
     if (!body.trim()) return null
 
     isSending.value = true
     error.value = null
+
     try {
-      const msg = await $fetch<ChatMessage>("/api/chat/send", {
-        method: "POST",
-        body: {
-          conversationId: activeConversation.value.conversationId,
-          body,
+      const message = await $fetch<ChatMessage>(
+        `/api/chat/conversations/${encodeURIComponent(activeConversation.value.conversationId)}/messages`,
+        {
+          method: "POST",
+          body: {
+            body,
+            imageUrl: imageUrl ?? null,
+          },
         },
-      })
-      messages.value.push(msg)
-
-      // Update conversation list
-      const conv = conversations.value.find(
-        (c) => c.conversationId === activeConversation.value?.conversationId,
       )
-      if (conv) {
-        conv.lastMessage = {
-          id: msg.id,
-          body: msg.body,
-          senderUserId: msg.senderUserId,
-          createdAt: msg.createdAt,
-          isRead: false,
-        }
-        // Move to top
-        const idx = conversations.value.indexOf(conv)
-        if (idx > 0) {
-          conversations.value.splice(idx, 1)
-          conversations.value.unshift(conv)
-        }
-      }
 
-      return msg
-    } catch (e: unknown) {
-      error.value = getErrorMessage(e, "Failed to send message")
+      messages.value = mergeChatMessages(messages.value, [message])
+      updateConversationFromMessage(message, false)
+      return message
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to send message.")
       return null
     } finally {
       isSending.value = false
+    }
+  }
+
+  const reportConversation = async (description?: string) => {
+    if (!activeConversation.value || isReporting.value) {
+      return null
+    }
+
+    isReporting.value = true
+    error.value = null
+
+    try {
+      return await $fetch<ChatConversationReport>("/api/chat/report", {
+        method: "POST",
+        body: {
+          conversationId: activeConversation.value.conversationId,
+          description: description?.trim() || undefined,
+        },
+      })
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to submit report.")
+      return null
+    } finally {
+      isReporting.value = false
     }
   }
 
@@ -221,7 +347,7 @@ export const useChat = () => {
         body: { conversationId },
       })
     } catch {
-      // Silently ignore read receipt failures
+      // Read receipts are non-blocking.
     }
   }
 
@@ -230,61 +356,36 @@ export const useChat = () => {
       const data = await $fetch<{ unreadCount: number }>("/api/chat/unread-count")
       totalUnreadCount.value = data.unreadCount
     } catch {
-      // ignore
+      // Ignore transient badge failures.
     }
   }
 
-  /** Called when a new message arrives via realtime/polling */
-  const onIncomingMessage = (msg: ChatMessage) => {
-    // If viewing this conversation, append and auto-read
-    if (activeConversation.value?.conversationId === msg.conversationId) {
-      const exists = messages.value.some((m) => m.id === msg.id)
-      if (!exists) {
-        messages.value.push(msg)
-        markAsRead(msg.conversationId)
+  const onIncomingMessage = (message: ChatMessage) => {
+    const isActiveConversation = activeConversation.value?.conversationId === message.conversationId
+    const alreadyKnown = messages.value.some((entry) => entry.id === message.id)
+
+    if (isActiveConversation) {
+      messages.value = mergeChatMessages(messages.value, [message])
+      if (!alreadyKnown) {
+        void syncLocalReadState(message.conversationId)
       }
-    } else {
-      // Update unread count
+    } else if (!alreadyKnown) {
       totalUnreadCount.value += 1
     }
 
-    // Update conversation list
-    const conv = conversations.value.find((c) => c.conversationId === msg.conversationId)
-    if (conv) {
-      conv.lastMessage = {
-        id: msg.id,
-        body: msg.body,
-        senderUserId: msg.senderUserId,
-        createdAt: msg.createdAt,
-        isRead: activeConversation.value?.conversationId === msg.conversationId,
-      }
-      if (activeConversation.value?.conversationId !== msg.conversationId) {
-        conv.unreadCount += 1
-      }
-      // Move to top
-      const idx = conversations.value.indexOf(conv)
-      if (idx > 0) {
-        conversations.value.splice(idx, 1)
-        conversations.value.unshift(conv)
-      }
-    } else {
-      // New conversation not in list yet — reload
-      loadConversations()
-    }
+    updateConversationFromMessage(message, !isActiveConversation && !alreadyKnown)
   }
 
   const closeConversation = () => {
     activeConversation.value = null
-    messages.value = []
-    nextCursor.value = null
-    hasMoreMessages.value = false
+    resetConversationState(messages, nextCursor, hasMoreMessages)
   }
 
   const sortedConversations = computed(() =>
-    [...conversations.value].sort((a, b) => {
-      const aTime = a.lastMessage?.createdAt ?? ""
-      const bTime = b.lastMessage?.createdAt ?? ""
-      return bTime.localeCompare(aTime)
+    [...conversations.value].sort((left, right) => {
+      const leftTime = left.lastMessage?.createdAt ?? ""
+      const rightTime = right.lastMessage?.createdAt ?? ""
+      return rightTime.localeCompare(leftTime)
     }),
   )
 
@@ -295,18 +396,23 @@ export const useChat = () => {
     messages,
     isLoadingConversations,
     isLoadingMessages,
+    isOpeningConversation,
     isSending,
+    isReporting,
     error,
     hasMoreMessages,
     totalUnreadCount,
     loadConversations,
     openConversation,
+    openConversationById,
     selectConversation,
     loadMoreMessages,
     sendMessage,
+    reportConversation,
     markAsRead,
     loadUnreadCount,
     onIncomingMessage,
+    mergeActiveConversationMessages,
     closeConversation,
   }
 }

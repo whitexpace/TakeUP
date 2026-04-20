@@ -114,9 +114,10 @@ enum ActorRole {
 }
 
 enum DisputeReason {
-  LATE    @map("late")
-  DAMAGED @map("damaged")
-  LOST    @map("lost")
+  LATE               @map("late")
+  DAMAGED            @map("damaged")
+  LOST               @map("lost")
+  INAPPROPRIATE_CHAT @map("inappropriate_chat")
 
   @@map("dispute_reason_enum")
 }
@@ -653,6 +654,7 @@ model Message {
   conversationId String    @map("conversation_id")
   senderUserId   String    @map("sender_user_id")
   body           String
+  imageUrl       String?   @map("image_url")
   isRead         Boolean   @default(false) @map("is_read")
   readAt         DateTime? @map("read_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
