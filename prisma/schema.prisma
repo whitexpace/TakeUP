@@ -76,6 +76,24 @@ enum BookingStatus {
   IN_DISPUTE
 }
 
+enum ReturnStatus {
+  NOT_RETURNED
+  RETURNED
+  EARLY_RETURNED
+}
+
+enum RefundStatus {
+  NONE
+  PENDING
+  PROCESSED
+  NOT_ELIGIBLE
+  FAILED
+}
+
+enum RefundReason {
+  EARLY_RETURN
+}
+
 enum BookingPaymentStatus {
   NOT_REQUIRED
   PENDING
@@ -123,6 +141,14 @@ enum DisputeStatus {
   @@map("dispute_status_enum")
 }
 
+enum DisputeOutcome {
+  BORROWER_AT_FAULT
+  LENDER_AT_FAULT
+  SHARED_FAULT
+  DISMISSED
+  NO_FAULT
+}
+
 enum NotificationType {
   BOOKING_RETURN_REQUESTED
 }
@@ -159,6 +185,37 @@ enum ReviewType {
   BORROWER_REVIEW
 }
 
+enum RewardSourceType {
+  TRANSACTION_COMPLETED
+  REVIEW_SUBMITTED
+  DISPUTE_RESOLUTION_ADJUSTMENT
+  BOOST_REDEMPTION
+  MANUAL_ADJUSTMENT
+}
+
+enum RewardRoleCategory {
+  BORROWER
+  LENDER
+  GENERAL
+}
+
+enum RewardEventStatus {
+  PENDING
+  APPLIED
+  REVERSED
+  BLOCKED
+}
+
+enum ItemBoostType {
+  STANDARD_24_HOUR
+}
+
+enum ItemBoostStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
 model Item {
   id               String        @id @default(uuid())
   numericId        Int           @unique @default(autoincrement())
@@ -180,6 +237,8 @@ model Item {
   bookingCount     Int           @default(0)
   likeCount        Int           @default(0)
   rating           Float         @default(0)
+  boostScore       Int           @default(0)
+  boostExpiresAt   DateTime?
   lenderId         String
   borrowerId       String?
 
@@ -191,6 +250,7 @@ model Item {
   categories         ItemCategoryOnItem[]
   images             ItemImage[]
   likes              Like[]
+  boosts             ItemBoost[]
   requestOffers      RequestOffer[]
   tags               ItemTagOnItem[]
   transactionReviews TransactionReview[]
@@ -224,6 +284,14 @@ model Booking {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
+  // Early return and refund tracking
+  returnStatus      ReturnStatus  @default(NOT_RETURNED)
+  refundStatus      RefundStatus  @default(NONE)
+  refundAmount      Int           @default(0)
+  refundProcessedAt DateTime?
+  refundReason      RefundReason?
+  actualReturnedAt  DateTime?
+
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
   lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
@@ -235,6 +303,8 @@ model Booking {
   @@index([lenderId])
   @@index([paymentStatus])
   @@index([status])
+  @@index([returnStatus])
+  @@index([refundStatus])
 }
 
 model AppNotification {
@@ -276,12 +346,13 @@ model RentalTransaction {
   borrower     User?                    @relation("transactions_borrower_user_idToUser", fields: [borrowerId], references: [id], onDelete: Restrict)
   lender       User?                    @relation("transactions_lender_user_idToUser", fields: [lenderId], references: [id], onDelete: Restrict)
   item         Item?                    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  conversation Conversation?
   disputes     TransactionDispute[]
   payments     TransactionPayment[]
+  rewardEvents RewardEvent[]
   reviewDrafts TransactionReviewDraft[]
   reviews      TransactionReview[]
   statusLogs   TransactionStatusLog[]
-  conversation Conversation?
 
   @@index([borrowerId, status, createdAt(sort: Desc)], map: "idx_transactions_borrower_status")
   @@index([lenderId, status, createdAt(sort: Desc)], map: "idx_transactions_lender_status")
@@ -370,8 +441,15 @@ model User {
   appNotificationsSent            AppNotification[]        @relation("app_notifications_actor_user_idToUser")
   borrower                        Borrower?
   cartEntries                     CartEntry[]
+  itemBoosts                      ItemBoost[]
   lender                          Lender?
   likes                           Like[]
+  lentTransactions                RentalTransaction[]      @relation("transactions_lender_user_idToUser")
+  borrowedTransactions            RentalTransaction[]      @relation("transactions_borrower_user_idToUser")
+  requestPosts                    RequestPost[]
+  rewardEvents                    RewardEvent[]
+  rewards                         UserReward?
+  sentMessages                    Message[]
   transactionDisputesAdmin        TransactionDispute[]     @relation("transaction_disputes_admin_idToUser")
   transactionDisputesFiled        TransactionDispute[]     @relation("transaction_disputes_filed_by_user_idToUser")
   transactionPaymentsPayee        TransactionPayment[]     @relation("transaction_payments_payee_user_idToUser")
@@ -380,10 +458,6 @@ model User {
   transactionReviewsReviewee      TransactionReview[]      @relation("transaction_reviews_reviewee_user_idToUser")
   transactionReviewsReviewer      TransactionReview[]      @relation("transaction_reviews_reviewer_user_idToUser")
   transactionStatusLogsChanged    TransactionStatusLog[]
-  borrowedTransactions            RentalTransaction[]      @relation("transactions_borrower_user_idToUser")
-  lentTransactions                RentalTransaction[]      @relation("transactions_lender_user_idToUser")
-  requestPosts                    RequestPost[]
-  sentMessages                    Message[]
 }
 
 model CartEntry {
@@ -428,7 +502,7 @@ model Admin {
 model Lender {
   id           Int    @unique @default(autoincrement())
   userId       String @id
-  lenderRating Int    @default(0)
+  lenderRating Float  @default(0)
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings      Booking[]
@@ -440,7 +514,7 @@ model Borrower {
   id             Int    @unique @default(autoincrement())
   userId         String @id
   borrowStatus   String
-  borrowerRating Int    @default(0)
+  borrowerRating Float  @default(0)
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings      Booking[]
@@ -506,6 +580,7 @@ model TransactionDispute {
   resolution    String?
   reviewedAt    DateTime?     @map("resolved_at") @db.Timestamptz(6)
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  outcome       DisputeOutcome?
 
   reviewedBy  User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
   raisedBy    User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [raisedById], references: [id])
@@ -550,6 +625,7 @@ model TransactionReview {
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
   item         Item?             @relation(fields: [itemId], references: [id])
+  rewardEvents RewardEvent[]
   revieweeUser User?             @relation("transaction_reviews_reviewee_user_idToUser", fields: [revieweeUserId], references: [id])
   reviewerUser User              @relation("transaction_reviews_reviewer_user_idToUser", fields: [reviewerUserId], references: [id])
   transaction  RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
@@ -594,6 +670,73 @@ model TransactionStatusLog {
 
   @@index([transactionId, createdAt(sort: Desc)], map: "idx_status_logs_txn_created")
   @@map("transaction_status_logs")
+}
+
+model UserReward {
+  id                String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId            String   @unique @map("user_id")
+  availablePoints   Int      @default(0) @map("available_points")
+  totalPointsEarned Int      @default(0) @map("total_points_earned")
+  borrowerPoints    Int      @default(0) @map("borrower_points")
+  lenderPoints      Int      @default(0) @map("lender_points")
+  pendingPoints     Int      @default(0) @map("pending_points")
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([availablePoints])
+  @@index([borrowerPoints])
+  @@index([lenderPoints])
+  @@map("user_rewards")
+}
+
+model RewardEvent {
+  id             String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId         String             @map("user_id")
+  transactionId  String?            @map("transaction_id")
+  reviewId       String?            @map("review_id")
+  itemBoostId    String?            @map("item_boost_id")
+  idempotencyKey String             @unique @map("idempotency_key")
+  sourceType     RewardSourceType   @map("source_type")
+  roleCategory   RewardRoleCategory @default(GENERAL) @map("role_category")
+  pointsDelta    Int                @map("points_delta")
+  status         RewardEventStatus  @default(PENDING)
+  metadata       Json               @default("{}")
+  appliedAt      DateTime?          @map("applied_at") @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  itemBoost   ItemBoost?         @relation(fields: [itemBoostId], references: [id], onDelete: SetNull)
+  review      TransactionReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  transaction RentalTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([transactionId, status])
+  @@index([reviewId])
+  @@index([itemBoostId])
+  @@map("reward_events")
+}
+
+model ItemBoost {
+  id          String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  itemId      String          @map("item_id")
+  userId      String          @map("user_id")
+  pointsSpent Int             @map("points_spent")
+  boostType   ItemBoostType   @map("boost_type")
+  boostScore  Int             @map("boost_score")
+  status      ItemBoostStatus @default(ACTIVE)
+  startsAt    DateTime        @map("starts_at") @db.Timestamptz(6)
+  expiresAt   DateTime        @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  rewardEvents RewardEvent[]
+  item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, status, expiresAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("item_boosts")
 }
 
 model RequestPost {

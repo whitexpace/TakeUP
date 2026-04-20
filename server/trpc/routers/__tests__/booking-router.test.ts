@@ -113,6 +113,9 @@ const makeContext = () => {
       update: vi.fn().mockResolvedValue({ id: "txn-1" }),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    conversation: {
+      upsert: vi.fn().mockResolvedValue({ id: "conv-1", transactionId: "txn-1" }),
+    },
     appNotification: {
       create: vi.fn().mockResolvedValue({ id: "notif-1" }),
     },
@@ -466,6 +469,10 @@ describe("bookingRouter", () => {
         confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
       }),
     )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "txn-1",
+      status: "CONFIRMED",
+    })
 
     const caller = bookingRouter.createCaller({
       ...ctx,
@@ -492,6 +499,11 @@ describe("bookingRouter", () => {
         }),
       }),
     )
+    expect(ctx.prisma.conversation.upsert).toHaveBeenCalledWith({
+      where: { transactionId: "txn-1" },
+      update: {},
+      create: { transactionId: "txn-1" },
+    })
   })
 
   it("forbids borrowers from accepting booking requests", async () => {

@@ -36,6 +36,12 @@ const links = computed<AccountLink[]>(() =>
 
 const isActive = (link: AccountLink) => {
   if (link.to === "/account") return route.path === "/account"
+
+  // "Booking Requests" (/account/requests) should highlight "My Listings"
+  if (link.to === "/account/listings" && route.path.startsWith("/account/requests")) {
+    return true
+  }
+
   return route.path.startsWith(link.to)
 }
 

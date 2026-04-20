@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { chatRouter } from "../chat"
 import type { Context } from "../../context"
 import type { SessionUser } from "../../../utils/auth-session"
+import { CHAT_CLOSED_NOTICE } from "../../../../shared/chat-rules"
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const OTHER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -73,6 +74,9 @@ function makePrisma(overrides: PrismaMockOverrides = {}) {
     conversation: {
       findUnique: vi.fn().mockResolvedValue(makeConversation()),
       findMany: vi.fn().mockResolvedValue([]),
+      upsert: vi
+        .fn()
+        .mockResolvedValue({ id: CONV_ID, transactionId: TX_ID, createdAt: new Date() }),
       create: vi
         .fn()
         .mockResolvedValue({ id: CONV_ID, transactionId: TX_ID, createdAt: new Date() }),
@@ -90,41 +94,34 @@ function makePrisma(overrides: PrismaMockOverrides = {}) {
   }
 }
 
+type ChatRouterTestContext = Omit<Context, "prisma"> & {
+  prisma: ReturnType<typeof makePrisma>
+}
+
 function makeContext(user = mockUser, prismaOverrides: PrismaMockOverrides = {}) {
   return {
     user,
-    prisma: makePrisma(prismaOverrides) as unknown as Context["prisma"],
+    prisma: makePrisma(prismaOverrides),
     event: {} as H3Event,
-  } satisfies Context
+  } satisfies ChatRouterTestContext
 }
 
-const caller = (ctx: Context) => chatRouter.createCaller(ctx)
+const caller = (ctx: ChatRouterTestContext) => chatRouter.createCaller(ctx as unknown as Context)
 
 describe("chatRouter", () => {
   describe("getOrCreateConversation", () => {
-    it("creates a conversation for a valid participant", async () => {
-      const ctx = makeContext(mockUser, {
-        conversation: {
-          findUnique: vi.fn().mockResolvedValue(null),
-          create: vi.fn().mockResolvedValue({ id: CONV_ID, transactionId: TX_ID }),
-        },
-      })
+    it("upserts a conversation for a valid participant", async () => {
+      const ctx = makeContext(mockUser)
       const result = await caller(ctx).getOrCreateConversation({ transactionId: TX_ID })
       expect(result.conversationId).toBe(CONV_ID)
       expect(result.isExpired).toBe(false)
       expect(result.otherParticipant?.id).toBe(OTHER_USER_ID)
-    })
-
-    it("returns existing conversation if already exists", async () => {
-      const ctx = makeContext(mockUser, {
-        conversation: {
-          findUnique: vi.fn().mockResolvedValue({ id: CONV_ID, transactionId: TX_ID }),
-          create: vi.fn(),
-        },
+      expect(ctx.prisma.conversation.upsert).toHaveBeenCalledWith({
+        where: { transactionId: TX_ID },
+        update: {},
+        create: { transactionId: TX_ID },
+        select: { id: true, transactionId: true },
       })
-      const result = await caller(ctx).getOrCreateConversation({ transactionId: TX_ID })
-      expect(result.conversationId).toBe(CONV_ID)
-      expect(ctx.prisma.conversation.create).not.toHaveBeenCalled()
     })
 
     it("rejects non-participant", async () => {
@@ -158,6 +155,19 @@ describe("chatRouter", () => {
       })
       const result = await caller(ctx).getOrCreateConversation({ transactionId: TX_ID })
       expect(result.isExpired).toBe(true)
+      expect(result.closedNotice).toBe(CHAT_CLOSED_NOTICE)
+    })
+
+    it("rejects transactions whose chat is not available", async () => {
+      const ctx = makeContext(mockUser, {
+        rentalTransaction: {
+          findUnique: vi.fn().mockResolvedValue(makeTransaction({ status: "CANCELLED" })),
+        },
+      })
+
+      await expect(caller(ctx).byTransaction({ transactionId: TX_ID })).rejects.toThrow(
+        "Chat is only available for accepted transactions.",
+      )
     })
   })
 
@@ -216,7 +226,7 @@ describe("chatRouter", () => {
       })
       await expect(
         caller(ctx).sendMessage({ conversationId: CONV_ID, body: "Hello!" }),
-      ).rejects.toThrow("read-only")
+      ).rejects.toThrow(CHAT_CLOSED_NOTICE)
     })
 
     it("rejects send when conversation not found", async () => {
@@ -314,6 +324,15 @@ describe("chatRouter", () => {
       expect(firstConversation?.lastMessage?.body).toBe("Last msg")
       expect(firstConversation?.unreadCount).toBe(3)
       expect(firstConversation?.otherParticipant?.id).toBe(OTHER_USER_ID)
+      expect(ctx.prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            transaction: expect.objectContaining({
+              status: { in: expect.any(Array) },
+            }),
+          }),
+        }),
+      )
     })
 
     it("returns empty list when no conversations", async () => {
