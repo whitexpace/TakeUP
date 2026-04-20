@@ -1,11 +1,13 @@
-import type {
-  BookingPaymentStatus as PrismaBookingPaymentStatus,
-  BookingStatus as PrismaBookingStatus,
-} from "@prisma/client"
 import {
+  type BookingPaymentStatus as PrismaBookingPaymentStatus,
+  type BookingStatus as PrismaBookingStatus,
   Prisma,
   PaymentMethod as PrismaPaymentMethod,
   TransactionStatus as PrismaTransactionStatus,
+  RefundStatus,
+  ReturnStatus,
+  RefundReason,
+  type Booking,
 } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
@@ -17,6 +19,7 @@ import {
   bookingStatusSchema,
   createBookingSchema,
   deleteBookingSchema,
+  earlyReturnBookingSchema,
   listBookingsSchema,
   type PaymentMethod,
   paymentMethodSchema,
@@ -29,6 +32,10 @@ import {
   transactionReviewSelect,
 } from "../review-helpers"
 import { isActiveDisputeStatus, toApiDisputeStatus } from "../../utils/dispute-status"
+import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
+import { processTransactionRewards } from "../../utils/rewards"
+import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
+import { creditToWallet } from "../../utils/wallet"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -127,6 +134,7 @@ const bookingEditableSelect = {
   completedAt: true,
   disputeOpenedAt: true,
   paymentProcessedAt: true,
+  refundAmount: true,
   item: {
     select: {
       id: true,
@@ -154,6 +162,7 @@ const bookingTransactionSelect = {
   platformCommission: true,
   status: true,
   paymentStatus: true,
+  refundAmount: true,
   confirmedAt: true,
   returnedAt: true,
   cancellationReason: true,
@@ -871,7 +880,10 @@ export const bookingRouter = router({
         status: bookingStatusSchema.enum.PENDING,
         paymentStatus: item.freeToBorrow
           ? bookingPaymentStatusSchema.enum.NOT_REQUIRED
-          : bookingPaymentStatusSchema.enum.PENDING,
+          : input.paymentMethod === "WALLET"
+            ? bookingPaymentStatusSchema.enum.PAID
+            : bookingPaymentStatusSchema.enum.PENDING,
+        paymentProcessedAt: input.paymentMethod === "WALLET" ? now : null,
         cancellationReason: input.cancellationReason ?? null,
         updatedAt: now,
       },
@@ -908,6 +920,18 @@ export const bookingRouter = router({
 
     if (!booking) {
       return null
+    }
+
+    // --- PROACTIVE DATA REPAIR ---
+    // If totalFee < refundAmount, the record is in a corrupted 'net' state.
+    // We restore it to 'gross' (Net + Refund) to ensure correct UI and Payouts.
+    if (booking.refundAmount > 0 && booking.totalFee < booking.refundAmount) {
+      const correctGross = booking.totalFee + booking.refundAmount
+      await bookingPrisma.booking.update({
+        where: { id: booking.id },
+        data: { totalFee: correctGross },
+      })
+      booking.totalFee = correctGross
     }
 
     assertParticipantAccess(booking, ctx.user.id)
@@ -1144,6 +1168,12 @@ export const bookingRouter = router({
       })
 
       if (isConfirmingBooking) {
+        // Increment bookingCount on the item
+        await (tx as Context["prisma"]).item.update({
+          where: { id: existing.itemId },
+          data: { bookingCount: { increment: 1 } },
+        })
+
         const overlappingPendingBookings = (await txBookingPrisma.booking.findMany({
           where: {
             itemId: existing.itemId,
@@ -1200,6 +1230,77 @@ export const bookingRouter = router({
           remarks: `Booking status updated to ${updatedBooking.status}.`,
         },
       )
+      const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+        where: { bookingId: updatedBooking.id },
+        select: {
+          id: true,
+          status: true,
+        },
+      })
+
+      if (syncedTransaction) {
+        if (isConfirmingBooking && isChatAvailableForTransactionStatus(syncedTransaction.status)) {
+          await (tx as Context["prisma"]).conversation.upsert({
+            where: { transactionId: syncedTransaction.id },
+            update: {},
+            create: { transactionId: syncedTransaction.id },
+          })
+        }
+
+        await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
+      }
+
+      // Wallet Payout & Refund Logic on completion
+      if (
+        updatedBooking.status === bookingStatusSchema.enum.COMPLETED &&
+        existing.status !== bookingStatusSchema.enum.COMPLETED &&
+        existing.paymentMethod === PrismaPaymentMethod.WALLET
+      ) {
+        const originalTotalFee = updatedBooking.totalFee
+        const commission = updatedBooking.platformCommission
+        const refundAmount = updatedBooking.refundAmount ?? 0
+        const lenderEarnings = originalTotalFee - commission - refundAmount
+
+        // 1. Calculate lender earnings
+        if (lenderEarnings > 0) {
+          await creditToWallet(
+            existing.lenderId,
+            lenderEarnings,
+            {
+              type: "EARNING",
+              relatedEntityType: "BOOKING",
+              relatedEntityId: updatedBooking.id,
+            },
+            tx as Context["prisma"],
+          )
+        }
+
+        // 2. Fallback Refund logic for Borrower
+        if (refundAmount > 0) {
+          const existingRefund = await (tx as Context["prisma"]).walletTransaction.findFirst({
+            where: {
+              userId: existing.borrowerId,
+              type: "REFUND",
+              relatedEntityType: "BOOKING",
+              relatedEntityId: updatedBooking.id,
+            },
+          })
+
+          if (!existingRefund) {
+            await creditToWallet(
+              existing.borrowerId,
+              refundAmount,
+              {
+                type: "REFUND",
+                relatedEntityType: "BOOKING",
+                relatedEntityId: updatedBooking.id,
+              },
+              tx as Context["prisma"],
+            )
+          }
+        }
+      }
+
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: updatedBooking.itemId,
       })
@@ -1300,6 +1401,8 @@ export const bookingRouter = router({
         where: { id: input.id },
         data: {
           status: bookingStatusSchema.enum.RETURNED,
+          returnStatus: ReturnStatus.RETURNED,
+          actualReturnedAt: latestBooking.returnedAt ?? new Date(),
           returnedAt: latestBooking.returnedAt ?? new Date(),
         },
         select: bookingTransactionSelect,
@@ -1314,6 +1417,13 @@ export const bookingRouter = router({
           remarks: "Borrower initiated item return.",
         },
       )
+      const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+        where: { bookingId: returnedBooking.id },
+        select: { id: true },
+      })
+      if (syncedTransaction) {
+        await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
+      }
 
       await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
         itemId: returnedBooking.itemId,
@@ -1344,6 +1454,218 @@ export const bookingRouter = router({
     }
 
     return mapBookingRecord(updatedBooking)
+  }),
+
+  earlyReturn: protectedProcedure
+    .input(earlyReturnBookingSchema)
+    .mutation(async ({ ctx, input }) => {
+      const bookingPrisma = getBookingPrisma(ctx)
+      const existing = (await bookingPrisma.booking.findUnique({
+        where: { id: input.id },
+        select: {
+          ...bookingEditableSelect,
+          returnStatus: true,
+          refundStatus: true,
+        },
+      })) as
+        | (BookingEditableRecord & { returnStatus: ReturnStatus; refundStatus: RefundStatus })
+        | null
+
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
+      }
+
+      if (existing.borrowerId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the borrower can initiate an early return.",
+        })
+      }
+
+      if (existing.status !== bookingStatusSchema.enum.CONFIRMED) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only active confirmed bookings can be returned early.",
+        })
+      }
+
+      if (
+        existing.returnStatus === ReturnStatus.EARLY_RETURNED ||
+        existing.returnStatus === ReturnStatus.RETURNED
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This booking has already been returned.",
+        })
+      }
+
+      const now = new Date()
+      if (now >= existing.endDate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The scheduled booking end time has already passed. Please use standard return.",
+        })
+      }
+
+      const refundCalc = calculateEarlyReturnRefund(existing as unknown as Booking, now)
+
+      const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
+        const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+
+        const updateData: Prisma.BookingUpdateInput = {
+          status: bookingStatusSchema.enum.RETURNED,
+          returnStatus: ReturnStatus.EARLY_RETURNED,
+          actualReturnedAt: now,
+          returnedAt: now,
+          refundStatus: refundCalc.eligible ? RefundStatus.PROCESSED : RefundStatus.NOT_ELIGIBLE,
+          refundAmount: refundCalc.refundAmount,
+          refundProcessedAt: refundCalc.eligible ? now : null,
+          refundReason: RefundReason.EARLY_RETURN,
+        }
+
+        const updatedBooking = await txBookingPrisma.booking.update({
+          where: { id: input.id },
+          data: updateData,
+          select: bookingTransactionSelect,
+        })
+
+        // Sync transaction status
+        await syncBookingTransaction(
+          tx as unknown as TransactionStatusRunnerPrismaClient,
+          updatedBooking,
+          {
+            userId: ctx.user.id,
+            role: "borrower",
+            remarks: `Borrower initiated early return. Refund: ${refundCalc.refundAmount} ${refundCalc.currency}`,
+          },
+        )
+
+        // Create refund payment record if eligible
+        if (refundCalc.eligible && refundCalc.refundAmount > 0) {
+          const rentalTx = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+            where: { bookingId: input.id },
+            select: { id: true },
+          })
+
+          if (rentalTx) {
+            await (tx as Context["prisma"]).transactionPayment.create({
+              data: {
+                transactionId: rentalTx.id,
+                payerUserId: existing.lenderId, // Money comes back from lender/system
+                payeeUserId: existing.borrowerId,
+                amount: refundCalc.refundAmount,
+                method: existing.paymentMethod === "WALLET" ? "WALLET" : "GCASH",
+                status: "SUCCESS",
+                processedAt: now,
+                feeAmount: 0,
+              },
+            })
+
+            // Wallet Credit for Early Return Refund
+            if (existing.paymentMethod === PrismaPaymentMethod.WALLET) {
+              await creditToWallet(
+                existing.borrowerId,
+                refundCalc.refundAmount,
+                {
+                  type: "REFUND",
+                  relatedEntityType: "BOOKING",
+                  relatedEntityId: updatedBooking.id,
+                },
+                tx as Context["prisma"],
+              )
+            }
+          }
+        }
+
+        // Standard post-return syncs
+        const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+          where: { bookingId: updatedBooking.id },
+          select: { id: true },
+        })
+        if (syncedTransaction) {
+          await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
+        }
+
+        await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
+          itemId: updatedBooking.itemId,
+        })
+
+        await (tx as Context["prisma"]).appNotification.create({
+          data: {
+            recipientUserId: existing.lenderId,
+            actorUserId: ctx.user.id,
+            bookingId: existing.id,
+            ...buildReturnNotification(existing.id),
+          },
+        })
+
+        return updatedBooking.id
+      }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
+
+      const updatedBooking = (await bookingPrisma.booking.findUnique({
+        where: { id: updatedBookingId },
+        include: bookingInclude,
+      })) as BookingRecord | null
+
+      if (!updatedBooking) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Booking was updated but could not be reloaded.",
+        })
+      }
+
+      return {
+        message: refundCalc.eligible
+          ? "Early return processed successfully"
+          : "Early return processed successfully. No refund is applicable.",
+        booking: mapBookingRecord(updatedBooking),
+        refund: {
+          eligible: refundCalc.eligible,
+          refundAmount: refundCalc.refundAmount,
+          penaltyAmount: refundCalc.penaltyAmount,
+          currency: refundCalc.currency,
+          reason: refundCalc.reason,
+        },
+      }
+    }),
+
+  earlyReturnPreview: protectedProcedure.input(bookingIdSchema).query(async ({ ctx, input }) => {
+    const existing = await ctx.prisma.booking.findUnique({
+      where: { id: input.id },
+    })
+
+    if (!existing) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
+    }
+
+    if (existing.borrowerId !== ctx.user.id) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only the borrower can preview an early return.",
+      })
+    }
+
+    const now = new Date()
+    const refundCalc = calculateEarlyReturnRefund(existing, now)
+
+    return {
+      refund: {
+        eligible: refundCalc.eligible,
+        totalPaidAmount: refundCalc.totalPaidAmount,
+        nonRefundableFees: refundCalc.nonRefundableFees,
+        refundableRentalAmount: refundCalc.refundableRentalAmount,
+        usedDurationMs: refundCalc.usedDurationMs,
+        unusedDurationMs: refundCalc.unusedDurationMs,
+        totalDurationMs: refundCalc.totalDurationMs,
+        usagePercentage: refundCalc.usagePercentage,
+        unusedRentalValue: refundCalc.unusedRentalValue,
+        penaltyAmount: refundCalc.penaltyAmount,
+        refundAmount: refundCalc.refundAmount,
+        currency: refundCalc.currency,
+        reason: refundCalc.reason,
+      },
+      actualReturnTime: now,
+    }
   }),
 
   delete: protectedProcedure.input(deleteBookingSchema).mutation(async ({ ctx, input }) => {

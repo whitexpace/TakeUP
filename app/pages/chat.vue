@@ -3,6 +3,7 @@ import { ref, computed, onMounted, nextTick, onUnmounted, watch } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { useChat } from "../composables/use-chat"
 import type { ChatMessage } from "../composables/use-chat"
+import { CHAT_CLOSED_NOTICE } from "../../shared/chat-rules"
 
 definePageMeta({
   layout: false,
@@ -17,17 +18,21 @@ const {
   messages,
   isLoadingConversations,
   isLoadingMessages,
+  isOpeningConversation,
   isSending,
   error,
   hasMoreMessages,
   loadConversations,
-  selectConversation,
+  openConversation,
   sendMessage: sendChatMessage,
   loadUnreadCount,
   onIncomingMessage,
   closeConversation,
   loadMoreMessages,
 } = useChat()
+
+const route = useRoute()
+const router = useRouter()
 
 // --- State Management ---
 const isMobile = ref(false)
@@ -136,27 +141,55 @@ const buildMessageSegments = (body: string): MessageSegment[] => {
 }
 
 // --- Actions ---
-const handleSelectChat = (conversationId: string) => {
-  selectConversation(conversationId)
+const routeTransactionId = computed(() => {
+  const transactionId = route.query.transactionId
+  return typeof transactionId === "string" ? transactionId : null
+})
+
+const openConversationFromRoute = async (transactionId: string) => {
+  await openConversation(transactionId)
   scrollToBottom()
 }
-const handleCloseChat = () => {
+
+const handleSelectChat = async (transactionId: string) => {
+  if (!transactionId) return
+
+  await router.replace({
+    path: "/chat",
+    query: { transactionId },
+  })
+}
+
+const handleCloseChat = async () => {
+  newMessage.value = ""
+  nextTick(adjustTextareaHeight)
+
+  if (routeTransactionId.value) {
+    await router.replace({ path: "/chat" })
+    return
+  }
+
   closeConversation()
 }
 
 const handleSendMessage = async () => {
-  if (!newMessage.value.trim() || !activeConversation.value) return
+  if (!newMessage.value.trim() || !activeConversation.value || activeConversation.value.isExpired) {
+    return
+  }
+
   const body = newMessage.value
   const hasSensitive = containsSensitiveInfo(body)
-  newMessage.value = ""
-  nextTick(adjustTextareaHeight)
 
   if (hasSensitive) {
     showWarning.value = true
     setTimeout(() => (showWarning.value = false), 8000)
   }
 
-  await sendChatMessage(body)
+  const sentMessage = await sendChatMessage(body)
+  if (!sentMessage) return
+
+  newMessage.value = ""
+  nextTick(adjustTextareaHeight)
   scrollToBottom()
 }
 
@@ -239,7 +272,26 @@ onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
   await Promise.all([loadNotifications(), loadConversations(), loadUnreadCount()])
+
+  if (routeTransactionId.value) {
+    await openConversationFromRoute(routeTransactionId.value)
+  }
+
   startPolling()
+})
+
+watch(routeTransactionId, async (transactionId, previousTransactionId) => {
+  newMessage.value = ""
+  nextTick(adjustTextareaHeight)
+
+  if (transactionId) {
+    await openConversationFromRoute(transactionId)
+    return
+  }
+
+  if (previousTransactionId) {
+    closeConversation()
+  }
 })
 
 onUnmounted(() => {
@@ -261,7 +313,7 @@ onUnmounted(() => {
       <aside
         class="w-full lg:w-80 border-r border-cinnamon-ice/20 flex flex-col shrink-0 bg-white transition-all duration-300 overflow-hidden"
         :class="[
-          isMobile && activeConversation
+          isMobile && routeTransactionId
             ? '-translate-x-full absolute inset-0'
             : 'translate-x-0 relative',
         ]"
@@ -304,7 +356,7 @@ onUnmounted(() => {
           </div>
           <!-- Error -->
           <div
-            v-else-if="error && !sortedConversations.length"
+            v-else-if="error && !sortedConversations.length && !routeTransactionId"
             class="p-12 text-center flex flex-col items-center"
           >
             <div
@@ -338,7 +390,7 @@ onUnmounted(() => {
               class="p-12 text-center flex flex-col items-center opacity-40"
             >
               <p class="text-sm font-bold mb-1">No conversations yet</p>
-              <p class="text-xs">Conversations are created when you have active transactions.</p>
+              <p class="text-xs">Conversations appear once a booking has been accepted.</p>
             </div>
             <!-- Conversation list -->
             <div
@@ -347,11 +399,12 @@ onUnmounted(() => {
               :key="conv.conversationId"
               class="px-4 py-3 cursor-pointer transition-all duration-200 relative group"
               :class="[
-                activeConversation?.conversationId === conv.conversationId
+                routeTransactionId === conv.transactionId ||
+                activeConversation?.transactionId === conv.transactionId
                   ? 'bg-cream'
                   : 'hover:bg-cream/40',
               ]"
-              @click="handleSelectChat(conv.conversationId)"
+              @click="handleSelectChat(conv.transactionId)"
             >
               <div class="flex items-start gap-3">
                 <div
@@ -409,14 +462,26 @@ onUnmounted(() => {
       <main
         class="flex-1 flex flex-col bg-cream relative overflow-hidden transition-all duration-300"
         :class="[
-          isMobile && !activeConversation
+          isMobile && !routeTransactionId
             ? 'translate-x-full absolute inset-0'
             : 'translate-x-0 relative',
         ]"
       >
+        <div
+          v-if="isOpeningConversation && !activeConversation"
+          class="flex-1 flex flex-col items-center justify-center space-y-4"
+        >
+          <div
+            class="w-12 h-12 border-4 border-cinnamon-ice/20 border-t-burning-orange rounded-full animate-spin"
+          ></div>
+          <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
+            Opening conversation...
+          </p>
+        </div>
+
         <!-- Loading messages -->
         <div
-          v-if="isLoadingMessages && !messages.length"
+          v-else-if="isLoadingMessages && !messages.length"
           class="flex-1 flex flex-col items-center justify-center space-y-4"
         >
           <div
@@ -496,6 +561,7 @@ onUnmounted(() => {
           >
             <p class="text-xs text-amber-700 font-medium">
               Direct messaging is disabled because this transaction is under dispute review.
+              {{ activeConversation.closedNotice ?? CHAT_CLOSED_NOTICE }}
             </p>
           </div>
 
@@ -613,31 +679,44 @@ onUnmounted(() => {
             </div>
           </transition>
 
-          <!-- Message input (hidden when expired) -->
-          <div
-            v-if="!activeConversation.isExpired"
-            class="bg-white p-4 border-t border-cinnamon-ice/20 shrink-0 relative"
-          >
+          <!-- Message input -->
+          <div class="bg-white p-4 border-t border-cinnamon-ice/20 shrink-0 relative">
             <div class="flex items-end gap-2 lg:gap-3">
               <div
-                class="flex-1 bg-cream border border-cinnamon-ice/20 rounded-[22px] transition-all duration-300 focus-within:border-burning-orange/50 relative flex items-end"
+                class="flex-1 bg-cream border border-cinnamon-ice/20 rounded-[22px] transition-all duration-300 relative flex items-end"
+                :class="
+                  activeConversation.isExpired
+                    ? 'opacity-70 bg-stone-100 border-stone-200'
+                    : 'focus-within:border-burning-orange/50'
+                "
               >
                 <textarea
                   ref="textareaRef"
                   v-model="newMessage"
                   rows="1"
-                  placeholder="Type your message..."
+                  :placeholder="
+                    activeConversation.isExpired
+                      ? 'Chat is closed while the dispute is active.'
+                      : 'Type your message...'
+                  "
                   class="w-full bg-transparent py-2.5 px-4 lg:px-6 pr-14 text-[14px] font-geist outline-none placeholder:text-noble-black/30 resize-none overflow-y-auto custom-chat-scrollbar leading-relaxed"
                   style="min-height: 42px; max-height: 120px"
+                  :disabled="activeConversation.isExpired"
                   @keydown="handleKeydown"
                 ></textarea>
               </div>
               <button
-                class="p-2.5 mb-1 bg-burning-orange text-white rounded-full shadow-md hover:bg-burning-orange/90 transition-all duration-300 active:scale-95 shrink-0"
-                :disabled="!newMessage.trim() || isSending"
-                :class="{
-                  'opacity-50 grayscale cursor-not-allowed': !newMessage.trim() || isSending,
-                }"
+                class="p-2.5 mb-1 text-white rounded-full shadow-md transition-all duration-300 shrink-0"
+                :class="[
+                  activeConversation.isExpired
+                    ? 'bg-stone-300 cursor-not-allowed'
+                    : 'bg-burning-orange hover:bg-burning-orange/90 active:scale-95',
+                  {
+                    'opacity-50 grayscale cursor-not-allowed':
+                      activeConversation.isExpired || !newMessage.trim() || isSending,
+                  },
+                ]"
+                :disabled="activeConversation.isExpired || !newMessage.trim() || isSending"
                 @click="handleSendMessage"
               >
                 <svg
@@ -656,6 +735,40 @@ onUnmounted(() => {
             </div>
           </div>
         </template>
+
+        <div
+          v-else-if="error"
+          class="flex-1 flex flex-col items-center justify-center bg-cream text-center px-6"
+        >
+          <div
+            class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-cinnamon-ice/20 text-cinnabar-red/70"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" x2="12" y1="8" y2="12" />
+              <line x1="12" x2="12.01" y1="16" y2="16" />
+            </svg>
+          </div>
+          <h2 class="text-xl font-bold mb-2">Unable to open chat</h2>
+          <p class="text-sm text-noble-black/60 max-w-sm">
+            {{ error }}
+          </p>
+          <button
+            v-if="routeTransactionId"
+            class="mt-5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-noble-black shadow-sm border border-cinnamon-ice/30"
+            @click="handleCloseChat"
+          >
+            Back to inbox
+          </button>
+        </div>
 
         <!-- No chat selected -->
         <div

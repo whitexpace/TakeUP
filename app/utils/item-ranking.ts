@@ -1,6 +1,7 @@
 import type { ListedItem } from "../types/item-listing"
 
 export type TrendingMetric =
+  | "boostScore"
   | "bookingCount"
   | "viewCount"
   | "likeCount"
@@ -10,6 +11,7 @@ export type TrendingScoreWeights = Readonly<Record<TrendingMetric, number>>
 
 // Extend this config when new ranking signals are introduced.
 export const TRENDING_SCORE_WEIGHTS: TrendingScoreWeights = {
+  boostScore: 100,
   bookingCount: 1,
   viewCount: 0,
   likeCount: 0,
@@ -20,10 +22,11 @@ export const TRENDING_SCORE_WEIGHTS: TrendingScoreWeights = {
 const asNumber = (value: number | null | undefined) => (typeof value === "number" ? value : 0)
 
 export const getTrendingScore = (
-  item: Pick<ListedItem, "bookingCount" | "viewCount" | "likeCount">,
+  item: Pick<ListedItem, "boostScore" | "bookingCount" | "viewCount" | "likeCount">,
   weights: TrendingScoreWeights = TRENDING_SCORE_WEIGHTS,
 ) => {
   return (
+    asNumber(item.boostScore) * weights.boostScore +
     asNumber(item.bookingCount) * weights.bookingCount +
     asNumber(item.viewCount) * weights.viewCount +
     asNumber(item.likeCount) * weights.likeCount

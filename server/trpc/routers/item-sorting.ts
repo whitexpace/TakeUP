@@ -2,7 +2,14 @@ import type { Prisma } from "@prisma/client"
 
 type SortDirection = "asc" | "desc"
 
-type ItemSortField = "bookingCount" | "createdAt" | "id" | "viewCount" | "likeCount" | "isTrending"
+type ItemSortField =
+  | "boostScore"
+  | "bookingCount"
+  | "createdAt"
+  | "id"
+  | "viewCount"
+  | "likeCount"
+  | "isTrending"
 
 type SortCriterion = {
   field: ItemSortField
@@ -16,7 +23,10 @@ type ItemSortStrategy = {
 
 // Keep ranking criteria config-driven so future score factors can be added in one place.
 export const DEFAULT_ITEM_SORT_STRATEGY: Readonly<ItemSortStrategy> = {
-  trendingFactors: [{ field: "bookingCount", direction: "desc" }],
+  trendingFactors: [
+    { field: "boostScore", direction: "desc" },
+    { field: "bookingCount", direction: "desc" },
+  ],
   tieBreakers: [
     { field: "createdAt", direction: "desc" },
     { field: "id", direction: "desc" },

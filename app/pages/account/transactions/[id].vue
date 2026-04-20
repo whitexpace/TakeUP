@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { onBeforeUnmount } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
 import type { ReviewType } from "../../../../shared/schemas/review"
+import { isChatAvailableForBookingStatus } from "../../../../shared/chat-rules"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
 
 definePageMeta({
@@ -21,6 +23,7 @@ type AuthMeResponse = {
 }
 
 const route = useRoute()
+const router = useRouter()
 const bookingId = computed(() => {
   const id = route.params.id
   return Array.isArray(id) ? (id[0] ?? "") : (id ?? "")
@@ -50,6 +53,32 @@ if (error.value) {
   throw error.value
 }
 
+const { data: reviewState, refresh: refreshReviewState } = await useAsyncData(
+  () => `booking-review:${bookingId.value || "missing"}`,
+  async () => {
+    if (!bookingId.value) {
+      return {
+        canSubmit: false,
+        review: null,
+        transactionId: null,
+      }
+    }
+
+    return await $fetch<{
+      canSubmit: boolean
+      transactionId: string | null
+      review: null | {
+        id: string
+        rating: number
+        reviewText: string | null
+        isAnonymous: boolean
+        createdAt: string | Date
+      }
+    }>(`/api/reviews/booking/${bookingId.value}`)
+  },
+  { watch: [bookingId] },
+)
+
 const booking = computed(() => {
   if (!data.value) {
     throw createError({
@@ -69,6 +98,10 @@ const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
 const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
+const canOpenChat = computed(
+  () =>
+    Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
+)
 
 const mappedStatus = computed(() => {
   switch (booking.value.status) {
@@ -213,10 +246,121 @@ const isSubmittingRebuttal = ref(false)
 const rebuttalText = ref("")
 const rebuttalNotes = ref("")
 const rebuttalValidationMessage = ref("")
+const isSubmittingReview = ref(false)
+const reviewErrorMessage = ref("")
+const reviewSuccessMessage = ref("")
+const showRewardPopup = ref(false)
+let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
+const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
+
+type SubmittedReviewPayload = {
+  transactionId: string
+  reviewType: ReviewType
+  currentUserRole: "BORROWER" | "LENDER"
+  itemId: string | null
+}
+
+const reviewForm = reactive({
+  rating: 5,
+  reviewText: "",
+  isAnonymous: false,
+})
+const canSubmitReview = computed(() => reviewState.value?.canSubmit ?? false)
+const currentUserReview = computed(() => reviewState.value?.review ?? null)
 
 const handleReturn = () => {
   actionErrorMessage.value = ""
   isReturnModalOpen.value = true
+}
+
+const isEarlyReturnEligible = computed(() => {
+  if (isLender.value || booking.value.status !== "CONFIRMED") return false
+  const now = new Date()
+  const end = new Date(booking.value.endDate)
+  return now < end
+})
+
+interface EarlyReturnPreviewData {
+  refund: {
+    eligible: boolean
+    totalPaidAmount: number
+    nonRefundableFees: number
+    refundableRentalAmount: number
+    usedDurationMs: number
+    unusedDurationMs: number
+    totalDurationMs: number
+    usagePercentage: number
+    unusedRentalValue: number
+    penaltyAmount: number
+    refundAmount: number
+    currency: string
+    reason?: string
+  }
+  actualReturnTime: string | Date
+}
+
+const isEarlyReturnModalOpen = ref(false)
+const earlyReturnPreviewData = ref<EarlyReturnPreviewData | null>(null)
+const isFetchingPreview = ref(false)
+
+const handleEarlyReturn = async () => {
+  actionErrorMessage.value = ""
+  isFetchingPreview.value = true
+  try {
+    const data = await $fetch<EarlyReturnPreviewData>(
+      `/api/bookings/${booking.value.id}/early-return-preview`,
+    )
+    earlyReturnPreviewData.value = data
+    isEarlyReturnModalOpen.value = true
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    actionErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to fetch early return preview."
+  } finally {
+    isFetchingPreview.value = false
+  }
+}
+
+const confirmEarlyReturn = async () => {
+  isSubmittingReturn.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+  try {
+    await $fetch(`/api/bookings/${booking.value.id}/early-return`, {
+      method: "POST",
+      body: { returnReason: "Early return initiated by borrower" },
+    })
+    await refresh()
+    isEarlyReturnModalOpen.value = false
+    isSuccessModalOpen.value = true
+    actionSuccessMessage.value = "Early return processed. The lender was notified."
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    actionErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to process early return right now."
+  } finally {
+    isSubmittingReturn.value = false
+  }
 }
 
 const confirmReturn = async () => {
@@ -483,6 +627,13 @@ const submitRebuttal = async () => {
   } finally {
     isSubmittingRebuttal.value = false
   }
+const openChat = async () => {
+  if (!booking.value.transactionId || !canOpenChat.value) return
+
+  await router.push({
+    path: "/chat",
+    query: { transactionId: booking.value.transactionId },
+  })
 }
 
 const reviewCounterpartName = computed(() => {
@@ -521,10 +672,100 @@ const closeReviewModal = () => {
   selectedReviewType.value = null
 }
 
-const handleReviewSubmitted = async () => {
+const triggerRewardPopup = () => {
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
+  }
+
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(REVIEW_REWARD_POPUP_STORAGE_KEY, "1")
+  }
+
+  showRewardPopup.value = true
+  rewardPopupTimeout = setTimeout(() => {
+    showRewardPopup.value = false
+    rewardPopupTimeout = null
+  }, 1800)
+}
+
+const shouldShowRewardPopup = (payload: SubmittedReviewPayload) => {
+  if (payload.currentUserRole === "LENDER") {
+    return true
+  }
+
+  const requiredTypes: ReviewType[] = ["LENDER_REVIEW"]
+  if (payload.itemId) {
+    requiredTypes.push("ITEM_REVIEW")
+  }
+
+  return requiredTypes.every((reviewType) => {
+    if (reviewType === payload.reviewType) {
+      return true
+    }
+
+    return (
+      booking.value.reviewState.actions.find((action) => action.reviewType === reviewType)
+        ?.hasSubmitted ?? false
+    )
+  })
+}
+
+const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
+  if (shouldShowRewardPopup(payload)) {
+    triggerRewardPopup()
+  }
+
   await refresh()
   actionSuccessMessage.value = "Thanks for your feedback. Your review is now visible here."
 }
+
+const submitReview = async () => {
+  isSubmittingReview.value = true
+  reviewErrorMessage.value = ""
+  reviewSuccessMessage.value = ""
+
+  try {
+    await $fetch("/api/reviews", {
+      method: "POST",
+      body: {
+        bookingId: booking.value.id,
+        rating: reviewForm.rating,
+        reviewText: reviewForm.reviewText,
+        isAnonymous: reviewForm.isAnonymous,
+      },
+    })
+
+    reviewSuccessMessage.value = "Review submitted. Your rewards bonus has been processed."
+    reviewForm.rating = 5
+    reviewForm.reviewText = ""
+    reviewForm.isAnonymous = false
+    await Promise.all([refreshReviewState(), refresh()])
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+          message?: string
+        }
+      }
+    )?.data
+
+    reviewErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      errorData?.message ??
+      "Unable to submit your review right now."
+  } finally {
+    isSubmittingReview.value = false
+  }
+}
+
+onBeforeUnmount(() => {
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
+  }
+})
 </script>
 
 <template>
@@ -690,13 +931,29 @@ const handleReviewSubmitted = async () => {
               </button>
             </div>
 
-            <!-- Borrower Action: Return Item -->
+            <!-- Borrower Action: Return Item / Early Return -->
             <button
               v-else-if="!isLender && booking.status === 'CONFIRMED'"
-              class="bg-burning-orange text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-estate transition-colors"
-              @click="handleReturn"
+              :disabled="isFetchingPreview"
+              class="flex items-center justify-center gap-2 bg-burning-orange text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-estate transition-colors disabled:opacity-50"
+              @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
             >
-              Return Item
+              <span v-if="isFetchingPreview" class="animate-spin">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </span>
+              <span>{{ isEarlyReturnEligible ? "Early Return" : "Return Item" }}</span>
             </button>
 
             <button
@@ -803,13 +1060,32 @@ const handleReviewSubmitted = async () => {
               <span>Service Fee</span>
               <span class="font-bold">{{ formatPeso(booking.platformCommission) }}</span>
             </div>
+            <div
+              v-if="booking.refundAmount > 0"
+              class="flex justify-between items-center text-green-700 font-medium"
+            >
+              <div class="flex items-center gap-1.5">
+                <span>Early Return Refund</span>
+                <span class="text-[10px] bg-green-100 px-1.5 py-0.5 rounded text-green-800"
+                  >PROCESSED</span
+                >
+              </div>
+              <span>-{{ formatPeso(booking.refundAmount) }}</span>
+            </div>
             <div class="flex justify-between items-center pt-3 border-t border-cinnamon-ice/30">
               <span class="text-lg font-bold text-noble-black">{{
-                isLender ? "Total Earnings" : "Total Paid"
+                isLender
+                  ? booking.refundAmount > 0
+                    ? "Total Earnings (Adjusted)"
+                    : "Total Earnings"
+                  : booking.refundAmount > 0
+                    ? "Total Paid (Adjusted)"
+                    : "Total Paid"
               }}</span>
               <span class="text-2xl font-bold text-burning-orange">{{
                 formatPeso(
-                  isLender ? booking.totalFee - booking.platformCommission : booking.totalFee,
+                  (isLender ? booking.totalFee - booking.platformCommission : booking.totalFee) -
+                    (booking.refundAmount || 0),
                 )
               }}</span>
             </div>
@@ -887,12 +1163,13 @@ const handleReviewSubmitted = async () => {
                 </div>
               </div>
             </div>
-            <a
-              :href="`mailto:${isLender ? booking.borrower.user.email : booking.lender.user.email}`"
-              class="w-10 h-10 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
+            <button
+              v-if="canOpenChat"
+              class="inline-flex items-center gap-2 shrink-0 rounded-2xl bg-blue-estate px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-burning-orange transition-colors"
+              @click="openChat"
             >
               <svg
-                class="w-5 h-5"
+                class="w-4 h-4"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -905,7 +1182,8 @@ const handleReviewSubmitted = async () => {
                   stroke-linejoin="round"
                 />
               </svg>
-            </a>
+              Chat
+            </button>
           </div>
         </section>
 
@@ -939,7 +1217,7 @@ const handleReviewSubmitted = async () => {
 
           <TransactionReviewList
             title="Transaction Reviews"
-            :reviews="booking.reviews"
+            :reviews="booking.reviews as any"
             empty-message="No reviews have been submitted for this transaction yet."
           />
         </section>
@@ -1098,6 +1376,83 @@ const handleReviewSubmitted = async () => {
       </div>
     </template>
 
+    <section
+      v-if="booking.status === 'COMPLETED'"
+      class="mt-6 rounded-[24px] border border-cinnamon-ice bg-cream p-6"
+    >
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-noble-black">Review and Bonus</h2>
+          <p class="text-sm text-noble-black/60">
+            Submitting a review earns bonus points regardless of the star rating.
+          </p>
+        </div>
+      </div>
+
+      <p v-if="reviewSuccessMessage" class="mt-4 text-sm font-medium text-emerald-700">
+        {{ reviewSuccessMessage }}
+      </p>
+      <p v-if="reviewErrorMessage" class="mt-4 text-sm font-medium text-red-600">
+        {{ reviewErrorMessage }}
+      </p>
+
+      <div
+        v-if="currentUserReview"
+        class="mt-5 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4"
+      >
+        <p class="text-sm font-semibold text-neutral-800">Your review</p>
+        <p class="mt-2 text-sm text-neutral-800/70">Rating: {{ currentUserReview.rating }}/5</p>
+        <p v-if="currentUserReview.reviewText" class="mt-2 text-sm text-neutral-800/70">
+          {{ currentUserReview.reviewText }}
+        </p>
+      </div>
+
+      <form v-else-if="canSubmitReview" class="mt-5 space-y-4" @submit.prevent="submitReview">
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-neutral-800">Your rating</label>
+          <select
+            v-model="reviewForm.rating"
+            class="h-11 w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
+          >
+            <option v-for="rating in [5, 4, 3, 2, 1]" :key="rating" :value="rating">
+              {{ rating }} star{{ rating === 1 ? "" : "s" }}
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-neutral-800">Optional review</label>
+          <textarea
+            v-model="reviewForm.reviewText"
+            rows="4"
+            class="w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 py-3 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
+            placeholder="Share what went well, what could improve, or anything future borrowers/lenders should know."
+          />
+        </div>
+
+        <label class="flex items-center gap-2 text-sm text-neutral-800/70">
+          <input
+            v-model="reviewForm.isAnonymous"
+            type="checkbox"
+            class="rounded border-cinnamon-ice"
+          />
+          Submit anonymously
+        </label>
+
+        <button
+          :disabled="isSubmittingReview"
+          type="submit"
+          class="inline-flex items-center rounded-full bg-burning-orange px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-burning-orange/90 disabled:cursor-not-allowed disabled:bg-burning-orange/40"
+        >
+          {{ isSubmittingReview ? "Submitting..." : "Submit Review" }}
+        </button>
+      </form>
+
+      <p v-else class="mt-5 text-sm text-neutral-800/55">
+        Review submission is not available for this transaction.
+      </p>
+    </section>
+
     <!-- Return Confirmation UI (Modal) -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
@@ -1109,7 +1464,7 @@ const handleReviewSubmitted = async () => {
     >
       <div
         v-if="isReturnModalOpen"
-        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
       >
         <!-- Backdrop -->
         <div
@@ -1193,7 +1548,7 @@ const handleReviewSubmitted = async () => {
     >
       <div
         v-if="isSuccessModalOpen"
-        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
       >
         <!-- Backdrop -->
         <div
@@ -1358,6 +1713,155 @@ const handleReviewSubmitted = async () => {
                 @click="rebuttalModalStep = 'form'"
               >
                 Back
+        v-if="isEarlyReturnModalOpen"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4 overflow-y-auto"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="isEarlyReturnModalOpen = false"
+        ></div>
+
+        <!-- Modal -->
+        <div
+          class="relative bg-white rounded-[32px] w-full max-w-lg p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+        >
+          <div class="text-center mb-6">
+            <h3 class="text-2xl font-bold text-noble-black mb-2">Early Return</h3>
+            <p class="text-noble-black/60 text-sm">
+              Review your partial refund for returning the item earlier than scheduled.
+            </p>
+          </div>
+
+          <div v-if="earlyReturnPreviewData" class="space-y-6">
+            <!-- Unified Refund Summary Card -->
+            <div class="bg-cream rounded-[32px] p-8 border border-cinnamon-ice/30">
+              <div class="space-y-6">
+                <!-- Step 1: The Base -->
+                <div class="flex justify-between items-center">
+                  <div>
+                    <span class="text-sm font-bold text-noble-black">Rental Value</span>
+                    <p class="text-[11px] text-noble-black/40 italic">
+                      Excluding non-refundable fees
+                    </p>
+                  </div>
+                  <span class="text-lg font-bold text-noble-black">{{
+                    formatPeso(earlyReturnPreviewData.refund.refundableRentalAmount)
+                  }}</span>
+                </div>
+
+                <!-- Step 2: The Flow -->
+                <div class="relative pl-6 border-l-2 border-cinnamon-ice/30 py-1 space-y-6">
+                  <!-- Time Factor -->
+                  <div class="flex justify-between items-start text-[13px]">
+                    <div>
+                      <span class="text-noble-black/70 font-medium block">Unused Value</span>
+                      <span class="text-[11px] text-noble-black/40">
+                        Used {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
+                        of booking duration
+                      </span>
+                    </div>
+                    <span class="text-noble-black/70">{{
+                      formatPeso(earlyReturnPreviewData.refund.unusedRentalValue)
+                    }}</span>
+                  </div>
+
+                  <!-- Policy Factor -->
+                  <div class="flex justify-between items-start text-[13px]">
+                    <div>
+                      <span class="text-noble-black/70 font-medium block">Early Return Policy</span>
+                      <span class="text-[11px] text-noble-black/40"
+                        >30% adjustment for reserved availability</span
+                      >
+                    </div>
+                    <span class="text-cinnabar-red font-medium"
+                      >-{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Step 3: The Result -->
+                <div class="pt-6 border-t border-cinnamon-ice/30 flex justify-between items-center">
+                  <span class="text-lg font-bold text-noble-black">Total Refund</span>
+                  <span class="text-3xl font-black text-burning-orange">{{
+                    formatPeso(earlyReturnPreviewData.refund.refundAmount)
+                  }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Validation/Info Box -->
+            <div class="px-2">
+              <div
+                v-if="!earlyReturnPreviewData.refund.eligible"
+                class="bg-cinnabar-red/[0.03] rounded-2xl p-4 border border-cinnabar-red/10"
+              >
+                <div class="flex gap-3">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#e11d48"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="shrink-0 mt-0.5"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <div>
+                    <p class="text-sm font-bold text-cinnabar-red">No refund applicable</p>
+                    <p class="text-xs text-cinnabar-red/60 leading-relaxed mt-1 italic">
+                      {{
+                        earlyReturnPreviewData.refund.reason ||
+                        "Refunds are not available if 70% or more of the booking duration has already been used."
+                      }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p
+                v-else
+                class="text-[11px] text-noble-black/40 text-center italic px-4 leading-relaxed"
+              >
+                By confirming, you agree to the early return policy. Platform fees are
+                non-refundable.
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-3 pt-2">
+              <button
+                :disabled="isSubmittingReturn"
+                class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
+                @click="confirmEarlyReturn"
+              >
+                <span v-if="isSubmittingReturn" class="animate-spin mr-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                </span>
+                Confirm Early Return
+              </button>
+              <button
+                class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
+                @click="isEarlyReturnModalOpen = false"
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -1371,6 +1875,25 @@ const handleReviewSubmitted = async () => {
       @close="closeReviewModal"
       @submitted="handleReviewSubmitted"
     />
+
+    <Transition
+      enter-active-class="transition duration-500 ease-out"
+      enter-from-class="opacity-0 scale-75 translate-y-3"
+      enter-to-class="opacity-100 scale-100 translate-y-0"
+      leave-active-class="transition duration-300 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-90"
+    >
+      <div
+        v-if="showRewardPopup"
+        class="pointer-events-none fixed inset-0 z-[140] flex items-center justify-center px-4"
+      >
+        <div class="rounded-full bg-emerald-500 px-7 py-4 text-center text-white shadow-2xl">
+          <p class="text-3xl font-black tracking-tight">+5 points</p>
+          <p class="text-sm font-medium text-white/90">Review bonus earned</p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
