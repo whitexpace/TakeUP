@@ -1,11 +1,10 @@
 import { TRPCError } from "@trpc/server"
-import {
-  DisputeStatus as PrismaDisputeStatus,
-  type ItemCategory,
-  type ItemCondition,
-  type ItemStatus,
-  type Prisma,
-  type TransactionStatus,
+import type {
+  ItemCategory,
+  ItemCondition,
+  ItemStatus,
+  Prisma,
+  TransactionStatus,
 } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
@@ -32,6 +31,7 @@ import { expireActiveBoosts } from "../../utils/rewards"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
+import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
 
 const SEARCH_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
@@ -97,12 +97,6 @@ const itemVisibilityBookings = {
   },
 } satisfies Prisma.BookingFindManyArgs
 
-const ACTIVE_TRANSACTION_DISPUTE_STATUSES = [
-  PrismaDisputeStatus.OPEN,
-  PrismaDisputeStatus.UNDER_REVIEW,
-  PrismaDisputeStatus.APPEALED,
-] as const
-
 const TERMINAL_TRANSACTION_STATUSES = [
   "COMPLETED",
   "CANCELLED",
@@ -117,7 +111,7 @@ const myListingsWithDisputes = {
       disputes: {
         where: {
           status: {
-            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+            in: [...ACTIVE_DISPUTE_STATUSES],
           },
         },
         select: {
@@ -1234,7 +1228,7 @@ export const itemRouter = router({
       disputes: {
         some: {
           status: {
-            in: [...ACTIVE_TRANSACTION_DISPUTE_STATUSES],
+            in: [...ACTIVE_DISPUTE_STATUSES],
           },
         },
       },

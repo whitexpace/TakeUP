@@ -15,15 +15,24 @@ type AccountLink = {
   to: string
 }
 
-const links: AccountLink[] = [
+const accountType = ref<string | null>(null)
+
+const baseLinks: AccountLink[] = [
   { label: "Account Information", to: "/account" },
   { label: "My Wallet", to: "/account/wallet" },
   { label: "My Transactions", to: "/account/transactions" },
+  { label: "Disputes", to: "/account/disputes" },
   { label: "My Listings", to: "/account/listings" },
   { label: "My Listing Analytics", to: "/account/analytics" },
   { label: "My Rewards", to: "/account/rewards" },
   { label: "My Reviews", to: "/account/reviews" },
 ]
+
+const links = computed<AccountLink[]>(() =>
+  accountType.value === "ADMIN"
+    ? [...baseLinks, { label: "Dispute Queue", to: "/account/admin/disputes" }]
+    : baseLinks,
+)
 
 const isActive = (link: AccountLink) => {
   if (link.to === "/account") return route.path === "/account"
@@ -37,6 +46,15 @@ const isActive = (link: AccountLink) => {
 }
 
 const supabase = useSupabaseClient()
+
+const loadAccountType = async () => {
+  try {
+    const response = await $fetch<{ user: { accountType: string | null } }>("/api/auth/me")
+    accountType.value = response.user.accountType
+  } catch {
+    accountType.value = null
+  }
+}
 
 const openLogoutModal = () => {
   showLogoutModal.value = true
@@ -56,6 +74,7 @@ const confirmLogout = async () => {
 
 onMounted(() => {
   void loadNotifications()
+  void loadAccountType()
 })
 </script>
 

@@ -445,9 +445,80 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
   }
 }
 
-const handleDispute = () => {
-  // Placeholder for dispute logic
-  alert("Dispute filing will be available soon.")
+const latestDispute = computed(() => booking.value.latestDispute)
+const canRaiseDispute = computed(() => booking.value.canRaiseDispute)
+const disputeReportPath = computed(() =>
+  booking.value.transactionId
+    ? {
+        path: "/account/disputes",
+        query: {
+          tab: "report",
+          transaction: booking.value.transactionId,
+        },
+      }
+    : {
+        path: "/account/disputes",
+        query: {
+          tab: "report",
+        },
+      },
+)
+
+const disputeStatusLabel = computed(() => {
+  switch (latestDispute.value?.status) {
+    case "SUBMITTED":
+      return "Dispute under review"
+    case "OPEN":
+      return "Dispute open"
+    case "REJECTED":
+      return "Dispute rejected"
+    case "APPEALED":
+      return "Dispute appealed"
+    case "RESOLVED":
+      return "Dispute resolved"
+    default:
+      return "No dispute"
+  }
+})
+
+const disputeStatusToneClasses = computed(() => {
+  switch (latestDispute.value?.status) {
+    case "SUBMITTED":
+      return "bg-burning-orange/10 text-burning-orange border border-burning-orange/20"
+    case "OPEN":
+      return "bg-cinnabar-red/10 text-cinnabar-red border border-cinnabar-red/20"
+    case "REJECTED":
+      return "bg-noble-black/5 text-noble-black/70 border border-cinnamon-ice"
+    case "APPEALED":
+      return "bg-blue-estate/10 text-blue-estate border border-blue-estate/20"
+    case "RESOLVED":
+      return "bg-green-100 text-green-700 border border-green-200"
+    default:
+      return "bg-cream text-noble-black/60 border border-cinnamon-ice"
+  }
+})
+
+const disputeStatusDescription = computed(() => {
+  switch (latestDispute.value?.status) {
+    case "SUBMITTED":
+      return "Your concern has been submitted and is waiting for admin review."
+    case "OPEN":
+      return "An admin approved this concern and opened a formal dispute."
+    case "REJECTED":
+      return "An admin reviewed this concern and did not open a dispute."
+    case "APPEALED":
+      return "Your appeal was submitted and is waiting for the next admin review."
+    case "RESOLVED":
+      return "This dispute was resolved after review."
+    default:
+      return "Your concern will be reviewed by an admin before a dispute is opened."
+  }
+})
+
+const handleDispute = async () => {
+  if (!canRaiseDispute.value) return
+  actionErrorMessage.value = ""
+  await navigateTo(disputeReportPath.value)
 }
 
 const openChat = async () => {
@@ -997,28 +1068,105 @@ const submitReview = async () => {
           />
         </section>
 
-        <!-- File Dispute Button -->
-        <button
-          class="w-full flex items-center justify-center gap-2 bg-cinnabar-red text-white font-bold py-4 hover:bg-cinnabar-red/90 rounded-2xl transition-colors mt-4"
-          @click="handleDispute"
+        <section
+          v-if="booking.transactionId || latestDispute"
+          class="bg-cream border border-cinnamon-ice rounded-3xl p-6"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-            <line x1="12" x2="12" y1="9" y2="13" />
-            <line x1="12" x2="12.01" y1="17" y2="17" />
-          </svg>
-          File Dispute
-        </button>
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 class="text-lg font-bold text-noble-black">Concerns & Disputes</h2>
+              <p class="mt-1 text-sm text-noble-black/60">
+                {{
+                  latestDispute
+                    ? disputeStatusDescription
+                    : "Raise a concern if this transaction needs admin review."
+                }}
+              </p>
+            </div>
+
+            <span
+              v-if="latestDispute"
+              class="inline-flex w-fit items-center rounded-full px-4 py-2 text-sm font-bold"
+              :class="disputeStatusToneClasses"
+            >
+              {{ disputeStatusLabel }}
+            </span>
+          </div>
+
+          <div v-if="latestDispute" class="mt-5 space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Reason
+                </p>
+                <p class="mt-2 text-sm font-semibold text-noble-black">
+                  {{ latestDispute.reason }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Submitted
+                </p>
+                <p class="mt-2 text-sm text-noble-black/80">
+                  {{ formatDateTime(latestDispute.createdAt) }}
+                </p>
+              </div>
+            </div>
+
+            <div v-if="latestDispute.description">
+              <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                Description
+              </p>
+              <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
+                {{ latestDispute.description }}
+              </p>
+            </div>
+
+            <div v-if="latestDispute.reviewedAt" class="rounded-2xl bg-cream p-4">
+              <p class="text-sm font-semibold text-noble-black">
+                Reviewed on {{ formatDateTime(latestDispute.reviewedAt) }}
+              </p>
+              <p v-if="latestDispute.reviewedBy" class="mt-1 text-sm text-noble-black/60">
+                Admin reviewer: {{ latestDispute.reviewedBy.firstName }}
+                {{ latestDispute.reviewedBy.lastName }}
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p v-if="latestDispute?.status === 'SUBMITTED'" class="text-sm text-noble-black/60">
+              Resubmission is disabled while this concern is under review.
+            </p>
+            <p v-else-if="booking.transactionId" class="text-sm text-noble-black/60">
+              Your concern will be reviewed by an admin before a dispute is opened.
+            </p>
+
+            <button
+              v-if="canRaiseDispute"
+              class="inline-flex items-center justify-center gap-2 rounded-2xl bg-cinnabar-red px-6 py-3.5 font-bold text-white transition-colors hover:bg-cinnabar-red/90"
+              @click="handleDispute"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+                />
+                <line x1="12" x2="12" y1="9" y2="13" />
+                <line x1="12" x2="12.01" y1="17" y2="17" />
+              </svg>
+              Report an Issue
+            </button>
+          </div>
+        </section>
       </div>
     </template>
 
