@@ -48,7 +48,7 @@ type MockStore = {
       status: DisputeStatus
       outcome: DisputeOutcome | null
       createdAt: Date
-      resolvedAt: Date | null
+      reviewedAt: Date | null
     }>
     reviews: Array<{ id: string }>
   }>
@@ -421,7 +421,7 @@ describe("rewards utility", () => {
           status: DisputeStatus.OPEN,
           outcome: null,
           createdAt: new Date("2026-04-18T00:00:00.000Z"),
-          resolvedAt: null,
+          reviewedAt: null,
         },
       ],
       reviews: [],
@@ -443,7 +443,7 @@ describe("rewards utility", () => {
       ...dispute,
       status: DisputeStatus.RESOLVED,
       outcome: DisputeOutcome.BORROWER_AT_FAULT,
-      resolvedAt: new Date("2026-04-18T01:00:00.000Z"),
+      reviewedAt: new Date("2026-04-18T01:00:00.000Z"),
     }
 
     await processTransactionRewards(prisma, "txn-2")
@@ -484,7 +484,7 @@ describe("rewards utility", () => {
           status: DisputeStatus.RESOLVED,
           outcome: DisputeOutcome.SHARED_FAULT,
           createdAt: new Date("2026-04-18T00:00:00.000Z"),
-          resolvedAt: new Date("2026-04-18T02:00:00.000Z"),
+          reviewedAt: new Date("2026-04-18T02:00:00.000Z"),
         },
       ],
       reviews: [{ id: "review-1" }],

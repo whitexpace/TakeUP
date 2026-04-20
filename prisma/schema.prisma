@@ -569,17 +569,17 @@ model RequestOffer {
 }
 
 model TransactionDispute {
-  id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  transactionId String        @map("transaction_id")
-  raisedById    String        @map("filed_by_user_id")
+  id            String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId String          @map("transaction_id")
+  raisedById    String          @map("filed_by_user_id")
   reason        String
   description   String?
-  claimedAmount Decimal       @default(0) @map("claimed_amount") @db.Decimal(12, 2)
-  status        DisputeStatus @default(SUBMITTED)
-  reviewedById  String?       @map("admin_id")
+  claimedAmount Decimal         @default(0) @map("claimed_amount") @db.Decimal(12, 2)
+  status        DisputeStatus   @default(SUBMITTED)
+  reviewedById  String?         @map("admin_id")
   resolution    String?
-  reviewedAt    DateTime?     @map("resolved_at") @db.Timestamptz(6)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  reviewedAt    DateTime?       @map("resolved_at") @db.Timestamptz(6)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   outcome       DisputeOutcome?
 
   reviewedBy  User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
