@@ -731,6 +731,18 @@ const buildDisputeResolvedNotification = (input: {
     : "/account/disputes?tab=disputes",
 })
 
+const buildDisputeRebuttalSubmittedNotification = (input: {
+  transactionReference: string
+  bookingId: string | null
+}) => ({
+  type: "DISPUTE_REBUTTAL_SUBMITTED" as const,
+  title: "A rebuttal was submitted",
+  body: `A rebuttal was submitted for transaction ${input.transactionReference}.`,
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}`
+    : "/account/disputes?tab=disputes",
+})
+
 const validateDisputeActions = (actions: DisputeActionInput[], allowedTargetIds: Set<string>) => {
   const seen = new Set<string>()
   const restrictionTypesByTarget = new Map<string, Set<DisputeActionInput["type"]>>()
