@@ -74,7 +74,6 @@ export const toUserFacingDisputeStatus = (status: string): ApiDisputeStatus => {
   if (DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED && apiStatus === "SUBMITTED") {
     return "OPEN"
   }
-
   return apiStatus
 }
 

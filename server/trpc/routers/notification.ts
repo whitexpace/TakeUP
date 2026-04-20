@@ -78,7 +78,6 @@ const normalizeNotificationContent = (notification: {
       body: `${actorName} submitted a rebuttal. Open the transaction to review their response.`,
     }
   }
-
   return {
     title: notification.title,
     body: notification.body,
