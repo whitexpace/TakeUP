@@ -1,5 +1,11 @@
+export type AppHeaderNotificationType =
+  | "BOOKING_RETURN_REQUESTED"
+  | "DISPUTE_SUBMITTED"
+  | "DISPUTE_OPENED"
+
 export type AppHeaderNotification = {
   id: string | number
+  type: AppHeaderNotificationType
   title: string
   body: string
   createdAt: Date

@@ -19,6 +19,14 @@ export const ACTIVE_DISPUTE_STATUSES = [
   APPEALED_RUNTIME_STATUS,
 ] as const
 
+// Temporary test switch: treat legacy submitted concerns as opened disputes so the
+// counterparty rebuttal flow can be exercised without the admin approval step.
+export const DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED = true
+
+export const REBUTTABLE_DISPUTE_STATUSES = DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED
+  ? [OPEN_DISPUTE_STATUS, SUBMITTED_DISPUTE_STATUS]
+  : [OPEN_DISPUTE_STATUS]
+
 export const isActiveDisputeStatus = (status: string) =>
   ACTIVE_DISPUTE_STATUSES.includes(status as (typeof ACTIVE_DISPUTE_STATUSES)[number])
 
@@ -57,3 +65,19 @@ export const toApiDisputeStatus = (status: string): ApiDisputeStatus => {
 
   return "SUBMITTED"
 }
+
+export const toUserFacingDisputeStatus = (status: string): ApiDisputeStatus => {
+  const apiStatus = toApiDisputeStatus(status)
+
+  if (DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED && apiStatus === "SUBMITTED") {
+    return "OPEN"
+  }
+
+  return apiStatus
+}
+
+export const isCounterpartyVisibleDisputeStatus = (status: string) =>
+  DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED || toApiDisputeStatus(status) !== "SUBMITTED"
+
+export const isRebuttalEnabledDisputeStatus = (status: string) =>
+  REBUTTABLE_DISPUTE_STATUSES.includes(status as (typeof REBUTTABLE_DISPUTE_STATUSES)[number])

@@ -6,6 +6,78 @@ import {
   notificationIdSchema,
   type AppNotificationType,
 } from "../../../shared/schemas/notification"
+import { DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED } from "../../utils/dispute-status"
+
+const formatActorName = (
+  actorUser:
+    | {
+        firstName: string
+        lastName: string
+      }
+    | null
+    | undefined,
+) => {
+  if (!actorUser?.firstName) {
+    return "The other user"
+  }
+
+  const lastInitial = actorUser.lastName?.[0]
+  return lastInitial ? `${actorUser.firstName} ${lastInitial}.` : actorUser.firstName
+}
+
+const extractDisputeReason = (body: string) => {
+  const match = body.match(
+    /Reason:\s*(.+?)(?=\s(?:Details:|Requested resolution:|Transaction:|Other party:|Summary:|You may submit|Admin review|$))/i,
+  )
+
+  return match?.[1]?.trim() || null
+}
+
+const normalizeNotificationContent = (notification: {
+  type: AppNotificationType
+  title: string
+  body: string
+  actorUser?: {
+    firstName: string
+    lastName: string
+  } | null
+}) => {
+  if (notification.type === "DISPUTE_SUBMITTED" || notification.type === "DISPUTE_OPENED") {
+    const actorName = formatActorName(notification.actorUser)
+    const reason = extractDisputeReason(notification.body)
+
+    return {
+      title: "New dispute on your transaction",
+      body: reason
+        ? `${actorName} reported "${reason}". Review the dispute and submit your rebuttal if needed.`
+        : `${actorName} reported an issue with one of your transactions. Review the dispute and submit your rebuttal if needed.`,
+    }
+  }
+
+  if (notification.type === "BOOKING_RETURN_REQUESTED") {
+    return {
+      title: "Item marked as returned",
+      body: "The borrower marked this item as returned. Open the transaction to confirm receipt.",
+    }
+  }
+
+  return {
+    title: notification.title,
+    body: notification.body,
+  }
+}
+
+const withRebuttalActionPath = (actionPath: string | null) => {
+  if (!actionPath?.startsWith("/account/transactions/")) {
+    return actionPath
+  }
+
+  const [pathname, queryString = ""] = actionPath.split("?", 2)
+  const searchParams = new URLSearchParams(queryString)
+  searchParams.set("action", "rebuttal")
+
+  return `${pathname}?${searchParams.toString()}`
+}
 
 const mapNotification = (notification: {
   id: string
@@ -15,12 +87,19 @@ const mapNotification = (notification: {
   actionPath: string | null
   readAt: Date | null
   createdAt: Date
+  actorUser?: {
+    firstName: string
+    lastName: string
+  } | null
 }) => ({
   id: notification.id,
   type: notification.type,
-  title: notification.title,
-  body: notification.body,
-  actionPath: notification.actionPath,
+  ...normalizeNotificationContent(notification),
+  actionPath:
+    notification.type === "DISPUTE_OPENED" ||
+    (DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED && notification.type === "DISPUTE_SUBMITTED")
+      ? withRebuttalActionPath(notification.actionPath)
+      : notification.actionPath,
   read: notification.readAt !== null,
   createdAt: notification.createdAt,
 })
@@ -39,6 +118,12 @@ export const notificationRouter = router({
         actionPath: true,
         readAt: true,
         createdAt: true,
+        actorUser: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
       },
     })
 
@@ -79,6 +164,12 @@ export const notificationRouter = router({
         actionPath: true,
         readAt: true,
         createdAt: true,
+        actorUser: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
       },
     })
 

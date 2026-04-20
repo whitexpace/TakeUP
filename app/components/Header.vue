@@ -112,27 +112,58 @@ const toggleNotifications = () => {
   showNotifications.value = !showNotifications.value
 }
 
+const isAppHeaderNotification = (
+  notification: CommunityOfferNotification | AppHeaderNotification,
+): notification is AppHeaderNotification => "title" in notification
+
+const notificationPanelDescription = computed(() => {
+  const firstNotification = props.notifications[0]
+
+  if (!firstNotification) {
+    return "Latest updates on your account activity"
+  }
+
+  return isAppHeaderNotification(firstNotification)
+    ? "Updates on your bookings, returns, and disputes"
+    : "Offer updates for your request posts"
+})
+
+const notificationEmptyState = computed(() =>
+  isAccountSectionActive.value ? "No account notifications yet." : "No offer notifications yet.",
+)
+
 const getNotificationTitle = (notification: CommunityOfferNotification | AppHeaderNotification) => {
-  if ("title" in notification) return notification.title
+  if (isAppHeaderNotification(notification)) return notification.title
   return `${notification.actorName} offered ${notification.itemName}`
 }
 
 const getNotificationBody = (notification: CommunityOfferNotification | AppHeaderNotification) => {
-  if ("body" in notification) return notification.body
+  if (isAppHeaderNotification(notification)) return notification.body
   return notification.requestTitle
 }
 
 const getNotificationAccent = (
   notification: CommunityOfferNotification | AppHeaderNotification,
 ) => {
-  if ("title" in notification) return null
+  if (isAppHeaderNotification(notification)) {
+    switch (notification.type) {
+      case "DISPUTE_SUBMITTED":
+      case "DISPUTE_OPENED":
+        return "Review dispute"
+      case "BOOKING_RETURN_REQUESTED":
+        return "View return"
+      default:
+        return null
+    }
+  }
+
   return formatFee(notification.fee)
 }
 
 const getNotificationActionPath = (
   notification: CommunityOfferNotification | AppHeaderNotification,
 ) => {
-  if ("actionPath" in notification) return notification.actionPath ?? null
+  if (isAppHeaderNotification(notification)) return notification.actionPath ?? null
   return null
 }
 
@@ -302,7 +333,7 @@ onBeforeUnmount(() => {
                     Notifications
                   </p>
                   <p class="mt-1 text-[13px] text-noble-black/50">
-                    Offer updates for your request posts
+                    {{ notificationPanelDescription }}
                   </p>
                 </div>
 
@@ -334,7 +365,9 @@ onBeforeUnmount(() => {
                     {{ getNotificationTitle(notification) }}
                   </p>
                   <p class="mt-1 text-[13px] leading-relaxed text-noble-black/55">
-                    {{ getNotificationBody(notification) }}
+                    <span class="line-clamp-3">
+                      {{ getNotificationBody(notification) }}
+                    </span>
                   </p>
                   <div class="mt-3 flex items-center justify-between gap-3">
                     <span class="text-[12px] font-bold text-burning-orange">
@@ -351,7 +384,7 @@ onBeforeUnmount(() => {
                 v-else
                 class="rounded-[18px] border border-dashed border-cinnamon-ice/25 bg-cream/50 px-4 py-6 text-center text-[13px] leading-relaxed text-noble-black/45"
               >
-                No offer notifications yet.
+                {{ notificationEmptyState }}
               </div>
             </div>
           </transition>

@@ -31,7 +31,12 @@ import {
   mapTransactionReview,
   transactionReviewSelect,
 } from "../review-helpers"
-import { isActiveDisputeStatus, toApiDisputeStatus } from "../../utils/dispute-status"
+import {
+  isActiveDisputeStatus,
+  isCounterpartyVisibleDisputeStatus,
+  isRebuttalEnabledDisputeStatus,
+  toUserFacingDisputeStatus,
+} from "../../utils/dispute-status"
 import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
@@ -991,14 +996,20 @@ export const bookingRouter = router({
     const latestDispute = transaction?.disputes[0] ?? null
     const hasActiveDispute =
       transaction?.disputes.some((dispute) => isActiveDisputeStatus(dispute.status)) ?? false
+    const visibleLatestDispute =
+      latestDispute &&
+      (latestDispute.raisedById === ctx.user.id ||
+        isCounterpartyVisibleDisputeStatus(latestDispute.status))
+        ? latestDispute
+        : null
     const isWithinDisputeWindow =
       booking.status === bookingStatusSchema.enum.COMPLETED &&
       isDateWithinWindow(booking.completedAt, DISPUTE_REPORT_WINDOW_DAYS)
     const canSubmitRebuttal = Boolean(
-      latestDispute &&
-      toApiDisputeStatus(latestDispute.status) === "OPEN" &&
-      latestDispute.raisedById !== ctx.user.id &&
-      !latestDispute.rebuttalSubmittedAt,
+      visibleLatestDispute &&
+      isRebuttalEnabledDisputeStatus(visibleLatestDispute.status) &&
+      visibleLatestDispute.raisedById !== ctx.user.id &&
+      !visibleLatestDispute.rebuttalSubmittedAt,
     )
 
     return {
@@ -1008,42 +1019,46 @@ export const bookingRouter = router({
         Boolean(transaction?.id && (transaction.borrowerId || transaction.lenderId)) &&
         isWithinDisputeWindow &&
         !hasActiveDispute,
-      latestDispute: latestDispute
+      latestDispute: visibleLatestDispute
         ? {
-            id: latestDispute.id,
-            raisedById: latestDispute.raisedById,
-            reason: latestDispute.reason,
-            description: latestDispute.description,
-            status: toApiDisputeStatus(latestDispute.status),
-            createdAt: latestDispute.createdAt,
-            reviewedAt: latestDispute.reviewedAt,
-            rebuttalById: latestDispute.rebuttalById,
-            rebuttalText: latestDispute.rebuttalText,
-            rebuttalNotes: latestDispute.rebuttalNotes,
-            rebuttalSubmittedAt: latestDispute.rebuttalSubmittedAt,
-            rebuttalBy: latestDispute.rebuttalBy
+            id: visibleLatestDispute.id,
+            raisedById: visibleLatestDispute.raisedById,
+            reason: visibleLatestDispute.reason,
+            description: visibleLatestDispute.description,
+            status: toUserFacingDisputeStatus(visibleLatestDispute.status),
+            createdAt: visibleLatestDispute.createdAt,
+            reviewedAt: visibleLatestDispute.reviewedAt,
+            rebuttalById: visibleLatestDispute.rebuttalById,
+            rebuttalText: visibleLatestDispute.rebuttalText,
+            rebuttalNotes: visibleLatestDispute.rebuttalNotes,
+            rebuttalSubmittedAt: visibleLatestDispute.rebuttalSubmittedAt,
+            rebuttalBy: visibleLatestDispute.rebuttalBy
               ? {
-                  id: latestDispute.rebuttalBy.id,
-                  firstName: latestDispute.rebuttalBy.firstName,
-                  middleName: latestDispute.rebuttalBy.middleName,
-                  lastName: latestDispute.rebuttalBy.lastName,
+                  id: visibleLatestDispute.rebuttalBy.id,
+                  firstName: visibleLatestDispute.rebuttalBy.firstName,
+                  middleName: visibleLatestDispute.rebuttalBy.middleName,
+                  lastName: visibleLatestDispute.rebuttalBy.lastName,
                 }
               : null,
-            reviewedBy: latestDispute.reviewedBy
+            reviewedBy: visibleLatestDispute.reviewedBy
               ? {
-                  id: latestDispute.reviewedBy.id,
-                  firstName: latestDispute.reviewedBy.firstName,
-                  middleName: latestDispute.reviewedBy.middleName,
-                  lastName: latestDispute.reviewedBy.lastName,
+                  id: visibleLatestDispute.reviewedBy.id,
+                  firstName: visibleLatestDispute.reviewedBy.firstName,
+                  middleName: visibleLatestDispute.reviewedBy.middleName,
+                  lastName: visibleLatestDispute.reviewedBy.lastName,
                 }
               : null,
-            isActive: isActiveDisputeStatus(latestDispute.status),
-            hasRebuttal: Boolean(latestDispute.rebuttalSubmittedAt && latestDispute.rebuttalText),
+            isActive: isActiveDisputeStatus(visibleLatestDispute.status),
+            hasRebuttal: Boolean(
+              visibleLatestDispute.rebuttalSubmittedAt && visibleLatestDispute.rebuttalText,
+            ),
             canSubmitRebuttal,
           }
         : null,
       reviewState: buildTransactionReviewState({
-        status: transaction?.status ?? booking.status,
+        status: hasActiveDispute
+          ? bookingStatusSchema.enum.IN_DISPUTE
+          : (transaction?.status ?? booking.status),
         itemId: booking.itemId,
         borrowerId: transaction?.borrowerId ?? booking.borrowerId,
         lenderId: transaction?.lenderId ?? booking.lenderId,

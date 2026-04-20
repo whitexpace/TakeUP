@@ -466,6 +466,15 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
 const latestDispute = computed(() => booking.value.latestDispute)
 const canRaiseDispute = computed(() => booking.value.canRaiseDispute)
 const canSubmitRebuttal = computed(() => Boolean(latestDispute.value?.canSubmitRebuttal))
+const isLatestDisputeRaisedByCurrentUser = computed(
+  () => latestDispute.value?.raisedById === currentUserId.value,
+)
+const isReviewBlockedByDispute = computed(
+  () => booking.value.status === "COMPLETED" && !booking.value.reviewState.isCompleted,
+)
+const showReviewBonusSection = computed(
+  () => booking.value.status === "COMPLETED" && booking.value.reviewState.isCompleted,
+)
 const disputeReportPath = computed(() =>
   booking.value.transactionId
     ? {
@@ -520,19 +529,23 @@ const disputeStatusToneClasses = computed(() => {
 const disputeStatusDescription = computed(() => {
   switch (latestDispute.value?.status) {
     case "SUBMITTED":
-      return "Your concern has been submitted and is waiting for admin review."
+      return isLatestDisputeRaisedByCurrentUser.value
+        ? "Your concern was recorded and is being prepared for response."
+        : "A concern was recorded for this transaction."
     case "OPEN":
       return canSubmitRebuttal.value
-        ? "An admin approved this concern and opened a formal dispute. You may submit one rebuttal while review is in progress."
-        : "An admin approved this concern and opened a formal dispute."
+        ? "A dispute has been opened for this transaction. You may submit one rebuttal while review is in progress."
+        : "A dispute has been opened for this transaction."
     case "REJECTED":
-      return "An admin reviewed this concern and did not open a dispute."
+      return isLatestDisputeRaisedByCurrentUser.value
+        ? "Your concern was reviewed and the dispute was not opened."
+        : "This concern was reviewed and the dispute was not opened."
     case "APPEALED":
-      return "Your appeal was submitted and is waiting for the next admin review."
+      return "Your appeal was submitted and is waiting for the next review."
     case "RESOLVED":
       return "This dispute was resolved after review."
     default:
-      return "Your concern will be reviewed by an admin before a dispute is opened."
+      return "Raise a concern if this transaction needs dispute review."
   }
 })
 
@@ -673,6 +686,42 @@ const closeReviewModal = () => {
   isReviewModalOpen.value = false
   selectedReviewType.value = null
 }
+
+const clearRouteActionQuery = async () => {
+  const { action, ...remainingQuery } = route.query
+  if (action === undefined) return
+
+  await router.replace({
+    query: remainingQuery,
+  })
+}
+
+watch(
+  [() => route.query.action, latestDispute, canSubmitRebuttal],
+  async ([action, dispute, canRebut]) => {
+    if (action !== "rebuttal" || pending.value) return
+
+    if (!dispute) {
+      await clearRouteActionQuery()
+      return
+    }
+
+    if (canRebut) {
+      if (!isRebuttalModalOpen.value) {
+        openRebuttalModal()
+      }
+      await clearRouteActionQuery()
+      return
+    }
+
+    actionErrorMessage.value =
+      dispute.status === "OPEN"
+        ? "You cannot submit a rebuttal for this dispute."
+        : "Rebuttal is no longer available for this dispute."
+    await clearRouteActionQuery()
+  },
+  { immediate: true },
+)
 
 const triggerRewardPopup = () => {
   if (rewardPopupTimeout) {
@@ -1235,7 +1284,9 @@ onBeforeUnmount(() => {
                 {{
                   latestDispute
                     ? disputeStatusDescription
-                    : "Raise a concern if this transaction needs admin review."
+                    : isReviewBlockedByDispute
+                      ? "Review actions are unavailable while a dispute is in progress."
+                      : "Raise a concern if this transaction needs dispute review."
                 }}
               </p>
             </div>
@@ -1321,13 +1372,13 @@ onBeforeUnmount(() => {
 
           <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p v-if="latestDispute?.status === 'SUBMITTED'" class="text-sm text-noble-black/60">
-              Resubmission is disabled while this concern is under review.
+              This dispute is being prepared for response.
             </p>
             <p
               v-else-if="latestDispute?.status === 'OPEN' && latestDispute?.hasRebuttal"
               class="text-sm text-noble-black/60"
             >
-              Rebuttal submitted. Admin review is still in progress.
+              Rebuttal submitted. This dispute is still under review.
             </p>
             <p
               v-else-if="latestDispute?.status === 'OPEN' && canSubmitRebuttal"
@@ -1335,8 +1386,11 @@ onBeforeUnmount(() => {
             >
               You may submit one rebuttal while this dispute is open.
             </p>
+            <p v-else-if="isReviewBlockedByDispute" class="text-sm text-noble-black/60">
+              Review actions are unavailable while a dispute is in progress.
+            </p>
             <p v-else-if="booking.transactionId" class="text-sm text-noble-black/60">
-              Your concern will be reviewed by an admin before a dispute is opened.
+              Raise a concern if this transaction needs dispute review.
             </p>
 
             <div class="flex flex-wrap gap-3">
@@ -1379,7 +1433,7 @@ onBeforeUnmount(() => {
     </template>
 
     <section
-      v-if="booking.status === 'COMPLETED'"
+      v-if="showReviewBonusSection"
       class="mt-6 rounded-[24px] border border-cinnamon-ice bg-cream p-6"
     >
       <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1615,17 +1669,62 @@ onBeforeUnmount(() => {
         />
 
         <div
-          class="relative w-full max-w-lg rounded-[32px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          class="relative w-full max-w-2xl rounded-[32px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
         >
           <div v-if="rebuttalModalStep === 'form'">
             <div class="text-center">
               <h3 class="text-2xl font-bold text-noble-black">Submit Rebuttal</h3>
               <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
-                Respond to the opened dispute so the admin can review both sides of the issue.
+                Review the dispute details below, then explain your side of the issue.
               </p>
             </div>
 
             <div class="mt-6 space-y-4">
+              <div
+                v-if="latestDispute"
+                class="rounded-[28px] border border-cinnamon-ice bg-cream p-5"
+              >
+                <p class="text-sm font-bold text-noble-black">Dispute Details</p>
+
+                <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Reason
+                    </p>
+                    <p class="mt-2 text-sm font-semibold text-noble-black">
+                      {{ latestDispute.reason }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Raised By
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ disputeRaisedByName ?? "Transaction participant" }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Submitted
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ formatDateTime(latestDispute.createdAt) }}
+                    </p>
+                  </div>
+                </div>
+
+                <div v-if="latestDispute.description" class="mt-4">
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Description
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
+                    {{ latestDispute.description }}
+                  </p>
+                </div>
+              </div>
+
               <label class="block">
                 <span class="text-sm font-bold text-noble-black">Rebuttal Statement</span>
                 <textarea
@@ -1676,28 +1775,74 @@ onBeforeUnmount(() => {
             <div class="text-center">
               <h3 class="text-2xl font-bold text-noble-black">Confirm Rebuttal</h3>
               <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
-                Your rebuttal will be reviewed by the admin as part of the dispute resolution
-                process.
+                Confirm the dispute details and your rebuttal before final submission.
               </p>
             </div>
 
-            <div class="mt-6 space-y-4 rounded-[28px] bg-cream p-5">
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                  Rebuttal Statement
-                </p>
-                <p class="mt-2 text-sm leading-relaxed text-noble-black">
-                  {{ rebuttalText.trim() }}
-                </p>
+            <div class="mt-6 space-y-4">
+              <div
+                v-if="latestDispute"
+                class="rounded-[28px] border border-cinnamon-ice bg-cream p-5"
+              >
+                <p class="text-sm font-bold text-noble-black">Dispute Details</p>
+
+                <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Reason
+                    </p>
+                    <p class="mt-2 text-sm font-semibold text-noble-black">
+                      {{ latestDispute.reason }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Raised By
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ disputeRaisedByName ?? "Transaction participant" }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Submitted
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ formatDateTime(latestDispute.createdAt) }}
+                    </p>
+                  </div>
+                </div>
+
+                <div v-if="latestDispute.description" class="mt-4">
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Description
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
+                    {{ latestDispute.description }}
+                  </p>
+                </div>
               </div>
 
-              <div v-if="rebuttalNotes.trim()">
-                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                  Additional Notes
-                </p>
-                <p class="mt-2 text-sm leading-relaxed text-noble-black/70">
-                  {{ rebuttalNotes.trim() }}
-                </p>
+              <div class="rounded-[28px] bg-cream p-5">
+                <div>
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Rebuttal Statement
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black">
+                    {{ rebuttalText.trim() }}
+                  </p>
+                </div>
+
+                <div v-if="rebuttalNotes.trim()">
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Additional Notes
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black/70">
+                    {{ rebuttalNotes.trim() }}
+                  </p>
+                </div>
               </div>
             </div>
 

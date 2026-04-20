@@ -152,8 +152,13 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
 }
 
 describe("disputeRouter", () => {
-  it("creates a submitted dispute for a transaction participant with a recent completed booking", async () => {
+  it("opens a dispute immediately for a transaction participant with a recent completed booking", async () => {
     const ctx = makeContext()
+    ctx.prisma.transactionDispute.create.mockResolvedValue(
+      makeDisputeRecord({
+        status: OPEN_DISPUTE_STATUS,
+      }),
+    )
     ctx.prisma.rentalTransaction.findUnique.mockResolvedValue({
       id: TRANSACTION_ID,
       bookingId: BOOKING_ID,
@@ -187,7 +192,7 @@ describe("disputeRouter", () => {
         data: expect.objectContaining({
           transactionId: TRANSACTION_ID,
           raisedById: USER_ID,
-          status: SUBMITTED_DISPUTE_STATUS,
+          status: OPEN_DISPUTE_STATUS,
           reason: "Item was already damaged when I received it.",
         }),
       }),
@@ -198,11 +203,12 @@ describe("disputeRouter", () => {
           recipientUserId: OTHER_USER_ID,
           actorUserId: USER_ID,
           bookingId: BOOKING_ID,
-          type: "DISPUTE_SUBMITTED",
+          type: "DISPUTE_OPENED",
+          actionPath: `/account/transactions/${BOOKING_ID}?action=rebuttal`,
         }),
       }),
     )
-    expect(result.status).toBe("SUBMITTED")
+    expect(result.status).toBe("OPEN")
   })
 
   it("blocks dispute submission from non-participants", async () => {
@@ -270,8 +276,9 @@ describe("disputeRouter", () => {
       where: {
         OR: [
           { raisedById: USER_ID },
-          { transaction: { borrowerId: USER_ID } },
-          { transaction: { lenderId: USER_ID } },
+          {
+            OR: [{ transaction: { borrowerId: USER_ID } }, { transaction: { lenderId: USER_ID } }],
+          },
         ],
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -280,9 +287,40 @@ describe("disputeRouter", () => {
     expect(result.disputes).toHaveLength(1)
     expect(result.disputes[0]).toMatchObject({
       id: DISPUTE_ID,
-      status: "SUBMITTED",
+      status: "OPEN",
       counterpartName: "Lend E.",
     })
+  })
+
+  it("exposes another user's submitted concern to the counterparty in temporary direct-open mode", async () => {
+    const ctx = makeContext({ userId: OTHER_USER_ID })
+    ctx.prisma.transactionDispute.findMany.mockResolvedValue([makeDisputeRecord()])
+
+    const caller = disputeRouter.createCaller(ctx as never)
+    const result = await caller.mine()
+
+    expect(ctx.prisma.transactionDispute.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { raisedById: OTHER_USER_ID },
+          {
+            OR: [
+              { transaction: { borrowerId: OTHER_USER_ID } },
+              { transaction: { lenderId: OTHER_USER_ID } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: expect.any(Object),
+    })
+    expect(result.disputes).toMatchObject([
+      {
+        id: DISPUTE_ID,
+        status: "OPEN",
+        canSubmitRebuttal: true,
+      },
+    ])
   })
 
   it("lists only recent completed transactions without active disputes as reportable", async () => {
@@ -390,6 +428,7 @@ describe("disputeRouter", () => {
           actorUserId: USER_ID,
           bookingId: BOOKING_ID,
           type: "DISPUTE_OPENED",
+          actionPath: `/account/transactions/${BOOKING_ID}?action=rebuttal`,
         }),
       }),
     )
@@ -459,12 +498,12 @@ describe("disputeRouter", () => {
     expect(result.status).toBe("APPEALED")
   })
 
-  it("allows the counterparty to submit one rebuttal while the dispute is open", async () => {
+  it("allows the counterparty to submit one rebuttal for a legacy submitted dispute in temporary direct-open mode", async () => {
     const ctx = makeContext({ userId: OTHER_USER_ID })
     ctx.prisma.transactionDispute.findUnique
       .mockResolvedValueOnce({
         id: DISPUTE_ID,
-        status: OPEN_DISPUTE_STATUS,
+        status: SUBMITTED_DISPUTE_STATUS,
         raisedById: USER_ID,
         rebuttalSubmittedAt: null,
         transaction: {
@@ -500,10 +539,13 @@ describe("disputeRouter", () => {
     expect(ctx.prisma.transactionDispute.updateMany).toHaveBeenCalledWith({
       where: {
         id: DISPUTE_ID,
-        status: OPEN_DISPUTE_STATUS,
+        status: {
+          in: [OPEN_DISPUTE_STATUS, SUBMITTED_DISPUTE_STATUS],
+        },
         rebuttalSubmittedAt: null,
       },
       data: expect.objectContaining({
+        status: OPEN_DISPUTE_STATUS,
         rebuttalById: OTHER_USER_ID,
         rebuttalText: "The item was returned on time and in the agreed condition.",
       }),
