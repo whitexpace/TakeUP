@@ -232,9 +232,110 @@ describe("bookingRouter", () => {
     expect(result?.canRaiseDispute).toBe(false)
     expect(result?.latestDispute).toMatchObject({
       id: "dispute-1",
-      status: "SUBMITTED",
+      status: "OPEN",
       isActive: true,
     })
+  })
+
+  it("shows a submitted concern to the counterparty in temporary direct-open mode", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "COMPLETED",
+        completedAt: new Date(Date.now() - 2 * DAY_IN_MS),
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "COMPLETED",
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      disputes: [
+        {
+          id: "dispute-hidden",
+          raisedById: USER_ID,
+          reason: "Item came back with damage.",
+          description: "The issue was found during inspection.",
+          status: SUBMITTED_DISPUTE_STATUS,
+          createdAt: new Date("2026-04-05T00:00:00.000Z"),
+          reviewedAt: null,
+          rebuttalById: null,
+          rebuttalText: null,
+          rebuttalNotes: null,
+          rebuttalSubmittedAt: null,
+          rebuttalBy: null,
+          reviewedBy: null,
+        },
+      ],
+      reviews: [],
+    })
+
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
+    const result = await caller.byId({ id: BOOKING_ID })
+
+    expect(result?.canRaiseDispute).toBe(false)
+    expect(result?.latestDispute).toMatchObject({
+      id: "dispute-hidden",
+      status: "OPEN",
+      canSubmitRebuttal: true,
+    })
+    expect(result?.reviewState.canSubmitAny).toBe(false)
+    expect(result?.reviewState.isCompleted).toBe(false)
+  })
+
+  it("shows an opened dispute to the counterparty and allows one rebuttal", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "COMPLETED",
+        completedAt: new Date(Date.now() - 2 * DAY_IN_MS),
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "IN_DISPUTE",
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      disputes: [
+        {
+          id: "dispute-open",
+          raisedById: USER_ID,
+          reason: "Item came back with damage.",
+          description: "The issue was found during inspection.",
+          status: "OPEN",
+          createdAt: new Date("2026-04-05T00:00:00.000Z"),
+          reviewedAt: new Date("2026-04-06T00:00:00.000Z"),
+          rebuttalById: null,
+          rebuttalText: null,
+          rebuttalNotes: null,
+          rebuttalSubmittedAt: null,
+          rebuttalBy: null,
+          reviewedBy: {
+            id: "admin-1",
+            firstName: "Admin",
+            middleName: null,
+            lastName: "User",
+          },
+        },
+      ],
+      reviews: [],
+    })
+
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
+    const result = await caller.byId({ id: BOOKING_ID })
+
+    expect(result?.latestDispute).toMatchObject({
+      id: "dispute-open",
+      status: "OPEN",
+      canSubmitRebuttal: true,
+    })
+    expect(result?.reviewState.canSubmitAny).toBe(false)
   })
 
   it("allows a new dispute request after the latest one was rejected", async () => {

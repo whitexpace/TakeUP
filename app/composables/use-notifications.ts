@@ -3,6 +3,7 @@ import type { AppHeaderNotification } from "../types/notifications"
 
 type ApiNotification = {
   id: string
+  type: AppHeaderNotification["type"]
   title: string
   body: string
   actionPath: string | null
@@ -12,6 +13,7 @@ type ApiNotification = {
 
 const normalizeNotification = (notification: ApiNotification): AppHeaderNotification => ({
   id: notification.id,
+  type: notification.type,
   title: notification.title,
   body: notification.body,
   actionPath: notification.actionPath,

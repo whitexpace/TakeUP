@@ -192,8 +192,24 @@ export const useChat = () => {
     try {
       const data = await $fetch<ConversationSummary[]>("/api/chat")
       conversations.value = data
-    } catch (err: unknown) {
-      error.value = getErrorMessage(err, "Failed to load conversations.")
+      if (activeConversation.value) {
+        const matchingConversation = data.find(
+          (conversation) =>
+            conversation.conversationId === activeConversation.value?.conversationId,
+        )
+        if (matchingConversation) {
+          activeConversation.value = {
+            conversationId: matchingConversation.conversationId,
+            transactionId: matchingConversation.transactionId,
+            isExpired: matchingConversation.isExpired,
+            closedNotice: matchingConversation.closedNotice,
+            item: matchingConversation.item,
+            otherParticipant: matchingConversation.otherParticipant,
+          }
+        }
+      }
+    } catch (e: unknown) {
+      error.value = getErrorMessage(e, "Failed to load conversations")
       conversations.value = []
     } finally {
       isLoadingConversations.value = false
@@ -308,8 +324,26 @@ export const useChat = () => {
       messages.value = mergeChatMessages(messages.value, [message])
       updateConversationFromMessage(message, false)
       return message
-    } catch (err: unknown) {
-      error.value = getErrorMessage(err, "Failed to send message.")
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Failed to send message")
+      error.value = message
+
+      if (activeConversation.value && message.toLowerCase().includes("read-only")) {
+        activeConversation.value = {
+          ...activeConversation.value,
+          isExpired: true,
+        }
+
+        const matchingConversation = conversations.value.find(
+          (conversation) =>
+            conversation.conversationId === activeConversation.value?.conversationId,
+        )
+
+        if (matchingConversation) {
+          matchingConversation.isExpired = true
+        }
+      }
+
       return null
     } finally {
       isSending.value = false

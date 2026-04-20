@@ -20,6 +20,8 @@ type PrismaMockOverrides = {
   rentalTransaction?: Record<string, unknown>
   conversation?: Record<string, unknown>
   message?: Record<string, unknown>
+  $queryRaw?: ReturnType<typeof vi.fn>
+  $executeRaw?: ReturnType<typeof vi.fn>
 }
 
 const makeTransaction = (overrides: Record<string, unknown> = {}) => ({
@@ -59,6 +61,7 @@ const makeMessage = (overrides: Record<string, unknown> = {}) => ({
   conversationId: CONV_ID,
   senderUserId: USER_ID,
   body: "Hello!",
+  imageUrl: null,
   isRead: false,
   readAt: null,
   createdAt: new Date("2026-04-01T12:00:00Z"),
@@ -67,6 +70,8 @@ const makeMessage = (overrides: Record<string, unknown> = {}) => ({
 
 function makePrisma(overrides: PrismaMockOverrides = {}) {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     rentalTransaction: {
       findUnique: vi.fn().mockResolvedValue(makeTransaction()),
       ...overrides.rentalTransaction,
@@ -91,6 +96,8 @@ function makePrisma(overrides: PrismaMockOverrides = {}) {
       groupBy: vi.fn().mockResolvedValue([]),
       ...overrides.message,
     },
+    ...("$queryRaw" in overrides ? { $queryRaw: overrides.$queryRaw } : {}),
+    ...("$executeRaw" in overrides ? { $executeRaw: overrides.$executeRaw } : {}),
   }
 }
 

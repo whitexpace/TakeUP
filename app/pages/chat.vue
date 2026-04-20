@@ -397,6 +397,7 @@ const startPolling = () => {
     if (!activeConversation.value) return
 
     try {
+      await loadConversations()
       const data = await $fetch<{
         messages: ChatMessage[]
         nextCursor: string | null

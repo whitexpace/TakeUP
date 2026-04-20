@@ -4,6 +4,7 @@ import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import { bookingReviewLookupSchema, createReviewSchema } from "../../../shared/schemas/review"
 import { processReviewRewards } from "../../utils/rewards"
+import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
 
 type ReviewLeaderboardType = "BORROWER_REVIEW" | "LENDER_REVIEW"
 
@@ -136,6 +137,17 @@ export const reviewRouter = router({
         status: true,
         borrowerId: true,
         lenderId: true,
+        disputes: {
+          where: {
+            status: {
+              in: [...ACTIVE_DISPUTE_STATUSES],
+            },
+          },
+          select: {
+            id: true,
+          },
+          take: 1,
+        },
         reviews: {
           where: { reviewerUserId: ctx.user.id },
           select: {
@@ -165,6 +177,7 @@ export const reviewRouter = router({
       canSubmit:
         isParticipant &&
         transaction.status === TransactionStatus.COMPLETED &&
+        transaction.disputes.length === 0 &&
         transaction.reviews.length === 0,
       review: transaction.reviews[0] ?? null,
       transactionId: transaction.id,
@@ -209,6 +222,17 @@ export const reviewRouter = router({
           itemId: true,
           borrowerId: true,
           lenderId: true,
+          disputes: {
+            where: {
+              status: {
+                in: [...ACTIVE_DISPUTE_STATUSES],
+              },
+            },
+            select: {
+              id: true,
+            },
+            take: 1,
+          },
         },
       })
 
@@ -216,6 +240,13 @@ export const reviewRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "A completed transaction is required before submitting a review.",
+        })
+      }
+
+      if (transaction.disputes.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Reviews are unavailable while a dispute or concern is in progress.",
         })
       }
 

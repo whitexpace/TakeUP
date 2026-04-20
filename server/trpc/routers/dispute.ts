@@ -8,15 +8,20 @@ import {
   disputeIdSchema,
   listDisputesSchema,
   reviewDisputeSchema,
+  submitRebuttalSchema,
   submitDisputeSchema,
 } from "../../../shared/schemas/dispute"
 import {
   ACTIVE_DISPUTE_STATUSES,
+  DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED,
   OPEN_DISPUTE_STATUS,
+  REBUTTABLE_DISPUTE_STATUSES,
   REJECTED_DISPUTE_STATUS,
   SUBMITTED_DISPUTE_STATUS,
   fromApiDisputeStatus,
+  isRebuttalEnabledDisputeStatus,
   toApiDisputeStatus,
+  toUserFacingDisputeStatus,
 } from "../../utils/dispute-status"
 
 const disputeItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
@@ -45,8 +50,15 @@ const disputeRecordSelect = {
   resolution: true,
   status: true,
   reviewedAt: true,
+  rebuttalById: true,
+  rebuttalText: true,
+  rebuttalNotes: true,
+  rebuttalSubmittedAt: true,
   createdAt: true,
   raisedBy: {
+    select: participantUserSelect,
+  },
+  rebuttalBy: {
     select: participantUserSelect,
   },
   reviewedBy: {
@@ -100,8 +112,13 @@ type DisputeRecord = {
   resolution: string | null
   status: string
   reviewedAt: Date | null
+  rebuttalById: string | null
+  rebuttalText: string | null
+  rebuttalNotes: string | null
+  rebuttalSubmittedAt: Date | null
   createdAt: Date
   raisedBy: DisputeParticipant | null
+  rebuttalBy: DisputeParticipant | null
   reviewedBy: DisputeParticipant | null
   transaction: {
     id: string
@@ -175,6 +192,17 @@ type DisputeAppealCandidateRecord = {
   }
 }
 
+type DisputeRebuttalCandidateRecord = {
+  id: string
+  status: string
+  raisedById: string
+  rebuttalSubmittedAt: Date | null
+  transaction: {
+    borrowerId: string | null
+    lenderId: string | null
+  }
+}
+
 type DisputeTransactionClient = {
   rentalTransaction: {
     findUnique(args: Record<string, unknown>): Promise<DisputeAccessTransaction | null>
@@ -190,6 +218,9 @@ type DisputeTransactionClient = {
     findMany(args: Record<string, unknown>): Promise<DisputeRecord[]>
     findUnique(args: Record<string, unknown>): Promise<DisputeRecord | DisputeStatusRecord | null>
     updateMany(args: Record<string, unknown>): Promise<{ count: number }>
+  }
+  appNotification: {
+    create(args: Record<string, unknown>): Promise<unknown>
   }
 }
 
@@ -221,6 +252,21 @@ const getWindowStart = (days: number) => new Date(Date.now() - days * DAY_IN_MS)
 
 const isDateWithinWindow = (value: Date | null, days: number) =>
   Boolean(value && value.getTime() >= getWindowStart(days).getTime())
+
+const getCounterpartyUserId = (
+  transaction: { borrowerId: string | null; lenderId: string | null },
+  actorUserId: string,
+) => {
+  if (transaction.borrowerId === actorUserId) {
+    return transaction.lenderId
+  }
+
+  if (transaction.lenderId === actorUserId) {
+    return transaction.borrowerId
+  }
+
+  return null
+}
 
 const getThumbnailImage = (
   item: { images?: Array<{ path: string; isPrimary?: boolean }> } | null,
@@ -266,8 +312,13 @@ const mapParticipant = (
       }
     : null
 
-const mapDisputeRecord = (record: DisputeRecord, currentUserId?: string | null) => {
-  const status = toApiDisputeStatus(record.status)
+const mapDisputeRecord = (
+  record: DisputeRecord,
+  currentUserId?: string | null,
+  options?: { userFacing?: boolean },
+) => {
+  const rawStatus = toApiDisputeStatus(record.status)
+  const status = options?.userFacing ? toUserFacingDisputeStatus(record.status) : rawStatus
   const viewerRole =
     currentUserId === record.transaction.borrowerId
       ? "BORROWER"
@@ -278,11 +329,20 @@ const mapDisputeRecord = (record: DisputeRecord, currentUserId?: string | null) 
   const lender = mapParticipant(record.transaction.lender)
   const counterpart = viewerRole === "BORROWER" ? lender : viewerRole === "LENDER" ? borrower : null
   const canAppeal =
-    status === "REJECTED" && isDateWithinWindow(record.reviewedAt, DISPUTE_APPEAL_WINDOW_DAYS)
+    rawStatus === "REJECTED" && isDateWithinWindow(record.reviewedAt, DISPUTE_APPEAL_WINDOW_DAYS)
+  const hasRebuttal = Boolean(record.rebuttalSubmittedAt && record.rebuttalText)
+  const canSubmitRebuttal =
+    isRebuttalEnabledDisputeStatus(record.status) &&
+    Boolean(currentUserId) &&
+    currentUserId !== record.raisedById &&
+    (currentUserId === record.transaction.borrowerId ||
+      currentUserId === record.transaction.lenderId) &&
+    !hasRebuttal
 
   return {
     id: record.id,
     transactionId: record.transactionId,
+    bookingId: record.transaction.bookingId,
     transactionReference: formatReference(record.transaction.id, record.transaction.bookingId),
     status,
     reason: record.reason,
@@ -311,8 +371,20 @@ const mapDisputeRecord = (record: DisputeRecord, currentUserId?: string | null) 
       borrower,
       lender,
     },
-    canReview: status === "SUBMITTED",
+    canReview: rawStatus === "SUBMITTED",
     canAppeal,
+    canSubmitRebuttal,
+    hasRebuttal,
+    rebuttalText: record.rebuttalText,
+    rebuttalNotes: record.rebuttalNotes,
+    rebuttalSubmittedAt: record.rebuttalSubmittedAt,
+    rebuttalBy: mapParticipant(record.rebuttalBy),
+    rebuttalSubmittedByRole:
+      record.rebuttalById === record.transaction.borrowerId
+        ? "BORROWER"
+        : record.rebuttalById === record.transaction.lenderId
+          ? "LENDER"
+          : null,
     appealAvailableUntil: record.reviewedAt
       ? new Date(record.reviewedAt.getTime() + DISPUTE_APPEAL_WINDOW_DAYS * DAY_IN_MS)
       : null,
@@ -334,6 +406,41 @@ const buildAppealResolution = (
     .join("\n\n")
 
 const getSubmittedConflictMessage = () => "An active dispute already exists for this transaction."
+
+const buildDisputeOpenedNotification = (input: {
+  transactionReference: string
+  reason: string
+  description: string | null
+  raisedByName: string
+  bookingId: string | null
+}) => ({
+  type: "DISPUTE_OPENED" as const,
+  title: "A formal dispute has been opened",
+  body: [
+    `A formal dispute has been opened for transaction ${input.transactionReference}.`,
+    `${input.raisedByName} raised the concern.`,
+    `Reason: ${input.reason}`,
+    input.description ? `Details: ${input.description}` : null,
+    "You may submit one rebuttal.",
+  ]
+    .filter(Boolean)
+    .join(" "),
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}?action=rebuttal`
+    : "/account/disputes?tab=disputes",
+})
+
+const buildDisputeRebuttalSubmittedNotification = (input: {
+  transactionReference: string
+  bookingId: string | null
+}) => ({
+  type: "DISPUTE_REBUTTAL_SUBMITTED" as const,
+  title: "A rebuttal was submitted",
+  body: `A rebuttal was submitted for transaction ${input.transactionReference}.`,
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}`
+    : "/account/disputes?tab=disputes",
+})
 
 export const disputeRouter = router({
   submit: protectedProcedure.input(submitDisputeSchema).mutation(async ({ ctx, input }) => {
@@ -415,19 +522,49 @@ export const disputeRouter = router({
           })
         }
 
-        return await tx.transactionDispute.create({
+        // Temporary test shortcut: open the dispute immediately instead of
+        // waiting for the admin review step, so the counterparty rebuttal flow
+        // can be exercised end-to-end.
+        const createdDispute = await tx.transactionDispute.create({
           data: {
             transactionId: input.transactionId,
             raisedById: ctx.user.id,
             reason: input.reason.trim(),
             description: normalizeOptionalText(input.description),
-            status: SUBMITTED_DISPUTE_STATUS,
+            status: OPEN_DISPUTE_STATUS,
           },
           select: disputeRecordSelect,
         })
+
+        const counterpartyUserId = getCounterpartyUserId(
+          createdDispute.transaction,
+          createdDispute.raisedById,
+        )
+
+        if (counterpartyUserId) {
+          await tx.appNotification.create({
+            data: {
+              recipientUserId: counterpartyUserId,
+              actorUserId: createdDispute.raisedById,
+              bookingId: createdDispute.transaction.bookingId,
+              ...buildDisputeOpenedNotification({
+                transactionReference: formatReference(
+                  createdDispute.transaction.id,
+                  createdDispute.transaction.bookingId,
+                ),
+                reason: createdDispute.reason,
+                description: createdDispute.description,
+                raisedByName: formatDisplayName(createdDispute.raisedBy),
+                bookingId: createdDispute.transaction.bookingId,
+              }),
+            },
+          })
+        }
+
+        return createdDispute
       }, DISPUTE_TRANSACTION_OPTIONS)
 
-      return mapDisputeRecord(createdDispute)
+      return mapDisputeRecord(createdDispute, ctx.user.id, { userFacing: true })
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -445,20 +582,34 @@ export const disputeRouter = router({
 
   mine: protectedProcedure.query(async ({ ctx }) => {
     const disputePrisma = getDisputePrisma(ctx)
+    const participantVisibilityWhere = DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED
+      ? {
+          OR: [
+            { transaction: { borrowerId: ctx.user.id } },
+            { transaction: { lenderId: ctx.user.id } },
+          ],
+        }
+      : {
+          status: {
+            not: SUBMITTED_DISPUTE_STATUS,
+          },
+          OR: [
+            { transaction: { borrowerId: ctx.user.id } },
+            { transaction: { lenderId: ctx.user.id } },
+          ],
+        }
     const disputes = await disputePrisma.transactionDispute.findMany({
       where: {
-        OR: [
-          { raisedById: ctx.user.id },
-          { transaction: { borrowerId: ctx.user.id } },
-          { transaction: { lenderId: ctx.user.id } },
-        ],
+        OR: [{ raisedById: ctx.user.id }, participantVisibilityWhere],
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: disputeRecordSelect,
     })
 
     return {
-      disputes: disputes.map((record) => mapDisputeRecord(record, ctx.user.id)),
+      disputes: disputes.map((record) =>
+        mapDisputeRecord(record, ctx.user.id, { userFacing: true }),
+      ),
     }
   }),
 
@@ -686,8 +837,127 @@ export const disputeRouter = router({
       })
     }
 
-    return mapDisputeRecord(appealedDispute, ctx.user.id)
+    return mapDisputeRecord(appealedDispute, ctx.user.id, { userFacing: true })
   }),
+
+  submitRebuttal: protectedProcedure
+    .input(submitRebuttalSchema)
+    .mutation(async ({ ctx, input }) => {
+      const disputePrisma = getDisputePrisma(ctx)
+
+      const rebuttedDispute = await disputePrisma.$transaction(async (tx) => {
+        const dispute = (await tx.transactionDispute.findUnique({
+          where: { id: input.id },
+          select: {
+            id: true,
+            status: true,
+            raisedById: true,
+            rebuttalSubmittedAt: true,
+            transaction: {
+              select: {
+                borrowerId: true,
+                lenderId: true,
+              },
+            },
+          },
+        })) as DisputeRebuttalCandidateRecord | null
+
+        if (!dispute) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Dispute not found.",
+          })
+        }
+
+        if (
+          dispute.transaction.borrowerId !== ctx.user.id &&
+          dispute.transaction.lenderId !== ctx.user.id
+        ) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only dispute participants can submit a rebuttal.",
+          })
+        }
+
+        if (dispute.raisedById === ctx.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You cannot submit a rebuttal to your own dispute.",
+          })
+        }
+
+        if (!isRebuttalEnabledDisputeStatus(dispute.status)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Rebuttals can only be submitted while the dispute is open.",
+          })
+        }
+
+        if (dispute.rebuttalSubmittedAt) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "A rebuttal has already been submitted for this dispute.",
+          })
+        }
+
+        const updateResult = await tx.transactionDispute.updateMany({
+          where: {
+            id: input.id,
+            status: {
+              in: [...REBUTTABLE_DISPUTE_STATUSES],
+            },
+            rebuttalSubmittedAt: null,
+          },
+          data: {
+            status: OPEN_DISPUTE_STATUS,
+            rebuttalById: ctx.user.id,
+            rebuttalText: input.rebuttalText.trim(),
+            rebuttalNotes: normalizeOptionalText(input.rebuttalNotes),
+            rebuttalSubmittedAt: new Date(),
+          },
+        })
+
+        if (updateResult.count === 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This dispute can no longer accept a rebuttal.",
+          })
+        }
+
+        const rebuttedDispute = (await tx.transactionDispute.findUnique({
+          where: { id: input.id },
+          select: disputeRecordSelect,
+        })) as DisputeRecord | null
+
+        if (rebuttedDispute) {
+          await tx.appNotification.create({
+            data: {
+              recipientUserId: rebuttedDispute.raisedById,
+              actorUserId: ctx.user.id,
+              bookingId: rebuttedDispute.transaction.bookingId,
+              ...buildDisputeRebuttalSubmittedNotification({
+                transactionReference: formatReference(
+                  rebuttedDispute.transaction.id,
+                  rebuttedDispute.transaction.bookingId,
+                ),
+                bookingId: rebuttedDispute.transaction.bookingId,
+              }),
+            },
+          })
+        }
+
+        return rebuttedDispute
+      }, DISPUTE_TRANSACTION_OPTIONS)
+
+      if (!rebuttedDispute) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Dispute not found.",
+        })
+      }
+
+      return mapDisputeRecord(rebuttedDispute, ctx.user.id, { userFacing: true })
+    }),
 
   review: adminProcedure.input(reviewDisputeSchema).mutation(async ({ ctx, input }) => {
     const disputePrisma = getDisputePrisma(ctx)
@@ -726,10 +996,36 @@ export const disputeRouter = router({
         })
       }
 
-      return (await tx.transactionDispute.findUnique({
+      const dispute = (await tx.transactionDispute.findUnique({
         where: { id: input.id },
         select: disputeRecordSelect,
       })) as DisputeRecord | null
+
+      if (input.decision === "APPROVE" && dispute) {
+        const counterpartyUserId = getCounterpartyUserId(dispute.transaction, dispute.raisedById)
+
+        if (counterpartyUserId) {
+          await tx.appNotification.create({
+            data: {
+              recipientUserId: counterpartyUserId,
+              actorUserId: dispute.raisedById,
+              bookingId: dispute.transaction.bookingId,
+              ...buildDisputeOpenedNotification({
+                transactionReference: formatReference(
+                  dispute.transaction.id,
+                  dispute.transaction.bookingId,
+                ),
+                reason: dispute.reason,
+                description: dispute.description,
+                raisedByName: formatDisplayName(dispute.raisedBy),
+                bookingId: dispute.transaction.bookingId,
+              }),
+            },
+          })
+        }
+      }
+
+      return dispute
     }, DISPUTE_TRANSACTION_OPTIONS)
 
     if (!reviewedDispute) {

@@ -151,6 +151,9 @@ enum DisputeOutcome {
 
 enum NotificationType {
   BOOKING_RETURN_REQUESTED
+  DISPUTE_SUBMITTED
+  DISPUTE_OPENED
+  DISPUTE_REBUTTAL_SUBMITTED
 }
 
 enum AccountType {
@@ -486,6 +489,7 @@ model User {
   sentMessages                    Message[]
   transactionDisputesAdmin        TransactionDispute[]     @relation("transaction_disputes_admin_idToUser")
   transactionDisputesFiled        TransactionDispute[]     @relation("transaction_disputes_filed_by_user_idToUser")
+  transactionDisputesRebuttal     TransactionDispute[]     @relation("transaction_disputes_rebuttal_by_user_idToUser")
   transactionPaymentsPayee        TransactionPayment[]     @relation("transaction_payments_payee_user_idToUser")
   transactionPaymentsPayer        TransactionPayment[]     @relation("transaction_payments_payer_user_idToUser")
   transactionReviewDraftsReviewer TransactionReviewDraft[] @relation("transaction_review_drafts_reviewer_user_idToUser")
@@ -648,22 +652,26 @@ model RequestOffer {
 }
 
 model TransactionDispute {
-  id            String          @id @default(dbgenerated("(gen_random_uuid())::text"))
-  transactionId String          @map("transaction_id")
-  raisedById    String          @map("filed_by_user_id")
-  reason        String
-  description   String?
-  claimedAmount Decimal         @default(0) @map("claimed_amount") @db.Decimal(12, 2)
-  status        DisputeStatus   @default(SUBMITTED)
-  reviewedById  String?         @map("admin_id")
-  resolution    String?
-  reviewedAt    DateTime?       @map("resolved_at") @db.Timestamptz(6)
-  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  outcome       DisputeOutcome?
-
-  reviewedBy  User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
-  raisedBy    User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [raisedById], references: [id])
-  transaction RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  id                  String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId       String            @map("transaction_id")
+  raisedById          String            @map("filed_by_user_id")
+  reason              String
+  description         String?
+  claimedAmount       Decimal           @default(0) @map("claimed_amount") @db.Decimal(12, 2)
+  status              DisputeStatus     @default(SUBMITTED)
+  reviewedById        String?           @map("admin_id")
+  resolution          String?
+  reviewedAt          DateTime?         @map("resolved_at") @db.Timestamptz(6)
+  rebuttalById        String?           @map("rebuttal_by_user_id")
+  rebuttalText        String?           @map("rebuttal_text")
+  rebuttalNotes       String?           @map("rebuttal_notes")
+  rebuttalSubmittedAt DateTime?         @map("rebuttal_submitted_at") @db.Timestamptz(6)
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  rebuttalBy          User?             @relation("transaction_disputes_rebuttal_by_user_idToUser", fields: [rebuttalById], references: [id])
+  outcome             DisputeOutcome?
+  reviewedBy          User?             @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
+  raisedBy            User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [raisedById], references: [id])
+  transaction         RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId, status, createdAt(sort: Desc)], map: "idx_disputes_txn_status")
   @@map("transaction_disputes")

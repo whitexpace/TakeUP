@@ -125,6 +125,10 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
   }
 
+  const appNotification = {
+    create: vi.fn().mockResolvedValue({ id: "notif-1" }),
+  }
+
   const prisma = {
     $transaction: vi.fn(),
     user: {
@@ -133,6 +137,7 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
     rentalTransaction,
     booking,
     transactionDispute,
+    appNotification,
   }
 
   prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) =>
@@ -147,8 +152,13 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
 }
 
 describe("disputeRouter", () => {
-  it("creates a submitted dispute for a transaction participant with a recent completed booking", async () => {
+  it("opens a dispute immediately for a transaction participant with a recent completed booking", async () => {
     const ctx = makeContext()
+    ctx.prisma.transactionDispute.create.mockResolvedValue(
+      makeDisputeRecord({
+        status: OPEN_DISPUTE_STATUS,
+      }),
+    )
     ctx.prisma.rentalTransaction.findUnique.mockResolvedValue({
       id: TRANSACTION_ID,
       bookingId: BOOKING_ID,
@@ -182,12 +192,23 @@ describe("disputeRouter", () => {
         data: expect.objectContaining({
           transactionId: TRANSACTION_ID,
           raisedById: USER_ID,
-          status: SUBMITTED_DISPUTE_STATUS,
+          status: OPEN_DISPUTE_STATUS,
           reason: "Item was already damaged when I received it.",
         }),
       }),
     )
-    expect(result.status).toBe("SUBMITTED")
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: OTHER_USER_ID,
+          actorUserId: USER_ID,
+          bookingId: BOOKING_ID,
+          type: "DISPUTE_OPENED",
+          actionPath: `/account/transactions/${BOOKING_ID}?action=rebuttal`,
+        }),
+      }),
+    )
+    expect(result.status).toBe("OPEN")
   })
 
   it("blocks dispute submission from non-participants", async () => {
@@ -255,8 +276,9 @@ describe("disputeRouter", () => {
       where: {
         OR: [
           { raisedById: USER_ID },
-          { transaction: { borrowerId: USER_ID } },
-          { transaction: { lenderId: USER_ID } },
+          {
+            OR: [{ transaction: { borrowerId: USER_ID } }, { transaction: { lenderId: USER_ID } }],
+          },
         ],
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -265,9 +287,40 @@ describe("disputeRouter", () => {
     expect(result.disputes).toHaveLength(1)
     expect(result.disputes[0]).toMatchObject({
       id: DISPUTE_ID,
-      status: "SUBMITTED",
+      status: "OPEN",
       counterpartName: "Lend E.",
     })
+  })
+
+  it("exposes another user's submitted concern to the counterparty in temporary direct-open mode", async () => {
+    const ctx = makeContext({ userId: OTHER_USER_ID })
+    ctx.prisma.transactionDispute.findMany.mockResolvedValue([makeDisputeRecord()])
+
+    const caller = disputeRouter.createCaller(ctx as never)
+    const result = await caller.mine()
+
+    expect(ctx.prisma.transactionDispute.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { raisedById: OTHER_USER_ID },
+          {
+            OR: [
+              { transaction: { borrowerId: OTHER_USER_ID } },
+              { transaction: { lenderId: OTHER_USER_ID } },
+            ],
+          },
+        ],
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: expect.any(Object),
+    })
+    expect(result.disputes).toMatchObject([
+      {
+        id: DISPUTE_ID,
+        status: "OPEN",
+        canSubmitRebuttal: true,
+      },
+    ])
   })
 
   it("lists only recent completed transactions without active disputes as reportable", async () => {
@@ -368,6 +421,17 @@ describe("disputeRouter", () => {
         reviewedById: ADMIN_ID,
       }),
     })
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: OTHER_USER_ID,
+          actorUserId: USER_ID,
+          bookingId: BOOKING_ID,
+          type: "DISPUTE_OPENED",
+          actionPath: `/account/transactions/${BOOKING_ID}?action=rebuttal`,
+        }),
+      }),
+    )
     expect(result.status).toBe("OPEN")
   })
 
@@ -432,6 +496,125 @@ describe("disputeRouter", () => {
       }),
     })
     expect(result.status).toBe("APPEALED")
+  })
+
+  it("allows the counterparty to submit one rebuttal for a legacy submitted dispute in temporary direct-open mode", async () => {
+    const ctx = makeContext({ userId: OTHER_USER_ID })
+    ctx.prisma.transactionDispute.findUnique
+      .mockResolvedValueOnce({
+        id: DISPUTE_ID,
+        status: SUBMITTED_DISPUTE_STATUS,
+        raisedById: USER_ID,
+        rebuttalSubmittedAt: null,
+        transaction: {
+          borrowerId: USER_ID,
+          lenderId: OTHER_USER_ID,
+        },
+      })
+      .mockResolvedValueOnce(
+        makeDisputeRecord({
+          status: "OPEN",
+          rebuttalById: OTHER_USER_ID,
+          rebuttalText: "The item was returned on time and in the agreed condition.",
+          rebuttalNotes: "Chat screenshots were already shared with admin.",
+          rebuttalSubmittedAt: new Date("2026-04-18T08:00:00.000Z"),
+          rebuttalBy: {
+            id: OTHER_USER_ID,
+            username: "lender1",
+            email: "lender@up.edu.ph",
+            firstName: "Lend",
+            middleName: null,
+            lastName: "Er",
+          },
+        }),
+      )
+
+    const caller = disputeRouter.createCaller(ctx as never)
+    const result = await caller.submitRebuttal({
+      id: DISPUTE_ID,
+      rebuttalText: "The item was returned on time and in the agreed condition.",
+      rebuttalNotes: "Chat screenshots were already shared with admin.",
+    })
+
+    expect(ctx.prisma.transactionDispute.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: DISPUTE_ID,
+        status: {
+          in: [OPEN_DISPUTE_STATUS, SUBMITTED_DISPUTE_STATUS],
+        },
+        rebuttalSubmittedAt: null,
+      },
+      data: expect.objectContaining({
+        status: OPEN_DISPUTE_STATUS,
+        rebuttalById: OTHER_USER_ID,
+        rebuttalText: "The item was returned on time and in the agreed condition.",
+      }),
+    })
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: USER_ID,
+          actorUserId: OTHER_USER_ID,
+          bookingId: BOOKING_ID,
+          type: "DISPUTE_REBUTTAL_SUBMITTED",
+          actionPath: `/account/transactions/${BOOKING_ID}`,
+        }),
+      }),
+    )
+    expect(result.hasRebuttal).toBe(true)
+    expect(result.canSubmitRebuttal).toBe(false)
+  })
+
+  it("blocks the original submitter from rebutting their own dispute", async () => {
+    const ctx = makeContext()
+    ctx.prisma.transactionDispute.findUnique.mockResolvedValue({
+      id: DISPUTE_ID,
+      status: OPEN_DISPUTE_STATUS,
+      raisedById: USER_ID,
+      rebuttalSubmittedAt: null,
+      transaction: {
+        borrowerId: USER_ID,
+        lenderId: OTHER_USER_ID,
+      },
+    })
+
+    const caller = disputeRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.submitRebuttal({
+        id: DISPUTE_ID,
+        rebuttalText: "I should not be able to rebut this.",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "You cannot submit a rebuttal to your own dispute.",
+    })
+  })
+
+  it("blocks duplicate rebuttal submission", async () => {
+    const ctx = makeContext({ userId: OTHER_USER_ID })
+    ctx.prisma.transactionDispute.findUnique.mockResolvedValue({
+      id: DISPUTE_ID,
+      status: OPEN_DISPUTE_STATUS,
+      raisedById: USER_ID,
+      rebuttalSubmittedAt: new Date("2026-04-18T08:00:00.000Z"),
+      transaction: {
+        borrowerId: USER_ID,
+        lenderId: OTHER_USER_ID,
+      },
+    })
+
+    const caller = disputeRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.submitRebuttal({
+        id: DISPUTE_ID,
+        rebuttalText: "Trying to submit again.",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "A rebuttal has already been submitted for this dispute.",
+    })
   })
 
   it("blocks appeals for rejected disputes outside the appeal window", async () => {
