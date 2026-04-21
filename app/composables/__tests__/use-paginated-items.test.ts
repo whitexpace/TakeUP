@@ -97,10 +97,10 @@ describe("usePaginatedItems", () => {
       .mockResolvedValueOnce({
         items: [repeatedItem],
         nextCursor: {
-          id: repeatedItem.id,
-          boostScore: repeatedItem.boostScore,
-          bookingCount: repeatedItem.bookingCount,
-          createdAt: repeatedItem.createdAt,
+          version: 1,
+          scanExhausted: true,
+          scanCursor: null,
+          pendingIds: [uniqueItem.id],
         },
       } satisfies PaginatedItemsResponse)
       .mockResolvedValueOnce({
@@ -118,6 +118,25 @@ describe("usePaginatedItems", () => {
     expect(new Set(paginatedItems.items.value.map((item) => item.id))).toEqual(
       new Set([repeatedItem.id, uniqueItem.id]),
     )
+  })
+
+  it("preserves server-provided feed order instead of re-ranking on the client", async () => {
+    const lowerRankedFirst = makeItem("11111111-1111-1111-1111-111111111111", { bookingCount: 1 })
+    const higherRankedSecond = makeItem("22222222-2222-2222-2222-222222222222", { bookingCount: 9 })
+    const fetchMock = vi.fn().mockResolvedValue({
+      items: [lowerRankedFirst, higherRankedSecond],
+      nextCursor: null,
+    } satisfies PaginatedItemsResponse)
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const paginatedItems = usePaginatedItems({ searchQuery: ref(""), filterParams: ref({}) })
+
+    await paginatedItems.refresh()
+
+    expect(paginatedItems.items.value.map((item) => item.id)).toEqual([
+      lowerRankedFirst.id,
+      higherRankedSecond.id,
+    ])
   })
 
   it("ignores stale responses from older refresh calls", async () => {

@@ -5,11 +5,18 @@ export interface ItemAvailabilityRange {
   status: string
 }
 
-export interface ItemPaginationCursor {
+export interface ItemRankingScanCursor {
   id: string
   boostScore: number
   bookingCount: number
   createdAt: string | Date
+}
+
+export interface ItemPaginationCursor {
+  version: 1
+  scanExhausted: boolean
+  scanCursor: ItemRankingScanCursor | null
+  pendingIds: string[]
 }
 
 export interface ListedItemImage {
