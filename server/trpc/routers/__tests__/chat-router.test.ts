@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from "vitest"
 import { chatRouter } from "../chat"
 import type { Context } from "../../context"
 import type { SessionUser } from "../../../utils/auth-session"
-import { CHAT_CLOSED_NOTICE } from "../../../../shared/chat-rules"
+import {
+  CHAT_DISPUTE_NOTICE,
+  CHAT_ENDED_NOTICE,
+  CHAT_IN_DISPUTE_PREVIEW,
+} from "../../../../shared/chat-rules"
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const OTHER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -147,13 +151,28 @@ describe("chatRouter", () => {
       )
     })
 
-    it("marks expired when COMPLETED with OPEN dispute", async () => {
+    it("marks completed transactions as ended", async () => {
+      const ctx = makeContext(mockUser, {
+        rentalTransaction: {
+          findUnique: vi.fn().mockResolvedValue(makeTransaction({ status: "COMPLETED" })),
+        },
+        conversation: {
+          findUnique: vi.fn().mockResolvedValue({ id: CONV_ID, transactionId: TX_ID }),
+        },
+      })
+      const result = await caller(ctx).getOrCreateConversation({ transactionId: TX_ID })
+      expect(result.closureState).toBe("ENDED")
+      expect(result.isExpired).toBe(true)
+      expect(result.closedNotice).toBe(CHAT_ENDED_NOTICE)
+    })
+
+    it("marks disputed completed transactions as in dispute", async () => {
       const ctx = makeContext(mockUser, {
         rentalTransaction: {
           findUnique: vi
             .fn()
             .mockResolvedValue(
-              makeTransaction({ status: "COMPLETED", disputes: [{ status: "OPEN" }] }),
+              makeTransaction({ status: "COMPLETED", disputes: [{ status: "SUBMITTED" }] }),
             ),
         },
         conversation: {
@@ -161,8 +180,9 @@ describe("chatRouter", () => {
         },
       })
       const result = await caller(ctx).getOrCreateConversation({ transactionId: TX_ID })
+      expect(result.closureState).toBe("IN_DISPUTE")
       expect(result.isExpired).toBe(true)
-      expect(result.closedNotice).toBe(CHAT_CLOSED_NOTICE)
+      expect(result.closedNotice).toBe(CHAT_DISPUTE_NOTICE)
     })
 
     it("rejects transactions whose chat is not available", async () => {
@@ -233,7 +253,7 @@ describe("chatRouter", () => {
       })
       await expect(
         caller(ctx).sendMessage({ conversationId: CONV_ID, body: "Hello!" }),
-      ).rejects.toThrow(CHAT_CLOSED_NOTICE)
+      ).rejects.toThrow(CHAT_DISPUTE_NOTICE)
     })
 
     it("rejects send when conversation not found", async () => {
@@ -331,6 +351,7 @@ describe("chatRouter", () => {
       expect(firstConversation?.lastMessage?.body).toBe("Last msg")
       expect(firstConversation?.unreadCount).toBe(3)
       expect(firstConversation?.otherParticipant?.id).toBe(OTHER_USER_ID)
+      expect(firstConversation?.closureState).toBe("OPEN")
       expect(ctx.prisma.conversation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -346,6 +367,25 @@ describe("chatRouter", () => {
       const ctx = makeContext()
       const result = await caller(ctx).listConversations()
       expect(result).toEqual([])
+    })
+
+    it("returns disputed conversations as read-only in summaries", async () => {
+      const conv = {
+        ...makeConversation({
+          transaction: makeTransaction({ status: "IN_DISPUTE", disputes: [{ status: "OPEN" }] }),
+        }),
+        messages: [makeMessage({ body: "Last msg" })],
+      }
+      const ctx = makeContext(mockUser, {
+        conversation: { findMany: vi.fn().mockResolvedValue([conv]) },
+      })
+
+      const [firstConversation] = await caller(ctx).listConversations()
+
+      expect(firstConversation?.closureState).toBe("IN_DISPUTE")
+      expect(firstConversation?.isExpired).toBe(true)
+      expect(firstConversation?.closedNotice).toBe(CHAT_DISPUTE_NOTICE)
+      expect(firstConversation?.lastMessage?.body).not.toBe(CHAT_IN_DISPUTE_PREVIEW)
     })
   })
 })

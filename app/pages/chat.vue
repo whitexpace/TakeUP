@@ -5,7 +5,7 @@ import type { ChatMessage } from "../composables/use-chat"
 import { useNotifications } from "../composables/use-notifications"
 import { insertTextAtSelection } from "../utils/chat-composer"
 import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
-import { CHAT_CLOSED_NOTICE } from "../../shared/chat-rules"
+import { getChatClosedPreviewLabel } from "../../shared/chat-rules"
 import { containsModeratedContent } from "../../shared/chat-moderation"
 
 definePageMeta({
@@ -185,6 +185,8 @@ const formatDetailedTime = (dateStr: string | Date) => {
 }
 
 const getChatPreview = (conversation: (typeof sortedConversations.value)[0]) => {
+  const closedPreview = getChatClosedPreviewLabel(conversation.closureState)
+  if (closedPreview) return closedPreview
   if (!conversation.lastMessage) return "Start a conversation"
   return conversation.lastMessage.body.replace(/<[^>]*>?/gm, "").slice(0, 60)
 }
@@ -193,6 +195,9 @@ const getChatTime = (conversation: (typeof sortedConversations.value)[0]) => {
   if (!conversation.lastMessage) return ""
   return formatTimestamp(conversation.lastMessage.createdAt)
 }
+
+const getClosedConversationLabel = (conversation: NonNullable<typeof activeConversation.value>) =>
+  getChatClosedPreviewLabel(conversation.closureState) ?? "Chat unavailable"
 
 const openConversationFromRoute = async (transactionId: string) => {
   await openConversation(transactionId)
@@ -424,6 +429,14 @@ const stopPolling = () => {
 
 watch(messages, () => scrollToBottom(), { deep: true })
 watch([newMessage, pendingImagePreviewUrl], () => nextTick(adjustTextareaHeight))
+watch(
+  () => activeConversation.value?.isExpired,
+  (isExpired) => {
+    if (isExpired) {
+      resetComposer()
+    }
+  },
+)
 
 watch(routeTransactionId, async (transactionId, previousTransactionId) => {
   resetComposer()
@@ -730,7 +743,7 @@ onUnmounted(() => {
             class="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center"
           >
             <p class="text-xs font-medium text-amber-700">
-              {{ activeConversation.closedNotice ?? CHAT_CLOSED_NOTICE }}
+              {{ activeConversation.closedNotice }}
             </p>
           </div>
 
@@ -839,7 +852,41 @@ onUnmounted(() => {
             </div>
           </transition>
 
-          <div class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4">
+          <div
+            v-if="activeConversation.isExpired"
+            class="shrink-0 border-t border-cinnamon-ice/20 bg-white p-4"
+          >
+            <div
+              class="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3"
+            >
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 text-stone-600"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M8.5 12h7" />
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-noble-black">
+                  {{ getClosedConversationLabel(activeConversation) }}
+                </p>
+                <p class="text-xs text-noble-black/60">
+                  {{ activeConversation.closedNotice }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4">
             <div
               v-if="pendingImagePreviewUrl"
               class="mb-3 flex items-start gap-3 rounded-2xl border border-cinnamon-ice/20 bg-cream/70 p-3"
@@ -863,17 +910,12 @@ onUnmounted(() => {
 
             <div class="flex items-end gap-2 lg:gap-3">
               <div
-                class="relative flex flex-1 items-end rounded-[24px] border border-cinnamon-ice/20 bg-cream transition-all duration-300"
-                :class="
-                  activeConversation.isExpired
-                    ? 'border-stone-200 bg-stone-100 opacity-70'
-                    : 'focus-within:border-burning-orange/50'
-                "
+                class="relative flex flex-1 items-end rounded-[24px] border border-cinnamon-ice/20 bg-cream transition-all duration-300 focus-within:border-burning-orange/50"
               >
                 <button
                   class="mb-1 ml-2 rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
                   type="button"
-                  :disabled="activeConversation.isExpired || isUploadingImage"
+                  :disabled="isUploadingImage"
                   @click="triggerPhotoPicker"
                 >
                   <svg
@@ -895,12 +937,8 @@ onUnmounted(() => {
                   ref="textareaRef"
                   v-model="newMessage"
                   rows="1"
-                  :disabled="activeConversation.isExpired || isUploadingImage"
-                  :placeholder="
-                    activeConversation.isExpired
-                      ? 'Chat is closed while the dispute is active.'
-                      : 'Type your message...'
-                  "
+                  :disabled="isUploadingImage"
+                  placeholder="Type your message..."
                   class="custom-chat-scrollbar w-full resize-none bg-transparent px-2 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-noble-black/30"
                   style="min-height: 44px; max-height: 140px"
                   @input="handleComposerInput"
@@ -911,7 +949,6 @@ onUnmounted(() => {
                   <button
                     class="rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
                     type="button"
-                    :disabled="activeConversation.isExpired"
                     @click.stop="toggleEmojiPicker"
                   >
                     <svg
@@ -950,9 +987,7 @@ onUnmounted(() => {
               <button
                 class="mb-1 shrink-0 rounded-full p-2.5 text-white shadow-md transition-all duration-300"
                 :class="[
-                  activeConversation.isExpired
-                    ? 'cursor-not-allowed bg-stone-300'
-                    : 'bg-burning-orange hover:bg-burning-orange/90',
+                  'bg-burning-orange hover:bg-burning-orange/90',
                   { 'cursor-not-allowed opacity-50 grayscale': !canSendMessage },
                 ]"
                 :disabled="!canSendMessage"

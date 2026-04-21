@@ -1,5 +1,11 @@
 import { computed, ref } from "vue"
 import { mergeChatMessages } from "../utils/chat-message-utils"
+import {
+  getChatClosedNotice,
+  getChatClosureStateFromNotice,
+  isChatClosed,
+  type ChatClosureState,
+} from "../../shared/chat-rules"
 
 export type ChatMessage = {
   id: string
@@ -29,6 +35,7 @@ export type ChatItem = {
 type ConversationBase = {
   conversationId: string
   transactionId: string
+  closureState: ChatClosureState
   isExpired: boolean
   closedNotice: string | null
   item: ChatItem | null
@@ -103,6 +110,33 @@ export const useChat = () => {
   const hasMoreMessages = ref(false)
   const nextCursor = ref<string | null>(null)
   const totalUnreadCount = ref(0)
+
+  const updateConversationClosureState = (
+    conversationId: string,
+    closureState: ChatClosureState,
+    overrideNotice?: string | null,
+  ) => {
+    const isExpired = isChatClosed(closureState)
+    const closedNotice = overrideNotice ?? getChatClosedNotice(closureState)
+
+    if (activeConversation.value?.conversationId === conversationId) {
+      activeConversation.value = {
+        ...activeConversation.value,
+        closureState,
+        isExpired,
+        closedNotice,
+      }
+    }
+
+    const conversation = conversations.value.find(
+      (entry) => entry.conversationId === conversationId,
+    )
+    if (conversation) {
+      conversation.closureState = closureState
+      conversation.isExpired = isExpired
+      conversation.closedNotice = closedNotice
+    }
+  }
 
   const updateConversationFromMessage = (message: ChatMessage, markUnread: boolean) => {
     const conversation = conversations.value.find(
@@ -201,6 +235,7 @@ export const useChat = () => {
           activeConversation.value = {
             conversationId: matchingConversation.conversationId,
             transactionId: matchingConversation.transactionId,
+            closureState: matchingConversation.closureState,
             isExpired: matchingConversation.isExpired,
             closedNotice: matchingConversation.closedNotice,
             item: matchingConversation.item,
@@ -328,19 +363,21 @@ export const useChat = () => {
       const message = getErrorMessage(e, "Failed to send message")
       error.value = message
 
-      if (activeConversation.value && message.toLowerCase().includes("read-only")) {
-        activeConversation.value = {
-          ...activeConversation.value,
-          isExpired: true,
-        }
+      if (activeConversation.value) {
+        const closureState = getChatClosureStateFromNotice(message)
 
-        const matchingConversation = conversations.value.find(
-          (conversation) =>
-            conversation.conversationId === activeConversation.value?.conversationId,
-        )
-
-        if (matchingConversation) {
-          matchingConversation.isExpired = true
+        if (closureState) {
+          updateConversationClosureState(
+            activeConversation.value.conversationId,
+            closureState,
+            message,
+          )
+        } else if (message.toLowerCase().includes("read-only")) {
+          updateConversationClosureState(
+            activeConversation.value.conversationId,
+            activeConversation.value.closureState,
+            message,
+          )
         }
       }
 
@@ -359,13 +396,16 @@ export const useChat = () => {
     error.value = null
 
     try {
-      return await $fetch<ChatConversationReport>("/api/chat/report", {
+      const report = await $fetch<ChatConversationReport>("/api/chat/report", {
         method: "POST",
         body: {
           conversationId: activeConversation.value.conversationId,
           description: description?.trim() || undefined,
         },
       })
+
+      updateConversationClosureState(activeConversation.value.conversationId, "IN_DISPUTE")
+      return report
     } catch (err: unknown) {
       error.value = getErrorMessage(err, "Failed to submit report.")
       return null
