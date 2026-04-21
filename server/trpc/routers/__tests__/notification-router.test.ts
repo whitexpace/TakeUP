@@ -10,6 +10,19 @@ const mockContext = () => ({
     appNotification: {
       findMany: vi.fn().mockResolvedValue([
         {
+          id: "dispute-review-approved",
+          type: "DISPUTE_OPENED",
+          title: "A dispute concern was approved",
+          body: "An admin approved the dispute concern for transaction C99AC81A-44C1-42. Reason: Damage / Missing parts A formal dispute is now open and under admin review.",
+          actionPath: "/account/transactions/booking-approved",
+          readAt: null,
+          createdAt: new Date("2026-03-28T00:00:00.000Z"),
+          actorUser: {
+            firstName: "Admin",
+            lastName: "User",
+          },
+        },
+        {
           id: "dispute-rebuttal-submitted",
           type: "DISPUTE_REBUTTAL_SUBMITTED",
           title: "A rebuttal was submitted",
@@ -60,7 +73,7 @@ const mockContext = () => ({
         createdAt: new Date("2026-03-25T00:00:00.000Z"),
         actorUser: null,
       }),
-      updateMany: vi.fn().mockResolvedValue({ count: 3 }),
+      updateMany: vi.fn().mockResolvedValue({ count: 4 }),
     },
   },
   user: { id: USER_ID, email: "user@up.edu.ph", name: "User" },
@@ -78,20 +91,27 @@ describe("notificationRouter", () => {
         where: { recipientUserId: USER_ID },
       }),
     )
-    expect(notifications).toHaveLength(3)
+    expect(notifications).toHaveLength(4)
     expect(notifications[0]).toMatchObject({
+      id: "dispute-review-approved",
+      read: false,
+      title: "A dispute concern was approved",
+      body: "An admin approved the dispute concern for transaction C99AC81A-44C1-42. Reason: Damage / Missing parts A formal dispute is now open and under admin review.",
+      actionPath: "/account/transactions/booking-approved",
+    })
+    expect(notifications[1]).toMatchObject({
       id: "dispute-rebuttal-submitted",
       read: false,
       title: "New rebuttal on your dispute",
       body: "Lend E. submitted a rebuttal. Open the transaction to review their response.",
       actionPath: "/account/transactions/booking-rebuttal",
     })
-    expect(notifications[1]).toMatchObject({
+    expect(notifications[2]).toMatchObject({
       id: "legacy-dispute-submitted",
       read: false,
       title: "New dispute on your transaction",
       body: 'Npguarin U. reported "Damage / Missing parts". Review the dispute and submit your rebuttal if needed.',
-      actionPath: "/account/transactions/booking-legacy?action=rebuttal",
+      actionPath: "/account/transactions/booking-legacy",
     })
   })
 
@@ -123,6 +143,6 @@ describe("notificationRouter", () => {
         },
       }),
     )
-    expect(result).toEqual({ count: 3 })
+    expect(result).toEqual({ count: 4 })
   })
 })

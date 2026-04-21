@@ -23,14 +23,14 @@ const route = useRoute()
 const router = useRouter()
 
 const statusFilters: Array<{ value: AdminStatusFilter; label: string; description: string }> = [
-  { value: "OPEN", label: "Open", description: "Ready for final resolution" },
   { value: "SUBMITTED", label: "Submitted", description: "New concerns awaiting intake review" },
+  { value: "OPEN", label: "Open", description: "Ready for final resolution" },
   { value: "APPEALED", label: "Appealed", description: "Rejected concerns sent back for review" },
   { value: "REJECTED", label: "Rejected", description: "Concerns not opened as formal disputes" },
   { value: "CLOSED", label: "Closed", description: "Resolved and finalized disputes" },
 ]
 
-const defaultStatusFilter: AdminStatusFilter = "OPEN"
+const defaultStatusFilter: AdminStatusFilter = "SUBMITTED"
 
 const activeStatus = computed<AdminStatusFilter>(() => {
   const raw = route.query.status

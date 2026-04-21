@@ -33,6 +33,15 @@ const extractDisputeReason = (body: string) => {
   return match?.[1]?.trim() || null
 }
 
+const shouldNormalizeLegacyDisputeNotification = (notification: {
+  type: AppNotificationType
+  title: string
+}) =>
+  (notification.type === "DISPUTE_SUBMITTED" &&
+    notification.title === "A dispute concern was submitted") ||
+  (notification.type === "DISPUTE_OPENED" &&
+    notification.title === "A formal dispute has been opened")
+
 const normalizeNotificationContent = (notification: {
   type: AppNotificationType
   title: string
@@ -42,7 +51,7 @@ const normalizeNotificationContent = (notification: {
     lastName: string
   } | null
 }) => {
-  if (notification.type === "DISPUTE_SUBMITTED" || notification.type === "DISPUTE_OPENED") {
+  if (shouldNormalizeLegacyDisputeNotification(notification)) {
     const actorName = formatActorName(notification.actorUser)
     const reason = extractDisputeReason(notification.body)
 
@@ -105,8 +114,11 @@ const mapNotification = (notification: {
   type: notification.type,
   ...normalizeNotificationContent(notification),
   actionPath:
-    notification.type === "DISPUTE_OPENED" ||
-    (DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED && notification.type === "DISPUTE_SUBMITTED")
+    (notification.type === "DISPUTE_OPENED" &&
+      notification.title === "A formal dispute has been opened") ||
+    (DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED &&
+      notification.type === "DISPUTE_SUBMITTED" &&
+      notification.title === "A dispute concern was submitted")
       ? withRebuttalActionPath(notification.actionPath)
       : notification.actionPath,
   read: notification.readAt !== null,
