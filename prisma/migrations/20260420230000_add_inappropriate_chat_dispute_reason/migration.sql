@@ -1,3 +1,5 @@
--- AlterEnum
-ALTER TYPE "dispute_reason_enum" ADD VALUE 'inappropriate_chat';
-
+-- No-op.
+-- `transaction_disputes.reason` was migrated from `dispute_reason_enum` to `TEXT`
+-- in `20260420062146_upd_transaction_dispute`, which also dropped the enum.
+-- Keeping this migration empty preserves history without trying to alter a
+-- type that no longer exists.
