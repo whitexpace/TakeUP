@@ -262,6 +262,36 @@ const createMockPrisma = (store: MockStore) =>
         store.userRewards.push(nextReward)
         return pickFields(nextReward, select)
       },
+      updateMany: async ({
+        where,
+        data,
+      }: {
+        where: { userId: string; availablePoints?: { gte: number } }
+        data: { availablePoints?: number | { decrement: number } }
+      }) => {
+        let count = 0
+
+        for (const reward of store.userRewards) {
+          const matchesUser = reward.userId === where.userId
+          const matchesBalance =
+            where.availablePoints?.gte === undefined ||
+            reward.availablePoints >= where.availablePoints.gte
+
+          if (!matchesUser || !matchesBalance) {
+            continue
+          }
+
+          if (typeof data.availablePoints === "number") {
+            reward.availablePoints = data.availablePoints
+          } else if (data.availablePoints && "decrement" in data.availablePoints) {
+            reward.availablePoints -= data.availablePoints.decrement
+          }
+
+          count++
+        }
+
+        return { count }
+      },
     },
     item: {
       findUnique: async ({
@@ -290,21 +320,45 @@ const createMockPrisma = (store: MockStore) =>
         where,
         data,
       }: {
-        where: { boostExpiresAt?: { lte: Date } }
+        where: {
+          id?: string
+          lenderId?: string
+          status?: MockStore["items"][number]["status"]
+          boostExpiresAt?: { lte: Date }
+          OR?: Array<{ boostExpiresAt: null } | { boostExpiresAt: { lte: Date } }>
+        }
         data: Partial<MockStore["items"][number]>
       }) => {
+        let count = 0
+
         for (const item of store.items) {
-          const shouldUpdate =
+          const matchesId = !where.id || item.id === where.id
+          const matchesLender = !where.lenderId || item.lenderId === where.lenderId
+          const matchesStatus = !where.status || item.status === where.status
+          const matchesBoostExpiry =
             !where.boostExpiresAt ||
             (item.boostExpiresAt instanceof Date &&
               item.boostExpiresAt.getTime() <= where.boostExpiresAt.lte.getTime())
+          const matchesOr =
+            !where.OR ||
+            where.OR.some((clause) => {
+              if (clause.boostExpiresAt === null) {
+                return item.boostExpiresAt === null
+              }
 
-          if (shouldUpdate) {
+              return (
+                item.boostExpiresAt instanceof Date &&
+                item.boostExpiresAt.getTime() <= clause.boostExpiresAt.lte.getTime()
+              )
+            })
+
+          if (matchesId && matchesLender && matchesStatus && matchesBoostExpiry && matchesOr) {
             Object.assign(item, clone(data))
+            count++
           }
         }
 
-        return { count: 0 }
+        return { count }
       },
     },
     itemBoost: {
@@ -617,6 +671,18 @@ describe("rewards utility", () => {
 
     expect(result.pointsSpent).toBe(50)
     expect(result.remainingPoints).toBe(10)
+    expect(store.rewardEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: RewardSourceType.MANUAL_ADJUSTMENT,
+          pointsDelta: 60,
+        }),
+        expect.objectContaining({
+          sourceType: RewardSourceType.BOOST_REDEMPTION,
+          pointsDelta: -50,
+        }),
+      ]),
+    )
     expect(store.items[0]).toEqual(
       expect.objectContaining({
         id: "item-1",
@@ -660,6 +726,68 @@ describe("rewards utility", () => {
         boostType: ItemBoostType.STANDARD_24_HOUR,
       }),
     ).rejects.toThrow("Not enough available points")
+  })
+
+  it("prevents boost redemption when the listing is not currently active and available", async () => {
+    const store = createBaseStore()
+    store.items.push({
+      id: "item-3",
+      lenderId: "lender-6",
+      status: "DEACTIVATED",
+      boostScore: 0,
+      boostExpiresAt: null,
+    })
+    store.userRewards.push({
+      userId: "lender-6",
+      availablePoints: 70,
+      totalPointsEarned: 70,
+      borrowerPoints: 0,
+      lenderPoints: 0,
+      pendingPoints: 0,
+    })
+
+    const prisma = createMockPrisma(store)
+
+    await expect(
+      redeemListingBoost(prisma, "lender-6", {
+        itemId: "item-3",
+        boostType: ItemBoostType.STANDARD_24_HOUR,
+      }),
+    ).rejects.toThrow("Only active available listings can be boosted")
+
+    expect(store.itemBoosts).toHaveLength(0)
+    expect(store.userRewards[0]?.availablePoints).toBe(70)
+  })
+
+  it("prevents boost redemption when the listing already has an active boost in item state", async () => {
+    const store = createBaseStore()
+    store.items.push({
+      id: "item-4",
+      lenderId: "lender-7",
+      status: "AVAILABLE",
+      boostScore: 1,
+      boostExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    })
+    store.userRewards.push({
+      userId: "lender-7",
+      availablePoints: 90,
+      totalPointsEarned: 90,
+      borrowerPoints: 0,
+      lenderPoints: 0,
+      pendingPoints: 0,
+    })
+
+    const prisma = createMockPrisma(store)
+
+    await expect(
+      redeemListingBoost(prisma, "lender-7", {
+        itemId: "item-4",
+        boostType: ItemBoostType.STANDARD_24_HOUR,
+      }),
+    ).rejects.toThrow("This listing already has an active boost")
+
+    expect(store.itemBoosts).toHaveLength(0)
+    expect(store.userRewards[0]?.availablePoints).toBe(90)
   })
 
   it("keeps achievement totals stable when spending only affects available points", () => {

@@ -702,6 +702,7 @@ export const redeemListingBoost = async (
   },
 ) => {
   await expireActiveBoosts(prisma)
+  await syncUserRewardLedger(prisma, userId)
 
   const config = getBoostConfig(input.boostType)
   const item = await prisma.item.findUnique({
@@ -732,42 +733,98 @@ export const redeemListingBoost = async (
     })
   }
 
-  const activeBoost = await prisma.itemBoost.findFirst({
-    where: {
-      itemId: item.id,
-      status: ItemBoostStatus.ACTIVE,
-      expiresAt: { gt: new Date() },
-    },
-    select: {
-      id: true,
-    },
-  })
-
-  if (activeBoost) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: "This listing already has an active boost.",
-    })
-  }
-
-  const rewards = await prisma.userReward.upsert({
-    where: { userId },
-    create: { userId },
-    update: {},
-    select: {
-      availablePoints: true,
-    },
-  })
-
-  if (rewards.availablePoints < config.pointsCost) {
+  if (item.status !== "AVAILABLE") {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Not enough available points to boost this listing.",
+      message: "Only active available listings can be boosted.",
     })
   }
 
   const startsAt = new Date()
   const expiresAt = new Date(startsAt.getTime() + config.durationHours * 60 * 60 * 1000)
+
+  const claimedItem = await prisma.item.updateMany({
+    where: {
+      id: item.id,
+      lenderId: userId,
+      status: "AVAILABLE",
+      OR: [{ boostExpiresAt: null }, { boostExpiresAt: { lte: startsAt } }],
+    },
+    data: {
+      boostScore: config.boostScore,
+      boostExpiresAt: expiresAt,
+    },
+  })
+
+  if (claimedItem.count === 0) {
+    const currentItem = await prisma.item.findUnique({
+      where: { id: input.itemId },
+      select: {
+        id: true,
+        lenderId: true,
+        status: true,
+        boostExpiresAt: true,
+      },
+    })
+
+    if (!currentItem) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Item not found." })
+    }
+
+    if (currentItem.lenderId !== userId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only the owner of this item can boost the listing.",
+      })
+    }
+
+    if (currentItem.status === "DELETED") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Deleted listings cannot be boosted.",
+      })
+    }
+
+    if (currentItem.status !== "AVAILABLE") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Only active available listings can be boosted.",
+      })
+    }
+
+    if (currentItem.boostExpiresAt instanceof Date && currentItem.boostExpiresAt > startsAt) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "This listing already has an active boost.",
+      })
+    }
+
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "This listing could not be reserved for boosting. Refresh and try again.",
+    })
+  }
+
+  const deductedRewards = await prisma.userReward.updateMany({
+    where: {
+      userId,
+      availablePoints: {
+        gte: config.pointsCost,
+      },
+    },
+    data: {
+      availablePoints: {
+        decrement: config.pointsCost,
+      },
+    },
+  })
+
+  if (deductedRewards.count === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Not enough available points to boost this listing.",
+    })
+  }
 
   const boost = await prisma.itemBoost.create({
     data: {
@@ -779,14 +836,6 @@ export const redeemListingBoost = async (
       status: ItemBoostStatus.ACTIVE,
       startsAt,
       expiresAt,
-    },
-  })
-
-  await prisma.item.update({
-    where: { id: item.id },
-    data: {
-      boostScore: config.boostScore,
-      boostExpiresAt: expiresAt,
     },
   })
 
@@ -804,8 +853,6 @@ export const redeemListingBoost = async (
       pointsSpent: config.pointsCost,
     },
   })
-
-  await syncUserRewardLedger(prisma, userId)
 
   const updatedRewards = await prisma.userReward.findUnique({
     where: { userId },

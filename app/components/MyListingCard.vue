@@ -46,12 +46,43 @@ function formatCategory(category: string) {
 
 const isInUse = computed(() => props.item.displayStatus === "IN_USE")
 const isDeactivated = computed(() => props.item.status === "DEACTIVATED")
+const boostExpiresAt = computed(() => {
+  if (!props.item.boostExpiresAt) {
+    return null
+  }
+
+  const value =
+    props.item.boostExpiresAt instanceof Date
+      ? props.item.boostExpiresAt
+      : new Date(props.item.boostExpiresAt)
+
+  return Number.isNaN(value.getTime()) ? null : value
+})
+const hasActiveBoost = computed(() => {
+  if (!boostExpiresAt.value) {
+    return false
+  }
+
+  return boostExpiresAt.value.getTime() > Date.now()
+})
+const isBoostEligible = computed(
+  () => props.item.displayStatus === "ACTIVE" && !hasActiveBoost.value,
+)
 const toggleLabel = computed(() => (isDeactivated.value ? "Activate" : "Deactivate"))
 const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
   isDeactivated.value ? "AVAILABLE" : "DEACTIVATED",
 )
-const hasActiveBoost = computed(() => props.item.hasActiveBoost)
-const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boost 50 pts"))
+const boostLabel = computed(() => {
+  if (hasActiveBoost.value) {
+    return "Boost Active"
+  }
+
+  if (!isBoostEligible.value) {
+    return "Boost Unavailable"
+  }
+
+  return "Boost 50 pts"
+})
 </script>
 
 <template>
@@ -71,7 +102,7 @@ const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boos
         </NuxtLink>
 
         <button
-          :disabled="hasActiveBoost"
+          :disabled="!isBoostEligible || isToggling"
           class="w-full max-w-[140px] rounded-full bg-blue-estate py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-blue-estate/90 active:scale-95 disabled:cursor-not-allowed disabled:bg-blue-estate/40"
           @click.stop="emit('boostListing', item.id)"
         >
@@ -107,7 +138,7 @@ const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boos
 
       <div
         v-if="hasActiveBoost"
-        class="absolute left-3 top-3 z-20 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+        class="absolute right-3 top-3 z-20 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm"
       >
         Boosted
       </div>

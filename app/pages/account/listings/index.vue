@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { MyListingCategory, MyListingFilterStatus } from "../../../composables/use-my-listings"
+import { resetFilteredResultsCountCache } from "../../../composables/use-filtered-results-count"
+import { resetPaginatedItemsCache } from "../../../composables/use-paginated-items"
 
 definePageMeta({ layout: "account", middleware: "account-auth" })
 
@@ -31,6 +33,9 @@ const boostSuccessMessage = ref("")
 const boostingId = ref<string | null>(null)
 const categorySearch = ref("")
 const isCategoryDropdownOpen = ref(false)
+const showBoostToast = ref(false)
+const boostToastTone = ref<"success" | "error">("success")
+let boostToastTimeout: ReturnType<typeof setTimeout> | null = null
 
 const { data: rewardsSummary, refresh: refreshRewards } = await useAsyncData(
   "account:listings:rewards",
@@ -100,7 +105,44 @@ const handleToggleStatus = async (id: string, status: "AVAILABLE" | "DEACTIVATED
   }
 }
 
+const showBoostToastMessage = (tone: "success" | "error", message: string) => {
+  boostToastTone.value = tone
+
+  if (tone === "success") {
+    boostSuccessMessage.value = message
+    boostErrorMessage.value = ""
+  } else {
+    boostErrorMessage.value = message
+    boostSuccessMessage.value = ""
+  }
+
+  showBoostToast.value = false
+
+  if (boostToastTimeout) {
+    clearTimeout(boostToastTimeout)
+  }
+
+  requestAnimationFrame(() => {
+    showBoostToast.value = true
+  })
+
+  boostToastTimeout = setTimeout(() => {
+    showBoostToast.value = false
+    boostToastTimeout = null
+  }, 3200)
+}
+
 const handleBoostListing = async (itemId: string) => {
+  const targetListing = listings.value.find((listing) => listing.id === itemId)
+
+  if (!targetListing || targetListing.displayStatus !== "ACTIVE" || targetListing.hasActiveBoost) {
+    showBoostToastMessage(
+      "error",
+      "Only active available listings without an existing boost can be boosted.",
+    )
+    return
+  }
+
   boostingId.value = itemId
   boostErrorMessage.value = ""
   boostSuccessMessage.value = ""
@@ -113,12 +155,16 @@ const handleBoostListing = async (itemId: string) => {
         boostType: "STANDARD_24_HOUR",
       },
     })
-    boostSuccessMessage.value = "Listing boost activated for 24 hours."
+    resetPaginatedItemsCache()
+    resetFilteredResultsCountCache()
+    showBoostToastMessage("success", "Listing boost activated for 24 hours.")
     await Promise.all([refresh(), refreshRewards()])
   } catch (error: unknown) {
     const data = (error as { data?: { statusMessage?: string; message?: string } })?.data
-    boostErrorMessage.value =
-      data?.statusMessage ?? data?.message ?? "Unable to boost this listing right now."
+    showBoostToastMessage(
+      "error",
+      data?.statusMessage ?? data?.message ?? "Unable to boost this listing right now.",
+    )
   } finally {
     boostingId.value = null
   }
@@ -126,6 +172,12 @@ const handleBoostListing = async (itemId: string) => {
 
 onMounted(() => {
   void refresh()
+})
+
+onBeforeUnmount(() => {
+  if (boostToastTimeout) {
+    clearTimeout(boostToastTimeout)
+  }
 })
 </script>
 
@@ -194,13 +246,6 @@ onMounted(() => {
           Open Rewards
         </NuxtLink>
       </div>
-
-      <p v-if="boostSuccessMessage" class="mb-4 text-sm font-medium text-emerald-700">
-        {{ boostSuccessMessage }}
-      </p>
-      <p v-if="boostErrorMessage" class="mb-4 text-sm font-medium text-red-600">
-        {{ boostErrorMessage }}
-      </p>
 
       <div class="flex flex-col gap-4 xl:flex-row xl:items-center">
         <div
@@ -415,5 +460,35 @@ onMounted(() => {
         class="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"
       />
     </div>
+
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="translate-y-3 opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="translate-y-2 opacity-0"
+    >
+      <div
+        v-if="showBoostToast && (boostSuccessMessage || boostErrorMessage)"
+        class="pointer-events-none fixed bottom-6 right-6 z-[150] max-w-sm"
+      >
+        <div
+          class="rounded-[20px] px-5 py-4 shadow-2xl ring-1 backdrop-blur-sm"
+          :class="
+            boostToastTone === 'success'
+              ? 'bg-emerald-500 text-white ring-emerald-400/40'
+              : 'bg-red-500 text-white ring-red-400/40'
+          "
+        >
+          <p class="text-sm font-semibold">
+            {{ boostToastTone === "success" ? "Boost updated" : "Boost failed" }}
+          </p>
+          <p class="mt-1 text-sm leading-5 text-white/90">
+            {{ boostToastTone === "success" ? boostSuccessMessage : boostErrorMessage }}
+          </p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
