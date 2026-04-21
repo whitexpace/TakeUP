@@ -1066,7 +1066,7 @@ export const itemRouter = router({
 
     // Increment view count without delaying the item detail response.
     const updateItem = (
-      ctx.prisma.item as Partial<{
+      ctx.prisma.item as unknown as Partial<{
         update(args: {
           where: { id: string }
           data: { viewCount: { increment: number } }
