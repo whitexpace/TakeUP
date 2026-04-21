@@ -3,8 +3,9 @@ import { TransactionStatus, UserStatus, type Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import { bookingReviewLookupSchema, createReviewSchema } from "../../../shared/schemas/review"
-import { processReviewRewards } from "../../utils/rewards"
+import { processTransactionRewards } from "../../utils/rewards"
 import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
+import { syncRoleRatingForUser, syncRoleRatingsFromReviews } from "../../utils/review-ratings"
 
 type ReviewLeaderboardType = "BORROWER_REVIEW" | "LENDER_REVIEW"
 
@@ -50,7 +51,6 @@ const listReviewLeaderboard = async (
 
   const eligibleStats = [...grouped.entries()].map(([userId, entry]) => ({
     userId,
-    totalRating: entry.totalRating,
     reviewCount: entry.reviewCount,
     lastActivityAt: entry.lastActivityAt,
   }))
@@ -60,6 +60,8 @@ const listReviewLeaderboard = async (
   if (userIds.length === 0) {
     return []
   }
+
+  await syncRoleRatingsFromReviews(prisma, reviewType, userIds)
 
   const users = await prisma.user.findMany({
     where: {
@@ -76,11 +78,38 @@ const listReviewLeaderboard = async (
   })
 
   const userMap = new Map(users.map((user) => [user.id, user]))
+  let ratingMap: Map<string, number>
+
+  if (reviewType === "BORROWER_REVIEW") {
+    const roleRatings = await prisma.borrower.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: {
+        userId: true,
+        borrowerRating: true,
+      },
+    })
+
+    ratingMap = new Map(roleRatings.map((entry) => [entry.userId, entry.borrowerRating]))
+  } else {
+    const roleRatings = await prisma.lender.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: {
+        userId: true,
+        lenderRating: true,
+      },
+    })
+
+    ratingMap = new Map(roleRatings.map((entry) => [entry.userId, entry.lenderRating]))
+  }
 
   return eligibleStats
     .map((entry) => ({
       ...entry,
-      averageRating: entry.reviewCount > 0 ? entry.totalRating / entry.reviewCount : 0,
+      averageRating: ratingMap.get(entry.userId) ?? 0,
     }))
     .sort((left, right) => {
       if (right.averageRating !== left.averageRating) {
@@ -294,6 +323,8 @@ export const reviewRouter = router({
         },
       })
 
+      await syncRoleRatingForUser(tx as Prisma.TransactionClient, reviewType, revieweeUserId)
+
       return {
         review,
         transactionId: transaction.id,
@@ -303,7 +334,10 @@ export const reviewRouter = router({
     const rewardEventDelegate = (ctx.prisma as { rewardEvent?: { upsert?: unknown } }).rewardEvent
     if (rewardEventDelegate && typeof rewardEventDelegate.upsert === "function") {
       try {
-        await processReviewRewards(ctx.prisma as Prisma.TransactionClient, result.review.id)
+        await processTransactionRewards(
+          ctx.prisma as Prisma.TransactionClient,
+          result.transactionId,
+        )
       } catch (error) {
         console.error("Failed to process transaction rewards after review submission", error)
       }

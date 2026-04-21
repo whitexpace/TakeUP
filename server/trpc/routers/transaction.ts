@@ -22,7 +22,8 @@ import {
   transactionReviewSelect,
   transactionReviewUserSelect,
 } from "../review-helpers"
-import { processReviewRewards } from "../../utils/rewards"
+import { processTransactionRewards } from "../../utils/rewards"
+import { syncRoleRatingForUser } from "../../utils/review-ratings"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -711,6 +712,14 @@ export const transactionRouter = router({
             })
           }
 
+          if (revieweeUserId && input.reviewType !== "ITEM_REVIEW") {
+            await syncRoleRatingForUser(
+              tx as Prisma.TransactionClient,
+              input.reviewType,
+              revieweeUserId,
+            )
+          }
+
           return {
             createdReview,
             transactionId: transaction.id,
@@ -721,9 +730,9 @@ export const transactionRouter = router({
           .rewardEvent
         if (rewardEventDelegate && typeof rewardEventDelegate.upsert === "function") {
           try {
-            await processReviewRewards(
+            await processTransactionRewards(
               ctx.prisma as Prisma.TransactionClient,
-              reviewResult.createdReview.id,
+              reviewResult.transactionId,
             )
           } catch (error) {
             console.error("Failed to process transaction rewards after review submission", error)

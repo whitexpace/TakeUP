@@ -3,6 +3,7 @@ export type AppHeaderNotificationType =
   | "DISPUTE_SUBMITTED"
   | "DISPUTE_OPENED"
   | "DISPUTE_REBUTTAL_SUBMITTED"
+  | "DISPUTE_RESOLVED"
 
 export type AppHeaderNotification = {
   id: string | number

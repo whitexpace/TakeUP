@@ -176,11 +176,21 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="font-geist">
-    <!-- Page header -->
-    <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold">My Transactions</h1>
-    <p class="text-neutral-800 text-base sm:text-lg font-normal tracking-wide mt-1 mb-4 sm:mb-6">
-      Review your borrowing and lending history
-    </p>
+    <div class="mb-4 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-neutral-800 text-xl font-bold sm:text-2xl">My Transactions</h1>
+        <p class="mt-1 text-base font-normal tracking-wide text-neutral-800 sm:text-lg">
+          Review your borrowing and lending history
+        </p>
+      </div>
+
+      <NuxtLink
+        :to="{ path: '/account/disputes', query: { tab: 'disputes' } }"
+        class="inline-flex items-center justify-center self-start rounded-2xl border border-blue-estate/15 bg-blue-estate px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-indigo-900 sm:self-auto"
+      >
+        Disputes
+      </NuxtLink>
+    </div>
 
     <!-- Search bar -->
     <div

@@ -135,6 +135,14 @@ const formatDateTime = (date: Date | string) => {
   return `${formattedDate} at ${time}`
 }
 
+const finalDecisionLabel = (
+  decision: NonNullable<BookingDetail["latestDispute"]>["finalDecision"],
+) => {
+  if (decision === "APPROVED") return "Dispute approved"
+  if (decision === "REJECTED") return "Dispute rejected"
+  return "Pending final judgment"
+}
+
 const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
   const start = new Date(startDate)
   const end = new Date(endDate)
@@ -502,8 +510,8 @@ const disputeStatusLabel = computed(() => {
       return "Dispute rejected"
     case "APPEALED":
       return "Dispute appealed"
-    case "RESOLVED":
-      return "Dispute resolved"
+    case "CLOSED":
+      return "Dispute closed"
     default:
       return "No dispute"
   }
@@ -519,7 +527,7 @@ const disputeStatusToneClasses = computed(() => {
       return "bg-noble-black/5 text-noble-black/70 border border-cinnamon-ice"
     case "APPEALED":
       return "bg-blue-estate/10 text-blue-estate border border-blue-estate/20"
-    case "RESOLVED":
+    case "CLOSED":
       return "bg-green-100 text-green-700 border border-green-200"
     default:
       return "bg-cream text-noble-black/60 border border-cinnamon-ice"
@@ -541,9 +549,11 @@ const disputeStatusDescription = computed(() => {
         ? "Your concern was reviewed and the dispute was not opened."
         : "This concern was reviewed and the dispute was not opened."
     case "APPEALED":
-      return "Your appeal was submitted and is waiting for the next review."
-    case "RESOLVED":
-      return "This dispute was resolved after review."
+      return "Your appeal was submitted and is waiting for the next admin review."
+    case "CLOSED":
+      return latestDispute.value?.finalDecision === "APPROVED"
+        ? "This dispute was upheld, enforced, and closed by admin."
+        : "This dispute was closed after review."
     default:
       return "Raise a concern if this transaction needs dispute review."
   }
@@ -1344,6 +1354,27 @@ onBeforeUnmount(() => {
               <p v-if="latestDispute.reviewedBy" class="mt-1 text-sm text-noble-black/60">
                 Admin reviewer: {{ latestDispute.reviewedBy.firstName }}
                 {{ latestDispute.reviewedBy.lastName }}
+              </p>
+            </div>
+
+            <div
+              v-if="latestDispute.finalDecision"
+              class="rounded-2xl border border-green-200 bg-green-50/70 p-4"
+            >
+              <p class="text-sm font-semibold text-noble-black">
+                {{ finalDecisionLabel(latestDispute.finalDecision) }}
+              </p>
+              <p v-if="latestDispute.finalDecisionAt" class="mt-1 text-sm text-noble-black/60">
+                Final judgment recorded on {{ formatDateTime(latestDispute.finalDecisionAt) }}
+              </p>
+              <p v-if="latestDispute.closedAt" class="mt-1 text-sm text-noble-black/60">
+                Case closed on {{ formatDateTime(latestDispute.closedAt) }}
+              </p>
+              <p
+                v-if="latestDispute.finalDecisionNotes"
+                class="mt-3 text-sm leading-relaxed text-noble-black/80"
+              >
+                {{ latestDispute.finalDecisionNotes }}
               </p>
             </div>
 

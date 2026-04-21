@@ -42,7 +42,7 @@ const transactionSummarySelect = {
   borrowerId: true,
   lenderId: true,
   status: true,
-  disputes: { select: { status: true } },
+  disputes: { select: { status: true, finalDecisionAt: true } },
   item: {
     select: {
       id: true,
@@ -115,17 +115,20 @@ const chatEnabledTransactionStatuses = CHAT_ENABLED_TRANSACTION_STATUSES.map(
   (status) => prismaTransactionStatuses[status],
 ).filter((status): status is PrismaTransactionStatus => Boolean(status))
 
-const hasOpenDispute = (disputes?: Array<{ status: string }>) =>
+const hasOpenDispute = (disputes?: Array<{ status: string; finalDecisionAt?: Date | null }>) =>
   (disputes ?? []).some((dispute) => dispute.status === "OPEN")
 
 const isConversationExpired = (transaction: {
   status: string
-  disputes?: Array<{ status: string }>
+  disputes?: Array<{ status: string; finalDecisionAt?: Date | null }>
 }) =>
   isChatReadOnly({
     transactionStatus: transaction.status,
     hasOpenDispute: hasOpenDispute(transaction.disputes),
-  })
+  }) ||
+  (transaction.disputes ?? []).some(
+    (dispute) => dispute.status === "CLOSED" || Boolean(dispute.finalDecisionAt),
+  )
 
 const assertChatAvailableForTransaction = (transaction: { status: string }) => {
   if (isChatAvailableForTransactionStatus(transaction.status)) {

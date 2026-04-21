@@ -2,7 +2,6 @@ import { TRPCError } from "@trpc/server"
 import { describe, expect, it, vi } from "vitest"
 import { disputeRouter } from "../dispute"
 import {
-  ACTIVE_DISPUTE_STATUSES,
   OPEN_DISPUTE_STATUS,
   REJECTED_DISPUTE_STATUS,
   SUBMITTED_DISPUTE_STATUS,
@@ -34,6 +33,11 @@ const makeDisputeRecord = (overrides: Record<string, unknown> = {}) => ({
   resolution: null,
   status: SUBMITTED_DISPUTE_STATUS,
   reviewedAt: null,
+  finalDecision: null,
+  finalDecisionNotes: null,
+  finalDecisionAt: null,
+  requiredActionCount: 0,
+  closedAt: null,
   createdAt: new Date("2026-04-10T09:00:00.000Z"),
   raisedBy: {
     id: USER_ID,
@@ -42,8 +46,12 @@ const makeDisputeRecord = (overrides: Record<string, unknown> = {}) => ({
     firstName: "Borrow",
     middleName: null,
     lastName: "Er",
+    status: "ACTIVE",
+    points: 40,
   },
   reviewedBy: null,
+  finalDecisionBy: null,
+  actions: [],
   transaction: {
     id: TRANSACTION_ID,
     bookingId: BOOKING_ID,
@@ -61,6 +69,8 @@ const makeDisputeRecord = (overrides: Record<string, unknown> = {}) => ({
       firstName: "Borrow",
       middleName: null,
       lastName: "Er",
+      status: "ACTIVE",
+      points: 40,
     },
     lender: {
       id: OTHER_USER_ID,
@@ -69,6 +79,8 @@ const makeDisputeRecord = (overrides: Record<string, unknown> = {}) => ({
       firstName: "Lend",
       middleName: null,
       lastName: "Er",
+      status: "ACTIVE",
+      points: 25,
     },
   },
   ...overrides,
@@ -91,6 +103,8 @@ const makeReportableBooking = (overrides: Record<string, unknown> = {}) => ({
       firstName: "Borrow",
       middleName: null,
       lastName: "Er",
+      status: "ACTIVE",
+      points: 40,
     },
   },
   lender: {
@@ -101,6 +115,8 @@ const makeReportableBooking = (overrides: Record<string, unknown> = {}) => ({
       firstName: "Lend",
       middleName: null,
       lastName: "Er",
+      status: "ACTIVE",
+      points: 25,
     },
   },
   ...overrides,
@@ -110,6 +126,7 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
   const rentalTransaction = {
     findUnique: vi.fn(),
     findMany: vi.fn().mockResolvedValue([]),
+    update: vi.fn().mockResolvedValue({ id: TRANSACTION_ID }),
   }
 
   const booking = {
@@ -125,6 +142,10 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
   }
 
+  const transactionDisputeAction = {
+    create: vi.fn().mockResolvedValue({ id: "action-1" }),
+  }
+
   const appNotification = {
     create: vi.fn().mockResolvedValue({ id: "notif-1" }),
   }
@@ -133,10 +154,16 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
     $transaction: vi.fn(),
     user: {
       findUnique: vi.fn().mockResolvedValue({ accountType: options?.accountType ?? "BORROWER" }),
+      findMany: vi.fn().mockResolvedValue([
+        { id: USER_ID, status: "ACTIVE", points: 40 },
+        { id: OTHER_USER_ID, status: "ACTIVE", points: 25 },
+      ]),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     rentalTransaction,
     booking,
     transactionDispute,
+    transactionDisputeAction,
     appNotification,
   }
 
@@ -183,7 +210,6 @@ describe("disputeRouter", () => {
     expect(ctx.prisma.transactionDispute.findFirst).toHaveBeenCalledWith({
       where: {
         transactionId: TRANSACTION_ID,
-        status: { in: [...ACTIVE_DISPUTE_STATUSES] },
       },
       select: { id: true },
     })
@@ -236,7 +262,7 @@ describe("disputeRouter", () => {
     expect(ctx.prisma.transactionDispute.create).not.toHaveBeenCalled()
   })
 
-  it("blocks duplicate active disputes for the same transaction", async () => {
+  it("blocks duplicate dispute records for the same transaction", async () => {
     const ctx = makeContext()
     ctx.prisma.rentalTransaction.findUnique.mockResolvedValue({
       id: TRANSACTION_ID,
@@ -261,7 +287,7 @@ describe("disputeRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "CONFLICT",
-      message: "An active dispute already exists for this transaction.",
+      message: "A dispute has already been filed for this transaction.",
     })
   })
 
@@ -322,8 +348,7 @@ describe("disputeRouter", () => {
       },
     ])
   })
-
-  it("lists only recent completed transactions without active disputes as reportable", async () => {
+  it("lists only recent completed transactions without dispute records as reportable", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findMany.mockResolvedValue([makeReportableBooking()])
     ctx.prisma.rentalTransaction.findMany.mockResolvedValue([
@@ -414,7 +439,11 @@ describe("disputeRouter", () => {
     expect(ctx.prisma.transactionDispute.updateMany).toHaveBeenCalledWith({
       where: {
         id: DISPUTE_ID,
-        status: SUBMITTED_DISPUTE_STATUS,
+        status: {
+          in: [SUBMITTED_DISPUTE_STATUS, "APPEALED"],
+        },
+        finalDecisionAt: null,
+        closedAt: null,
       },
       data: expect.objectContaining({
         status: OPEN_DISPUTE_STATUS,
@@ -452,8 +481,233 @@ describe("disputeRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "CONFLICT",
-      message: "Only disputes that are under review can be approved or rejected.",
+      message: "Only disputes that are under review or under appeal can be approved or rejected.",
     })
+  })
+
+  it("records final judgment and applies multiple actions before closure", async () => {
+    const ctx = makeContext({ accountType: "ADMIN", userId: ADMIN_ID })
+    ctx.prisma.transactionDispute.findUnique
+      .mockResolvedValueOnce({
+        id: DISPUTE_ID,
+        status: OPEN_DISPUTE_STATUS,
+        transactionId: TRANSACTION_ID,
+        finalDecisionAt: null,
+        closedAt: null,
+        transaction: {
+          borrowerId: USER_ID,
+          lenderId: OTHER_USER_ID,
+        },
+      })
+      .mockResolvedValueOnce(
+        makeDisputeRecord({
+          status: "OPEN",
+          finalDecision: "APPROVED",
+          finalDecisionNotes: "The lender withheld the return without valid evidence.",
+          finalDecisionAt: new Date("2026-04-20T04:00:00.000Z"),
+          requiredActionCount: 2,
+          actions: [
+            {
+              id: "action-1",
+              type: "POINT_DEDUCTION",
+              targetUserId: OTHER_USER_ID,
+              pointsDelta: -5,
+              note: "Late handover and unsupported damage claim.",
+              appliedAt: new Date("2026-04-20T04:00:00.000Z"),
+              targetUser: {
+                id: OTHER_USER_ID,
+                username: "lender1",
+                email: "lender@up.edu.ph",
+                firstName: "Lend",
+                middleName: null,
+                lastName: "Er",
+                status: "SUSPENDED",
+                points: 20,
+              },
+              appliedBy: {
+                id: ADMIN_ID,
+                username: "admin1",
+                email: "admin@up.edu.ph",
+                firstName: "Admin",
+                middleName: null,
+                lastName: "User",
+                status: "ACTIVE",
+                points: 0,
+              },
+            },
+            {
+              id: "action-2",
+              type: "SUSPENSION",
+              targetUserId: OTHER_USER_ID,
+              pointsDelta: null,
+              note: "Repeat policy violations.",
+              appliedAt: new Date("2026-04-20T04:01:00.000Z"),
+              targetUser: {
+                id: OTHER_USER_ID,
+                username: "lender1",
+                email: "lender@up.edu.ph",
+                firstName: "Lend",
+                middleName: null,
+                lastName: "Er",
+                status: "SUSPENDED",
+                points: 20,
+              },
+              appliedBy: {
+                id: ADMIN_ID,
+                username: "admin1",
+                email: "admin@up.edu.ph",
+                firstName: "Admin",
+                middleName: null,
+                lastName: "User",
+                status: "ACTIVE",
+                points: 0,
+              },
+            },
+          ],
+        }),
+      )
+
+    const caller = disputeRouter.createCaller(ctx as never)
+    const result = await caller.finalJudgment({
+      id: DISPUTE_ID,
+      decision: "APPROVED",
+      decisionNotes: "The lender withheld the return without valid evidence.",
+      actions: [
+        {
+          type: "POINT_DEDUCTION",
+          targetUserId: OTHER_USER_ID,
+          points: 5,
+          note: "Late handover and unsupported damage claim.",
+        },
+        {
+          type: "SUSPENSION",
+          targetUserId: OTHER_USER_ID,
+          note: "Repeat policy violations.",
+        },
+      ],
+    })
+
+    expect(ctx.prisma.transactionDispute.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: DISPUTE_ID,
+        status: OPEN_DISPUTE_STATUS,
+        finalDecisionAt: null,
+        closedAt: null,
+      },
+      data: expect.objectContaining({
+        finalDecision: "APPROVED",
+        finalDecisionNotes: "The lender withheld the return without valid evidence.",
+        finalDecisionById: ADMIN_ID,
+        requiredActionCount: 2,
+      }),
+    })
+    expect(ctx.prisma.user.updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: OTHER_USER_ID,
+          points: { gte: 5 },
+        }),
+      }),
+    )
+    expect(ctx.prisma.user.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: OTHER_USER_ID,
+          status: { in: ["ACTIVE", "PENDING"] },
+        }),
+      }),
+    )
+    expect(ctx.prisma.transactionDisputeAction.create).toHaveBeenCalledTimes(2)
+    expect(result.finalDecision).toBe("APPROVED")
+    expect(result.canClose).toBe(true)
+  })
+
+  it("closes a judged dispute and notifies both parties", async () => {
+    const ctx = makeContext({ accountType: "ADMIN", userId: ADMIN_ID })
+    ctx.prisma.transactionDispute.findUnique
+      .mockResolvedValueOnce({
+        id: DISPUTE_ID,
+        status: OPEN_DISPUTE_STATUS,
+        transactionId: TRANSACTION_ID,
+        finalDecision: "APPROVED",
+        finalDecisionNotes: "The lender withheld the return without valid evidence.",
+        finalDecisionAt: new Date("2026-04-20T04:00:00.000Z"),
+        requiredActionCount: 1,
+        closedAt: null,
+        transaction: {
+          id: TRANSACTION_ID,
+          bookingId: BOOKING_ID,
+          borrowerId: USER_ID,
+          lenderId: OTHER_USER_ID,
+        },
+        actions: [{ id: "action-1" }],
+      })
+      .mockResolvedValueOnce(
+        makeDisputeRecord({
+          status: "CLOSED",
+          reviewedAt: new Date("2026-04-10T10:00:00.000Z"),
+          finalDecision: "APPROVED",
+          finalDecisionNotes: "The lender withheld the return without valid evidence.",
+          finalDecisionAt: new Date("2026-04-20T04:00:00.000Z"),
+          requiredActionCount: 1,
+          closedAt: new Date("2026-04-20T04:05:00.000Z"),
+          actions: [
+            {
+              id: "action-1",
+              type: "WARNING",
+              targetUserId: OTHER_USER_ID,
+              pointsDelta: null,
+              note: "Documented for policy enforcement.",
+              appliedAt: new Date("2026-04-20T04:00:00.000Z"),
+              targetUser: {
+                id: OTHER_USER_ID,
+                username: "lender1",
+                email: "lender@up.edu.ph",
+                firstName: "Lend",
+                middleName: null,
+                lastName: "Er",
+                status: "ACTIVE",
+                points: 25,
+              },
+              appliedBy: {
+                id: ADMIN_ID,
+                username: "admin1",
+                email: "admin@up.edu.ph",
+                firstName: "Admin",
+                middleName: null,
+                lastName: "User",
+                status: "ACTIVE",
+                points: 0,
+              },
+            },
+          ],
+        }),
+      )
+
+    const caller = disputeRouter.createCaller(ctx as never)
+    const result = await caller.close({
+      id: DISPUTE_ID,
+    })
+
+    expect(ctx.prisma.transactionDispute.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: DISPUTE_ID,
+        status: OPEN_DISPUTE_STATUS,
+        finalDecisionAt: { not: null },
+        closedAt: null,
+      },
+      data: expect.objectContaining({
+        status: "CLOSED",
+      }),
+    })
+    expect(ctx.prisma.rentalTransaction.update).toHaveBeenCalledWith({
+      where: { id: TRANSACTION_ID },
+      data: { status: "COMPLETED" },
+    })
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledTimes(2)
+    expect(result.status).toBe("CLOSED")
   })
 
   it("allows participants to appeal recent rejected disputes", async () => {
@@ -506,6 +760,8 @@ describe("disputeRouter", () => {
         status: SUBMITTED_DISPUTE_STATUS,
         raisedById: USER_ID,
         rebuttalSubmittedAt: null,
+        finalDecisionAt: null,
+        closedAt: null,
         transaction: {
           borrowerId: USER_ID,
           lenderId: OTHER_USER_ID,
@@ -542,6 +798,8 @@ describe("disputeRouter", () => {
         status: {
           in: [OPEN_DISPUTE_STATUS, SUBMITTED_DISPUTE_STATUS],
         },
+        finalDecisionAt: null,
+        closedAt: null,
         rebuttalSubmittedAt: null,
       },
       data: expect.objectContaining({
@@ -572,6 +830,8 @@ describe("disputeRouter", () => {
       status: OPEN_DISPUTE_STATUS,
       raisedById: USER_ID,
       rebuttalSubmittedAt: null,
+      finalDecisionAt: null,
+      closedAt: null,
       transaction: {
         borrowerId: USER_ID,
         lenderId: OTHER_USER_ID,
@@ -598,6 +858,8 @@ describe("disputeRouter", () => {
       status: OPEN_DISPUTE_STATUS,
       raisedById: USER_ID,
       rebuttalSubmittedAt: new Date("2026-04-18T08:00:00.000Z"),
+      finalDecisionAt: null,
+      closedAt: null,
       transaction: {
         borrowerId: USER_ID,
         lenderId: OTHER_USER_ID,

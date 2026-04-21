@@ -1035,7 +1035,20 @@ export const itemRouter = router({
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
     await expireActiveBoosts(ctx.prisma)
     const now = new Date()
-    const item = (await ctx.prisma.item.findFirst({
+    const itemInclude = {
+      ...buildPublicItemInclude(ctx.user?.id ?? null),
+      transactionReviews: {
+        where: {
+          reviewType: "ITEM_REVIEW",
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: transactionReviewSelect,
+      },
+    } satisfies Prisma.ItemInclude
+
+    const item = await ctx.prisma.item.findFirst({
       where: {
         id: input.id,
         OR: [
@@ -1043,36 +1056,25 @@ export const itemRouter = router({
           ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
         ],
       },
-      include: {
-        ...buildPublicItemInclude(ctx.user?.id ?? null),
-        transactionReviews: {
-          where: {
-            reviewType: "ITEM_REVIEW",
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-          select: transactionReviewSelect,
-        },
-      },
-    })) as
-      | (ItemWithUserLike & {
-          bookings: Array<{ id: string; startDate: Date; endDate: Date; status: string }>
-          transactionReviews: Prisma.TransactionReviewGetPayload<{
-            select: typeof transactionReviewSelect
-          }>[]
-        })
-      | null
+      include: itemInclude,
+    })
 
     if (!item) return null
 
     const isOwner = ctx.user?.id === item.lenderId
     if (!isOwner && !isPublicVisibleItem(item, now)) return null
 
-    // Increment view count without blocking the item detail response.
-    ctx.prisma.item
-      .update({ where: { id: item.id }, data: { viewCount: { increment: 1 } } })
-      .catch(() => {})
+    // Increment view count without delaying the item detail response.
+    const updateItem = (
+      ctx.prisma.item as unknown as Partial<{
+        update(args: {
+          where: { id: string }
+          data: { viewCount: { increment: number } }
+        }): Promise<unknown>
+      }>
+    ).update
+
+    updateItem?.({ where: { id: item.id }, data: { viewCount: { increment: 1 } } }).catch(() => {})
 
     const reviews = item.transactionReviews.map(mapTransactionReview)
     const averageRating =

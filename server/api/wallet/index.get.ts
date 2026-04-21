@@ -7,7 +7,6 @@ import { asWalletPrisma, prisma } from "../../utils/prisma"
  */
 export async function runWalletSelfHealing(userId: string) {
   const walletPrisma = asWalletPrisma(prisma)
-
   // We only look for the most recent completed bookings to keep it fast
   const relevantBookings = await prisma.booking.findMany({
     where: {

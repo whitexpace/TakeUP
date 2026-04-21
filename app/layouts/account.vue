@@ -21,18 +21,21 @@ const baseLinks: AccountLink[] = [
   { label: "Account Information", to: "/account" },
   { label: "My Wallet", to: "/account/wallet" },
   { label: "My Transactions", to: "/account/transactions" },
-  { label: "Disputes", to: "/account/disputes" },
   { label: "My Listings", to: "/account/listings" },
   { label: "My Listing Analytics", to: "/account/analytics" },
   { label: "My Rewards", to: "/account/rewards" },
   { label: "My Reviews", to: "/account/reviews" },
 ]
 
-const links = computed<AccountLink[]>(() =>
-  accountType.value === "ADMIN"
-    ? [...baseLinks, { label: "Dispute Queue", to: "/account/admin/disputes" }]
-    : baseLinks,
-)
+const adminOnlyLinks: AccountLink[] = [{ label: "Dispute Queue", to: "/account/admin/disputes" }]
+
+const links = computed<AccountLink[]>(() => {
+  if (accountType.value !== "ADMIN") {
+    return baseLinks
+  }
+
+  return [...baseLinks.slice(0, 3), ...adminOnlyLinks, ...baseLinks.slice(3)]
+})
 
 const isActive = (link: AccountLink) => {
   if (link.to === "/account") return route.path === "/account"

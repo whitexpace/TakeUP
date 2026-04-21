@@ -7,6 +7,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
   boostListing: [itemId: string]
 }>()
 
@@ -43,6 +44,12 @@ function formatCategory(category: string) {
     .join(" ")
 }
 
+const isInUse = computed(() => props.item.displayStatus === "IN_USE")
+const isDeactivated = computed(() => props.item.status === "DEACTIVATED")
+const toggleLabel = computed(() => (isDeactivated.value ? "Activate" : "Deactivate"))
+const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
+  isDeactivated.value ? "AVAILABLE" : "DEACTIVATED",
+)
 const hasActiveBoost = computed(() => props.item.hasActiveBoost)
 const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boost 50 pts"))
 </script>
@@ -70,6 +77,32 @@ const boostLabel = computed(() => (hasActiveBoost.value ? "Boost Active" : "Boos
         >
           {{ boostLabel }}
         </button>
+
+        <div class="relative w-full max-w-[140px] group/tooltip">
+          <button
+            :disabled="isInUse || isToggling"
+            class="w-full rounded-full py-2 font-geist text-sm font-semibold shadow-lg transition-all duration-300 active:scale-95 disabled:cursor-not-allowed"
+            :class="[
+              isInUse
+                ? 'border border-white/10 bg-white/10 text-white/30 backdrop-blur-sm'
+                : 'bg-white text-noble-black hover:bg-cream',
+              isDeactivated ? 'border-burning-orange text-burning-orange' : '',
+            ]"
+            @click.stop="emit('toggleStatus', item.id, toggleTarget)"
+          >
+            {{ isToggling ? "..." : toggleLabel }}
+          </button>
+
+          <div
+            v-if="isInUse"
+            class="pointer-events-none absolute -top-10 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-noble-black px-3 py-1.5 text-[11px] font-medium text-white opacity-0 shadow-xl transition-opacity duration-200 group-hover/tooltip:opacity-100"
+          >
+            Item is currently In Use
+            <div
+              class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-white/10 bg-noble-black"
+            />
+          </div>
+        </div>
       </div>
 
       <div
