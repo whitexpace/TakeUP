@@ -137,8 +137,8 @@ const chartItems = computed(() =>
 )
 
 const maxViews = computed(() => Math.max(...chartItems.value.map((item) => item.totalViews), 1))
-const maxCategoryCount = computed(
-  () => Math.max(...categoryBreakdown.value.map((category) => category.count), 1),
+const maxCategoryCount = computed(() =>
+  Math.max(...categoryBreakdown.value.map((category) => category.count), 1),
 )
 
 const liveDataChips = computed(() => [
@@ -240,10 +240,7 @@ onMounted(() => {
       />
     </section>
 
-    <section
-      v-else-if="error"
-      class="rounded-2xl border border-cinnamon-ice bg-cream p-6 sm:p-8"
-    >
+    <section v-else-if="error" class="rounded-2xl border border-cinnamon-ice bg-cream p-6 sm:p-8">
       <h2 class="text-xl font-bold text-noble-black">Unable to load analytics</h2>
       <p class="mt-2 text-sm text-noble-black/70">{{ error }}</p>
       <button
@@ -287,10 +284,7 @@ onMounted(() => {
         </NuxtLink>
       </section>
 
-      <section
-        v-else
-        class="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]"
-      >
+      <section v-else class="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]">
         <div class="space-y-6">
           <div
             v-if="hasFetched && !hasActivity"

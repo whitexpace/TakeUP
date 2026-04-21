@@ -63,48 +63,48 @@ const listReviewLeaderboard = async (
 
   await syncRoleRatingsFromReviews(prisma, reviewType, userIds)
 
-  const [users, roleRatings] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        id: { in: userIds },
-        status: UserStatus.ACTIVE,
-      },
-      select: {
-        id: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        avatarUrl: true,
-      },
-    }),
-    reviewType === "BORROWER_REVIEW"
-      ? prisma.borrower.findMany({
-          where: {
-            userId: { in: userIds },
-          },
-          select: {
-            userId: true,
-            borrowerRating: true,
-          },
-        })
-      : prisma.lender.findMany({
-          where: {
-            userId: { in: userIds },
-          },
-          select: {
-            userId: true,
-            lenderRating: true,
-          },
-        }),
-  ])
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: userIds },
+      status: UserStatus.ACTIVE,
+    },
+    select: {
+      id: true,
+      username: true,
+      firstName: true,
+      lastName: true,
+      avatarUrl: true,
+    },
+  })
 
   const userMap = new Map(users.map((user) => [user.id, user]))
-  const ratingMap = new Map(
-    roleRatings.map((entry) => [
-      entry.userId,
-      reviewType === "BORROWER_REVIEW" ? entry.borrowerRating : entry.lenderRating,
-    ]),
-  )
+  let ratingMap: Map<string, number>
+
+  if (reviewType === "BORROWER_REVIEW") {
+    const roleRatings = await prisma.borrower.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: {
+        userId: true,
+        borrowerRating: true,
+      },
+    })
+
+    ratingMap = new Map(roleRatings.map((entry) => [entry.userId, entry.borrowerRating]))
+  } else {
+    const roleRatings = await prisma.lender.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: {
+        userId: true,
+        lenderRating: true,
+      },
+    })
+
+    ratingMap = new Map(roleRatings.map((entry) => [entry.userId, entry.lenderRating]))
+  }
 
   return eligibleStats
     .map((entry) => ({

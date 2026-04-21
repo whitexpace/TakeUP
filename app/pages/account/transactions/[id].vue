@@ -661,15 +661,6 @@ const openChat = async () => {
   })
 }
 
-const openChat = async () => {
-  if (!booking.value.transactionId || !canOpenChat.value) return
-
-  await router.push({
-    path: "/chat",
-    query: { transactionId: booking.value.transactionId },
-  })
-}
-
 const reviewCounterpartName = computed(() => {
   const user = isLender.value ? booking.value.borrower.user : booking.value.lender.user
   return `${user.firstName} ${user.lastName[0]}.`

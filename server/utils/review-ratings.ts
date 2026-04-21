@@ -46,7 +46,8 @@ export const syncRoleRatingsFromReviews = async (
   }
 
   const uniqueUserIds = [...new Set((userIds ?? []).filter(Boolean))]
-  const reviewDelegate = (prisma as { transactionReview?: { findMany?: unknown } }).transactionReview
+  const reviewDelegate = (prisma as { transactionReview?: { findMany?: unknown } })
+    .transactionReview
 
   if (!reviewDelegate || typeof reviewDelegate.findMany !== "function") {
     return
