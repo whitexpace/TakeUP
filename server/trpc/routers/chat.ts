@@ -13,12 +13,17 @@ import {
   transactionConversationSchema,
 } from "../../../shared/schemas/chat"
 import { sanitizeChatMessage } from "../../../shared/chat-moderation"
-import { ACTIVE_DISPUTE_STATUSES, SUBMITTED_DISPUTE_STATUS } from "../../utils/dispute-status"
 import {
-  CHAT_CLOSED_NOTICE,
+  ACTIVE_DISPUTE_STATUSES,
+  SUBMITTED_DISPUTE_STATUS,
+  isActiveDisputeStatus,
+} from "../../utils/dispute-status"
+import {
   CHAT_ENABLED_TRANSACTION_STATUSES,
+  getChatClosedNotice,
+  getChatClosureState,
+  isChatClosed,
   isChatAvailableForTransactionStatus,
-  isChatReadOnly,
 } from "../../../shared/chat-rules"
 
 const participantSelect = {
@@ -115,20 +120,22 @@ const chatEnabledTransactionStatuses = CHAT_ENABLED_TRANSACTION_STATUSES.map(
   (status) => prismaTransactionStatuses[status],
 ).filter((status): status is PrismaTransactionStatus => Boolean(status))
 
-const hasOpenDispute = (disputes?: Array<{ status: string; finalDecisionAt?: Date | null }>) =>
-  (disputes ?? []).some((dispute) => dispute.status === "OPEN")
+const hasActiveDispute = (disputes?: Array<{ status: string; finalDecisionAt?: Date | null }>) =>
+  (disputes ?? []).some((dispute) => isActiveDisputeStatus(dispute.status))
+
+const getConversationClosureState = (transaction: {
+  status: string
+  disputes?: Array<{ status: string; finalDecisionAt?: Date | null }>
+}) =>
+  getChatClosureState({
+    transactionStatus: transaction.status,
+    hasActiveDispute: hasActiveDispute(transaction.disputes),
+  })
 
 const isConversationExpired = (transaction: {
   status: string
   disputes?: Array<{ status: string; finalDecisionAt?: Date | null }>
-}) =>
-  isChatReadOnly({
-    transactionStatus: transaction.status,
-    hasOpenDispute: hasOpenDispute(transaction.disputes),
-  }) ||
-  (transaction.disputes ?? []).some(
-    (dispute) => dispute.status === "CLOSED" || Boolean(dispute.finalDecisionAt),
-  )
+}) => isChatClosed(getConversationClosureState(transaction))
 
 const assertChatAvailableForTransaction = (transaction: { status: string }) => {
   if (isChatAvailableForTransactionStatus(transaction.status)) {
@@ -213,13 +220,15 @@ const mapConversationDetail = (input: {
       ? input.transaction.lender
       : input.transaction.borrower
 
-  const isExpired = isConversationExpired(input.transaction)
+  const closureState = getConversationClosureState(input.transaction)
+  const isExpired = isChatClosed(closureState)
 
   return {
     conversationId: input.conversationId,
     transactionId: input.transaction.id,
+    closureState,
     isExpired,
-    closedNotice: isExpired ? CHAT_CLOSED_NOTICE : null,
+    closedNotice: getChatClosedNotice(closureState),
     item: input.transaction.item
       ? {
           id: input.transaction.item.id,
@@ -314,13 +323,15 @@ const listUserConversations = async (prisma: Context["prisma"], userId: string) 
         ? conversation.transaction.lender
         : conversation.transaction.borrower
     const lastMessage = conversation.messages[0] ?? null
-    const isExpired = isConversationExpired(conversation.transaction)
+    const closureState = getConversationClosureState(conversation.transaction)
+    const isExpired = isChatClosed(closureState)
 
     return {
       conversationId: conversation.id,
       transactionId: conversation.transaction.id,
+      closureState,
       isExpired,
-      closedNotice: isExpired ? CHAT_CLOSED_NOTICE : null,
+      closedNotice: getChatClosedNotice(closureState),
       item: conversation.transaction.item
         ? {
             id: conversation.transaction.item.id,
@@ -419,9 +430,10 @@ export const chatRouter = router({
     assertChatAvailableForTransaction(conversation.transaction)
 
     if (isConversationExpired(conversation.transaction)) {
+      const closureState = getConversationClosureState(conversation.transaction)
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: CHAT_CLOSED_NOTICE,
+        message: getChatClosedNotice(closureState) ?? "Chat is read-only.",
       })
     }
 

@@ -27,6 +27,12 @@ import {
   buildPublicVisibleItemWhere,
   isPublicVisibleItem,
 } from "../../utils/item-visibility"
+import {
+  buildViewerInterestProfile,
+  compareFeedItemsByRelevance,
+  sortFeedItemsByRelevance,
+  type ViewerInterestProfile,
+} from "../../utils/item-feed-ranking"
 import { expireActiveBoosts } from "../../utils/rewards"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
@@ -34,6 +40,7 @@ import { mapTransactionReview, transactionReviewSelect } from "../review-helpers
 import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
 
 const SEARCH_SCAN_LIMIT = 2000
+const FEED_RANKING_SCAN_LIMIT = 2000
 const SEARCH_COUNT_BATCH_SIZE = 250
 const VISIBILITY_SCAN_BATCH_SIZE = 100
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
@@ -331,7 +338,10 @@ const filterAndRankSearchResults = <
 >(
   items: T[],
   search: string,
-  options: { sortByScore?: boolean } = {},
+  options: {
+    sortByScore?: boolean
+    compareItems?: (left: T, right: T) => number
+  } = {},
 ): T[] => {
   const ranked = items
     .map((item) => ({
@@ -341,7 +351,12 @@ const filterAndRankSearchResults = <
     .filter((entry): entry is { item: T; score: number } => entry.score !== null)
 
   if (options.sortByScore ?? true) {
-    ranked.sort((a, b) => b.score - a.score)
+    ranked.sort((a, b) => {
+      const scoreDiff = b.score - a.score
+      if (scoreDiff !== 0) return scoreDiff
+
+      return options.compareItems ? options.compareItems(a.item, b.item) : 0
+    })
   }
 
   return ranked.map((entry) => entry.item)
@@ -731,57 +746,256 @@ const buildPaginatedWhere = (
   } satisfies Prisma.ItemWhereInput
 }
 
+type FeedScanCursor = {
+  id: string
+  boostScore: number
+  bookingCount: number
+  createdAt: Date
+}
+
+type FeedPaginationState = {
+  scanCursor: FeedScanCursor | null
+  scanExhausted: boolean
+  pendingIds: string[]
+}
+
+const getFeedScanCursor = (
+  item: Pick<PublicVisibleItemRecord, "id" | "boostScore" | "bookingCount" | "createdAt">,
+): FeedScanCursor => ({
+  id: item.id,
+  boostScore: item.boostScore,
+  bookingCount: item.bookingCount,
+  createdAt: item.createdAt,
+})
+
+const dedupeItemsById = <T extends { id: string }>(items: T[]) => {
+  const unique = new Map<string, T>()
+
+  for (const item of items) {
+    if (!unique.has(item.id)) {
+      unique.set(item.id, item)
+    }
+  }
+
+  return [...unique.values()]
+}
+
+const orderItemsByIds = <T extends { id: string }>(items: T[], orderedIds: string[]) => {
+  const itemsById = new Map(items.map((item) => [item.id, item]))
+  return orderedIds.map((id) => itemsById.get(id)).filter((item): item is T => Boolean(item))
+}
+
+const getViewerInterestProfileForFeed = async (prisma: PrismaClientLike, userId: string | null) => {
+  if (!userId) {
+    return buildViewerInterestProfile([])
+  }
+
+  const likedItems = await prisma.like.findMany({
+    where: { userId },
+    select: {
+      item: {
+        select: {
+          categories: {
+            select: { category: true },
+          },
+          tags: {
+            select: {
+              tag: {
+                select: { name: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  return buildViewerInterestProfile(likedItems)
+}
+
+type PrismaClientLike = {
+  like: {
+    findMany: (...args: unknown[]) => Promise<
+      Array<{
+        item: {
+          categories: Array<{ category: ItemCategory }>
+          tags: Array<{ tag: { name: string } }>
+        } | null
+      }>
+    >
+  }
+  item: {
+    findMany: (...args: unknown[]) => Promise<PublicVisibleItemRecord[]>
+  }
+}
+
+const rankFeedRecords = (
+  items: PublicVisibleItemRecord[],
+  profile: ViewerInterestProfile,
+  now: Date,
+  search?: string,
+) => {
+  if (search) {
+    return filterAndRankSearchResults(items, search, {
+      compareItems: (left, right) => compareFeedItemsByRelevance(left, right, profile, now),
+    })
+  }
+
+  return sortFeedItemsByRelevance(items, profile, now)
+}
+
+const loadPendingFeedRecords = async (
+  prisma: PrismaClientLike["item"],
+  userId: string | null,
+  where: Prisma.ItemWhereInput,
+  pendingIds: string[],
+  now: Date,
+  requiredWindow: { startDate: Date; endDate: Date } | null,
+  search?: string,
+) => {
+  if (pendingIds.length === 0) {
+    return []
+  }
+
+  const pendingRecords = await prisma.findMany({
+    include: buildPublicItemInclude(userId),
+    where: {
+      AND: [where, { id: { in: pendingIds } }],
+    },
+  })
+
+  const filteredPendingRecords = filterPublicVisibleItems(
+    search
+      ? filterAndRankSearchResults(pendingRecords, search, { sortByScore: false })
+      : pendingRecords,
+    now,
+    requiredWindow,
+  )
+
+  return orderItemsByIds(filteredPendingRecords, pendingIds)
+}
+
+const collectRankedFeedRecords = async ({
+  prisma,
+  userId,
+  where,
+  search,
+  limit,
+  pagination,
+  now,
+  requiredWindow,
+  viewerProfile,
+}: {
+  prisma: PrismaClientLike
+  userId: string | null
+  where: Prisma.ItemWhereInput
+  search?: string
+  limit: number
+  pagination: FeedPaginationState
+  now: Date
+  requiredWindow: { startDate: Date; endDate: Date } | null
+  viewerProfile: ViewerInterestProfile
+}) => {
+  const collectedRecords = await loadPendingFeedRecords(
+    prisma.item,
+    userId,
+    where,
+    pagination.pendingIds,
+    now,
+    requiredWindow,
+    search,
+  )
+
+  let scanCursor = pagination.scanCursor
+  let scanExhausted = pagination.scanExhausted
+  let scannedCount = 0
+
+  while (!scanExhausted && scannedCount < FEED_RANKING_SCAN_LIMIT) {
+    const take = Math.min(VISIBILITY_SCAN_BATCH_SIZE, FEED_RANKING_SCAN_LIMIT - scannedCount)
+    const records = await prisma.item.findMany({
+      take,
+      orderBy: getDefaultItemOrderBy(),
+      include: buildPublicItemInclude(userId),
+      where: buildPaginatedWhere(where, scanCursor),
+    })
+
+    if (records.length === 0) {
+      scanExhausted = true
+      break
+    }
+
+    scannedCount += records.length
+
+    const filteredRecords = filterPublicVisibleItems(
+      search ? filterAndRankSearchResults(records, search, { sortByScore: false }) : records,
+      now,
+      requiredWindow,
+    )
+    collectedRecords.push(...filteredRecords)
+
+    const lastScannedRecord = records.at(-1)
+    scanCursor = lastScannedRecord ? getFeedScanCursor(lastScannedRecord) : scanCursor
+
+    if (records.length < take) {
+      scanExhausted = true
+      break
+    }
+  }
+
+  const rankedRecords = rankFeedRecords(
+    dedupeItemsById(collectedRecords),
+    viewerProfile,
+    now,
+    search,
+  )
+  const pageRecords = rankedRecords.slice(0, limit)
+  const pendingIds = rankedRecords.slice(limit).map((item) => item.id)
+
+  return {
+    pageRecords,
+    nextCursor:
+      pendingIds.length > 0 || !scanExhausted
+        ? {
+            version: 1 as const,
+            scanExhausted,
+            scanCursor: scanExhausted ? null : scanCursor,
+            pendingIds,
+          }
+        : null,
+  }
+}
+
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
     await expireActiveBoosts(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
-    const visibleRecords: PublicVisibleItemRecord[] = []
-    let scanCursor: {
-      id: string
-      boostScore: number
-      bookingCount: number
-      createdAt: Date
-    } | null = null
+    const userId = ctx.user?.id ?? null
+    const feedPrisma = ctx.prisma as unknown as PrismaClientLike
+    const baseWhere = buildListWhere(input, {
+      includeSearch: !search,
+      userId,
+      now,
+    })
+    const viewerProfile = await getViewerInterestProfileForFeed(feedPrisma, userId)
+    const { pageRecords } = await collectRankedFeedRecords({
+      prisma: feedPrisma,
+      userId,
+      where: baseWhere,
+      search,
+      limit: 50,
+      pagination: {
+        scanCursor: null,
+        scanExhausted: false,
+        pendingIds: [],
+      },
+      now,
+      requiredWindow,
+      viewerProfile,
+    })
 
-    while (visibleRecords.length < 50) {
-      const take = search ? SEARCH_SCAN_LIMIT : VISIBILITY_SCAN_BATCH_SIZE
-      const records = (await ctx.prisma.item.findMany({
-        take,
-        orderBy: getDefaultItemOrderBy(),
-        include: buildPublicItemInclude(ctx.user?.id ?? null),
-        where: buildPaginatedWhere(
-          buildListWhere(input, {
-            includeSearch: !search,
-            userId: ctx.user?.id ?? null,
-            now,
-          }),
-          scanCursor,
-        ),
-      })) as PublicVisibleItemRecord[]
-
-      if (records.length === 0) break
-
-      visibleRecords.push(...filterPublicVisibleItems(records, now, requiredWindow))
-
-      if (search || records.length < take) break
-
-      const lastScannedRecord = records.at(-1)
-      if (!lastScannedRecord) break
-
-      scanCursor = {
-        id: lastScannedRecord.id,
-        boostScore: lastScannedRecord.boostScore,
-        bookingCount: lastScannedRecord.bookingCount,
-        createdAt: lastScannedRecord.createdAt,
-      }
-    }
-
-    const matchedItems = search
-      ? filterAndRankSearchResults(visibleRecords, search).slice(0, 50)
-      : visibleRecords.slice(0, 50)
-    return matchedItems.map(mapItemTaxonomy)
+    return pageRecords.map(mapItemTaxonomy)
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
@@ -789,65 +1003,47 @@ export const itemRouter = router({
     const search = input.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
+    const userId = ctx.user?.id ?? null
+    const feedPrisma = ctx.prisma as unknown as PrismaClientLike
     const baseWhere = buildListWhere(input, {
       includeSearch: !search,
-      userId: ctx.user?.id ?? null,
+      userId,
       now,
     })
-    let scanCursor = input.cursor
+    const viewerProfile = await getViewerInterestProfileForFeed(feedPrisma, userId)
+    const pagination: FeedPaginationState = input.cursor
       ? {
-          boostScore: input.cursor.boostScore,
-          bookingCount: input.cursor.bookingCount,
-          createdAt: input.cursor.createdAt,
-          id: input.cursor.id,
+          scanCursor: input.cursor.scanCursor
+            ? {
+                id: input.cursor.scanCursor.id,
+                boostScore: input.cursor.scanCursor.boostScore,
+                bookingCount: input.cursor.scanCursor.bookingCount,
+                createdAt: input.cursor.scanCursor.createdAt,
+              }
+            : null,
+          scanExhausted: input.cursor.scanExhausted,
+          pendingIds: input.cursor.pendingIds,
         }
-      : null
-    const collectedRecords: PublicVisibleItemRecord[] = []
-
-    while (collectedRecords.length <= input.limit) {
-      const take = search ? SEARCH_SCAN_LIMIT : VISIBILITY_SCAN_BATCH_SIZE
-      const records = (await ctx.prisma.item.findMany({
-        take,
-        orderBy: getDefaultItemOrderBy(),
-        include: buildPublicItemInclude(ctx.user?.id ?? null),
-        where: buildPaginatedWhere(baseWhere, scanCursor),
-      })) as PublicVisibleItemRecord[]
-
-      if (records.length === 0) break
-
-      const filteredRecords = search
-        ? filterAndRankSearchResults(records, search, { sortByScore: false })
-        : records
-      collectedRecords.push(...filterPublicVisibleItems(filteredRecords, now, requiredWindow))
-
-      if (search || records.length < take) break
-
-      const lastScannedRecord = records.at(-1)
-      if (!lastScannedRecord) break
-
-      scanCursor = {
-        id: lastScannedRecord.id,
-        boostScore: lastScannedRecord.boostScore,
-        bookingCount: lastScannedRecord.bookingCount,
-        createdAt: lastScannedRecord.createdAt,
-      }
-    }
-
-    const hasMore = collectedRecords.length > input.limit
-    const pageRecords = hasMore ? collectedRecords.slice(0, input.limit) : collectedRecords
-    const lastRecord = pageRecords.at(-1)
+      : {
+          scanCursor: null,
+          scanExhausted: false,
+          pendingIds: [],
+        }
+    const { pageRecords, nextCursor } = await collectRankedFeedRecords({
+      prisma: feedPrisma,
+      userId,
+      where: baseWhere,
+      search,
+      limit: input.limit,
+      pagination,
+      now,
+      requiredWindow,
+      viewerProfile,
+    })
 
     return {
       items: pageRecords.map(mapItemTaxonomy),
-      nextCursor:
-        hasMore && lastRecord
-          ? {
-              id: lastRecord.id,
-              boostScore: lastRecord.boostScore,
-              bookingCount: lastRecord.bookingCount,
-              createdAt: lastRecord.createdAt,
-            }
-          : null,
+      nextCursor,
     }
   }),
 

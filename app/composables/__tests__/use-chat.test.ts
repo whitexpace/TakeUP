@@ -5,6 +5,7 @@ import {
   type ConversationDetail,
   type ConversationSummary,
 } from "../use-chat"
+import { CHAT_DISPUTE_NOTICE, CHAT_ENDED_NOTICE } from "../../../shared/chat-rules"
 
 const CONV_ID_1 = "conv-1"
 const CONV_ID_2 = "conv-2"
@@ -22,6 +23,7 @@ const makeConversationSummary = (
 ): ConversationSummary => ({
   conversationId,
   transactionId: conversationId === CONV_ID_1 ? TX_ID_1 : TX_ID_2,
+  closureState: "OPEN",
   isExpired: false,
   closedNotice: null,
   item: { id: `item-${conversationId}`, name: `Item ${conversationId}`, thumbnailImage: null },
@@ -50,6 +52,7 @@ const makeConversationDetail = (
 ): ConversationDetail => ({
   conversationId,
   transactionId: conversationId === CONV_ID_1 ? TX_ID_1 : TX_ID_2,
+  closureState: "OPEN",
   isExpired: false,
   closedNotice: null,
   item: { id: `item-${conversationId}`, name: `Item ${conversationId}`, thumbnailImage: null },
@@ -236,6 +239,24 @@ describe("useChat", () => {
         description: "Threatening language",
       },
     })
+    expect(chat.activeConversation.value?.closureState).toBe("IN_DISPUTE")
+    expect(chat.activeConversation.value?.isExpired).toBe(true)
+    expect(chat.activeConversation.value?.closedNotice).toBe(CHAT_DISPUTE_NOTICE)
+  })
+
+  it("updates local closure state when the server rejects sending to a completed chat", async () => {
+    fetchMock.mockRejectedValueOnce({ data: { message: CHAT_ENDED_NOTICE } })
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+
+    const result = await chat.sendMessage("Hello there")
+
+    expect(result).toBeNull()
+    expect(chat.activeConversation.value?.closureState).toBe("ENDED")
+    expect(chat.activeConversation.value?.isExpired).toBe(true)
+    expect(chat.conversations.value[0]?.closedNotice).toBe(CHAT_ENDED_NOTICE)
   })
 
   it("handles incoming messages for active and background conversations", async () => {

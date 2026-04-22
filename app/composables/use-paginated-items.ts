@@ -4,7 +4,6 @@ import type {
   ListedItem,
   PaginatedItemsResponse,
 } from "../types/item-listing"
-import { sortItemsByRanking } from "../utils/item-ranking"
 
 type UsePaginatedItemsOptions = {
   searchQuery: Ref<string>
@@ -119,7 +118,7 @@ export const usePaginatedItems = ({
       loadedIds.add(item.id)
     }
 
-    items.value = sortItemsByRanking([...items.value, ...uniqueItems])
+    items.value = [...items.value, ...uniqueItems]
     cursor.value = response.nextCursor
     hasMore.value = Boolean(response.nextCursor)
   }
