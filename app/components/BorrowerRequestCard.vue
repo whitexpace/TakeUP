@@ -101,12 +101,7 @@ const statusBadgeClass = computed(() => {
         <p class="mt-1 truncate text-xs font-normal text-neutral-800/80">{{ requestId }}</p>
         <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span class="flex items-center gap-1 text-xs text-neutral-800/80">
-            <svg
-              class="h-3.5 w-3.5 shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="1" />
               <line x1="16" y1="2" x2="16" y2="6" stroke-width="1" />
               <line x1="8" y1="2" x2="8" y2="6" stroke-width="1" />
