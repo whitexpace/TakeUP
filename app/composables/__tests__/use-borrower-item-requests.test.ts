@@ -75,8 +75,8 @@ describe("useBorrowerItemRequests", () => {
     )
     expect(requests.value.map((request) => request.requestStatusLabel).sort()).toEqual([
       "Approved",
+      "Cancelled",
       "Pending",
-      "Rejected",
     ])
   })
 
