@@ -651,6 +651,67 @@ describe("bookingRouter", () => {
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
   })
 
+  it("allows the borrower to cancel a pending booking request", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(makeBooking({ status: "PENDING" }))
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CANCELLED",
+        cancellationReason: "Cancelled by borrower.",
+        cancelledAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.update.mockResolvedValueOnce(
+      makeBooking({
+        status: "CANCELLED",
+        cancellationReason: "Cancelled by borrower.",
+        cancelledAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    const cancelledBooking = await caller.update({
+      id: BOOKING_ID,
+      status: "CANCELLED",
+      cancellationReason: "Cancelled by borrower.",
+    })
+
+    expect(ctx.prisma.booking.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BOOKING_ID },
+        data: expect.objectContaining({
+          status: "CANCELLED",
+          cancellationReason: "Cancelled by borrower.",
+        }),
+      }),
+    )
+    expect(cancelledBooking.status).toBe("CANCELLED")
+  })
+
+  it("rejects cancelling a booking after it is accepted", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.update({
+        id: BOOKING_ID,
+        status: "CANCELLED",
+        cancellationReason: "Cancelled by borrower.",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Only pending booking requests can be cancelled.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
   it("allows the borrower to mark a confirmed booking as returned", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce(
@@ -727,6 +788,26 @@ describe("bookingRouter", () => {
     expect(ctx.prisma.appNotification.create).not.toHaveBeenCalled()
   })
 
+  it("rejects return submission before the rental period starts", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        startDate: new Date("2099-04-30T01:00:00.000Z"),
+        endDate: new Date("2099-04-30T10:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(caller.returnItem({ id: BOOKING_ID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "This booking cannot be returned before the rental period starts.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
   it("rejects return initiation when another overlapping booking exists for the same item", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce(
@@ -771,5 +852,35 @@ describe("bookingRouter", () => {
       code: "FORBIDDEN",
       message: "Only the lender can complete this booking after the item is returned.",
     })
+  })
+
+  it("rejects completion when the recorded return happened before the rental period starts", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        lenderId: LENDER_ID,
+        status: "RETURNED",
+        confirmedAt: new Date("2026-04-20T04:27:50.025Z"),
+        startDate: new Date("2026-04-30T01:00:00.000Z"),
+        endDate: new Date("2026-04-30T10:00:00.000Z"),
+        returnedAt: new Date("2026-04-20T04:36:08.194Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
+
+    await expect(
+      caller.update({
+        id: BOOKING_ID,
+        status: "COMPLETED",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Only bookings returned after the rental period starts can be completed.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
   })
 })

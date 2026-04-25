@@ -1114,6 +1114,22 @@ export const bookingRouter = router({
       })
     }
 
+    if (input.status === bookingStatusSchema.enum.CANCELLED) {
+      if (existing.status !== bookingStatusSchema.enum.PENDING) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only pending booking requests can be cancelled.",
+        })
+      }
+
+      if (existing.borrowerId !== ctx.user.id && existing.lenderId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only booking participants can cancel this request.",
+        })
+      }
+    }
+
     if (input.status === bookingStatusSchema.enum.COMPLETED) {
       if (existing.lenderId !== ctx.user.id) {
         throw new TRPCError({
@@ -1126,6 +1142,13 @@ export const bookingRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Only returned bookings can be completed.",
+        })
+      }
+
+      if (!existing.returnedAt || existing.returnedAt < existing.startDate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only bookings returned after the rental period starts can be completed.",
         })
       }
     }
@@ -1390,8 +1413,16 @@ export const bookingRouter = router({
       })
     }
 
+    if (new Date() < existing.startDate) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This booking cannot be returned before the rental period starts.",
+      })
+    }
+
     const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
       const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+      const now = new Date()
       const latestBooking = (await txBookingPrisma.booking.findUnique({
         where: { id: input.id },
         select: bookingEditableSelect,
@@ -1422,6 +1453,13 @@ export const bookingRouter = router({
         })
       }
 
+      if (now < latestBooking.startDate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This booking cannot be returned before the rental period starts.",
+        })
+      }
+
       await ensureBookingWindowAvailable(txBookingPrisma, {
         itemId: latestBooking.itemId,
         startDate: latestBooking.startDate,
@@ -1437,8 +1475,8 @@ export const bookingRouter = router({
         data: {
           status: bookingStatusSchema.enum.RETURNED,
           returnStatus: ReturnStatus.RETURNED,
-          actualReturnedAt: latestBooking.returnedAt ?? new Date(),
-          returnedAt: latestBooking.returnedAt ?? new Date(),
+          actualReturnedAt: latestBooking.returnedAt ?? now,
+          returnedAt: latestBooking.returnedAt ?? now,
         },
         select: bookingTransactionSelect,
       })
@@ -1535,6 +1573,13 @@ export const bookingRouter = router({
       }
 
       const now = new Date()
+      if (now < existing.startDate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This booking cannot be returned before the rental period starts.",
+        })
+      }
+
       if (now >= existing.endDate) {
         throw new TRPCError({
           code: "BAD_REQUEST",
