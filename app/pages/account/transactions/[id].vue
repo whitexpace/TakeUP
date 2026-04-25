@@ -102,6 +102,12 @@ const canOpenChat = computed(
   () =>
     Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
 )
+const isPendingRequest = computed(() => booking.value.status === "PENDING")
+const requestStageMessage = computed(() =>
+  isLender.value
+    ? "Requested - waiting for you to accept the booking"
+    : "Requested - waiting for lender to accept the booking",
+)
 
 const mappedStatus = computed(() => {
   switch (booking.value.status) {
@@ -179,18 +185,23 @@ const backToTransactionsPath = computed(() => {
 const timeline = computed(() => {
   const steps = [
     {
-      label: "Order Placed",
-      description: isLender.value ? "Borrower placed this order" : "You placed this order",
+      label: "Requested",
+      description:
+        booking.value.status === "PENDING"
+          ? requestStageMessage.value
+          : isLender.value
+            ? "Borrower requested this booking"
+            : "You requested this booking",
       date: formatDate(booking.value.requestedAt),
       status: "completed",
     },
     {
-      label: "Request Approved",
+      label: "Lender Confirmation",
       description:
         booking.value.status === "PENDING"
           ? isLender.value
-            ? "Waiting for your approval"
-            : "Waiting for lender's approval"
+            ? "Review and accept or decline this booking"
+            : "Waiting for lender to accept the booking"
           : "Lender approved the request",
       date: booking.value.confirmedAt ? formatDate(booking.value.confirmedAt) : "--",
       status:
@@ -896,7 +907,20 @@ onBeforeUnmount(() => {
           <span class="font-normal">Placed on {{ formatDateTime(booking.requestedAt) }}</span>
         </div>
 
-        <TransactionStatusBadge :status="mappedStatus" :role="userRole" />
+        <span
+          v-if="isPendingRequest"
+          class="inline-flex items-center rounded-md bg-burning-orange px-3 py-1 text-base font-normal font-geist text-white"
+        >
+          Requested
+        </span>
+        <TransactionStatusBadge v-else :status="mappedStatus" :role="userRole" />
+      </div>
+
+      <div
+        v-if="isPendingRequest"
+        class="mb-8 rounded-2xl border border-burning-orange/20 bg-burning-orange/5 px-5 py-4 text-sm font-semibold text-noble-black"
+      >
+        {{ requestStageMessage }}
       </div>
 
       <!-- Main Content Grid -->

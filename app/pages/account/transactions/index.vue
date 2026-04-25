@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from "vue"
 import type { TransactionStatus } from "../../../../shared/schemas/transaction"
+import type { BookingStatus } from "../../../../shared/schemas/booking"
 import type { ReviewType } from "../../../../shared/schemas/review"
 import { useTransactions, type TransactionListItem } from "../../../composables/use-transactions"
+import {
+  useBorrowerItemRequests,
+  type BorrowerItemRequest,
+} from "../../../composables/use-borrower-item-requests"
 
 definePageMeta({
   layout: "account",
@@ -10,7 +15,10 @@ definePageMeta({
 })
 
 type ActiveRole = "BORROWER" | "LENDER"
-type TransactionFilter = TransactionStatus | "TO_REVIEW" | null
+type TransactionFilter = TransactionStatus | "TO_REVIEW" | "REQUESTED_ITEMS" | null
+type HistoryEntry =
+  | { kind: "request"; id: string; date: Date | string; request: BorrowerItemRequest }
+  | { kind: "transaction"; id: string; date: Date | string; transaction: TransactionListItem }
 
 const route = useRoute()
 const router = useRouter()
@@ -21,14 +29,105 @@ const searchQuery = ref("")
 const { filteredTransactions, isLoading, error, hasMore, loadMore, refresh, fetchPage } =
   useTransactions({
     role: activeRole,
-    status: computed(() => (activeStatus.value === "TO_REVIEW" ? null : activeStatus.value)),
+    status: computed(() =>
+      activeStatus.value === "TO_REVIEW" || activeStatus.value === "REQUESTED_ITEMS"
+        ? null
+        : activeStatus.value,
+    ),
     searchQuery,
   })
 
+const borrowerRequestStatuses = computed<BookingStatus[]>(() => {
+  if (activeRole.value !== "BORROWER") return []
+
+  switch (activeStatus.value) {
+    case null:
+    case "REQUESTED_ITEMS":
+      return ["PENDING", "CONFIRMED", "CANCELLED"]
+    case "PENDING":
+      return ["PENDING"]
+    case "ACTIVE":
+      return ["CONFIRMED"]
+    case "CANCELLED":
+      return ["CANCELLED"]
+    default:
+      return []
+  }
+})
+
+const shouldShowBorrowerRequests = computed(
+  () => activeRole.value === "BORROWER" && borrowerRequestStatuses.value.length > 0,
+)
+
+const {
+  filteredRequests: filteredBorrowerRequests,
+  isLoading: areBorrowerRequestsLoading,
+  error: borrowerRequestsError,
+  fetchRequests: fetchBorrowerRequests,
+} = useBorrowerItemRequests({
+  enabled: shouldShowBorrowerRequests,
+  statuses: borrowerRequestStatuses,
+  searchQuery,
+})
+
 const visibleTransactions = computed(() =>
-  activeStatus.value === "TO_REVIEW"
-    ? filteredTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny)
-    : filteredTransactions.value,
+  activeStatus.value === "REQUESTED_ITEMS"
+    ? []
+    : activeStatus.value === "TO_REVIEW"
+      ? filteredTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny)
+      : filteredTransactions.value,
+)
+
+const visibleBorrowerRequests = computed(() =>
+  shouldShowBorrowerRequests.value ? filteredBorrowerRequests.value : [],
+)
+
+const visibleHistoryEntries = computed<HistoryEntry[]>(() =>
+  [
+    ...visibleBorrowerRequests.value.map((request) => ({
+      kind: "request" as const,
+      id: request.id,
+      date: request.createdAt,
+      request,
+    })),
+    ...visibleTransactions.value.map((transaction) => ({
+      kind: "transaction" as const,
+      id: transaction.id,
+      date: transaction.createdAt,
+      transaction,
+    })),
+  ].sort((left, right) => {
+    const rightTime = new Date(right.date).getTime()
+    const leftTime = new Date(left.date).getTime()
+
+    if (rightTime !== leftTime) return rightTime - leftTime
+    return right.id.localeCompare(left.id)
+  }),
+)
+
+const hasVisibleEntries = computed(() => visibleHistoryEntries.value.length > 0)
+
+const isInitialLoading = computed(
+  () =>
+    !hasVisibleEntries.value &&
+    (isLoading.value ||
+      (shouldShowBorrowerRequests.value && areBorrowerRequestsLoading.value)),
+)
+
+const combinedError = computed(() => error.value ?? borrowerRequestsError.value)
+
+const hasInitialError = computed(
+  () =>
+    !hasVisibleEntries.value &&
+    !isInitialLoading.value &&
+    Boolean(combinedError.value),
+)
+
+const hasEmptyState = computed(
+  () =>
+    !hasVisibleEntries.value &&
+    !isInitialLoading.value &&
+    !hasInitialError.value,
 )
 
 const isReviewModalOpen = ref(false)
@@ -45,7 +144,10 @@ type SubmittedReviewPayload = {
   itemId: string | null
 }
 
-onMounted(() => fetchPage())
+onMounted(() => {
+  void fetchPage()
+  void fetchBorrowerRequests()
+})
 
 const setRole = (role: ActiveRole) => {
   if (activeRole.value === role) return
@@ -66,6 +168,9 @@ type StatusChip = {
 
 const statusChips = computed<StatusChip[]>(() => [
   { label: "All", value: null },
+  ...(activeRole.value === "BORROWER"
+    ? [{ label: "Requested Items", value: "REQUESTED_ITEMS" as TransactionFilter }]
+    : []),
   {
     label: activeRole.value === "BORROWER" ? "To Receive" : "For Approval",
     value: "PENDING",
@@ -85,6 +190,32 @@ const sectionSubtitle = computed(() =>
     ? "Items you've borrowed from other users"
     : "Items you've lent to other users",
 )
+
+const emptyTitle = computed(() => {
+  if (activeStatus.value === "TO_REVIEW") return "No transactions awaiting your review"
+  if (activeStatus.value === "REQUESTED_ITEMS") return "No requested items yet"
+  return activeRole.value === "BORROWER"
+    ? "No borrowing transactions yet"
+    : "No lending transactions yet"
+})
+
+const emptySubtitle = computed(() => {
+  if (activeStatus.value === "TO_REVIEW") {
+    return "Completed transactions you can review will appear here."
+  }
+
+  if (activeStatus.value === "REQUESTED_ITEMS") {
+    return "Items you request from lenders will appear here."
+  }
+
+  return activeRole.value === "BORROWER"
+    ? "Items you borrow and request will appear here."
+    : "Items you lend to others will appear here."
+})
+
+const refreshAll = async () => {
+  await Promise.all([refresh(), fetchBorrowerRequests()])
+}
 
 const reviewContext = computed(() => {
   if (!selectedTransactionForReview.value) return null
@@ -164,7 +295,7 @@ const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
     triggerRewardPopup()
   }
 
-  await refresh()
+  await refreshAll()
 }
 
 onBeforeUnmount(() => {
@@ -208,7 +339,7 @@ onBeforeUnmount(() => {
       <input
         v-model="searchQuery"
         type="text"
-        placeholder="Search by name or order ID"
+        placeholder="Search by item, owner, or order ID"
         class="flex-1 bg-transparent outline-none text-stone-400 text-sm sm:text-lg font-normal placeholder:text-stone-400 min-w-0"
       />
       <svg
@@ -282,7 +413,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Loading skeletons -->
-      <template v-if="isLoading && visibleTransactions.length === 0">
+      <template v-if="isInitialLoading">
         <div
           v-for="i in 3"
           :key="i"
@@ -292,7 +423,7 @@ onBeforeUnmount(() => {
 
       <!-- Error state -->
       <div
-        v-else-if="error && visibleTransactions.length === 0"
+        v-else-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
         <svg
@@ -305,10 +436,10 @@ onBeforeUnmount(() => {
           <line x1="12" y1="8" x2="12" y2="12" stroke-width="2" stroke-linecap="round" />
           <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke-width="2" />
         </svg>
-        <p class="text-neutral-800/80 text-sm sm:text-base mb-4">{{ error }}</p>
+        <p class="text-neutral-800/80 text-sm sm:text-base mb-4">{{ combinedError }}</p>
         <button
           class="bg-burning-orange text-white rounded-xl px-5 sm:px-6 py-2 text-sm sm:text-base font-normal hover:bg-cinnabar-red transition-colors"
-          @click="refresh"
+          @click="refreshAll"
         >
           Retry
         </button>
@@ -316,7 +447,7 @@ onBeforeUnmount(() => {
 
       <!-- Empty state -->
       <div
-        v-else-if="!isLoading && visibleTransactions.length === 0"
+        v-else-if="hasEmptyState"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
         <svg
@@ -329,35 +460,24 @@ onBeforeUnmount(() => {
           <path d="M3 9h18" stroke-width="1.5" />
           <path d="M9 21V9" stroke-width="1.5" />
         </svg>
-        <p class="text-neutral-800 text-sm sm:text-base font-semibold mb-1">
-          {{
-            activeStatus === "TO_REVIEW"
-              ? "No transactions awaiting your review"
-              : activeRole === "BORROWER"
-                ? "No borrowing transactions yet"
-                : "No lending transactions yet"
-          }}
-        </p>
-        <p class="text-neutral-800/60 text-xs sm:text-sm">
-          {{
-            activeStatus === "TO_REVIEW"
-              ? "Completed transactions you can review will appear here."
-              : activeRole === "BORROWER"
-                ? "Items you borrow will appear here."
-                : "Items you lend to others will appear here."
-          }}
-        </p>
+        <p class="text-neutral-800 text-sm sm:text-base font-semibold mb-1">{{ emptyTitle }}</p>
+        <p class="text-neutral-800/60 text-xs sm:text-sm">{{ emptySubtitle }}</p>
       </div>
 
       <!-- Transaction list -->
       <div v-else class="flex flex-col gap-3 sm:gap-4">
-        <TransactionCard
-          v-for="tx in visibleTransactions"
-          :key="tx.id"
-          :transaction="tx"
-          :active-role="activeRole"
-          @write-review="openReviewModal"
-        />
+        <template v-for="entry in visibleHistoryEntries" :key="`${entry.kind}-${entry.id}`">
+          <BorrowerRequestCard
+            v-if="entry.kind === 'request'"
+            :request="entry.request"
+          />
+          <TransactionCard
+            v-else
+            :transaction="entry.transaction"
+            :active-role="activeRole"
+            @write-review="openReviewModal"
+          />
+        </template>
       </div>
 
       <!-- Load More -->
