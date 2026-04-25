@@ -271,18 +271,41 @@ type BookingTimeRange = {
   endDate: Date
 }
 
-const normalizeCalendarDate = (value: Date) =>
-  new Date(value.getFullYear(), value.getMonth(), value.getDate())
+const doTimeRangesOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
+  left.startDate < right.endDate && left.endDate > right.startDate
 
-const isDateWithinAvailabilityRange = (date: Date, range: AvailabilityRangeRecord) => {
-  const normalizedDate = normalizeCalendarDate(date)
-  const rangeStart = normalizeCalendarDate(range.startDate)
-  const rangeEnd = normalizeCalendarDate(range.endDate)
+const isBookingWindowFullyCoveredByAvailability = (
+  bookingWindow: BookingTimeRange,
+  availabilityRanges: AvailabilityRangeRecord[],
+) => {
+  const availableRanges = availabilityRanges
+    .filter(
+      (range) =>
+        range.status === "AVAILABLE" &&
+        range.endDate > range.startDate &&
+        doTimeRangesOverlap(bookingWindow, range),
+    )
+    .sort((left, right) => left.startDate.getTime() - right.startDate.getTime())
 
-  return (
-    normalizedDate.getTime() >= rangeStart.getTime() &&
-    normalizedDate.getTime() <= rangeEnd.getTime()
-  )
+  let coveredUntil = bookingWindow.startDate.getTime()
+  const bookingEnd = bookingWindow.endDate.getTime()
+
+  for (const range of availableRanges) {
+    const rangeStart = range.startDate.getTime()
+    const rangeEnd = range.endDate.getTime()
+
+    if (rangeStart > coveredUntil) {
+      return false
+    }
+
+    coveredUntil = Math.max(coveredUntil, rangeEnd)
+
+    if (coveredUntil >= bookingEnd) {
+      return true
+    }
+  }
+
+  return false
 }
 
 const ensureBookingWindowMatchesAvailability = async (
@@ -308,28 +331,23 @@ const ensureBookingWindowMatchesAvailability = async (
 
   const hasAvailableRanges = availabilityRanges.some((range) => range.status === "AVAILABLE")
 
-  const startBoundary = normalizeCalendarDate(input.startDate)
-  const endBoundary = normalizeCalendarDate(input.endDate)
+  const requestedWindow = {
+    startDate: input.startDate,
+    endDate: input.endDate,
+  }
+  const hasBlockedWindow = availabilityRanges.some(
+    (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
+  )
 
-  for (
-    const cursor = new Date(startBoundary);
-    cursor.getTime() <= endBoundary.getTime();
-    cursor.setDate(cursor.getDate() + 1)
+  if (
+    hasBlockedWindow ||
+    (hasAvailableRanges &&
+      !isBookingWindowFullyCoveredByAvailability(requestedWindow, availabilityRanges))
   ) {
-    const hasAvailableWindow = availabilityRanges.some(
-      (range) => range.status === "AVAILABLE" && isDateWithinAvailabilityRange(cursor, range),
-    )
-
-    const hasBlockedWindow = availabilityRanges.some(
-      (range) => range.status !== "AVAILABLE" && isDateWithinAvailabilityRange(cursor, range),
-    )
-
-    if (hasBlockedWindow || (hasAvailableRanges && !hasAvailableWindow)) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "The selected dates are not fully available for this listing.",
-      })
-    }
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The selected dates are not fully available for this listing.",
+    })
   }
 }
 
@@ -524,8 +542,7 @@ const ensureBookingWindowAvailable = async (
   }
 }
 
-const doBookingWindowsOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
-  left.startDate < right.endDate && left.endDate > right.startDate
+const doBookingWindowsOverlap = doTimeRangesOverlap
 
 type TransactionSyncActor = {
   userId: string
