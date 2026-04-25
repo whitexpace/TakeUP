@@ -11,7 +11,7 @@ export type BorrowerItemRequestStatus = "PENDING" | "APPROVED" | "REJECTED"
 
 export type BorrowerItemRequest = BorrowerItemRequestSource & {
   requestStatus: BorrowerItemRequestStatus
-  requestStatusLabel: "Pending" | "Approved" | "Rejected"
+  requestStatusLabel: "Pending" | "Approved" | "Rejected" | "Cancelled"
 }
 
 type UseBorrowerItemRequestsOptions = {
@@ -28,15 +28,18 @@ const requestStatusByBookingStatus: Partial<
 > = {
   PENDING: { requestStatus: "PENDING", requestStatusLabel: "Pending" },
   CONFIRMED: { requestStatus: "APPROVED", requestStatusLabel: "Approved" },
-  CANCELLED: { requestStatus: "REJECTED", requestStatusLabel: "Rejected" },
+  // When a borrower cancels their own booking request we surface it in the
+  // borrower requests list. Historically this was shown with the label
+  // "Rejected" (which is confusing). Change the label to "Cancelled" while
+  // keeping the internal requestStatus value so existing consumers/styles
+  // remain compatible.
+  CANCELLED: { requestStatus: "REJECTED", requestStatusLabel: "Cancelled" },
 }
 
 const formatUserName = (user: { firstName: string; middleName: string | null; lastName: string }) =>
   `${user.firstName} ${user.lastName[0]}.`
 
-const toBorrowerItemRequest = (
-  booking: BorrowerItemRequestSource,
-): BorrowerItemRequest | null => {
+const toBorrowerItemRequest = (booking: BorrowerItemRequestSource): BorrowerItemRequest | null => {
   const requestStatus = requestStatusByBookingStatus[booking.status]
   if (!requestStatus) return null
 

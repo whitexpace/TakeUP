@@ -82,52 +82,55 @@ const visibleBorrowerRequests = computed(() =>
   shouldShowBorrowerRequests.value ? filteredBorrowerRequests.value : [],
 )
 
-const visibleHistoryEntries = computed<HistoryEntry[]>(() =>
-  [
-    ...visibleBorrowerRequests.value.map((request) => ({
-      kind: "request" as const,
-      id: request.id,
-      date: request.createdAt,
-      request,
-    })),
-    ...visibleTransactions.value.map((transaction) => ({
+const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
+  // Build maps to deduplicate transactions that correspond to a booking
+  // already represented by a borrower request card. If a transaction has a
+  // bookingId that matches a request.id we prefer showing the request entry
+  // and skip the transaction entry to avoid duplicate cards for the same
+  // underlying booking.
+  const requestIdSet = new Set(visibleBorrowerRequests.value.map((r) => r.id))
+
+  const requestEntries = visibleBorrowerRequests.value.map((request) => ({
+    kind: "request" as const,
+    id: request.id,
+    date: request.createdAt,
+    request,
+  }))
+
+  const transactionEntries = visibleTransactions.value
+    .filter((transaction) => !(transaction.bookingId && requestIdSet.has(transaction.bookingId)))
+    .map((transaction) => ({
       kind: "transaction" as const,
       id: transaction.id,
       date: transaction.createdAt,
       transaction,
-    })),
-  ].sort((left, right) => {
+    }))
+
+  return [...requestEntries, ...transactionEntries].sort((left, right) => {
     const rightTime = new Date(right.date).getTime()
     const leftTime = new Date(left.date).getTime()
 
     if (rightTime !== leftTime) return rightTime - leftTime
     return right.id.localeCompare(left.id)
-  }),
-)
+  })
+})
 
 const hasVisibleEntries = computed(() => visibleHistoryEntries.value.length > 0)
 
 const isInitialLoading = computed(
   () =>
     !hasVisibleEntries.value &&
-    (isLoading.value ||
-      (shouldShowBorrowerRequests.value && areBorrowerRequestsLoading.value)),
+    (isLoading.value || (shouldShowBorrowerRequests.value && areBorrowerRequestsLoading.value)),
 )
 
 const combinedError = computed(() => error.value ?? borrowerRequestsError.value)
 
 const hasInitialError = computed(
-  () =>
-    !hasVisibleEntries.value &&
-    !isInitialLoading.value &&
-    Boolean(combinedError.value),
+  () => !hasVisibleEntries.value && !isInitialLoading.value && Boolean(combinedError.value),
 )
 
 const hasEmptyState = computed(
-  () =>
-    !hasVisibleEntries.value &&
-    !isInitialLoading.value &&
-    !hasInitialError.value,
+  () => !hasVisibleEntries.value && !isInitialLoading.value && !hasInitialError.value,
 )
 
 const isReviewModalOpen = ref(false)
@@ -467,10 +470,7 @@ onBeforeUnmount(() => {
       <!-- Transaction list -->
       <div v-else class="flex flex-col gap-3 sm:gap-4">
         <template v-for="entry in visibleHistoryEntries" :key="`${entry.kind}-${entry.id}`">
-          <BorrowerRequestCard
-            v-if="entry.kind === 'request'"
-            :request="entry.request"
-          />
+          <BorrowerRequestCard v-if="entry.kind === 'request'" :request="entry.request" />
           <TransactionCard
             v-else
             :transaction="entry.transaction"
