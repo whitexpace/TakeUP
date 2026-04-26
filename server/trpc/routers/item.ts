@@ -382,12 +382,12 @@ const mapItemTaxonomy = (
     transactionReviews: _transactionReviews,
     ...rest
   } = item
-  const lenderUser = lender.user
-  const lenderFullName =
-    [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
-    null
-  const lenderUsername = lenderUser.username || null
-  const ownerName = lenderUsername || lenderFullName || lenderUser.email || item.lenderId
+  const lenderUser = lender?.user
+  const lenderFullName = lenderUser
+    ? [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ")
+    : null
+  const lenderUsername = lenderUser?.username || null
+  const ownerName = lenderUsername || lenderFullName || lenderUser?.email || item.lenderId
   const orderedPhotos =
     images?.map((entry) => entry.path) ??
     item.photos ??

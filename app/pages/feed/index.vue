@@ -229,6 +229,7 @@ definePageMeta({ layout: false })
 type ApiCommunityMember = {
   profileId: number
   userId: string
+  username: string
   name: string
   avatar: string
 }
@@ -471,6 +472,7 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
 const normalizeMember = (member: ApiCommunityMember): CommunityMember => ({
   profileId: Number(member.profileId),
   userId: member.userId,
+  username: member.username,
   name: member.name,
   avatar: member.avatar || "",
 })
