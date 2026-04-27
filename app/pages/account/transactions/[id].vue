@@ -1746,12 +1746,7 @@ onBeforeUnmount(() => {
               <span class="mt-1 block text-xs text-noble-black/50 truncate">
                 {{ handoffProofFile?.name || "Choose an image file" }}
               </span>
-              <input
-                type="file"
-                accept="image/*"
-                class="sr-only"
-                @change="setHandoffProofFile"
-              />
+              <input type="file" accept="image/*" class="sr-only" @change="setHandoffProofFile" />
             </label>
 
             <p v-if="proofUploadErrorMessage" class="mt-3 text-sm text-red-600">
@@ -1849,12 +1844,7 @@ onBeforeUnmount(() => {
               <span class="mt-1 block text-xs text-noble-black/50 truncate">
                 {{ returnProofFile?.name || "Choose an image file" }}
               </span>
-              <input
-                type="file"
-                accept="image/*"
-                class="sr-only"
-                @change="setReturnProofFile"
-              />
+              <input type="file" accept="image/*" class="sr-only" @change="setReturnProofFile" />
             </label>
 
             <p v-if="proofUploadErrorMessage" class="mb-4 text-sm text-red-600">

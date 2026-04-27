@@ -134,9 +134,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const { data: publicUrlData } = supabaseClient.storage
-    .from(proofBucket)
-    .getPublicUrl(storagePath)
+  const { data: publicUrlData } = supabaseClient.storage.from(proofBucket).getPublicUrl(storagePath)
 
   return {
     token: data.token,
