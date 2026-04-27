@@ -102,6 +102,13 @@ const canOpenChat = computed(
   () =>
     Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
 )
+const isPendingRequest = computed(() => booking.value.status === "PENDING")
+const canCancelRequest = computed(() => !isLender.value && booking.value.status === "PENDING")
+const requestStageMessage = computed(() =>
+  isLender.value
+    ? "Requested - waiting for you to accept the booking"
+    : "Requested - waiting for lender to accept the booking",
+)
 
 const mappedStatus = computed(() => {
   switch (booking.value.status) {
@@ -134,6 +141,22 @@ const formatDateTime = (date: Date | string) => {
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
   return `${formattedDate} at ${time}`
 }
+
+const isOnOrAfter = (value: Date | string | null | undefined, minimum: Date | string) => {
+  if (!value) return false
+  return new Date(value).getTime() >= new Date(minimum).getTime()
+}
+
+const validReturnedAt = computed(() =>
+  isOnOrAfter(booking.value.returnedAt, booking.value.startDate) ? booking.value.returnedAt : null,
+)
+
+const validCompletedAt = computed(() => {
+  if (!booking.value.completedAt) return null
+
+  const minimum = validReturnedAt.value ?? booking.value.startDate
+  return isOnOrAfter(booking.value.completedAt, minimum) ? booking.value.completedAt : null
+})
 
 const finalDecisionLabel = (
   decision: NonNullable<BookingDetail["latestDispute"]>["finalDecision"],
@@ -179,18 +202,23 @@ const backToTransactionsPath = computed(() => {
 const timeline = computed(() => {
   const steps = [
     {
-      label: "Order Placed",
-      description: isLender.value ? "Borrower placed this order" : "You placed this order",
+      label: "Requested",
+      description:
+        booking.value.status === "PENDING"
+          ? requestStageMessage.value
+          : isLender.value
+            ? "Borrower requested this booking"
+            : "You requested this booking",
       date: formatDate(booking.value.requestedAt),
       status: "completed",
     },
     {
-      label: "Request Approved",
+      label: "Lender Confirmation",
       description:
         booking.value.status === "PENDING"
           ? isLender.value
-            ? "Waiting for your approval"
-            : "Waiting for lender's approval"
+            ? "Review and accept or decline this booking"
+            : "Waiting for lender to accept the booking"
           : "Lender approved the request",
       date: booking.value.confirmedAt ? formatDate(booking.value.confirmedAt) : "--",
       status:
@@ -221,10 +249,12 @@ const timeline = computed(() => {
     {
       label: "Return Item",
       description: ["RETURNED", "COMPLETED"].includes(booking.value.status)
-        ? "Item returned successfully"
+        ? validReturnedAt.value
+          ? "Item returned successfully"
+          : "Return date unavailable"
         : "Return by the end of rental period",
-      date: booking.value.returnedAt
-        ? formatDate(booking.value.returnedAt)
+      date: validReturnedAt.value
+        ? formatDate(validReturnedAt.value)
         : formatDate(booking.value.endDate),
       status:
         booking.value.status === "RETURNED"
@@ -236,7 +266,7 @@ const timeline = computed(() => {
     {
       label: "Completed",
       description: "Transaction completed after inspection",
-      date: booking.value.completedAt ? formatDate(booking.value.completedAt) : "--",
+      date: validCompletedAt.value ? formatDate(validCompletedAt.value) : "--",
       status: booking.value.status === "COMPLETED" ? "current" : "upcoming",
     },
   ]
@@ -428,6 +458,40 @@ const confirmReceipt = async () => {
       errorData?.error?.message ??
       errorData?.statusMessage ??
       "Unable to complete this booking right now."
+  } finally {
+    isActing.value = false
+  }
+}
+
+const cancelRequest = async () => {
+  isActing.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+
+  try {
+    await $fetch(`/api/bookings/${booking.value.id}`, {
+      method: "PATCH",
+      body: {
+        status: "CANCELLED",
+        cancellationReason: "Cancelled by borrower.",
+      },
+    })
+    await refresh()
+    actionSuccessMessage.value = "Booking request cancelled."
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    actionErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to cancel this request right now."
   } finally {
     isActing.value = false
   }
@@ -896,7 +960,20 @@ onBeforeUnmount(() => {
           <span class="font-normal">Placed on {{ formatDateTime(booking.requestedAt) }}</span>
         </div>
 
-        <TransactionStatusBadge :status="mappedStatus" :role="userRole" />
+        <span
+          v-if="isPendingRequest"
+          class="inline-flex items-center rounded-md bg-burning-orange px-3 py-1 text-base font-normal font-geist text-white"
+        >
+          Requested
+        </span>
+        <TransactionStatusBadge v-else :status="mappedStatus" :role="userRole" />
+      </div>
+
+      <div
+        v-if="isPendingRequest"
+        class="mb-8 rounded-2xl border border-burning-orange/20 bg-burning-orange/5 px-5 py-4 text-sm font-semibold text-noble-black"
+      >
+        {{ requestStageMessage }}
       </div>
 
       <!-- Main Content Grid -->
@@ -991,6 +1068,15 @@ onBeforeUnmount(() => {
                 Decline
               </button>
             </div>
+
+            <button
+              v-else-if="canCancelRequest"
+              :disabled="isActing"
+              class="bg-cream border border-burning-orange text-burning-orange px-6 py-2 rounded-xl font-bold hover:bg-burning-orange/10 transition-colors disabled:opacity-50"
+              @click="cancelRequest"
+            >
+              {{ isActing ? "Cancelling..." : "Cancel Request" }}
+            </button>
 
             <!-- Borrower Action: Return Item / Early Return -->
             <button
