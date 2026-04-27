@@ -186,6 +186,15 @@ type BookingDetailTransaction = {
   status: PrismaTransactionStatus
   borrowerId: string | null
   lenderId: string | null
+  createdAt: Date
+  statusLogs: Array<{
+    id: string
+    oldStatus: PrismaTransactionStatus | null
+    newStatus: PrismaTransactionStatus
+    changedByRole: string
+    remarks: string | null
+    createdAt: Date
+  }>
   disputes: Array<{
     id: string
     raisedById: string
@@ -217,6 +226,14 @@ type BookingDetailTransaction = {
     } | null
   }>
   reviews: BookingReviewRecord[]
+}
+
+type BookingTimelineEvent = {
+  key: string
+  label: string
+  description: string
+  occurredAt: Date
+  source: "BOOKING" | "TRANSACTION_STATUS_LOG" | "TRANSACTION"
 }
 
 const overlappingPendingBookingSelect = {
@@ -271,18 +288,41 @@ type BookingTimeRange = {
   endDate: Date
 }
 
-const normalizeCalendarDate = (value: Date) =>
-  new Date(value.getFullYear(), value.getMonth(), value.getDate())
+const doTimeRangesOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
+  left.startDate < right.endDate && left.endDate > right.startDate
 
-const isDateWithinAvailabilityRange = (date: Date, range: AvailabilityRangeRecord) => {
-  const normalizedDate = normalizeCalendarDate(date)
-  const rangeStart = normalizeCalendarDate(range.startDate)
-  const rangeEnd = normalizeCalendarDate(range.endDate)
+const isBookingWindowFullyCoveredByAvailability = (
+  bookingWindow: BookingTimeRange,
+  availabilityRanges: AvailabilityRangeRecord[],
+) => {
+  const availableRanges = availabilityRanges
+    .filter(
+      (range) =>
+        range.status === "AVAILABLE" &&
+        range.endDate > range.startDate &&
+        doTimeRangesOverlap(bookingWindow, range),
+    )
+    .sort((left, right) => left.startDate.getTime() - right.startDate.getTime())
 
-  return (
-    normalizedDate.getTime() >= rangeStart.getTime() &&
-    normalizedDate.getTime() <= rangeEnd.getTime()
-  )
+  let coveredUntil = bookingWindow.startDate.getTime()
+  const bookingEnd = bookingWindow.endDate.getTime()
+
+  for (const range of availableRanges) {
+    const rangeStart = range.startDate.getTime()
+    const rangeEnd = range.endDate.getTime()
+
+    if (rangeStart > coveredUntil) {
+      return false
+    }
+
+    coveredUntil = Math.max(coveredUntil, rangeEnd)
+
+    if (coveredUntil >= bookingEnd) {
+      return true
+    }
+  }
+
+  return false
 }
 
 const ensureBookingWindowMatchesAvailability = async (
@@ -308,28 +348,23 @@ const ensureBookingWindowMatchesAvailability = async (
 
   const hasAvailableRanges = availabilityRanges.some((range) => range.status === "AVAILABLE")
 
-  const startBoundary = normalizeCalendarDate(input.startDate)
-  const endBoundary = normalizeCalendarDate(input.endDate)
+  const requestedWindow = {
+    startDate: input.startDate,
+    endDate: input.endDate,
+  }
+  const hasBlockedWindow = availabilityRanges.some(
+    (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
+  )
 
-  for (
-    const cursor = new Date(startBoundary);
-    cursor.getTime() <= endBoundary.getTime();
-    cursor.setDate(cursor.getDate() + 1)
+  if (
+    hasBlockedWindow ||
+    (hasAvailableRanges &&
+      !isBookingWindowFullyCoveredByAvailability(requestedWindow, availabilityRanges))
   ) {
-    const hasAvailableWindow = availabilityRanges.some(
-      (range) => range.status === "AVAILABLE" && isDateWithinAvailabilityRange(cursor, range),
-    )
-
-    const hasBlockedWindow = availabilityRanges.some(
-      (range) => range.status !== "AVAILABLE" && isDateWithinAvailabilityRange(cursor, range),
-    )
-
-    if (hasBlockedWindow || (hasAvailableRanges && !hasAvailableWindow)) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "The selected dates are not fully available for this listing.",
-      })
-    }
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The selected dates are not fully available for this listing.",
+    })
   }
 }
 
@@ -350,6 +385,153 @@ const mapBookingRecord = (record: BookingRecord): BookingListItem => {
       thumbnailImage: getBookingThumbnailImage({ images }),
     },
   }
+}
+
+const transactionStatusTimelineLabels: Record<
+  PrismaTransactionStatus,
+  { label: string; description: string }
+> = {
+  [PrismaTransactionStatus.PENDING]: {
+    label: "Transaction pending",
+    description: "Transaction status was recorded as pending.",
+  },
+  [PrismaTransactionStatus.AWAITING_LENDER_APPROVAL]: {
+    label: "Awaiting lender approval",
+    description: "Transaction is waiting for lender approval.",
+  },
+  [PrismaTransactionStatus.CONFIRMED]: {
+    label: "Confirmed",
+    description: "Lender approval was recorded for this transaction.",
+  },
+  [PrismaTransactionStatus.PAID]: {
+    label: "Payment marked paid",
+    description: "Payment status was recorded as paid.",
+  },
+  [PrismaTransactionStatus.ONGOING]: {
+    label: "In use",
+    description: "The item is in use.",
+  },
+  [PrismaTransactionStatus.RETURNED]: {
+    label: "Returned",
+    description: "The item return was recorded in the transaction log.",
+  },
+  [PrismaTransactionStatus.COMPLETED]: {
+    label: "Completed",
+    description: "Transaction completion was recorded.",
+  },
+  [PrismaTransactionStatus.CANCELLED]: {
+    label: "Cancelled",
+    description: "Transaction cancellation was recorded.",
+  },
+  [PrismaTransactionStatus.IN_DISPUTE]: {
+    label: "Dispute opened",
+    description: "Transaction status was recorded as in dispute.",
+  },
+  [PrismaTransactionStatus.APPEALED]: {
+    label: "Dispute appealed",
+    description: "Transaction status was recorded as appealed.",
+  },
+  [PrismaTransactionStatus.REFUNDED]: {
+    label: "Refunded",
+    description: "Transaction status was recorded as refunded.",
+  },
+  [PrismaTransactionStatus.FAILED]: {
+    label: "Failed",
+    description: "Transaction status was recorded as failed.",
+  },
+}
+
+const getFirstStatusLogAt = (
+  transaction: BookingDetailTransaction | null | undefined,
+  status: PrismaTransactionStatus,
+) =>
+  transaction?.statusLogs?.find((log) => log.newStatus === status)?.createdAt ??
+  null
+
+const buildBookingTimeline = (
+  booking: BookingRecord,
+  transaction: BookingDetailTransaction | null,
+): BookingTimelineEvent[] => {
+  const events: BookingTimelineEvent[] = []
+  const addBookingEvent = (
+    key: string,
+    label: string,
+    description: string,
+    occurredAt: Date | null | undefined,
+  ) => {
+    if (!occurredAt) return
+    events.push({
+      key,
+      label,
+      description,
+      occurredAt,
+      source: "BOOKING",
+    })
+  }
+
+  addBookingEvent(
+    "booking-requested",
+    "Requested",
+    "Booking request timestamp from the booking record.",
+    booking.requestedAt,
+  )
+  addBookingEvent(
+    "booking-confirmed",
+    "Confirmed",
+    "Booking confirmation timestamp from the booking record.",
+    booking.confirmedAt,
+  )
+  addBookingEvent(
+    "booking-returned",
+    "Returned",
+    "Return timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.RETURNED)
+      ? null
+      : (booking.actualReturnedAt ?? booking.returnedAt),
+  )
+  addBookingEvent(
+    "booking-completed",
+    "Completed",
+    "Completion timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.COMPLETED)
+      ? null
+      : booking.completedAt,
+  )
+  addBookingEvent(
+    "booking-cancelled",
+    "Cancelled",
+    "Cancellation timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.CANCELLED)
+      ? null
+      : booking.cancelledAt,
+  )
+  addBookingEvent(
+    "booking-dispute-opened",
+    "Dispute opened",
+    "Dispute opened timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.IN_DISPUTE)
+      ? null
+      : booking.disputeOpenedAt,
+  )
+
+  if (transaction) {
+    for (const log of transaction.statusLogs ?? []) {
+      const timelineCopy = transactionStatusTimelineLabels[log.newStatus]
+      events.push({
+        key: `transaction-status-log-${log.id}`,
+        label: timelineCopy.label,
+        description: log.remarks ?? timelineCopy.description,
+        occurredAt: log.createdAt,
+        source: "TRANSACTION_STATUS_LOG",
+      })
+    }
+  }
+
+  return events.sort((left, right) => {
+    const timeDiff = left.occurredAt.getTime() - right.occurredAt.getTime()
+    if (timeDiff !== 0) return timeDiff
+    return left.key.localeCompare(right.key)
+  })
 }
 
 const DEFAULT_PAYMENT_METHOD: PaymentMethod = paymentMethodSchema.enum.GCASH
@@ -524,8 +706,7 @@ const ensureBookingWindowAvailable = async (
   }
 }
 
-const doBookingWindowsOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
-  left.startDate < right.endDate && left.endDate > right.startDate
+const doBookingWindowsOverlap = doTimeRangesOverlap
 
 type TransactionSyncActor = {
   userId: string
@@ -957,6 +1138,18 @@ export const bookingRouter = router({
         status: true,
         borrowerId: true,
         lenderId: true,
+        createdAt: true,
+        statusLogs: {
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            oldStatus: true,
+            newStatus: true,
+            changedByRole: true,
+            remarks: true,
+            createdAt: true,
+          },
+        },
         disputes: {
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           select: {
@@ -1028,6 +1221,7 @@ export const bookingRouter = router({
     return {
       ...mapBookingRecord(booking),
       transactionId: transaction?.id ?? null,
+      timeline: buildBookingTimeline(booking, transaction),
       canRaiseDispute:
         Boolean(transaction?.id && (transaction.borrowerId || transaction.lenderId)) &&
         isWithinDisputeWindow &&

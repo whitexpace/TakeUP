@@ -419,6 +419,67 @@ describe("bookingRouter", () => {
     })
   })
 
+  it("builds the detail timeline from exact booking timestamps and transaction status logs", async () => {
+    const ctx = makeContext()
+    const bookingReturnedAt = new Date("2026-04-03T00:00:00.000Z")
+    const loggedReturnedAt = new Date("2026-04-03T08:15:30.000Z")
+
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "RETURNED",
+        confirmedAt: new Date("2026-03-21T02:30:00.000Z"),
+        returnedAt: bookingReturnedAt,
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "RETURNED",
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      createdAt: new Date("2026-03-21T02:30:05.000Z"),
+      statusLogs: [
+        {
+          id: "log-returned",
+          oldStatus: "CONFIRMED",
+          newStatus: "RETURNED",
+          changedByRole: "BORROWER",
+          remarks: "Borrower initiated item return.",
+          createdAt: loggedReturnedAt,
+        },
+      ],
+      disputes: [],
+      reviews: [],
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    const result = await caller.byId({ id: BOOKING_ID })
+
+    expect(result?.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "booking-requested",
+          occurredAt: new Date("2026-03-20T00:00:00.000Z"),
+          source: "BOOKING",
+        }),
+        expect.objectContaining({
+          key: "booking-confirmed",
+          occurredAt: new Date("2026-03-21T02:30:00.000Z"),
+          source: "BOOKING",
+        }),
+        expect.objectContaining({
+          key: "transaction-status-log-log-returned",
+          label: "Returned",
+          description: "Borrower initiated item return.",
+          occurredAt: loggedReturnedAt,
+          source: "TRANSACTION_STATUS_LOG",
+        }),
+      ]),
+    )
+    expect(
+      result?.timeline.some((entry) => entry.occurredAt.getTime() === bookingReturnedAt.getTime()),
+    ).toBe(false)
+  })
+
   it("rejects create when the requested dates fall outside listing availability", async () => {
     const ctx = makeContext()
     ctx.prisma.itemAvailability.findMany.mockResolvedValueOnce([
@@ -444,6 +505,62 @@ describe("bookingRouter", () => {
     })
 
     expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
+  })
+
+  it("rejects create when the requested time is outside a same-day availability window", async () => {
+    const ctx = makeContext()
+    ctx.prisma.itemAvailability.findMany.mockResolvedValueOnce([
+      {
+        startDate: new Date("2026-04-01T05:30:00.000Z"),
+        endDate: new Date("2026-04-01T06:30:00.000Z"),
+        status: "AVAILABLE",
+      },
+    ])
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T18:00:00.000Z"),
+        endDate: new Date("2026-04-01T19:00:00.000Z"),
+        platformCommission: 50,
+        paymentMethod: "GCASH",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The selected dates are not fully available for this listing.",
+    })
+
+    expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
+  })
+
+  it("allows create when the requested time is contained by a same-day availability window", async () => {
+    const ctx = makeContext()
+    ctx.prisma.itemAvailability.findMany.mockResolvedValueOnce([
+      {
+        startDate: new Date("2026-04-01T05:30:00.000Z"),
+        endDate: new Date("2026-04-01T06:30:00.000Z"),
+        status: "AVAILABLE",
+      },
+    ])
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await caller.create({
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-01T05:45:00.000Z"),
+      endDate: new Date("2026-04-01T06:15:00.000Z"),
+      platformCommission: 50,
+      paymentMethod: "GCASH",
+    })
+
+    expect(ctx.prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          startDate: new Date("2026-04-01T05:45:00.000Z"),
+          endDate: new Date("2026-04-01T06:15:00.000Z"),
+        }),
+      }),
+    )
   })
 
   it("rejects create when the requested window overlaps an existing active booking", async () => {
@@ -507,6 +624,44 @@ describe("bookingRouter", () => {
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "endDate must be later than startDate.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
+  it("rejects update when the resulting time moves outside listing availability", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce({
+      ...makeBooking({
+        startDate: new Date("2026-04-01T05:45:00.000Z"),
+        endDate: new Date("2026-04-01T06:15:00.000Z"),
+      }),
+      item: {
+        id: ITEM_ID,
+        lenderId: LENDER_ID,
+        rateOption: "PER_HOUR",
+        rentalFee: 200,
+        freeToBorrow: false,
+        status: "AVAILABLE",
+      },
+    })
+    ctx.prisma.itemAvailability.findMany.mockResolvedValueOnce([
+      {
+        startDate: new Date("2026-04-01T05:30:00.000Z"),
+        endDate: new Date("2026-04-01T06:30:00.000Z"),
+        status: "AVAILABLE",
+      },
+    ])
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.update({
+        id: BOOKING_ID,
+        endDate: new Date("2026-04-01T19:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The selected dates are not fully available for this listing.",
     })
 
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
