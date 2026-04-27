@@ -408,11 +408,11 @@ const transactionStatusTimelineLabels: Record<
     description: "Payment status was recorded as paid.",
   },
   [PrismaTransactionStatus.ONGOING]: {
-    label: "Ongoing",
-    description: "Transaction status was recorded as ongoing.",
+    label: "In use",
+    description: "The item is in use.",
   },
   [PrismaTransactionStatus.RETURNED]: {
-    label: "Return recorded",
+    label: "Returned",
     description: "The item return was recorded in the transaction log.",
   },
   [PrismaTransactionStatus.COMPLETED]: {
@@ -476,26 +476,14 @@ const buildBookingTimeline = (
     booking.requestedAt,
   )
   addBookingEvent(
-    "booking-created",
-    "Booking record created",
-    "Booking row creation timestamp from the booking record.",
-    booking.createdAt,
-  )
-  addBookingEvent(
     "booking-confirmed",
     "Confirmed",
     "Booking confirmation timestamp from the booking record.",
     booking.confirmedAt,
   )
   addBookingEvent(
-    "booking-payment-processed",
-    "Payment processed",
-    "Payment processing timestamp from the booking record.",
-    booking.paymentProcessedAt,
-  )
-  addBookingEvent(
     "booking-returned",
-    "Return recorded",
+    "Returned",
     "Return timestamp from the booking record.",
     getFirstStatusLogAt(transaction, PrismaTransactionStatus.RETURNED)
       ? null
@@ -527,16 +515,6 @@ const buildBookingTimeline = (
   )
 
   if (transaction) {
-    if (transaction.createdAt) {
-      events.push({
-        key: `transaction-created-${transaction.id}`,
-        label: "Transaction record created",
-        description: "Transaction row creation timestamp from the transaction record.",
-        occurredAt: transaction.createdAt,
-        source: "TRANSACTION",
-      })
-    }
-
     for (const log of transaction.statusLogs ?? []) {
       const timelineCopy = transactionStatusTimelineLabels[log.newStatus]
       events.push({
