@@ -142,22 +142,6 @@ const formatDateTime = (date: Date | string) => {
   return `${formattedDate} at ${time}`
 }
 
-const isOnOrAfter = (value: Date | string | null | undefined, minimum: Date | string) => {
-  if (!value) return false
-  return new Date(value).getTime() >= new Date(minimum).getTime()
-}
-
-const validReturnedAt = computed(() =>
-  isOnOrAfter(booking.value.returnedAt, booking.value.startDate) ? booking.value.returnedAt : null,
-)
-
-const validCompletedAt = computed(() => {
-  if (!booking.value.completedAt) return null
-
-  const minimum = validReturnedAt.value ?? booking.value.startDate
-  return isOnOrAfter(booking.value.completedAt, minimum) ? booking.value.completedAt : null
-})
-
 const finalDecisionLabel = (
   decision: NonNullable<BookingDetail["latestDispute"]>["finalDecision"],
 ) => {
@@ -198,79 +182,13 @@ const backToTransactionsPath = computed(() => {
   return `/account/transactions?role=${userRole.value}`
 })
 
-// Timeline logic
 const timeline = computed(() => {
-  const steps = [
-    {
-      label: "Requested",
-      description:
-        booking.value.status === "PENDING"
-          ? requestStageMessage.value
-          : isLender.value
-            ? "Borrower requested this booking"
-            : "You requested this booking",
-      date: formatDate(booking.value.requestedAt),
-      status: "completed",
-    },
-    {
-      label: "Lender Confirmation",
-      description:
-        booking.value.status === "PENDING"
-          ? isLender.value
-            ? "Review and accept or decline this booking"
-            : "Waiting for lender to accept the booking"
-          : "Lender approved the request",
-      date: booking.value.confirmedAt ? formatDate(booking.value.confirmedAt) : "--",
-      status:
-        booking.value.status === "PENDING"
-          ? "current"
-          : ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-            ? "completed"
-            : "upcoming",
-    },
-    {
-      label: "Picked Up",
-      description: "Item picked up at designated location",
-      date: formatDate(booking.value.startDate),
-      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-        ? "completed"
-        : "upcoming",
-    },
-    {
-      label: "In Use",
-      description: "Rental period started",
-      date: formatDate(booking.value.startDate),
-      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-        ? booking.value.status === "CONFIRMED"
-          ? "current"
-          : "completed"
-        : "upcoming",
-    },
-    {
-      label: "Return Item",
-      description: ["RETURNED", "COMPLETED"].includes(booking.value.status)
-        ? validReturnedAt.value
-          ? "Item returned successfully"
-          : "Return date unavailable"
-        : "Return by the end of rental period",
-      date: validReturnedAt.value
-        ? formatDate(validReturnedAt.value)
-        : formatDate(booking.value.endDate),
-      status:
-        booking.value.status === "RETURNED"
-          ? "current"
-          : booking.value.status === "COMPLETED"
-            ? "completed"
-            : "upcoming",
-    },
-    {
-      label: "Completed",
-      description: "Transaction completed after inspection",
-      date: validCompletedAt.value ? formatDate(validCompletedAt.value) : "--",
-      status: booking.value.status === "COMPLETED" ? "current" : "upcoming",
-    },
-  ]
-  return steps
+  const entries = booking.value.timeline ?? []
+  return entries.map((entry, index) => ({
+    ...entry,
+    date: formatDateTime(entry.occurredAt),
+    status: index === entries.length - 1 ? "current" : "completed",
+  }))
 })
 
 const isReturnModalOpen = ref(false)

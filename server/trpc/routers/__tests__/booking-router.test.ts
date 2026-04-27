@@ -419,6 +419,67 @@ describe("bookingRouter", () => {
     })
   })
 
+  it("builds the detail timeline from exact booking timestamps and transaction status logs", async () => {
+    const ctx = makeContext()
+    const bookingReturnedAt = new Date("2026-04-03T00:00:00.000Z")
+    const loggedReturnedAt = new Date("2026-04-03T08:15:30.000Z")
+
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "RETURNED",
+        confirmedAt: new Date("2026-03-21T02:30:00.000Z"),
+        returnedAt: bookingReturnedAt,
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique.mockResolvedValueOnce({
+      id: "txn-1",
+      status: "RETURNED",
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      createdAt: new Date("2026-03-21T02:30:05.000Z"),
+      statusLogs: [
+        {
+          id: "log-returned",
+          oldStatus: "CONFIRMED",
+          newStatus: "RETURNED",
+          changedByRole: "BORROWER",
+          remarks: "Borrower initiated item return.",
+          createdAt: loggedReturnedAt,
+        },
+      ],
+      disputes: [],
+      reviews: [],
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    const result = await caller.byId({ id: BOOKING_ID })
+
+    expect(result?.timeline).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "booking-requested",
+          occurredAt: new Date("2026-03-20T00:00:00.000Z"),
+          source: "BOOKING",
+        }),
+        expect.objectContaining({
+          key: "booking-confirmed",
+          occurredAt: new Date("2026-03-21T02:30:00.000Z"),
+          source: "BOOKING",
+        }),
+        expect.objectContaining({
+          key: "transaction-status-log-log-returned",
+          label: "Return recorded",
+          description: "Borrower initiated item return.",
+          occurredAt: loggedReturnedAt,
+          source: "TRANSACTION_STATUS_LOG",
+        }),
+      ]),
+    )
+    expect(
+      result?.timeline.some((entry) => entry.occurredAt.getTime() === bookingReturnedAt.getTime()),
+    ).toBe(false)
+  })
+
   it("rejects create when the requested dates fall outside listing availability", async () => {
     const ctx = makeContext()
     ctx.prisma.itemAvailability.findMany.mockResolvedValueOnce([

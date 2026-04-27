@@ -186,6 +186,15 @@ type BookingDetailTransaction = {
   status: PrismaTransactionStatus
   borrowerId: string | null
   lenderId: string | null
+  createdAt: Date
+  statusLogs: Array<{
+    id: string
+    oldStatus: PrismaTransactionStatus | null
+    newStatus: PrismaTransactionStatus
+    changedByRole: string
+    remarks: string | null
+    createdAt: Date
+  }>
   disputes: Array<{
     id: string
     raisedById: string
@@ -217,6 +226,14 @@ type BookingDetailTransaction = {
     } | null
   }>
   reviews: BookingReviewRecord[]
+}
+
+type BookingTimelineEvent = {
+  key: string
+  label: string
+  description: string
+  occurredAt: Date
+  source: "BOOKING" | "TRANSACTION_STATUS_LOG" | "TRANSACTION"
 }
 
 const overlappingPendingBookingSelect = {
@@ -368,6 +385,175 @@ const mapBookingRecord = (record: BookingRecord): BookingListItem => {
       thumbnailImage: getBookingThumbnailImage({ images }),
     },
   }
+}
+
+const transactionStatusTimelineLabels: Record<
+  PrismaTransactionStatus,
+  { label: string; description: string }
+> = {
+  [PrismaTransactionStatus.PENDING]: {
+    label: "Transaction pending",
+    description: "Transaction status was recorded as pending.",
+  },
+  [PrismaTransactionStatus.AWAITING_LENDER_APPROVAL]: {
+    label: "Awaiting lender approval",
+    description: "Transaction is waiting for lender approval.",
+  },
+  [PrismaTransactionStatus.CONFIRMED]: {
+    label: "Confirmed",
+    description: "Lender approval was recorded for this transaction.",
+  },
+  [PrismaTransactionStatus.PAID]: {
+    label: "Payment marked paid",
+    description: "Payment status was recorded as paid.",
+  },
+  [PrismaTransactionStatus.ONGOING]: {
+    label: "Ongoing",
+    description: "Transaction status was recorded as ongoing.",
+  },
+  [PrismaTransactionStatus.RETURNED]: {
+    label: "Return recorded",
+    description: "The item return was recorded in the transaction log.",
+  },
+  [PrismaTransactionStatus.COMPLETED]: {
+    label: "Completed",
+    description: "Transaction completion was recorded.",
+  },
+  [PrismaTransactionStatus.CANCELLED]: {
+    label: "Cancelled",
+    description: "Transaction cancellation was recorded.",
+  },
+  [PrismaTransactionStatus.IN_DISPUTE]: {
+    label: "Dispute opened",
+    description: "Transaction status was recorded as in dispute.",
+  },
+  [PrismaTransactionStatus.APPEALED]: {
+    label: "Dispute appealed",
+    description: "Transaction status was recorded as appealed.",
+  },
+  [PrismaTransactionStatus.REFUNDED]: {
+    label: "Refunded",
+    description: "Transaction status was recorded as refunded.",
+  },
+  [PrismaTransactionStatus.FAILED]: {
+    label: "Failed",
+    description: "Transaction status was recorded as failed.",
+  },
+}
+
+const getFirstStatusLogAt = (
+  transaction: BookingDetailTransaction | null | undefined,
+  status: PrismaTransactionStatus,
+) =>
+  transaction?.statusLogs?.find((log) => log.newStatus === status)?.createdAt ??
+  null
+
+const buildBookingTimeline = (
+  booking: BookingRecord,
+  transaction: BookingDetailTransaction | null,
+): BookingTimelineEvent[] => {
+  const events: BookingTimelineEvent[] = []
+  const addBookingEvent = (
+    key: string,
+    label: string,
+    description: string,
+    occurredAt: Date | null | undefined,
+  ) => {
+    if (!occurredAt) return
+    events.push({
+      key,
+      label,
+      description,
+      occurredAt,
+      source: "BOOKING",
+    })
+  }
+
+  addBookingEvent(
+    "booking-requested",
+    "Requested",
+    "Booking request timestamp from the booking record.",
+    booking.requestedAt,
+  )
+  addBookingEvent(
+    "booking-created",
+    "Booking record created",
+    "Booking row creation timestamp from the booking record.",
+    booking.createdAt,
+  )
+  addBookingEvent(
+    "booking-confirmed",
+    "Confirmed",
+    "Booking confirmation timestamp from the booking record.",
+    booking.confirmedAt,
+  )
+  addBookingEvent(
+    "booking-payment-processed",
+    "Payment processed",
+    "Payment processing timestamp from the booking record.",
+    booking.paymentProcessedAt,
+  )
+  addBookingEvent(
+    "booking-returned",
+    "Return recorded",
+    "Return timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.RETURNED)
+      ? null
+      : (booking.actualReturnedAt ?? booking.returnedAt),
+  )
+  addBookingEvent(
+    "booking-completed",
+    "Completed",
+    "Completion timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.COMPLETED)
+      ? null
+      : booking.completedAt,
+  )
+  addBookingEvent(
+    "booking-cancelled",
+    "Cancelled",
+    "Cancellation timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.CANCELLED)
+      ? null
+      : booking.cancelledAt,
+  )
+  addBookingEvent(
+    "booking-dispute-opened",
+    "Dispute opened",
+    "Dispute opened timestamp from the booking record.",
+    getFirstStatusLogAt(transaction, PrismaTransactionStatus.IN_DISPUTE)
+      ? null
+      : booking.disputeOpenedAt,
+  )
+
+  if (transaction) {
+    if (transaction.createdAt) {
+      events.push({
+        key: `transaction-created-${transaction.id}`,
+        label: "Transaction record created",
+        description: "Transaction row creation timestamp from the transaction record.",
+        occurredAt: transaction.createdAt,
+        source: "TRANSACTION",
+      })
+    }
+
+    for (const log of transaction.statusLogs ?? []) {
+      const timelineCopy = transactionStatusTimelineLabels[log.newStatus]
+      events.push({
+        key: `transaction-status-log-${log.id}`,
+        label: timelineCopy.label,
+        description: log.remarks ?? timelineCopy.description,
+        occurredAt: log.createdAt,
+        source: "TRANSACTION_STATUS_LOG",
+      })
+    }
+  }
+
+  return events.sort((left, right) => {
+    const timeDiff = left.occurredAt.getTime() - right.occurredAt.getTime()
+    if (timeDiff !== 0) return timeDiff
+    return left.key.localeCompare(right.key)
+  })
 }
 
 const DEFAULT_PAYMENT_METHOD: PaymentMethod = paymentMethodSchema.enum.GCASH
@@ -974,6 +1160,18 @@ export const bookingRouter = router({
         status: true,
         borrowerId: true,
         lenderId: true,
+        createdAt: true,
+        statusLogs: {
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            oldStatus: true,
+            newStatus: true,
+            changedByRole: true,
+            remarks: true,
+            createdAt: true,
+          },
+        },
         disputes: {
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           select: {
@@ -1045,6 +1243,7 @@ export const bookingRouter = router({
     return {
       ...mapBookingRecord(booking),
       transactionId: transaction?.id ?? null,
+      timeline: buildBookingTimeline(booking, transaction),
       canRaiseDispute:
         Boolean(transaction?.id && (transaction.borrowerId || transaction.lenderId)) &&
         isWithinDisputeWindow &&
