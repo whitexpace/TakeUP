@@ -30,6 +30,10 @@ const makeBooking = (overrides: Record<string, unknown> = {}) => ({
   completedAt: null,
   disputeOpenedAt: null,
   paymentProcessedAt: null,
+  lenderHandoffProofUrl: null,
+  lenderHandoffProofUploadedAt: null,
+  borrowerReturnProofUrl: null,
+  borrowerReturnProofUploadedAt: null,
   createdAt: new Date("2026-03-20T00:00:00.000Z"),
   updatedAt: new Date("2026-03-20T00:00:00.000Z"),
   item: {
@@ -867,7 +871,7 @@ describe("bookingRouter", () => {
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
   })
 
-  it("allows the borrower to mark a confirmed booking as returned", async () => {
+  it("allows the lender to upload handoff proof and mark the transaction ongoing", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce(
       makeBooking({
@@ -879,6 +883,79 @@ describe("bookingRouter", () => {
       makeBooking({
         status: "CONFIRMED",
         confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.update.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.rentalTransaction.findUnique
+      .mockResolvedValueOnce({ id: "txn-1", status: "CONFIRMED" })
+      .mockResolvedValueOnce({ id: "txn-1", status: "CONFIRMED" })
+
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
+
+    await caller.markHandoffProof({
+      id: BOOKING_ID,
+      proofImageUrl: "https://example.com/handoff.jpg",
+    })
+
+    expect(ctx.prisma.booking.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BOOKING_ID },
+        data: expect.objectContaining({
+          lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+          lenderHandoffProofUploadedAt: expect.any(Date),
+        }),
+      }),
+    )
+    expect(ctx.prisma.rentalTransaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "txn-1" },
+        data: { status: "ONGOING" },
+      }),
+    )
+  })
+
+  it("allows the borrower to mark a confirmed booking as returned", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
+      }),
+    )
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
       }),
     )
     ctx.prisma.booking.findUnique.mockResolvedValueOnce(
@@ -902,13 +979,25 @@ describe("bookingRouter", () => {
 
     const caller = bookingRouter.createCaller(ctx as never)
 
-    const returnedBooking = await caller.returnItem({ id: BOOKING_ID })
+    const returnedBooking = await caller.returnItem({
+      id: BOOKING_ID,
+      proofImageUrl: "https://example.com/return.jpg",
+    })
 
     expect(ctx.prisma.booking.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: BOOKING_ID },
         data: expect.objectContaining({
           status: "RETURNED",
+        }),
+      }),
+    )
+    expect(ctx.prisma.booking.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: BOOKING_ID },
+        data: expect.objectContaining({
+          borrowerReturnProofUrl: "https://example.com/return.jpg",
+          borrowerReturnProofUploadedAt: expect.any(Date),
         }),
       }),
     )
@@ -935,7 +1024,9 @@ describe("bookingRouter", () => {
     )
     const caller = bookingRouter.createCaller(ctx as never)
 
-    await expect(caller.returnItem({ id: BOOKING_ID })).rejects.toMatchObject({
+    await expect(
+      caller.returnItem({ id: BOOKING_ID, proofImageUrl: "https://example.com/return.jpg" }),
+    ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "This booking has already been marked as returned.",
     })
@@ -949,13 +1040,17 @@ describe("bookingRouter", () => {
       makeBooking({
         status: "CONFIRMED",
         confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
         startDate: new Date("2099-04-30T01:00:00.000Z"),
         endDate: new Date("2099-04-30T10:00:00.000Z"),
       }),
     )
     const caller = bookingRouter.createCaller(ctx as never)
 
-    await expect(caller.returnItem({ id: BOOKING_ID })).rejects.toMatchObject({
+    await expect(
+      caller.returnItem({ id: BOOKING_ID, proofImageUrl: "https://example.com/return.jpg" }),
+    ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "This booking cannot be returned before the rental period starts.",
     })
@@ -969,18 +1064,24 @@ describe("bookingRouter", () => {
       makeBooking({
         status: "CONFIRMED",
         confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
       }),
     )
     ctx.prisma.booking.findUnique.mockResolvedValueOnce(
       makeBooking({
         status: "CONFIRMED",
         confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
       }),
     )
     ctx.prisma.booking.findFirst.mockResolvedValueOnce({ id: "overlap-booking" })
     const caller = bookingRouter.createCaller(ctx as never)
 
-    await expect(caller.returnItem({ id: BOOKING_ID })).rejects.toMatchObject({
+    await expect(
+      caller.returnItem({ id: BOOKING_ID, proofImageUrl: "https://example.com/return.jpg" }),
+    ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message:
         "Return cannot be recorded because another overlapping booking exists for this item.",

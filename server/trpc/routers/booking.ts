@@ -20,10 +20,11 @@ import {
   createBookingSchema,
   deleteBookingSchema,
   earlyReturnBookingSchema,
+  handoffProofBookingSchema,
   listBookingsSchema,
   type PaymentMethod,
   paymentMethodSchema,
-  returnBookingSchema,
+  returnProofBookingSchema,
   updateBookingSchema,
 } from "../../../shared/schemas/booking"
 import {
@@ -113,7 +114,8 @@ const bookingInclude = {
 
 type BookingRecord = Prisma.BookingGetPayload<{
   include: typeof bookingInclude
-}>
+}> &
+  BookingProofFields
 
 type BookingListItem = Omit<BookingRecord, "item"> & {
   item: Omit<BookingRecord["item"], "images"> & {
@@ -151,11 +153,114 @@ const bookingEditableSelect = {
       status: true,
     },
   },
-} satisfies Prisma.BookingSelect
+} as const
+
+type BookingProofFields = {
+  lenderHandoffProofUrl: string | null
+  lenderHandoffProofUploadedAt: Date | null
+  borrowerReturnProofUrl: string | null
+  borrowerReturnProofUploadedAt: Date | null
+}
+
+const emptyBookingProofFields: BookingProofFields = {
+  lenderHandoffProofUrl: null,
+  lenderHandoffProofUploadedAt: null,
+  borrowerReturnProofUrl: null,
+  borrowerReturnProofUploadedAt: null,
+}
+
+type BookingProofPrismaClient = Pick<Context["prisma"], "$queryRaw" | "$executeRaw"> & {
+  booking?: {
+    update(args: Record<string, unknown>): Promise<unknown>
+  }
+}
+
+const getFallbackBookingProofFields = (fallback?: Partial<BookingProofFields> | null) => ({
+  ...emptyBookingProofFields,
+  ...(fallback ?? {}),
+})
+
+const getBookingProofFields = async (
+  prisma: Partial<BookingProofPrismaClient>,
+  bookingId: string,
+  fallback?: Partial<BookingProofFields> | null,
+): Promise<BookingProofFields> => {
+  if (typeof prisma.$queryRaw === "function") {
+    const rows = await prisma.$queryRaw<BookingProofFields[]>(
+      Prisma.sql`
+        SELECT
+          "lenderHandoffProofUrl",
+          "lenderHandoffProofUploadedAt",
+          "borrowerReturnProofUrl",
+          "borrowerReturnProofUploadedAt"
+        FROM "Booking"
+        WHERE "id" = ${bookingId}
+        LIMIT 1
+      `,
+    )
+
+    return rows[0] ?? getFallbackBookingProofFields(fallback)
+  }
+
+  return getFallbackBookingProofFields(fallback)
+}
+
+const updateHandoffProofFields = async (
+  prisma: Partial<BookingProofPrismaClient>,
+  input: { bookingId: string; proofImageUrl: string; uploadedAt: Date },
+) => {
+  if (typeof prisma.$executeRaw === "function") {
+    await prisma.$executeRaw(
+      Prisma.sql`
+        UPDATE "Booking"
+        SET
+          "lenderHandoffProofUrl" = ${input.proofImageUrl},
+          "lenderHandoffProofUploadedAt" = ${input.uploadedAt}
+        WHERE "id" = ${input.bookingId}
+      `,
+    )
+    return
+  }
+
+  await prisma.booking?.update({
+    where: { id: input.bookingId },
+    data: {
+      lenderHandoffProofUrl: input.proofImageUrl,
+      lenderHandoffProofUploadedAt: input.uploadedAt,
+    },
+  })
+}
+
+const updateReturnProofFields = async (
+  prisma: Partial<BookingProofPrismaClient>,
+  input: { bookingId: string; proofImageUrl: string; uploadedAt: Date },
+) => {
+  if (typeof prisma.$executeRaw === "function") {
+    await prisma.$executeRaw(
+      Prisma.sql`
+        UPDATE "Booking"
+        SET
+          "borrowerReturnProofUrl" = ${input.proofImageUrl},
+          "borrowerReturnProofUploadedAt" = ${input.uploadedAt}
+        WHERE "id" = ${input.bookingId}
+      `,
+    )
+    return
+  }
+
+  await prisma.booking?.update({
+    where: { id: input.bookingId },
+    data: {
+      borrowerReturnProofUrl: input.proofImageUrl,
+      borrowerReturnProofUploadedAt: input.uploadedAt,
+    },
+  })
+}
 
 type BookingEditableRecord = Prisma.BookingGetPayload<{
   select: typeof bookingEditableSelect
-}>
+}> &
+  BookingProofFields
 
 const bookingTransactionSelect = {
   id: true,
@@ -173,11 +278,12 @@ const bookingTransactionSelect = {
   returnedAt: true,
   cancellationReason: true,
   cancelledAt: true,
-} satisfies Prisma.BookingSelect
+} as const
 
 type BookingTransactionRecord = Prisma.BookingGetPayload<{
   select: typeof bookingTransactionSelect
-}>
+}> &
+  BookingProofFields
 
 type BookingReviewRecord = Parameters<typeof mapTransactionReview>[0]
 
@@ -482,12 +588,19 @@ const buildBookingTimeline = (
     booking.confirmedAt,
   )
   addBookingEvent(
+    "booking-handoff-proof",
+    "In use",
+    "Lender proof of item handoff upload timestamp from the booking record.",
+    booking.lenderHandoffProofUploadedAt,
+  )
+  addBookingEvent(
     "booking-returned",
     "Returned",
-    "Return timestamp from the booking record.",
-    getFirstStatusLogAt(transaction, PrismaTransactionStatus.RETURNED)
-      ? null
-      : (booking.actualReturnedAt ?? booking.returnedAt),
+    "Borrower proof of item return upload timestamp from the booking record.",
+    booking.borrowerReturnProofUploadedAt ??
+      (getFirstStatusLogAt(transaction, PrismaTransactionStatus.RETURNED)
+        ? null
+        : (booking.actualReturnedAt ?? booking.returnedAt)),
   )
   addBookingEvent(
     "booking-completed",
@@ -516,6 +629,16 @@ const buildBookingTimeline = (
 
   if (transaction) {
     for (const log of transaction.statusLogs ?? []) {
+      if (
+        (log.newStatus === PrismaTransactionStatus.ONGOING &&
+          booking.lenderHandoffProofUploadedAt) ||
+        (log.newStatus === PrismaTransactionStatus.RETURNED &&
+          booking.borrowerReturnProofUploadedAt) ||
+        log.newStatus === PrismaTransactionStatus.PAID
+      ) {
+        continue
+      }
+
       const timelineCopy = transactionStatusTimelineLabels[log.newStatus]
       events.push({
         key: `transaction-status-log-${log.id}`,
@@ -898,6 +1021,20 @@ const syncBookingTransaction = async (
   }
 }
 
+const transitionTransactionToStatus = async (
+  bookingPrisma: TransactionStatusRunnerPrismaClient,
+  transaction: { id: string; status: PrismaTransactionStatus },
+  targetStatus: PrismaTransactionStatus,
+  actor: TransactionSyncActor,
+) => {
+  const transitionSteps = getTransactionTransitionSteps(transaction.status, targetStatus)
+
+  for (const status of transitionSteps) {
+    if (status === transaction.status) continue
+    await applyTransactionStatusStep(bookingPrisma, transaction.id, status, actor)
+  }
+}
+
 type ItemStatusSyncPrismaClient = Pick<Context["prisma"], "item"> & {
   booking: {
     findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
@@ -1001,7 +1138,7 @@ export const bookingRouter = router({
     const nextCursor =
       hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
 
-    return { bookings: bookings.map(mapBookingRecord), nextCursor }
+    return { bookings: (bookings as BookingRecord[]).map(mapBookingRecord), nextCursor }
   }),
 
   create: protectedProcedure.input(createBookingSchema).mutation(async ({ ctx, input }) => {
@@ -1100,7 +1237,7 @@ export const bookingRouter = router({
       },
     })
 
-    return mapBookingRecord(booking)
+    return mapBookingRecord(booking as BookingRecord)
   }),
 
   byId: protectedProcedure.input(bookingIdSchema).query(async ({ ctx, input }) => {
@@ -1126,7 +1263,14 @@ export const bookingRouter = router({
       booking.totalFee = correctGross
     }
 
-    assertParticipantAccess(booking, ctx.user.id)
+    const bookingProofFields = await getBookingProofFields(
+      ctx.prisma,
+      booking.id,
+      booking as Partial<BookingProofFields>,
+    )
+    const bookingWithProof = { ...booking, ...bookingProofFields } as BookingRecord
+
+    assertParticipantAccess(bookingWithProof, ctx.user.id)
     const transaction = await (
       ctx.prisma.rentalTransaction.findUnique as unknown as (
         args: Record<string, unknown>,
@@ -1219,9 +1363,9 @@ export const bookingRouter = router({
     )
 
     return {
-      ...mapBookingRecord(booking),
+      ...mapBookingRecord(bookingWithProof),
       transactionId: transaction?.id ?? null,
-      timeline: buildBookingTimeline(booking, transaction),
+      timeline: buildBookingTimeline(bookingWithProof, transaction),
       canRaiseDispute:
         Boolean(transaction?.id && (transaction.borrowerId || transaction.lenderId)) &&
         isWithinDisputeWindow &&
@@ -1271,9 +1415,9 @@ export const bookingRouter = router({
         status: hasActiveDispute
           ? bookingStatusSchema.enum.IN_DISPUTE
           : (transaction?.status ?? booking.status),
-        itemId: booking.itemId,
-        borrowerId: transaction?.borrowerId ?? booking.borrowerId,
-        lenderId: transaction?.lenderId ?? booking.lenderId,
+        itemId: bookingWithProof.itemId,
+        borrowerId: transaction?.borrowerId ?? bookingWithProof.borrowerId,
+        lenderId: transaction?.lenderId ?? bookingWithProof.lenderId,
         currentUserId: ctx.user.id,
         existingReviewTypes: transaction?.reviews.map((review) => review.reviewType) ?? [],
       }),
@@ -1291,6 +1435,10 @@ export const bookingRouter = router({
     if (!existing) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
     }
+    Object.assign(
+      existing,
+      await getBookingProofFields(ctx.prisma, existing.id, existing as Partial<BookingProofFields>),
+    )
 
     assertParticipantAccess(existing, ctx.user.id)
 
@@ -1575,7 +1723,155 @@ export const bookingRouter = router({
     return mapBookingRecord(updatedBooking)
   }),
 
-  returnItem: protectedProcedure.input(returnBookingSchema).mutation(async ({ ctx, input }) => {
+  markHandoffProof: protectedProcedure
+    .input(handoffProofBookingSchema)
+    .mutation(async ({ ctx, input }) => {
+      const bookingPrisma = getBookingPrisma(ctx)
+      const existing = (await bookingPrisma.booking.findUnique({
+        where: { id: input.id },
+        select: bookingEditableSelect,
+      })) as BookingEditableRecord | null
+
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
+      }
+      Object.assign(
+        existing,
+        await getBookingProofFields(ctx.prisma, existing.id, existing as Partial<BookingProofFields>),
+      )
+
+      if (existing.lenderId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the lender can upload handoff proof for this booking.",
+        })
+      }
+
+      if (existing.status !== bookingStatusSchema.enum.CONFIRMED) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only confirmed bookings can be marked as in use.",
+        })
+      }
+
+      if (existing.lenderHandoffProofUploadedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Handoff proof has already been uploaded for this booking.",
+        })
+      }
+
+      const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
+        const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
+        const latestBooking = (await txBookingPrisma.booking.findUnique({
+          where: { id: input.id },
+          select: bookingEditableSelect,
+        })) as BookingEditableRecord | null
+
+        if (!latestBooking) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
+        }
+        Object.assign(
+          latestBooking,
+          await getBookingProofFields(
+            tx as Context["prisma"],
+            latestBooking.id,
+            latestBooking as Partial<BookingProofFields>,
+          ),
+        )
+
+        if (latestBooking.lenderId !== ctx.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only the lender can upload handoff proof for this booking.",
+          })
+        }
+
+        if (latestBooking.status !== bookingStatusSchema.enum.CONFIRMED) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Only confirmed bookings can be marked as in use.",
+          })
+        }
+
+        if (latestBooking.lenderHandoffProofUploadedAt) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Handoff proof has already been uploaded for this booking.",
+          })
+        }
+
+        await syncBookingTransaction(
+          tx as unknown as TransactionStatusRunnerPrismaClient,
+          latestBooking,
+          {
+            userId: ctx.user.id,
+            role: "lender",
+            remarks: "Booking transaction prepared before handoff proof.",
+          },
+        )
+
+        const transaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
+          where: { bookingId: latestBooking.id },
+          select: { id: true, status: true },
+        })
+
+        if (!transaction) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Transaction could not be prepared for this booking.",
+          })
+        }
+
+        await transitionTransactionToStatus(
+          tx as unknown as TransactionStatusRunnerPrismaClient,
+          transaction,
+          PrismaTransactionStatus.ONGOING,
+          {
+            userId: ctx.user.id,
+            role: "lender",
+            remarks: "Lender uploaded proof that the item was handed over.",
+          },
+        )
+
+        const proofUploadedAt = new Date()
+        await updateHandoffProofFields(tx as Context["prisma"], {
+          bookingId: input.id,
+          proofImageUrl: input.proofImageUrl,
+          uploadedAt: proofUploadedAt,
+        })
+        const updatedBooking = (await txBookingPrisma.booking.findUnique({
+          where: { id: input.id },
+          select: bookingTransactionSelect,
+        })) as BookingTransactionRecord | null
+
+        if (!updatedBooking) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
+        }
+
+        await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
+          itemId: updatedBooking.itemId,
+        })
+
+        return updatedBooking.id
+      }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
+
+      const updatedBooking = (await bookingPrisma.booking.findUnique({
+        where: { id: updatedBookingId },
+        include: bookingInclude,
+      })) as BookingRecord | null
+
+      if (!updatedBooking) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Booking handoff proof was saved but could not be reloaded.",
+        })
+      }
+
+      return mapBookingRecord(updatedBooking)
+    }),
+
+  returnItem: protectedProcedure.input(returnProofBookingSchema).mutation(async ({ ctx, input }) => {
     const bookingPrisma = getBookingPrisma(ctx)
     const existing = (await bookingPrisma.booking.findUnique({
       where: { id: input.id },
@@ -1585,6 +1881,10 @@ export const bookingRouter = router({
     if (!existing) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
     }
+    Object.assign(
+      existing,
+      await getBookingProofFields(ctx.prisma, existing.id, existing as Partial<BookingProofFields>),
+    )
 
     if (existing.borrowerId !== ctx.user.id) {
       throw new TRPCError({
@@ -1607,6 +1907,13 @@ export const bookingRouter = router({
       })
     }
 
+    if (!existing.lenderHandoffProofUploadedAt) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "The item must be marked as in use before it can be returned.",
+      })
+    }
+
     if (new Date() < existing.startDate) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -1625,6 +1932,14 @@ export const bookingRouter = router({
       if (!latestBooking) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
       }
+      Object.assign(
+        latestBooking,
+        await getBookingProofFields(
+          tx as Context["prisma"],
+          latestBooking.id,
+          latestBooking as Partial<BookingProofFields>,
+        ),
+      )
 
       if (latestBooking.borrowerId !== ctx.user.id) {
         throw new TRPCError({
@@ -1644,6 +1959,13 @@ export const bookingRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Only active confirmed bookings can be marked as returned.",
+        })
+      }
+
+      if (!latestBooking.lenderHandoffProofUploadedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The item must be marked as in use before it can be returned.",
         })
       }
 
@@ -1669,10 +1991,15 @@ export const bookingRouter = router({
         data: {
           status: bookingStatusSchema.enum.RETURNED,
           returnStatus: ReturnStatus.RETURNED,
-          actualReturnedAt: latestBooking.returnedAt ?? now,
-          returnedAt: latestBooking.returnedAt ?? now,
+          actualReturnedAt: now,
+          returnedAt: now,
         },
         select: bookingTransactionSelect,
+      })
+      await updateReturnProofFields(tx as Context["prisma"], {
+        bookingId: input.id,
+        proofImageUrl: input.proofImageUrl,
+        uploadedAt: now,
       })
 
       await syncBookingTransaction(
@@ -1681,7 +2008,7 @@ export const bookingRouter = router({
         {
           userId: ctx.user.id,
           role: "borrower",
-          remarks: "Borrower initiated item return.",
+          remarks: "Borrower uploaded proof that the item was returned.",
         },
       )
       const syncedTransaction = await (tx as Context["prisma"]).rentalTransaction.findUnique({
@@ -1741,6 +2068,10 @@ export const bookingRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
       }
+      Object.assign(
+        existing,
+        await getBookingProofFields(ctx.prisma, existing.id, existing as Partial<BookingProofFields>),
+      )
 
       if (existing.borrowerId !== ctx.user.id) {
         throw new TRPCError({
@@ -1753,6 +2084,13 @@ export const bookingRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Only active confirmed bookings can be returned early.",
+        })
+      }
+
+      if (!existing.lenderHandoffProofUploadedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The item must be marked as in use before it can be returned.",
         })
       }
 
@@ -1786,7 +2124,7 @@ export const bookingRouter = router({
       const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
         const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
 
-        const updateData: Prisma.BookingUpdateInput = {
+        const updateData = {
           status: bookingStatusSchema.enum.RETURNED,
           returnStatus: ReturnStatus.EARLY_RETURNED,
           actualReturnedAt: now,
@@ -1802,6 +2140,11 @@ export const bookingRouter = router({
           data: updateData,
           select: bookingTransactionSelect,
         })
+        await updateReturnProofFields(tx as Context["prisma"], {
+          bookingId: input.id,
+          proofImageUrl: input.proofImageUrl,
+          uploadedAt: now,
+        })
 
         // Sync transaction status
         await syncBookingTransaction(
@@ -1810,7 +2153,7 @@ export const bookingRouter = router({
           {
             userId: ctx.user.id,
             role: "borrower",
-            remarks: `Borrower initiated early return. Refund: ${refundCalc.refundAmount} ${refundCalc.currency}`,
+            remarks: `Borrower uploaded proof for early return. Refund: ${refundCalc.refundAmount} ${refundCalc.currency}`,
           },
         )
 
@@ -1974,7 +2317,7 @@ export const bookingRouter = router({
         itemId: deletedBooking.itemId,
       })
 
-      return mapBookingRecord(deletedBooking)
+      return mapBookingRecord(deletedBooking as BookingRecord)
     })
   }),
 })

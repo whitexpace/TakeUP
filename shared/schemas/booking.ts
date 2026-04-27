@@ -76,8 +76,19 @@ export const deleteBookingSchema = bookingIdSchema
 
 export const returnBookingSchema = bookingIdSchema
 
+const proofImageUrlSchema = z.string().url()
+
+export const handoffProofBookingSchema = bookingIdSchema.extend({
+  proofImageUrl: proofImageUrlSchema,
+})
+
+export const returnProofBookingSchema = bookingIdSchema.extend({
+  proofImageUrl: proofImageUrlSchema,
+})
+
 export const earlyReturnBookingSchema = z.object({
   id: z.string().uuid(),
+  proofImageUrl: proofImageUrlSchema,
   returnReason: z.string().trim().max(500).optional(),
 })
 
@@ -108,3 +119,5 @@ export type BookingRole = z.infer<typeof bookingRoleSchema>
 export type CreateBookingInput = z.infer<typeof createBookingSchema>
 export type UpdateBookingInput = z.infer<typeof updateBookingSchema>
 export type ListBookingsInput = z.infer<typeof listBookingsSchema>
+export type HandoffProofBookingInput = z.infer<typeof handoffProofBookingSchema>
+export type ReturnProofBookingInput = z.infer<typeof returnProofBookingSchema>
