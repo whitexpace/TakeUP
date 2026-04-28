@@ -73,7 +73,9 @@ export interface CommunityRequestComposerInput {
   description: string
   referenceImageUrl?: string | null
   startDate: string
+  startTime: string
   endDate: string
+  endTime: string
   minimumPrice: number
   maximumPrice: number
 }

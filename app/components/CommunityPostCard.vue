@@ -401,6 +401,12 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
   year: "numeric",
 })
 
+const timeFormatter = new Intl.DateTimeFormat("en-PH", {
+  hour: "numeric",
+  minute: "numeric",
+  hour12: true,
+})
+
 const formatFee = (fee: number) => {
   return fee === 0 ? "Free" : currencyFormatter.format(fee)
 }
@@ -446,9 +452,22 @@ const formatDateRange = (dates: Date[]) => {
   const end = sorted.at(-1)
 
   if (!start || !end) return "Dates not set"
-  if (start.getTime() === end.getTime()) return `Needed on ${dateFormatter.format(start)}`
 
-  return `${dateFormatter.format(start)} to ${dateFormatter.format(end)}`
+  const startStr = `${dateFormatter.format(start)} at ${timeFormatter.format(start)}`
+  const endStr = `${dateFormatter.format(end)} at ${timeFormatter.format(end)}`
+
+  if (start.getTime() === end.getTime()) return `Needed on ${startStr}`
+
+  // Check if it's the same day but different times
+  if (
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate()
+  ) {
+    return `Needed on ${dateFormatter.format(start)} from ${timeFormatter.format(start)} to ${timeFormatter.format(end)}`
+  }
+
+  return `${startStr} to ${endStr}`
 }
 
 const formatPriceRange = (range: [number, number]) => {

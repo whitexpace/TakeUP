@@ -22,14 +22,7 @@ const confirmedAvailabilitySchema = z
   .refine((value) => value, "Confirm item availability before submitting.")
 
 const normalizeRequestedDates = (dates: Date[]) => {
-  const uniqueByDay = new Map<number, Date>()
-
-  for (const date of dates) {
-    const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-    uniqueByDay.set(normalized.getTime(), normalized)
-  }
-
-  return [...uniqueByDay.values()].sort((left, right) => left.getTime() - right.getTime())
+  return [...dates].sort((left, right) => left.getTime() - right.getTime())
 }
 
 export const requestedDatesSchema = z

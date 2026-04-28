@@ -115,48 +115,78 @@
         </div>
 
         <div class="grid gap-3 md:grid-cols-2">
-          <label class="flex flex-col gap-2">
+          <div class="flex flex-col gap-2">
             <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-              Start date
+              Start date & time
             </span>
-            <input
-              v-model="startDate"
-              type="date"
-              class="w-full rounded-[14px] bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition-all duration-300"
-              :class="
-                showStartDateError || showDateRangeError
-                  ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                  : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
-              "
-              @blur="markTouched('startDate')"
-            />
-            <p v-if="showStartDateError" class="text-[12px] font-medium text-burning-orange">
-              {{ startDateError }}
-            </p>
-          </label>
-
-          <label class="flex flex-col gap-2">
-            <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-              End date
-            </span>
-            <input
-              v-model="endDate"
-              type="date"
-              class="w-full rounded-[14px] bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition-all duration-300"
-              :class="
-                showEndDateError || showDateRangeError
-                  ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                  : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
-              "
-              @blur="markTouched('endDate')"
-            />
+            <div class="flex gap-2">
+              <CustomCalendar
+                v-model="startDate"
+                placeholder="Select date"
+                disable-past
+                class="flex-1"
+                :class="{
+                  'ring-1 ring-burning-orange/50 rounded-[10px]':
+                    showStartDateError || showDateRangeError,
+                }"
+                @update:model-value="markTouched('startDate')"
+              />
+              <CustomTimePicker
+                v-model="startTime"
+                placeholder="Time"
+                class="w-32"
+                :min-time="getStartMinTime"
+                :class="{
+                  'ring-1 ring-burning-orange/50 rounded-[10px]':
+                    showStartTimeError || showDateRangeError,
+                }"
+                @update:model-value="markTouched('startTime')"
+              />
+            </div>
             <p
-              v-if="showEndDateError || showDateRangeError"
+              v-if="showStartDateError || showStartTimeError"
               class="text-[12px] font-medium text-burning-orange"
             >
-              {{ endDateError || dateRangeError }}
+              {{ startDateError || startTimeError }}
             </p>
-          </label>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
+              End date & time
+            </span>
+            <div class="flex gap-2">
+              <CustomCalendar
+                v-model="endDate"
+                placeholder="Select date"
+                disable-past
+                :min-date="startDate"
+                class="flex-1"
+                :class="{
+                  'ring-1 ring-burning-orange/50 rounded-[10px]':
+                    showEndDateError || showDateRangeError,
+                }"
+                @update:model-value="markTouched('endDate')"
+              />
+              <CustomTimePicker
+                v-model="endTime"
+                placeholder="Time"
+                class="w-32"
+                :min-time="getEndMinTime"
+                :class="{
+                  'ring-1 ring-burning-orange/50 rounded-[10px]':
+                    showEndTimeError || showDateRangeError,
+                }"
+                @update:model-value="markTouched('endTime')"
+              />
+            </div>
+            <p
+              v-if="showEndDateError || showEndTimeError || showDateRangeError"
+              class="text-[12px] font-medium text-burning-orange"
+            >
+              {{ endDateError || endTimeError || dateRangeError }}
+            </p>
+          </div>
 
           <label class="flex flex-col gap-2">
             <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
@@ -278,7 +308,9 @@ const supabaseKey = runtimeConfig.public.supabase.key
 const itemNeeded = ref("")
 const description = ref("")
 const startDate = ref("")
+const startTime = ref("")
 const endDate = ref("")
+const endTime = ref("")
 const minimumPrice = ref<string | number>("")
 const maximumPrice = ref<string | number>("")
 const referenceImage = ref<UploadedReferenceImage | null>(null)
@@ -299,7 +331,9 @@ const touchedFields = reactive({
   itemNeeded: false,
   description: false,
   startDate: false,
+  startTime: false,
   endDate: false,
+  endTime: false,
   minimumPrice: false,
   maximumPrice: false,
 })
@@ -313,7 +347,9 @@ const resetTouchedFields = () => {
   touchedFields.itemNeeded = false
   touchedFields.description = false
   touchedFields.startDate = false
+  touchedFields.startTime = false
   touchedFields.endDate = false
+  touchedFields.endTime = false
   touchedFields.minimumPrice = false
   touchedFields.maximumPrice = false
 }
@@ -334,10 +370,59 @@ const descriptionError = computed(() =>
   description.value.trim() ? "" : "Description is required.",
 )
 const startDateError = computed(() => (startDate.value ? "" : "Start date is required."))
+const startTimeError = computed(() => (startTime.value ? "" : "Start time is required."))
 const endDateError = computed(() => (endDate.value ? "" : "End date is required."))
+const endTimeError = computed(() => (endTime.value ? "" : "End time is required."))
+
+const addHourToTime = (time: string) => {
+  if (!time) return ""
+  const [hours = "0", minutes = "0"] = time.split(":")
+  const nextMinutes = Number(hours) * 60 + Number(minutes) + 60
+  const nextHours = Math.floor(nextMinutes / 60)
+  const remainderMinutes = nextMinutes % 60
+  return `${nextHours.toString().padStart(2, "0")}:${remainderMinutes.toString().padStart(2, "0")}`
+}
+
+const getEndMinTime = computed(() => {
+  if (!startDate.value || !startTime.value || !endDate.value || startDate.value !== endDate.value) {
+    return undefined
+  }
+  return addHourToTime(startTime.value)
+})
+
+const getStartMinTime = computed(() => {
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`
+
+  if (startDate.value === todayStr) {
+    const hours = today.getHours().toString().padStart(2, "0")
+    const minutes = today.getMinutes().toString().padStart(2, "0")
+    return `${hours}:${minutes}`
+  }
+
+  return undefined
+})
+
+const isTimeFrameInvalid = computed(() => {
+  if (!startDate.value || !startTime.value || !endDate.value || !endTime.value) return false
+  const start = new Date(`${startDate.value}T${startTime.value}`)
+  const end = new Date(`${endDate.value}T${endTime.value}`)
+  if (startDate.value === endDate.value) {
+    const minimumEnd = new Date(start.getTime() + 60 * 60 * 1000)
+    return end < minimumEnd
+  }
+  return end < start
+})
+
 const dateRangeError = computed(() => {
   if (!startDate.value || !endDate.value) return ""
-  return endDate.value < startDate.value ? "End date must be on or after the start date." : ""
+  if (endDate.value < startDate.value) return "End date must be on or after the start date."
+  if (isTimeFrameInvalid.value) {
+    return startDate.value === endDate.value
+      ? "End time must be at least 1 hour later."
+      : "End time cannot be earlier than start time."
+  }
+  return ""
 })
 const minimumPriceError = computed(() => {
   if (!hasInputValue(minimumPrice.value)) return "Minimum budget is required."
@@ -365,7 +450,9 @@ const validationMessage = computed(() => {
     itemNeededError.value ||
     descriptionError.value ||
     startDateError.value ||
+    startTimeError.value ||
     endDateError.value ||
+    endTimeError.value ||
     dateRangeError.value ||
     minimumPriceError.value ||
     maximumPriceError.value ||
@@ -379,7 +466,9 @@ const hasStartedForm = computed(() => {
     itemNeeded.value.trim().length > 0 ||
     description.value.trim().length > 0 ||
     Boolean(startDate.value) ||
+    Boolean(startTime.value) ||
     Boolean(endDate.value) ||
+    Boolean(endTime.value) ||
     hasInputValue(minimumPrice.value) ||
     hasInputValue(maximumPrice.value) ||
     Boolean(referenceImage.value) ||
@@ -395,13 +484,23 @@ const showDescriptionError = computed(
 const showStartDateError = computed(
   () => Boolean(startDateError.value) && (attemptedSubmit.value || touchedFields.startDate),
 )
+const showStartTimeError = computed(
+  () => Boolean(startTimeError.value) && (attemptedSubmit.value || touchedFields.startTime),
+)
 const showEndDateError = computed(
   () => Boolean(endDateError.value) && (attemptedSubmit.value || touchedFields.endDate),
+)
+const showEndTimeError = computed(
+  () => Boolean(endTimeError.value) && (attemptedSubmit.value || touchedFields.endTime),
 )
 const showDateRangeError = computed(
   () =>
     Boolean(dateRangeError.value) &&
-    (attemptedSubmit.value || touchedFields.startDate || touchedFields.endDate),
+    (attemptedSubmit.value ||
+      touchedFields.startDate ||
+      touchedFields.startTime ||
+      touchedFields.endDate ||
+      touchedFields.endTime),
 )
 const showMinimumPriceError = computed(
   () => Boolean(minimumPriceError.value) && (attemptedSubmit.value || touchedFields.minimumPrice),
@@ -492,7 +591,9 @@ const resetForm = () => {
   itemNeeded.value = ""
   description.value = ""
   startDate.value = ""
+  startTime.value = ""
   endDate.value = ""
+  endTime.value = ""
   minimumPrice.value = ""
   maximumPrice.value = ""
   referenceImage.value = null
@@ -648,7 +749,9 @@ const handlePost = () => {
     description: description.value.trim(),
     referenceImageUrl: referenceImage.value?.url ?? null,
     startDate: startDate.value,
+    startTime: startTime.value,
     endDate: endDate.value,
+    endTime: endTime.value,
     minimumPrice: parsedMinimumPrice.value,
     maximumPrice: parsedMaximumPrice.value,
   })
