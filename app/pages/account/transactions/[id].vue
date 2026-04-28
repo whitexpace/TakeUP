@@ -24,6 +24,7 @@ type AuthMeResponse = {
 
 const route = useRoute()
 const router = useRouter()
+const supabase = useSupabaseClient()
 const bookingId = computed(() => {
   const id = route.params.id
   return Array.isArray(id) ? (id[0] ?? "") : (id ?? "")
@@ -92,18 +93,31 @@ const booking = computed(() => {
 const isActing = ref(false)
 const actionErrorMessage = ref("")
 const actionSuccessMessage = ref("")
+const proofUploadErrorMessage = ref("")
 
 const currentUserId = computed(() => authData.value?.user.id ?? null)
 const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
 const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
+const canUploadHandoffProof = computed(
+  () =>
+    isLender.value &&
+    booking.value.status === "CONFIRMED" &&
+    !booking.value.lenderHandoffProofUploadedAt,
+)
 const canOpenChat = computed(
   () =>
     Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
 )
 const isPendingRequest = computed(() => booking.value.status === "PENDING")
 const canCancelRequest = computed(() => !isLender.value && booking.value.status === "PENDING")
+const canBorrowerReturnItem = computed(
+  () =>
+    !isLender.value &&
+    booking.value.status === "CONFIRMED" &&
+    Boolean(booking.value.lenderHandoffProofUploadedAt),
+)
 const requestStageMessage = computed(() =>
   isLender.value
     ? "Requested - waiting for you to accept the booking"
@@ -141,22 +155,6 @@ const formatDateTime = (date: Date | string) => {
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
   return `${formattedDate} at ${time}`
 }
-
-const isOnOrAfter = (value: Date | string | null | undefined, minimum: Date | string) => {
-  if (!value) return false
-  return new Date(value).getTime() >= new Date(minimum).getTime()
-}
-
-const validReturnedAt = computed(() =>
-  isOnOrAfter(booking.value.returnedAt, booking.value.startDate) ? booking.value.returnedAt : null,
-)
-
-const validCompletedAt = computed(() => {
-  if (!booking.value.completedAt) return null
-
-  const minimum = validReturnedAt.value ?? booking.value.startDate
-  return isOnOrAfter(booking.value.completedAt, minimum) ? booking.value.completedAt : null
-})
 
 const finalDecisionLabel = (
   decision: NonNullable<BookingDetail["latestDispute"]>["finalDecision"],
@@ -198,84 +196,20 @@ const backToTransactionsPath = computed(() => {
   return `/account/transactions?role=${userRole.value}`
 })
 
-// Timeline logic
 const timeline = computed(() => {
-  const steps = [
-    {
-      label: "Requested",
-      description:
-        booking.value.status === "PENDING"
-          ? requestStageMessage.value
-          : isLender.value
-            ? "Borrower requested this booking"
-            : "You requested this booking",
-      date: formatDate(booking.value.requestedAt),
-      status: "completed",
-    },
-    {
-      label: "Lender Confirmation",
-      description:
-        booking.value.status === "PENDING"
-          ? isLender.value
-            ? "Review and accept or decline this booking"
-            : "Waiting for lender to accept the booking"
-          : "Lender approved the request",
-      date: booking.value.confirmedAt ? formatDate(booking.value.confirmedAt) : "--",
-      status:
-        booking.value.status === "PENDING"
-          ? "current"
-          : ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-            ? "completed"
-            : "upcoming",
-    },
-    {
-      label: "Picked Up",
-      description: "Item picked up at designated location",
-      date: formatDate(booking.value.startDate),
-      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-        ? "completed"
-        : "upcoming",
-    },
-    {
-      label: "In Use",
-      description: "Rental period started",
-      date: formatDate(booking.value.startDate),
-      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-        ? booking.value.status === "CONFIRMED"
-          ? "current"
-          : "completed"
-        : "upcoming",
-    },
-    {
-      label: "Return Item",
-      description: ["RETURNED", "COMPLETED"].includes(booking.value.status)
-        ? validReturnedAt.value
-          ? "Item returned successfully"
-          : "Return date unavailable"
-        : "Return by the end of rental period",
-      date: validReturnedAt.value
-        ? formatDate(validReturnedAt.value)
-        : formatDate(booking.value.endDate),
-      status:
-        booking.value.status === "RETURNED"
-          ? "current"
-          : booking.value.status === "COMPLETED"
-            ? "completed"
-            : "upcoming",
-    },
-    {
-      label: "Completed",
-      description: "Transaction completed after inspection",
-      date: validCompletedAt.value ? formatDate(validCompletedAt.value) : "--",
-      status: booking.value.status === "COMPLETED" ? "current" : "upcoming",
-    },
-  ]
-  return steps
+  const entries = booking.value.timeline ?? []
+  return entries.map((entry, index) => ({
+    ...entry,
+    date: formatDateTime(entry.occurredAt),
+    status: index === entries.length - 1 ? "current" : "completed",
+  }))
 })
 
 const isReturnModalOpen = ref(false)
+const isHandoffProofModalOpen = ref(false)
 const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
+const isSubmittingHandoffProof = ref(false)
 const isReviewModalOpen = ref(false)
 const selectedReviewType = ref<ReviewType | null>(null)
 const isRebuttalModalOpen = ref(false)
@@ -305,10 +239,89 @@ const reviewForm = reactive({
 })
 const canSubmitReview = computed(() => reviewState.value?.canSubmit ?? false)
 const currentUserReview = computed(() => reviewState.value?.review ?? null)
+const handoffProofFile = ref<File | null>(null)
+const returnProofFile = ref<File | null>(null)
+const earlyReturnProofFile = ref<File | null>(null)
+
+type ProofUploadType = "HANDOFF" | "RETURN"
+type ProofUploadUrlResponse = {
+  token: string
+  path: string
+  publicUrl: string
+  bucket: string
+}
+
+const getFetchErrorMessage = (err: unknown, fallback: string) => {
+  const errorData = (
+    err as {
+      data?: {
+        error?: { message?: string }
+        statusMessage?: string
+      }
+    }
+  )?.data
+
+  return errorData?.error?.message ?? errorData?.statusMessage ?? fallback
+}
+
+const setProofFile = (
+  event: Event,
+  target: typeof handoffProofFile | typeof returnProofFile | typeof earlyReturnProofFile,
+) => {
+  proofUploadErrorMessage.value = ""
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+
+  if (file && !file.type.startsWith("image/")) {
+    target.value = null
+    input.value = ""
+    proofUploadErrorMessage.value = "Please upload an image file as proof."
+    return
+  }
+
+  target.value = file
+}
+
+const setHandoffProofFile = (event: Event) => setProofFile(event, handoffProofFile)
+const setReturnProofFile = (event: Event) => setProofFile(event, returnProofFile)
+const setEarlyReturnProofFile = (event: Event) => setProofFile(event, earlyReturnProofFile)
+
+const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
+  const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
+    method: "POST",
+    body: {
+      bookingId: booking.value.id,
+      proofType,
+      fileName: file.name,
+    },
+  })
+
+  const { error: uploadError } = await supabase.storage
+    .from(signedUpload.bucket)
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
+      contentType: file.type || "image/jpeg",
+      upsert: false,
+    })
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Unable to upload proof image.")
+  }
+
+  return signedUpload.publicUrl
+}
 
 const handleReturn = () => {
   actionErrorMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  returnProofFile.value = null
   isReturnModalOpen.value = true
+}
+
+const handleHandoffProof = () => {
+  actionErrorMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  handoffProofFile.value = null
+  isHandoffProofModalOpen.value = true
 }
 
 const isEarlyReturnEligible = computed(() => {
@@ -343,6 +356,8 @@ const isFetchingPreview = ref(false)
 
 const handleEarlyReturn = async () => {
   actionErrorMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  earlyReturnProofFile.value = null
   isFetchingPreview.value = true
   try {
     const data = await $fetch<EarlyReturnPreviewData>(
@@ -370,65 +385,92 @@ const handleEarlyReturn = async () => {
 }
 
 const confirmEarlyReturn = async () => {
+  if (!earlyReturnProofFile.value) {
+    proofUploadErrorMessage.value = "Upload proof of return before confirming early return."
+    return
+  }
+
   isSubmittingReturn.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
   try {
+    const proofImageUrl = await uploadProofImage(earlyReturnProofFile.value, "RETURN")
     await $fetch(`/api/bookings/${booking.value.id}/early-return`, {
       method: "POST",
-      body: { returnReason: "Early return initiated by borrower" },
+      body: { proofImageUrl, returnReason: "Early return initiated by borrower" },
     })
     await refresh()
     isEarlyReturnModalOpen.value = false
     isSuccessModalOpen.value = true
     actionSuccessMessage.value = "Early return processed. The lender was notified."
   } catch (err: unknown) {
-    const errorData = (
-      err as {
-        data?: {
-          error?: { message?: string }
-          statusMessage?: string
-        }
-      }
-    )?.data
-
     actionErrorMessage.value =
-      errorData?.error?.message ??
-      errorData?.statusMessage ??
-      "Unable to process early return right now."
+      err instanceof Error
+        ? err.message
+        : getFetchErrorMessage(err, "Unable to process early return right now.")
   } finally {
     isSubmittingReturn.value = false
   }
 }
 
 const confirmReturn = async () => {
+  if (!returnProofFile.value) {
+    proofUploadErrorMessage.value = "Upload proof of return before submitting."
+    return
+  }
+
   isSubmittingReturn.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
   try {
+    const proofImageUrl = await uploadProofImage(returnProofFile.value, "RETURN")
     await $fetch(`/api/bookings/${booking.value.id}/return`, {
       method: "POST",
+      body: { proofImageUrl },
     })
     await refresh()
     isReturnModalOpen.value = false
     isSuccessModalOpen.value = true
     actionSuccessMessage.value = "Return submitted. The lender was notified to confirm receipt."
   } catch (err: unknown) {
-    const errorData = (
-      err as {
-        data?: {
-          error?: { message?: string }
-          statusMessage?: string
-        }
-      }
-    )?.data
-
     actionErrorMessage.value =
-      errorData?.error?.message ??
-      errorData?.statusMessage ??
-      "Unable to submit the return right now."
+      err instanceof Error
+        ? err.message
+        : getFetchErrorMessage(err, "Unable to submit the return right now.")
   } finally {
     isSubmittingReturn.value = false
+  }
+}
+
+const confirmHandoffProof = async () => {
+  if (!handoffProofFile.value) {
+    proofUploadErrorMessage.value = "Upload proof of handoff before marking the item in use."
+    return
+  }
+
+  isSubmittingHandoffProof.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
+
+  try {
+    const proofImageUrl = await uploadProofImage(handoffProofFile.value, "HANDOFF")
+    await $fetch(`/api/bookings/${booking.value.id}/handoff-proof`, {
+      method: "POST",
+      body: { proofImageUrl },
+    })
+    await refresh()
+    isHandoffProofModalOpen.value = false
+    actionSuccessMessage.value = "Handoff proof uploaded. The item is now marked as in use."
+  } catch (err: unknown) {
+    actionErrorMessage.value =
+      err instanceof Error
+        ? err.message
+        : getFetchErrorMessage(err, "Unable to upload handoff proof right now.")
+  } finally {
+    isSubmittingHandoffProof.value = false
   }
 }
 
@@ -1080,7 +1122,31 @@ onBeforeUnmount(() => {
 
             <!-- Borrower Action: Return Item / Early Return -->
             <button
-              v-else-if="!isLender && booking.status === 'CONFIRMED'"
+              v-else-if="canUploadHandoffProof"
+              :disabled="isSubmittingHandoffProof"
+              class="flex items-center justify-center gap-2 bg-blue-estate text-white px-6 py-2 rounded-xl font-bold hover:bg-burning-orange transition-colors disabled:opacity-50"
+              @click="handleHandoffProof"
+            >
+              <span v-if="isSubmittingHandoffProof" class="animate-spin">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </span>
+              <span>Upload Handoff Proof</span>
+            </button>
+
+            <button
+              v-else-if="canBorrowerReturnItem"
               :disabled="isFetchingPreview"
               class="flex items-center justify-center gap-2 bg-burning-orange text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-estate transition-colors disabled:opacity-50"
               @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
@@ -1626,6 +1692,102 @@ onBeforeUnmount(() => {
       </p>
     </section>
 
+    <!-- Handoff Proof Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isHandoffProofModalOpen"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="isHandoffProofModalOpen = false"
+        ></div>
+
+        <div
+          class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+        >
+          <div class="text-center">
+            <div
+              class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#1f3a5f"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" x2="12" y1="3" y2="15" />
+              </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
+            <p class="text-noble-black/60 mb-6 leading-relaxed">
+              Upload proof that you have given the item to the borrower. This will mark the
+              transaction as in use.
+            </p>
+
+            <label
+              class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+            >
+              <span class="block text-sm font-bold text-noble-black">Proof image</span>
+              <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                {{ handoffProofFile?.name || "Choose an image file" }}
+              </span>
+              <input type="file" accept="image/*" class="sr-only" @change="setHandoffProofFile" />
+            </label>
+
+            <p v-if="proofUploadErrorMessage" class="mt-3 text-sm text-red-600">
+              {{ proofUploadErrorMessage }}
+            </p>
+
+            <div class="flex flex-col gap-3 mt-6">
+              <button
+                :disabled="isSubmittingHandoffProof"
+                class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-burning-orange transition-colors flex items-center justify-center disabled:opacity-50"
+                @click="confirmHandoffProof"
+              >
+                <span v-if="isSubmittingHandoffProof" class="animate-spin mr-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                </span>
+                {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
+              </button>
+              <button
+                class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
+                @click="isHandoffProofModalOpen = false"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Return Confirmation UI (Modal) -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
@@ -1671,8 +1833,22 @@ onBeforeUnmount(() => {
             </div>
             <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
             <p class="text-noble-black/60 mb-8 leading-relaxed">
-              Are you sure you want to mark this item as returned? Make sure you have coordinated
-              with the lender for the handover.
+              Upload proof that the item has been returned. The return timestamp will be recorded
+              when this proof is submitted.
+            </p>
+
+            <label
+              class="mb-4 block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+            >
+              <span class="block text-sm font-bold text-noble-black">Return proof image</span>
+              <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                {{ returnProofFile?.name || "Choose an image file" }}
+              </span>
+              <input type="file" accept="image/*" class="sr-only" @change="setReturnProofFile" />
+            </label>
+
+            <p v-if="proofUploadErrorMessage" class="mb-4 text-sm text-red-600">
+              {{ proofUploadErrorMessage }}
             </p>
 
             <div class="flex flex-col gap-3">
@@ -1696,7 +1872,7 @@ onBeforeUnmount(() => {
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                   </svg>
                 </span>
-                {{ isSubmittingReturn ? "Processing..." : "Yes, I've returned it" }}
+                {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
               </button>
               <button
                 class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
@@ -2115,6 +2291,25 @@ onBeforeUnmount(() => {
               </p>
             </div>
 
+            <label
+              class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+            >
+              <span class="block text-sm font-bold text-noble-black">Return proof image</span>
+              <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                {{ earlyReturnProofFile?.name || "Choose an image file" }}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                class="sr-only"
+                @change="setEarlyReturnProofFile"
+              />
+            </label>
+
+            <p v-if="proofUploadErrorMessage" class="text-sm text-red-600">
+              {{ proofUploadErrorMessage }}
+            </p>
+
             <div class="flex flex-col gap-3 pt-2">
               <button
                 :disabled="isSubmittingReturn"
@@ -2136,7 +2331,7 @@ onBeforeUnmount(() => {
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                   </svg>
                 </span>
-                Confirm Early Return
+                {{ isSubmittingReturn ? "Uploading..." : "Upload proof and confirm early return" }}
               </button>
               <button
                 class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"

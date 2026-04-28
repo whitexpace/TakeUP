@@ -344,6 +344,11 @@ model Booking {
   refundReason      RefundReason?
   actualReturnedAt  DateTime?
 
+  lenderHandoffProofUrl         String?
+  lenderHandoffProofUploadedAt  DateTime?
+  borrowerReturnProofUrl        String?
+  borrowerReturnProofUploadedAt DateTime?
+
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
   lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
