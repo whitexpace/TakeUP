@@ -559,7 +559,6 @@ describe("bookingRouter", () => {
         itemId: ITEM_ID,
         startDate: new Date("2026-04-01T18:00:00.000Z"),
         endDate: new Date("2026-04-01T19:00:00.000Z"),
-        platformCommission: 50,
         paymentMethod: "GCASH",
       }),
     ).rejects.toMatchObject({
@@ -585,7 +584,6 @@ describe("bookingRouter", () => {
       itemId: ITEM_ID,
       startDate: new Date("2026-04-01T05:45:00.000Z"),
       endDate: new Date("2026-04-01T06:15:00.000Z"),
-      platformCommission: 50,
       paymentMethod: "GCASH",
     })
 
