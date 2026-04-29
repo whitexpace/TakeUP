@@ -1,5 +1,5 @@
 import { createError, getRouterParam, readBody } from "h3"
-import { earlyReturnBookingSchema } from "../../../../shared/schemas/booking"
+import { earlyReturnBookingSchema } from "#shared/schemas/booking"
 import { createContext } from "../../../trpc/context"
 import { appRouter } from "../../../trpc/routers"
 import { handleBookingApiError } from "../../bookings/handle-booking-api-error"

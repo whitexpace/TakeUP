@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server"
 import { createError, readBody } from "h3"
-import { redeemBoostSchema } from "../../../shared/schemas/rewards"
+import { redeemBoostSchema } from "#shared/schemas/rewards"
 import { createContext } from "../../trpc/context"
 import { appRouter } from "../../trpc/routers"
 

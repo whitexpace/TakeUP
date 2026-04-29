@@ -5,7 +5,7 @@ import {
   MAX_REVIEW_IMAGES,
   MAX_REVIEW_IMAGE_BYTES,
   type ReviewType,
-} from "../../shared/schemas/review"
+} from "#shared/schemas/review"
 import { normalizeReviewImageUrl } from "../utils/review-image"
 
 type ReviewContext = {

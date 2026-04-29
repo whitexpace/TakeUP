@@ -20,7 +20,7 @@ import {
   toggleLikeSchema,
   KNOWN_SIDEBAR_DB_CATEGORIES,
   UI_OTHERS_SENTINEL,
-} from "../../../shared/schemas/item"
+} from "#shared/schemas/item"
 import { removeItemImagesFromStorage } from "../../utils/item-image-storage"
 import {
   ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES,

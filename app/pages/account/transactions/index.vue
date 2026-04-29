@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from "vue"
-import type { TransactionStatus } from "../../../../shared/schemas/transaction"
-import type { BookingStatus } from "../../../../shared/schemas/booking"
-import type { ReviewType } from "../../../../shared/schemas/review"
+import type { TransactionStatus } from "#shared/schemas/transaction"
+import type { BookingStatus } from "#shared/schemas/booking"
+import type { ReviewType } from "#shared/schemas/review"
 import { useTransactions, type TransactionListItem } from "../../../composables/use-transactions"
 import {
   useBorrowerItemRequests,

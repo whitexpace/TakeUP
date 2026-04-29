@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client"
 import { createError, readBody } from "h3"
-import { updateProfileSchema } from "../../../shared/schemas/profile"
+import { updateProfileSchema } from "#shared/schemas/profile"
 import { createContext } from "../../trpc/context"
 
 const splitFullName = (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { containsModeratedContent, sanitizeChatMessage } from "../../../shared/chat-moderation"
+import { containsModeratedContent, sanitizeChatMessage } from "#shared/chat-moderation"
 
 describe("sanitizeChatMessage", () => {
   it("censors phone numbers and email addresses", () => {

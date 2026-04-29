@@ -1,5 +1,5 @@
 import { readBody } from "h3"
-import { getOrCreateConversationSchema } from "../../../shared/schemas/chat"
+import { getOrCreateConversationSchema } from "#shared/schemas/chat"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 import { handleChatApiError } from "./handle-chat-api-error"

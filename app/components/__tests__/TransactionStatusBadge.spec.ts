@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { TransactionStatus } from "../../../shared/schemas/transaction"
+import type { TransactionStatus } from "#shared/schemas/transaction"
 
 // Pure logic extracted from TransactionStatusBadge.vue for unit testing
 const getLabel = (status: TransactionStatus, role: "LENDER" | "BORROWER"): string => {

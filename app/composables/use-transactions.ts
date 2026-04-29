@@ -1,7 +1,7 @@
 import { computed, ref, watch } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
-import type { TransactionStatus } from "../../shared/schemas/transaction"
+import type { TransactionStatus } from "#shared/schemas/transaction"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type TransactionListItem = RouterOutputs["transaction"]["list"]["transactions"][number]

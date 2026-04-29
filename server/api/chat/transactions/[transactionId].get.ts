@@ -1,5 +1,5 @@
 import { createError, getRouterParam } from "h3"
-import { transactionConversationSchema } from "../../../../shared/schemas/chat"
+import { transactionConversationSchema } from "#shared/schemas/chat"
 import { appRouter } from "../../../trpc/routers"
 import { createContext } from "../../../trpc/context"
 import { handleChatApiError } from "../../chat/handle-chat-api-error"

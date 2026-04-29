@@ -13,7 +13,7 @@ import {
   submitRebuttalSchema,
   submitDisputeSchema,
   type DisputeActionInput,
-} from "../../../shared/schemas/dispute"
+} from "#shared/schemas/dispute"
 import {
   DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED,
   CLOSED_DISPUTE_STATUS,

@@ -1,7 +1,7 @@
 import { ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useTransactions } from "../use-transactions"
-import type { TransactionStatus } from "../../../shared/schemas/transaction"
+import type { TransactionStatus } from "#shared/schemas/transaction"
 
 const BORROWER_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const LENDER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"

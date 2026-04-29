@@ -1,5 +1,5 @@
 import { createError, getRouterParam } from "h3"
-import { bookingIdSchema } from "../../../shared/schemas/booking"
+import { bookingIdSchema } from "#shared/schemas/booking"
 import { createContext } from "../../trpc/context"
 import { appRouter } from "../../trpc/routers"
 import { handleBookingApiError } from "../bookings/handle-booking-api-error"

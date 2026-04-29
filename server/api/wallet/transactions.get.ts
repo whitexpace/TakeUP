@@ -1,5 +1,5 @@
 import { getWalletTransactions, runWalletSelfHealing } from "../../utils/wallet"
-import { listTransactionsSchema } from "../../../shared/schemas/wallet"
+import { listTransactionsSchema } from "#shared/schemas/wallet"
 
 export default defineEventHandler(async (event) => {
   const user = event.context.authUser

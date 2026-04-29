@@ -1,5 +1,5 @@
 import { createError, getRouterParam } from "h3"
-import { bookingReviewLookupSchema } from "../../../../shared/schemas/review"
+import { bookingReviewLookupSchema } from "#shared/schemas/review"
 import { createContext } from "../../../trpc/context"
 import { appRouter } from "../../../trpc/routers"
 

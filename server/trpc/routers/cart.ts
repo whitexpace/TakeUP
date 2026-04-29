@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client"
 import type { Context } from "../context"
 import { router } from "../init"
 import { protectedProcedure } from "../procedures"
-import { addToCartSchema, cartEntryIdSchema } from "../../../shared/schemas/cart"
+import { addToCartSchema, cartEntryIdSchema } from "#shared/schemas/cart"
 
 const cartEntryInclude = {
   item: {

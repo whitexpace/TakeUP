@@ -1,7 +1,7 @@
 import { ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useBorrowerItemRequests } from "../use-borrower-item-requests"
-import type { BookingStatus } from "../../../shared/schemas/booking"
+import type { BookingStatus } from "#shared/schemas/booking"
 
 const BOOKING_ID_1 = "11111111-1111-1111-1111-111111111111"
 const BOOKING_ID_2 = "22222222-2222-2222-2222-222222222222"

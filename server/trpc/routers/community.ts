@@ -18,7 +18,7 @@ import {
   type RequestOfferStatus,
   updateItemRequestSchema,
   updateRequestOfferSchema,
-} from "../../../shared/schemas/item-request"
+} from "#shared/schemas/item-request"
 
 type ProfileIdRow = {
   id: number

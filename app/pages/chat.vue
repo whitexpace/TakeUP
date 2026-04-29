@@ -5,8 +5,8 @@ import type { ChatMessage } from "../composables/use-chat"
 import { useNotifications } from "../composables/use-notifications"
 import { insertTextAtSelection } from "../utils/chat-composer"
 import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
-import { getChatClosedPreviewLabel } from "../../shared/chat-rules"
-import { containsModeratedContent } from "../../shared/chat-moderation"
+import { getChatClosedPreviewLabel } from "#shared/chat-rules"
+import { containsModeratedContent } from "#shared/chat-moderation"
 
 definePageMeta({
   layout: false,

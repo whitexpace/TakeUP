@@ -1,5 +1,5 @@
 import { createError, getQuery } from "h3"
-import { listTransactionsSchema } from "../../shared/schemas/transaction"
+import { listTransactionsSchema } from "#shared/schemas/transaction"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
 

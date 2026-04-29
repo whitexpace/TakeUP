@@ -1,5 +1,5 @@
 import { createError, getRouterParam } from "h3"
-import { notificationIdSchema } from "../../../shared/schemas/notification"
+import { notificationIdSchema } from "#shared/schemas/notification"
 import { createContext } from "../../trpc/context"
 import { appRouter } from "../../trpc/routers"
 

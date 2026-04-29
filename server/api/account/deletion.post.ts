@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { createError, deleteCookie, getHeader, readBody } from "h3"
-import { deleteAccountRequestSchema } from "../../../shared/schemas/account"
+import { deleteAccountRequestSchema } from "#shared/schemas/account"
 import { createContext } from "../../trpc/context"
 import {
   deleteAccountAndAnonymizeData,

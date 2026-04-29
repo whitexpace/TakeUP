@@ -2,8 +2,8 @@
 import { onBeforeUnmount } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
-import type { ReviewType } from "../../../../shared/schemas/review"
-import { isChatAvailableForBookingStatus } from "../../../../shared/chat-rules"
+import type { ReviewType } from "#shared/schemas/review"
+import { isChatAvailableForBookingStatus } from "#shared/chat-rules"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
 
 definePageMeta({

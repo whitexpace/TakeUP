@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server"
 import { createError, getRouterParam } from "h3"
-import { cartEntryIdSchema } from "../../../shared/schemas/cart"
+import { cartEntryIdSchema } from "#shared/schemas/cart"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 

@@ -1,7 +1,7 @@
 import { createError, getRouterParam } from "h3"
 import { appRouter } from "../../../trpc/routers"
 import { createContext } from "../../../trpc/context"
-import { markRequestOfferNotificationReadSchema } from "../../../../shared/schemas/item-request"
+import { markRequestOfferNotificationReadSchema } from "#shared/schemas/item-request"
 import { handleRequestOfferApiError } from "../../request-offers/handle-request-offer-api-error"
 
 export default defineEventHandler(async (event) => {

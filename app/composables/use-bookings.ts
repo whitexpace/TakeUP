@@ -1,7 +1,7 @@
 import { computed, ref, watch, type Ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
-import type { BookingRole, BookingStatus } from "../../shared/schemas/booking"
+import type { BookingRole, BookingStatus } from "#shared/schemas/booking"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type BookingListItem = RouterOutputs["booking"]["list"]["bookings"][number]

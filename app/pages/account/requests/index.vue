@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
-import type { BookingStatus } from "../../../../shared/schemas/booking"
+import type { BookingStatus } from "#shared/schemas/booking"
 import { useBookings } from "../../../composables/use-bookings"
 
 definePageMeta({

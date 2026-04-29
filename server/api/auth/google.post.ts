@@ -1,7 +1,7 @@
 import { setCookie, readBody, createError } from "h3"
 import type { PrismaClient } from "@prisma/client"
 import { ZodError } from "zod"
-import { googleAuthRequestSchema } from "../../../shared/schemas/auth"
+import { googleAuthRequestSchema } from "#shared/schemas/auth"
 import { prisma } from "../../utils/prisma"
 import {
   createSessionToken,

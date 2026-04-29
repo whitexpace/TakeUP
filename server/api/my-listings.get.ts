@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server"
 import { createError, getQuery } from "h3"
-import { myListingsSchema } from "../../shared/schemas/item"
+import { myListingsSchema } from "#shared/schemas/item"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
 

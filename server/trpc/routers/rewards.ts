@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
-import { redeemBoostSchema } from "../../../shared/schemas/rewards"
+import { redeemBoostSchema } from "#shared/schemas/rewards"
 import {
   RewardEventStatus,
   expireActiveBoosts,

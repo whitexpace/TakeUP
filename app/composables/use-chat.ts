@@ -5,7 +5,7 @@ import {
   getChatClosureStateFromNotice,
   isChatClosed,
   type ChatClosureState,
-} from "../../shared/chat-rules"
+} from "#shared/chat-rules"
 
 export type ChatMessage = {
   id: string

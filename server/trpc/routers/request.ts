@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server"
-import { createRequestSchema } from "../../../shared/schemas/request"
+import { createRequestSchema } from "#shared/schemas/request"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 

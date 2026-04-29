@@ -1,5 +1,5 @@
 import { getRouterParam } from "h3"
-import { deleteItemSchema } from "../../../shared/schemas/item"
+import { deleteItemSchema } from "#shared/schemas/item"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 import { handleItemApiError } from "../items/handle-item-api-error"

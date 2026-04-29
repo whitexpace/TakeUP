@@ -1,5 +1,5 @@
 import { DisputeStatus } from "@prisma/client"
-import type { DisputeStatus as ApiDisputeStatus } from "../../shared/schemas/dispute"
+import type { DisputeStatus as ApiDisputeStatus } from "#shared/schemas/dispute"
 
 const runtimeDisputeStatuses = DisputeStatus as Record<string, string>
 const APPEALED_RUNTIME_STATUS = (runtimeDisputeStatuses.APPEALED ?? "APPEALED") as DisputeStatus

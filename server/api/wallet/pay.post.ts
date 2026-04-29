@@ -1,5 +1,5 @@
 import { payWithWallet } from "../../utils/wallet"
-import { payWithWalletSchema } from "../../../shared/schemas/wallet"
+import { payWithWalletSchema } from "#shared/schemas/wallet"
 import { prisma } from "../../utils/prisma"
 
 export default defineEventHandler(async (event) => {

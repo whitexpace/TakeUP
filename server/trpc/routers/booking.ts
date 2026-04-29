@@ -26,7 +26,7 @@ import {
   paymentMethodSchema,
   returnProofBookingSchema,
   updateBookingSchema,
-} from "../../../shared/schemas/booking"
+} from "#shared/schemas/booking"
 import {
   buildTransactionReviewState,
   mapTransactionReview,
@@ -38,7 +38,7 @@ import {
   isRebuttalEnabledDisputeStatus,
   toUserFacingDisputeStatus,
 } from "../../utils/dispute-status"
-import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
+import { isChatAvailableForTransactionStatus } from "#shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
 import {

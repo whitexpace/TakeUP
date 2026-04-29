@@ -1,5 +1,5 @@
 import { createError, getRouterParam } from "h3"
-import { deleteBookingSchema } from "../../../shared/schemas/booking"
+import { deleteBookingSchema } from "#shared/schemas/booking"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 import { handleBookingApiError } from "../bookings/handle-booking-api-error"

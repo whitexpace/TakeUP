@@ -10,7 +10,7 @@ import type {
   AccountDeletionEligibility,
   AccountDeletionReason,
   AccountDeletionReasonDetail,
-} from "../../shared/schemas/account"
+} from "#shared/schemas/account"
 import { ACTIVE_DISPUTE_STATUSES } from "./dispute-status"
 
 const BLOCKING_TRANSACTION_STATUSES = [

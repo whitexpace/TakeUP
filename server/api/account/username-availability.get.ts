@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client"
 import { createError, getQuery } from "h3"
-import { usernameAvailabilityQuerySchema } from "../../../shared/schemas/profile"
+import { usernameAvailabilityQuerySchema } from "#shared/schemas/profile"
 import { createContext } from "../../trpc/context"
 
 export default defineEventHandler(async (event) => {

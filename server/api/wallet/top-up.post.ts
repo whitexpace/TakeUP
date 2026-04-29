@@ -1,5 +1,5 @@
 import { topUpPseudo } from "../../utils/wallet"
-import { topUpSchema } from "../../../shared/schemas/wallet"
+import { topUpSchema } from "#shared/schemas/wallet"
 
 export default defineEventHandler(async (event) => {
   const user = event.context.authUser
