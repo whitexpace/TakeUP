@@ -1,6 +1,7 @@
 <script setup lang="ts">
 definePageMeta({
-  middleware: "account-auth",
+  layout: "admin",
+  middleware: "admin-auth",
 })
 
 await navigateTo("/admin/disputes", { replace: true })

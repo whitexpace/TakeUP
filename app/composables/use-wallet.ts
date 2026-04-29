@@ -1,22 +1,30 @@
 import { ref, computed, onMounted } from "vue"
 import type { Wallet, WalletTransaction, LinkedAccount } from "~/types/wallet"
 
-export const useWallet = () => {
+const DEFAULT_LINKED_ACCOUNTS: LinkedAccount[] = [
+  { id: "la-1", type: "GCASH", accountName: "John Doe", accountNumber: "0912****567" },
+  { id: "la-2", type: "LANDBANK", accountName: "John Doe", accountNumber: "1234********5678" },
+  { id: "la-3", type: "MAYA", accountName: "John Doe", accountNumber: "0912****567" },
+]
+
+type UseWalletOptions = {
+  basePath?: string
+  linkedAccounts?: LinkedAccount[]
+}
+
+export const useWallet = (options: UseWalletOptions = {}) => {
+  const basePath = options.basePath ?? "/api/wallet"
   const wallet = ref<Wallet | null>(null)
   const transactions = ref<WalletTransaction[]>([])
   const isBalanceVisible = ref(true)
   const isLoading = ref(false)
   const isInitialLoading = ref(true)
 
-  const linkedAccounts = ref<LinkedAccount[]>([
-    { id: "la-1", type: "GCASH", accountName: "John Doe", accountNumber: "0912****567" },
-    { id: "la-2", type: "LANDBANK", accountName: "John Doe", accountNumber: "1234********5678" },
-    { id: "la-3", type: "MAYA", accountName: "John Doe", accountNumber: "0912****567" },
-  ])
+  const linkedAccounts = ref<LinkedAccount[]>(options.linkedAccounts ?? DEFAULT_LINKED_ACCOUNTS)
 
   const fetchWallet = async () => {
     try {
-      const data = await $fetch<Wallet>("/api/wallet")
+      const data = await $fetch<Wallet>(basePath)
       wallet.value = data
     } catch (error) {
       console.error("Failed to fetch wallet:", error)
@@ -27,7 +35,7 @@ export const useWallet = () => {
 
   const fetchTransactions = async () => {
     try {
-      const data = await $fetch<WalletTransaction[]>("/api/wallet/transactions", {
+      const data = await $fetch<WalletTransaction[]>(`${basePath}/transactions`, {
         query: { take: 20 },
       })
       transactions.value = data
@@ -48,7 +56,7 @@ export const useWallet = () => {
     isLoading.value = true
     try {
       const result = await $fetch<{ wallet: Wallet; transaction: WalletTransaction }>(
-        "/api/wallet/top-up",
+        `${basePath}/top-up`,
         {
           method: "POST",
           body: { amount },
@@ -74,7 +82,7 @@ export const useWallet = () => {
     isLoading.value = true
     try {
       const result = await $fetch<{ wallet: Wallet; transaction: WalletTransaction }>(
-        "/api/wallet/pay",
+        `${basePath}/pay`,
         {
           method: "POST",
           body: {

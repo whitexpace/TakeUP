@@ -3,5 +3,5 @@ definePageMeta({
   middleware: "account-auth",
 })
 
-await navigateTo("/admin/disputes", { replace: true })
+await navigateTo("/admin/wallet", { replace: true })
 </script>

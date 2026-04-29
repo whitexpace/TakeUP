@@ -3,7 +3,9 @@ import { PrismaClient } from "@prisma/client"
 
 export type WalletRecord = {
   id: string
-  userId: string
+  scope: string
+  userId: string | null
+  systemKey: string | null
   currency: string
   balance: Prisma.Decimal
   status: string
@@ -14,7 +16,7 @@ export type WalletRecord = {
 export type WalletTransactionRecord = {
   id: string
   walletId: string
-  userId: string
+  userId: string | null
   type: string
   method: string
   direction: string
@@ -32,6 +34,7 @@ export type WalletTransactionRecord = {
 
 type WalletDelegate = {
   findUnique(args: unknown): Promise<WalletRecord | null>
+  upsert(args: unknown): Promise<WalletRecord>
   create(args: unknown): Promise<WalletRecord>
   update(args: unknown): Promise<WalletRecord>
 }
