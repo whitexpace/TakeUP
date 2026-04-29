@@ -36,13 +36,56 @@ const emit = defineEmits<{
 const { bagCount } = useBag()
 const { likesCount, loadLikesCount } = useLikes()
 const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount } = useChat()
+const supabase = useSupabaseClient()
+const user = useSupabaseUser()
 const route = useRoute()
 const headerRef = ref<HTMLElement | null>(null)
 const showNotifications = ref(false)
 const isVisible = ref(true)
+const accountType = ref<string | null>(null)
 const isAccountSectionActive = computed(
   () => route.path === "/account" || route.path.startsWith("/account/"),
 )
+const isAdminSectionActive = computed(
+  () => route.path === "/admin" || route.path.startsWith("/admin/"),
+)
+
+const bridgeAndLoadAccountType = async () => {
+  if (!user.value) {
+    accountType.value = null
+    return
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    accountType.value = null
+    return
+  }
+
+  const bridgedAccessToken = useState<string | null>("header-bridged-access-token", () => null)
+
+  try {
+    if (bridgedAccessToken.value !== session.access_token) {
+      await $fetch("/api/auth/supabase-session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      bridgedAccessToken.value = session.access_token
+    }
+
+    const response = await $fetch<{ user: { accountType: string | null } }>("/api/auth/me")
+    accountType.value = response.user.accountType
+  } catch {
+    accountType.value = null
+  }
+}
+
+watch(user, () => {
+  void bridgeAndLoadAccountType()
+})
 
 watch(isVisible, (val) => {
   emit("visibility-change", val)
@@ -220,6 +263,7 @@ watch(() => props.scrollContainerSelector, setupScrollListener)
 onMounted(() => {
   document.addEventListener("pointerdown", handlePointerDownOutside)
   setupScrollListener()
+  void bridgeAndLoadAccountType()
   void loadLikesCount()
   void loadChatUnreadCount()
 })
@@ -501,10 +545,41 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Profile Icon (Always Visible) -->
+        <!-- Account Actions -->
         <div class="flex items-stretch md:ml-1">
           <div class="flex items-center px-2 md:px-4">
             <div class="h-6 w-px bg-cinnamon-ice/30"></div>
+          </div>
+          <div
+            v-if="accountType === 'ADMIN'"
+            class="relative hidden md:flex items-stretch group/tooltip"
+          >
+            <NuxtLink
+              to="/admin"
+              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+              :class="{ 'active-nav-link': isAdminSectionActive }"
+              active-class="active-nav-link"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              >
+                <path d="M12 3l7 4v5c0 5-3.5 7.74-7 9-3.5-1.26-7-4-7-9V7l7-4Z" />
+                <path d="M9.5 12 11 13.5l3.5-3.5" />
+              </svg>
+            </NuxtLink>
+            <div class="custom-tooltip">
+              Admin Panel
+              <div class="tooltip-arrow"></div>
+            </div>
           </div>
           <div class="relative flex items-stretch group/tooltip">
             <NuxtLink

@@ -7,6 +7,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     jwtSecret: process.env.JWT_SECRET,
+    platformCommissionRatePercent: process.env.PLATFORM_COMMISSION_RATE_PERCENT ?? "5",
     supabaseServiceRoleKey:
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.NUXT_SUPABASE_SERVICE_ROLE_KEY ||
@@ -26,7 +27,7 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: "/",
       callback: "/auth/callback",
-      include: ["/dashboard*", "/account*", "/bag*"],
+      include: ["/dashboard*", "/account*", "/admin*", "/bag*"],
       exclude: ["/"],
     },
   },

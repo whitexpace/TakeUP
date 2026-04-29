@@ -1,4 +1,11 @@
-export type WalletTransactionType = "TOP_UP" | "PAYMENT" | "REFUND" | "ADJUSTMENT" | "EARNING"
+export type WalletScope = "USER" | "SYSTEM"
+export type WalletTransactionType =
+  | "TOP_UP"
+  | "PAYMENT"
+  | "REFUND"
+  | "ADJUSTMENT"
+  | "EARNING"
+  | "COMMISSION"
 export type WalletTransactionMethod = "PSEUDO" | "GCASH" | "BANK" | "MAYA" | "SYSTEM"
 export type WalletTransactionStatus = "SUCCESS" | "FAILED" | "REVERSED" | "PENDING"
 export type WalletTransactionDirection = "CREDIT" | "DEBIT"
@@ -6,7 +13,7 @@ export type WalletTransactionDirection = "CREDIT" | "DEBIT"
 export interface WalletTransaction {
   id: string
   walletId: string
-  userId: string
+  userId: string | null
   type: WalletTransactionType
   method: WalletTransactionMethod
   direction: WalletTransactionDirection
@@ -17,13 +24,16 @@ export interface WalletTransaction {
   relatedEntityType?: string | null
   relatedEntityId?: string | null
   status: WalletTransactionStatus
+  metadata?: Record<string, unknown> | null
   createdAt: string | Date
   updatedAt: string | Date
 }
 
 export interface Wallet {
   id: string
-  userId: string
+  scope: WalletScope
+  userId: string | null
+  systemKey?: string | null
   balance: number | { toString(): string }
   currency: string
   status: "ACTIVE" | "SUSPENDED" | "CLOSED"

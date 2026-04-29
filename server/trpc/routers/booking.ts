@@ -41,8 +41,14 @@ import {
 import { isChatAvailableForTransactionStatus } from "../../../shared/chat-rules"
 import { processTransactionRewards } from "../../utils/rewards"
 import { calculateEarlyReturnRefund } from "../../utils/booking-refund"
-import { creditToWallet } from "../../utils/wallet"
+import {
+  BOOKING_ENTITY_TYPE,
+  creditCommissionToSystemWallet,
+  creditToWallet,
+  findSystemCommissionTransaction,
+} from "../../utils/wallet"
 import { asWalletPrisma } from "../../utils/prisma"
+import { calculatePlatformCommissionAmount } from "../../utils/platform-commission"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -697,7 +703,6 @@ const calculateBookingTotal = (
   item: Pick<BookingEditableRecord["item"], "freeToBorrow" | "rateOption" | "rentalFee">,
   startDate: Date,
   endDate: Date,
-  platformCommission: number,
 ) => {
   if (item.freeToBorrow) {
     return 0
@@ -707,7 +712,7 @@ const calculateBookingTotal = (
   const unitMs = item.rateOption === "PER_HOUR" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000
   const units = Math.max(1, Math.ceil(diffMs / unitMs))
 
-  return units * item.rentalFee + platformCommission
+  return units * item.rentalFee
 }
 
 const calculateRentalAmount = (totalFee: number, platformCommission: number) =>
@@ -1184,8 +1189,8 @@ export const bookingRouter = router({
       endDate: input.endDate,
     })
 
-    const platformCommission = item.freeToBorrow ? 0 : input.platformCommission
-    const totalFee = calculateBookingTotal(item, input.startDate, input.endDate, platformCommission)
+    const totalFee = calculateBookingTotal(item, input.startDate, input.endDate)
+    const platformCommission = item.freeToBorrow ? 0 : calculatePlatformCommissionAmount(totalFee)
     const now = new Date()
 
     await ctx.prisma.lender.upsert({
@@ -1519,10 +1524,15 @@ export const bookingRouter = router({
       })
     }
 
+    const shouldRecalculatePricing = Boolean(input.startDate || input.endDate)
+    const totalFee = shouldRecalculatePricing
+      ? calculateBookingTotal(existing.item, startDate, endDate)
+      : existing.totalFee
     const platformCommission = existing.item.freeToBorrow
       ? 0
-      : (input.platformCommission ?? existing.platformCommission)
-    const totalFee = calculateBookingTotal(existing.item, startDate, endDate, platformCommission)
+      : shouldRecalculatePricing
+        ? calculatePlatformCommissionAmount(totalFee)
+        : existing.platformCommission
     const timestamps = buildBookingTimestamps(existing, input.status, input.paymentStatus)
 
     const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
@@ -1546,9 +1556,7 @@ export const bookingRouter = router({
         data: {
           ...(input.startDate ? { startDate } : {}),
           ...(input.endDate ? { endDate } : {}),
-          ...(input.startDate || input.endDate || input.platformCommission !== undefined
-            ? { totalFee, platformCommission }
-            : {}),
+          ...(shouldRecalculatePricing ? { totalFee, platformCommission } : {}),
           ...(input.paymentMethod
             ? { paymentMethod: prismaPaymentMethodByInput[input.paymentMethod] }
             : {}),
@@ -1657,29 +1665,64 @@ export const bookingRouter = router({
         const commission = updatedBooking.platformCommission
         const refundAmount = updatedBooking.refundAmount ?? 0
         const lenderEarnings = originalTotalFee - commission - refundAmount
+        const walletTx = asWalletPrisma(tx as Prisma.TransactionClient)
+        const commissionRatePercent =
+          originalTotalFee > 0 ? Number(((commission / originalTotalFee) * 100).toFixed(2)) : 0
+        const commissionMetadata = {
+          sourceTransactionId: syncedTransaction?.id ?? null,
+          bookingId: updatedBooking.id,
+          borrowerId: existing.borrowerId,
+          lenderId: existing.lenderId,
+          grossAmount: originalTotalFee,
+          commissionRatePercent,
+        }
 
-        // 1. Calculate lender earnings
+        if (commission > 0) {
+          const existingCommission = await findSystemCommissionTransaction(
+            updatedBooking.id,
+            undefined,
+            tx as Prisma.TransactionClient,
+          )
+
+          if (!existingCommission) {
+            await creditCommissionToSystemWallet(
+              commission,
+              {
+                relatedEntityType: BOOKING_ENTITY_TYPE,
+                relatedEntityId: updatedBooking.id,
+                metadata: commissionMetadata,
+              },
+              tx as Context["prisma"],
+            )
+          }
+        }
+
         if (lenderEarnings > 0) {
           await creditToWallet(
             existing.lenderId,
             lenderEarnings,
             {
               type: "EARNING",
-              relatedEntityType: "BOOKING",
+              relatedEntityType: BOOKING_ENTITY_TYPE,
               relatedEntityId: updatedBooking.id,
+              metadata: {
+                sourceTransactionId: syncedTransaction?.id ?? null,
+                bookingId: updatedBooking.id,
+                grossAmount: originalTotalFee,
+                commissionAmount: commission,
+                refundAmount,
+              },
             },
             tx as Context["prisma"],
           )
         }
 
-        // 2. Fallback Refund logic for Borrower
         if (refundAmount > 0) {
-          const walletTx = asWalletPrisma(tx as Prisma.TransactionClient)
           const existingRefund = await walletTx.walletTransaction.findFirst({
             where: {
               userId: existing.borrowerId,
               type: "REFUND",
-              relatedEntityType: "BOOKING",
+              relatedEntityType: BOOKING_ENTITY_TYPE,
               relatedEntityId: updatedBooking.id,
             },
           })
@@ -1690,8 +1733,13 @@ export const bookingRouter = router({
               refundAmount,
               {
                 type: "REFUND",
-                relatedEntityType: "BOOKING",
+                relatedEntityType: BOOKING_ENTITY_TYPE,
                 relatedEntityId: updatedBooking.id,
+                metadata: {
+                  sourceTransactionId: syncedTransaction?.id ?? null,
+                  bookingId: updatedBooking.id,
+                  refundAmount,
+                },
               },
               tx as Context["prisma"],
             )

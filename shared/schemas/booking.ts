@@ -40,7 +40,6 @@ export const createBookingSchema = z
   .object({
     itemId: z.string().uuid(),
     ...bookingDateRangeShape,
-    platformCommission: z.number().int().min(0).default(0),
     paymentMethod: paymentMethodSchema.default("GCASH"),
     cancellationReason: z.string().trim().max(500).optional(),
   })
@@ -54,7 +53,6 @@ export const updateBookingSchema = z
     id: z.string().uuid(),
     startDate: z.coerce.date().optional(),
     endDate: z.coerce.date().optional(),
-    platformCommission: z.number().int().min(0).optional(),
     paymentMethod: paymentMethodSchema.optional(),
     status: bookingStatusSchema.optional(),
     paymentStatus: bookingPaymentStatusSchema.optional(),
@@ -64,7 +62,6 @@ export const updateBookingSchema = z
     (payload) =>
       payload.startDate !== undefined ||
       payload.endDate !== undefined ||
-      payload.platformCommission !== undefined ||
       payload.paymentMethod !== undefined ||
       payload.status !== undefined ||
       payload.paymentStatus !== undefined ||

@@ -1,6 +1,28 @@
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { bookingRouter } from "../booking"
 import { REJECTED_DISPUTE_STATUS, SUBMITTED_DISPUTE_STATUS } from "../../../utils/dispute-status"
+
+const {
+  creditToWalletMock,
+  creditCommissionToSystemWalletMock,
+  findSystemCommissionTransactionMock,
+} = vi.hoisted(() => ({
+  creditToWalletMock: vi.fn(),
+  creditCommissionToSystemWalletMock: vi.fn(),
+  findSystemCommissionTransactionMock: vi.fn(),
+}))
+
+vi.mock("../../../utils/wallet", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../../utils/wallet")>("../../../utils/wallet")
+
+  return {
+    ...actual,
+    creditToWallet: creditToWalletMock,
+    creditCommissionToSystemWallet: creditCommissionToSystemWalletMock,
+    findSystemCommissionTransaction: findSystemCommissionTransactionMock,
+  }
+})
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const ITEM_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -120,6 +142,9 @@ const makeContext = () => {
     conversation: {
       upsert: vi.fn().mockResolvedValue({ id: "conv-1", transactionId: "txn-1" }),
     },
+    walletTransaction: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     appNotification: {
       create: vi.fn().mockResolvedValue({ id: "notif-1" }),
     },
@@ -138,6 +163,15 @@ const makeContext = () => {
 }
 
 describe("bookingRouter", () => {
+  beforeEach(() => {
+    creditToWalletMock.mockReset()
+    creditCommissionToSystemWalletMock.mockReset()
+    findSystemCommissionTransactionMock.mockReset()
+    creditToWalletMock.mockResolvedValue(null)
+    creditCommissionToSystemWalletMock.mockResolvedValue(null)
+    findSystemCommissionTransactionMock.mockResolvedValue(null)
+  })
+
   it("creates a booking using the authenticated user as borrower and item owner as lender", async () => {
     const ctx = makeContext()
     const caller = bookingRouter.createCaller(ctx as never)
@@ -146,7 +180,6 @@ describe("bookingRouter", () => {
       itemId: ITEM_ID,
       startDate: new Date("2026-04-01T00:00:00.000Z"),
       endDate: new Date("2026-04-03T00:00:00.000Z"),
-      platformCommission: 50,
       paymentMethod: "GCASH",
     })
 
@@ -169,8 +202,8 @@ describe("bookingRouter", () => {
           borrowerId: USER_ID,
           lenderId: LENDER_ID,
           itemId: ITEM_ID,
-          totalFee: 450,
-          platformCommission: 50,
+          totalFee: 400,
+          platformCommission: 20,
           status: "PENDING",
           paymentStatus: "PENDING",
         }),
@@ -500,7 +533,6 @@ describe("bookingRouter", () => {
         itemId: ITEM_ID,
         startDate: new Date("2026-04-01T00:00:00.000Z"),
         endDate: new Date("2026-04-03T00:00:00.000Z"),
-        platformCommission: 50,
         paymentMethod: "GCASH",
       }),
     ).rejects.toMatchObject({
@@ -577,7 +609,6 @@ describe("bookingRouter", () => {
         itemId: ITEM_ID,
         startDate: new Date("2026-04-01T00:00:00.000Z"),
         endDate: new Date("2026-04-03T00:00:00.000Z"),
-        platformCommission: 50,
         paymentMethod: "GCASH",
       }),
     ).rejects.toMatchObject({
@@ -1108,6 +1139,94 @@ describe("bookingRouter", () => {
       code: "FORBIDDEN",
       message: "Only the lender can complete this booking after the item is returned.",
     })
+  })
+
+  it("credits lender earnings and centralized commission when a wallet booking is completed", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique
+      .mockResolvedValueOnce(
+        makeBooking({
+          status: "RETURNED",
+          paymentMethod: "WALLET",
+          paymentStatus: "PAID",
+          totalFee: 400,
+          platformCommission: 20,
+          confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+          returnedAt: new Date("2026-04-03T00:00:00.000Z"),
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeBooking({
+          status: "COMPLETED",
+          paymentMethod: "WALLET",
+          paymentStatus: "PAID",
+          totalFee: 400,
+          platformCommission: 20,
+          confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+          returnedAt: new Date("2026-04-03T00:00:00.000Z"),
+          completedAt: new Date("2026-04-03T01:00:00.000Z"),
+        }),
+      )
+    ctx.prisma.booking.update.mockResolvedValueOnce({
+      id: BOOKING_ID,
+      borrowerId: USER_ID,
+      lenderId: LENDER_ID,
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-01T00:00:00.000Z"),
+      endDate: new Date("2026-04-03T00:00:00.000Z"),
+      totalFee: 400,
+      platformCommission: 20,
+      status: "COMPLETED",
+      paymentStatus: "PAID",
+      refundAmount: 0,
+      confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      returnedAt: new Date("2026-04-03T00:00:00.000Z"),
+      cancellationReason: null,
+      cancelledAt: null,
+    })
+    ctx.prisma.rentalTransaction.findUnique
+      .mockResolvedValueOnce({ id: "txn-1", status: "RETURNED" })
+      .mockResolvedValueOnce({ id: "txn-1", status: "COMPLETED" })
+
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
+
+    const completedBooking = await caller.update({
+      id: BOOKING_ID,
+      status: "COMPLETED",
+    })
+
+    expect(findSystemCommissionTransactionMock).toHaveBeenCalledWith(
+      BOOKING_ID,
+      undefined,
+      ctx.prisma,
+    )
+    expect(creditCommissionToSystemWalletMock).toHaveBeenCalledWith(
+      20,
+      expect.objectContaining({
+        relatedEntityType: "BOOKING",
+        relatedEntityId: BOOKING_ID,
+        metadata: expect.objectContaining({
+          sourceTransactionId: "txn-1",
+          grossAmount: 400,
+          commissionRatePercent: 5,
+        }),
+      }),
+      ctx.prisma,
+    )
+    expect(creditToWalletMock).toHaveBeenCalledWith(
+      LENDER_ID,
+      380,
+      expect.objectContaining({
+        type: "EARNING",
+        relatedEntityType: "BOOKING",
+        relatedEntityId: BOOKING_ID,
+      }),
+      ctx.prisma,
+    )
+    expect(completedBooking.status).toBe("COMPLETED")
   })
 
   it("rejects completion when the recorded return happened before the rental period starts", async () => {

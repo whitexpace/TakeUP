@@ -190,12 +190,18 @@ enum WalletStatus {
   CLOSED
 }
 
+enum WalletScope {
+  USER
+  SYSTEM
+}
+
 enum WalletTransactionType {
   TOP_UP
   PAYMENT
   REFUND
   ADJUSTMENT
   EARNING
+  COMMISSION
 }
 
 enum WalletTransactionMethod {
@@ -525,23 +531,26 @@ model User {
 
 model Wallet {
   id        String       @id @default(uuid())
-  userId    String       @unique @map("user_id")
+  scope     WalletScope  @default(USER)
+  userId    String?      @unique @map("user_id")
+  systemKey String?      @unique @map("system_key")
   currency  String       @default("PHP")
   balance   Decimal      @default(0) @db.Decimal(12, 2)
   status    WalletStatus @default(ACTIVE)
   createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions WalletTransaction[]
 
+  @@index([scope])
   @@map("wallets")
 }
 
 model WalletTransaction {
   id                String                     @id @default(dbgenerated("(gen_random_uuid())::text"))
   walletId          String                     @map("wallet_id")
-  userId            String                     @map("user_id")
+  userId            String?                    @map("user_id")
   type              WalletTransactionType
   method            WalletTransactionMethod
   direction         WalletTransactionDirection
@@ -557,7 +566,7 @@ model WalletTransaction {
   updatedAt         DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([userId])
