@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import type { TransactionListItem } from "../composables/use-transactions"
+import type { ReviewType } from "../../shared/schemas/review"
+import { isChatAvailableForTransactionStatus } from "../../shared/chat-rules"
 
 const props = defineProps<{
   transaction: TransactionListItem
   activeRole: "LENDER" | "BORROWER"
 }>()
+
+const emit = defineEmits<{
+  writeReview: [payload: { transaction: TransactionListItem; reviewType: ReviewType }]
+}>()
+
+const router = useRouter()
 
 const formatPeso = (value: number) =>
   `₱${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
@@ -62,12 +70,26 @@ const totalLabel = computed(() =>
   props.transaction.item.freeToBorrow ? "₱0" : formatPeso(props.transaction.totalAmount),
 )
 
-const isCompleted = computed(() => props.transaction.status === "COMPLETED")
 const detailPath = computed(() =>
   props.transaction.bookingId
     ? `/account/transactions/${props.transaction.bookingId}`
     : `/account/transactions/${props.transaction.id}`,
 )
+
+const canOpenChat = computed(() => isChatAvailableForTransactionStatus(props.transaction.status))
+
+const handleWriteReview = (reviewType: ReviewType) => {
+  emit("writeReview", { transaction: props.transaction, reviewType })
+}
+
+const handleOpenChat = async () => {
+  if (!canOpenChat.value) return
+
+  await router.push({
+    path: "/chat",
+    query: { transactionId: props.transaction.id },
+  })
+}
 </script>
 
 <template>
@@ -80,27 +102,43 @@ const detailPath = computed(() =>
         {{ counterpartName }}
       </span>
 
-      <!-- Action buttons for completed transactions -->
-      <div v-if="isCompleted" class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
         <button
-          class="bg-burning-orange text-white rounded-md px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none"
+          v-if="canOpenChat"
+          class="inline-flex items-center gap-1.5 rounded-md border border-blue-estate/15 bg-blue-estate/5 px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none text-blue-estate hover:bg-blue-estate hover:text-white transition-colors"
+          @click.stop="handleOpenChat"
         >
-          Leave a review
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          Chat
         </button>
         <button
+          v-for="action in transaction.reviewState.actions.filter((entry) => entry.canSubmit)"
+          :key="action.reviewType"
+          class="bg-burning-orange text-white rounded-md px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none hover:bg-cinnabar-red transition-colors"
+          @click.stop="handleWriteReview(action.reviewType)"
+        >
+          {{ action.label }}
+        </button>
+        <span
+          v-for="action in transaction.reviewState.actions.filter((entry) => entry.hasSubmitted)"
+          :key="`${action.reviewType}-submitted`"
           class="bg-indigo-900 text-white rounded-md px-2.5 sm:px-3 py-1 text-sm sm:text-base font-normal leading-none"
         >
-          See review
-        </button>
+          {{ action.submittedLabel }}
+        </span>
       </div>
-
-      <NuxtLink
-        v-if="detailPath"
-        :to="detailPath"
-        class="text-orange-500 text-xs sm:text-sm font-medium hover:text-orange-600 transition-colors"
-      >
-        View details
-      </NuxtLink>
 
       <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
     </div>

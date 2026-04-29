@@ -3,6 +3,58 @@ import { describe, expect, it, vi } from "vitest"
 import { itemRouter } from "../item"
 
 const VALID_UUID = "11111111-1111-1111-1111-111111111111"
+const SECOND_UUID = "22222222-2222-2222-2222-222222222222"
+const THIRD_UUID = "33333333-3333-3333-3333-333333333333"
+
+const makeFeedRecord = (id: string, overrides: Record<string, unknown> = {}) => ({
+  id,
+  name: `Item ${id}`,
+  status: "AVAILABLE",
+  lenderId: "owner-1",
+  lender: {
+    user: {
+      username: "owner1",
+      firstName: "Owner",
+      middleName: null,
+      lastName: "One",
+      email: "owner1@up.edu.ph",
+      status: "ACTIVE",
+    },
+  },
+  availability: [
+    {
+      id: `${id}-availability`,
+      startDate: new Date("2099-03-10T00:00:00.000Z"),
+      endDate: new Date("2099-03-12T00:00:00.000Z"),
+      status: "AVAILABLE",
+    },
+  ],
+  bookings: [],
+  images: [{ path: `https://example.com/${id}.jpg`, isPrimary: true, sortOrder: 0 }],
+  categories: [{ category: "ELECTRONICS" }],
+  tags: [{ tag: { name: "camera" } }],
+  likes: [],
+  description: null,
+  condition: "GOOD",
+  rateOption: "PER_DAY",
+  createdAt: new Date("2026-03-22T00:00:00.000Z"),
+  rentalFee: 250,
+  replacementCost: null,
+  freeToBorrow: false,
+  whatItemOffers: null,
+  whatIsIncluded: null,
+  knownIssues: null,
+  usageLimitations: null,
+  isTrending: false,
+  viewCount: 0,
+  bookingCount: 0,
+  likeCount: 0,
+  rating: 0,
+  boostScore: 0,
+  boostExpiresAt: null,
+  borrowerId: null,
+  ...overrides,
+})
 
 describe("itemRouter", () => {
   it("create throws BAD_REQUEST when the signed-in user is missing from the database", async () => {
@@ -138,37 +190,25 @@ describe("itemRouter", () => {
 
   it("list maps taxonomy relations into plain arrays", async () => {
     const findMany = vi.fn().mockResolvedValue([
-      {
-        id: VALID_UUID,
+      makeFeedRecord(VALID_UUID, {
         name: "Camera",
-        status: "AVAILABLE",
-        lenderId: "owner-1",
-        lender: {
-          user: {
-            username: "owner1",
-            firstName: "Owner",
-            middleName: null,
-            lastName: "One",
-            email: "owner1@up.edu.ph",
-          },
-        },
         availability: [
           {
-            id: "22222222-2222-2222-2222-222222222222",
-            startDate: new Date("2026-03-10T00:00:00.000Z"),
-            endDate: new Date("2026-03-12T00:00:00.000Z"),
+            id: SECOND_UUID,
+            startDate: new Date("2099-03-10T00:00:00.000Z"),
+            endDate: new Date("2099-03-12T00:00:00.000Z"),
             status: "AVAILABLE",
           },
         ],
         images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
-        categories: [{ category: "ELECTRONICS" }],
         tags: [{ tag: { name: "photo" } }],
-      },
+      }),
     ])
+    const likeFindMany = vi.fn().mockResolvedValue([])
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findMany } } as never,
+      prisma: { item: { findMany }, like: { findMany: likeFindMany } } as never,
       user: null,
     })
 
@@ -186,9 +226,17 @@ describe("itemRouter", () => {
             }),
             orderBy: { startDate: "asc" },
           }),
+          bookings: expect.objectContaining({
+            where: expect.objectContaining({
+              status: { in: ["CONFIRMED", "IN_DISPUTE"] },
+            }),
+          }),
         }),
         where: expect.objectContaining({
-          status: { not: "DELETED" },
+          AND: expect.arrayContaining([
+            expect.objectContaining({ status: { not: "DELETED" } }),
+            expect.objectContaining({ status: "AVAILABLE" }),
+          ]),
         }),
       }),
     )
@@ -200,8 +248,8 @@ describe("itemRouter", () => {
     expect(result[0]?.availability).toEqual([
       {
         id: "22222222-2222-2222-2222-222222222222",
-        startDate: new Date("2026-03-10T00:00:00.000Z"),
-        endDate: new Date("2026-03-12T00:00:00.000Z"),
+        startDate: new Date("2099-03-10T00:00:00.000Z"),
+        endDate: new Date("2099-03-12T00:00:00.000Z"),
         status: "AVAILABLE",
       },
     ])
@@ -210,6 +258,193 @@ describe("itemRouter", () => {
     ])
     expect(result[0]?.thumbnailImage).toBe("https://example.com/camera.jpg")
     expect(result[0]?.photos).toEqual(["https://example.com/camera.jpg"])
+  })
+
+  it("personalizes public listing order for signed-in viewers", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      makeFeedRecord(VALID_UUID, {
+        categories: [{ category: "TOOLS" }],
+        tags: [{ tag: { name: "drill" } }],
+        bookingCount: 12,
+        likeCount: 20,
+        viewCount: 300,
+      }),
+      makeFeedRecord(SECOND_UUID, {
+        categories: [{ category: "BOOKS" }],
+        tags: [{ tag: { name: "novel" } }],
+      }),
+    ])
+    const likeFindMany = vi.fn().mockResolvedValue([
+      {
+        item: {
+          categories: [{ category: "BOOKS" }],
+          tags: [{ tag: { name: "novel" } }],
+        },
+      },
+    ])
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: { item: { findMany }, like: { findMany: likeFindMany } } as never,
+      user: { id: "viewer-1", email: "viewer@up.edu.ph", name: "Viewer" },
+    })
+
+    const result = await caller.list()
+
+    expect(result.map((item) => item.id)).toEqual([SECOND_UUID, VALID_UUID])
+  })
+
+  it("uses carry-over cursor ids for paginated personalized feeds", async () => {
+    const firstBatch = [
+      makeFeedRecord(VALID_UUID, {
+        categories: [{ category: "TOOLS" }],
+        tags: [{ tag: { name: "drill" } }],
+        bookingCount: 6,
+      }),
+      makeFeedRecord(SECOND_UUID, {
+        categories: [{ category: "BOOKS" }],
+        tags: [{ tag: { name: "novel" } }],
+      }),
+      makeFeedRecord(THIRD_UUID, {
+        categories: [{ category: "MUSIC_AUDIO" }],
+        tags: [{ tag: { name: "guitar" } }],
+      }),
+    ]
+    const pendingItem = makeFeedRecord(THIRD_UUID, {
+      categories: [{ category: "MUSIC_AUDIO" }],
+      tags: [{ tag: { name: "guitar" } }],
+    })
+    const findMany = vi.fn().mockResolvedValueOnce(firstBatch).mockResolvedValueOnce([pendingItem])
+    const likeFindMany = vi.fn().mockResolvedValue([
+      {
+        item: {
+          categories: [{ category: "BOOKS" }],
+          tags: [{ tag: { name: "novel" } }],
+        },
+      },
+    ])
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: { item: { findMany }, like: { findMany: likeFindMany } } as never,
+      user: { id: "viewer-1", email: "viewer@up.edu.ph", name: "Viewer" },
+    })
+
+    const firstPage = await caller.paginatedList({ limit: 2 })
+
+    expect(firstPage.items.map((item) => item.id)).toEqual([SECOND_UUID, VALID_UUID])
+    expect(firstPage.nextCursor).toEqual({
+      version: 1,
+      scanExhausted: true,
+      scanCursor: null,
+      pendingIds: [THIRD_UUID],
+    })
+
+    const secondPage = await caller.paginatedList({
+      limit: 2,
+      cursor: firstPage.nextCursor ?? undefined,
+    })
+
+    expect(secondPage.items.map((item) => item.id)).toEqual([THIRD_UUID])
+    expect(secondPage.nextCursor).toBeNull()
+  })
+
+  it("byId returns item review images for display", async () => {
+    const reviewImageUrl =
+      "https://example.supabase.co/storage/v1/object/public/item-images/reviews/u/r1.jpg"
+    const findById = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      name: "Camera",
+      status: "AVAILABLE",
+      lenderId: "owner-1",
+      lender: {
+        user: {
+          username: "owner1",
+          firstName: "Owner",
+          middleName: null,
+          lastName: "One",
+          email: "owner1@up.edu.ph",
+          status: "ACTIVE",
+        },
+      },
+      availability: [
+        {
+          id: "33333333-3333-3333-3333-333333333333",
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      images: [{ path: "https://example.com/camera.jpg", isPrimary: true, sortOrder: 0 }],
+      categories: [{ category: "ELECTRONICS" }],
+      tags: [{ tag: { name: "photo" } }],
+      likes: [],
+      description: "Mirrorless camera",
+      condition: "GOOD",
+      rateOption: "PER_DAY",
+      createdAt: new Date("2026-03-22T00:00:00.000Z"),
+      rentalFee: 250,
+      replacementCost: null,
+      freeToBorrow: false,
+      whatItemOffers: null,
+      whatIsIncluded: null,
+      knownIssues: null,
+      usageLimitations: null,
+      isTrending: false,
+      viewCount: 0,
+      bookingCount: 0,
+      likeCount: 0,
+      rating: 0,
+      borrowerId: null,
+      transactionReviews: [
+        {
+          id: "review-1",
+          transactionId: "txn-1",
+          reviewerUserId: "borrower-1",
+          reviewType: "ITEM_REVIEW",
+          revieweeUserId: null,
+          itemId: VALID_UUID,
+          rating: 5,
+          reviewText: "Very clean and complete.",
+          images: [reviewImageUrl],
+          isAnonymous: false,
+          createdAt: new Date("2026-04-14T00:00:00.000Z"),
+          reviewerUser: {
+            id: "borrower-1",
+            username: "borrower1",
+            firstName: "Borrower",
+            middleName: null,
+            lastName: "One",
+            avatarUrl: null,
+          },
+          revieweeUser: null,
+        },
+      ],
+      bookings: [],
+    })
+    const incrementViewCount = vi.fn().mockResolvedValue({ id: VALID_UUID })
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        item: { findUnique: findById, findFirst: findById, update: incrementViewCount },
+      } as never,
+      user: null,
+    })
+
+    const result = await caller.byId({ id: VALID_UUID })
+
+    expect(findById).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: VALID_UUID }),
+      }),
+    )
+    expect(incrementViewCount).toHaveBeenCalledWith({
+      where: { id: VALID_UUID },
+      data: { viewCount: { increment: 1 } },
+    })
+    expect(result?.reviewsCount).toBe(1)
+    expect(result?.reviews[0]?.images).toEqual([reviewImageUrl])
   })
 
   it("update throws NOT_FOUND when item does not exist", async () => {
@@ -313,7 +548,20 @@ describe("itemRouter", () => {
   })
 
   it("toggleLike creates a like when it does not exist", async () => {
-    const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      status: "AVAILABLE",
+      lender: { user: { status: "ACTIVE" } },
+      availability: [
+        {
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      bookings: [],
+    })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce(null) // check if like exists
@@ -324,7 +572,7 @@ describe("itemRouter", () => {
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findUnique: itemFindUnique },
+        item: { findFirst: itemFindFirst, update: itemUpdate },
         like: { findUnique: likeFindUnique, create, delete: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
@@ -335,12 +583,29 @@ describe("itemRouter", () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: "user-1", itemId: VALID_UUID },
     })
+    expect(itemUpdate).toHaveBeenCalledWith({
+      where: { id: VALID_UUID },
+      data: { likeCount: { increment: 1 } },
+    })
     expect(result.isLiked).toBe(true)
     expect(result.itemId).toBe(VALID_UUID)
   })
 
   it("toggleLike deletes a like when it exists", async () => {
-    const itemFindUnique = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemUpdate = vi.fn().mockResolvedValue({ id: VALID_UUID })
+    const itemFindFirst = vi.fn().mockResolvedValue({
+      id: VALID_UUID,
+      status: "AVAILABLE",
+      lender: { user: { status: "ACTIVE" } },
+      availability: [
+        {
+          startDate: new Date("2099-03-10T00:00:00.000Z"),
+          endDate: new Date("2099-03-12T00:00:00.000Z"),
+          status: "AVAILABLE",
+        },
+      ],
+      bookings: [],
+    })
     const likeFindUnique = vi
       .fn()
       .mockResolvedValueOnce({ userId: "user-1", itemId: VALID_UUID }) // check if like exists
@@ -351,7 +616,7 @@ describe("itemRouter", () => {
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findUnique: itemFindUnique },
+        item: { findFirst: itemFindFirst, update: itemUpdate },
         like: { findUnique: likeFindUnique, delete: deleteLike, create: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },
@@ -367,17 +632,21 @@ describe("itemRouter", () => {
         },
       },
     })
+    expect(itemUpdate).toHaveBeenCalledWith({
+      where: { id: VALID_UUID },
+      data: { likeCount: { decrement: 1 } },
+    })
     expect(result.isLiked).toBe(false)
     expect(result.itemId).toBe(VALID_UUID)
   })
 
   it("toggleLike throws NOT_FOUND when item does not exist", async () => {
-    const itemFindUnique = vi.fn().mockResolvedValue(null) // item not found
+    const itemFindFirst = vi.fn().mockResolvedValue(null) // item not found
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
-        item: { findUnique: itemFindUnique },
+        item: { findFirst: itemFindFirst },
         like: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
       } as never,
       user: { id: "user-1", email: "user@up.edu.ph", name: "User" },

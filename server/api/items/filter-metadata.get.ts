@@ -9,7 +9,7 @@ export default defineCachedEventHandler(
     return caller.item.filterMetadata()
   },
   {
-    maxAge: 300,
+    maxAge: 30,
     swr: true,
   },
 )

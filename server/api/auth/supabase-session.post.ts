@@ -53,9 +53,10 @@ export default defineEventHandler(async (event) => {
 
   let user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, username: true },
+    select: { id: true, email: true, username: true, status: true },
   })
 
+  let isNewUser = false
   if (!user && googleSub) {
     const username = email.split("@")[0] ?? "user"
     user = await prisma.user.create({
@@ -70,25 +71,42 @@ export default defineEventHandler(async (event) => {
         lender: { create: { lenderRating: 0 } },
         borrower: { create: { borrowStatus: "ACTIVE", borrowerRating: 0 } },
       },
-      select: { id: true, email: true, username: true },
+      select: { id: true, email: true, username: true, status: true },
     })
+    isNewUser = true
   }
 
   if (!user) {
     throw createError({ statusCode: 404, statusMessage: "User not found." })
   }
 
-  // Ensure both Lender and Borrower profiles exist
-  await prisma.lender.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id, lenderRating: 0 },
-    update: {},
-  })
-  await prisma.borrower.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
-    update: {},
-  })
+  if (user.status === "DEACTIVATED") {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: "ACTIVE" },
+      select: { id: true, email: true, username: true, status: true },
+    })
+  }
+
+  if (user.status !== "ACTIVE") {
+    throw createError({ statusCode: 403, statusMessage: "Your account is not active." })
+  }
+
+  // Ensure both Lender and Borrower profiles exist (in parallel) - skip for new users
+  if (!isNewUser) {
+    await Promise.all([
+      prisma.lender.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, lenderRating: 0 },
+        update: {},
+      }),
+      prisma.borrower.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
+        update: {},
+      }),
+    ])
+  }
 
   const { token, expiresAt } = createSessionToken(
     { id: user.id, email: user.email, name: user.username },

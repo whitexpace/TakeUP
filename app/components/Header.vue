@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useBag } from "../composables/use-bag"
+import { useChat } from "../composables/use-chat"
 import { useLikes } from "../composables/use-likes"
 import type { CommunityOfferNotification } from "~/types/community-requests"
 import type { AppHeaderNotification } from "../types/notifications"
@@ -34,13 +35,57 @@ const emit = defineEmits<{
 
 const { bagCount } = useBag()
 const { likesCount, loadLikesCount } = useLikes()
+const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount } = useChat()
+const supabase = useSupabaseClient()
+const user = useSupabaseUser()
 const route = useRoute()
 const headerRef = ref<HTMLElement | null>(null)
 const showNotifications = ref(false)
 const isVisible = ref(true)
+const accountType = ref<string | null>(null)
 const isAccountSectionActive = computed(
   () => route.path === "/account" || route.path.startsWith("/account/"),
 )
+const isAdminSectionActive = computed(
+  () => route.path === "/admin" || route.path.startsWith("/admin/"),
+)
+
+const bridgeAndLoadAccountType = async () => {
+  if (!user.value) {
+    accountType.value = null
+    return
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    accountType.value = null
+    return
+  }
+
+  const bridgedAccessToken = useState<string | null>("header-bridged-access-token", () => null)
+
+  try {
+    if (bridgedAccessToken.value !== session.access_token) {
+      await $fetch("/api/auth/supabase-session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      bridgedAccessToken.value = session.access_token
+    }
+
+    const response = await $fetch<{ user: { accountType: string | null } }>("/api/auth/me")
+    accountType.value = response.user.accountType
+  } catch {
+    accountType.value = null
+  }
+}
+
+watch(user, () => {
+  void bridgeAndLoadAccountType()
+})
 
 watch(isVisible, (val) => {
   emit("visibility-change", val)
@@ -110,27 +155,62 @@ const toggleNotifications = () => {
   showNotifications.value = !showNotifications.value
 }
 
+const isAppHeaderNotification = (
+  notification: CommunityOfferNotification | AppHeaderNotification,
+): notification is AppHeaderNotification => "title" in notification
+
+const notificationPanelDescription = computed(() => {
+  const firstNotification = props.notifications[0]
+
+  if (!firstNotification) {
+    return "Latest updates on your account activity"
+  }
+
+  return isAppHeaderNotification(firstNotification)
+    ? "Updates on your bookings, returns, and disputes"
+    : "Offer updates for your request posts"
+})
+
+const notificationEmptyState = computed(() =>
+  isAccountSectionActive.value ? "No account notifications yet." : "No offer notifications yet.",
+)
+
 const getNotificationTitle = (notification: CommunityOfferNotification | AppHeaderNotification) => {
-  if ("title" in notification) return notification.title
+  if (isAppHeaderNotification(notification)) return notification.title
   return `${notification.actorName} offered ${notification.itemName}`
 }
 
 const getNotificationBody = (notification: CommunityOfferNotification | AppHeaderNotification) => {
-  if ("body" in notification) return notification.body
+  if (isAppHeaderNotification(notification)) return notification.body
   return notification.requestTitle
 }
 
 const getNotificationAccent = (
   notification: CommunityOfferNotification | AppHeaderNotification,
 ) => {
-  if ("title" in notification) return null
+  if (isAppHeaderNotification(notification)) {
+    switch (notification.type) {
+      case "DISPUTE_SUBMITTED":
+      case "DISPUTE_OPENED":
+        return "Review dispute"
+      case "DISPUTE_REBUTTAL_SUBMITTED":
+        return "View rebuttal"
+      case "DISPUTE_RESOLVED":
+        return "View outcome"
+      case "BOOKING_RETURN_REQUESTED":
+        return "View return"
+      default:
+        return null
+    }
+  }
+
   return formatFee(notification.fee)
 }
 
 const getNotificationActionPath = (
   notification: CommunityOfferNotification | AppHeaderNotification,
 ) => {
-  if ("actionPath" in notification) return notification.actionPath ?? null
+  if (isAppHeaderNotification(notification)) return notification.actionPath ?? null
   return null
 }
 
@@ -183,7 +263,9 @@ watch(() => props.scrollContainerSelector, setupScrollListener)
 onMounted(() => {
   document.addEventListener("pointerdown", handlePointerDownOutside)
   setupScrollListener()
+  void bridgeAndLoadAccountType()
   void loadLikesCount()
+  void loadChatUnreadCount()
 })
 
 onBeforeUnmount(() => {
@@ -299,7 +381,7 @@ onBeforeUnmount(() => {
                     Notifications
                   </p>
                   <p class="mt-1 text-[13px] text-noble-black/50">
-                    Offer updates for your request posts
+                    {{ notificationPanelDescription }}
                   </p>
                 </div>
 
@@ -331,7 +413,9 @@ onBeforeUnmount(() => {
                     {{ getNotificationTitle(notification) }}
                   </p>
                   <p class="mt-1 text-[13px] leading-relaxed text-noble-black/55">
-                    {{ getNotificationBody(notification) }}
+                    <span class="line-clamp-3">
+                      {{ getNotificationBody(notification) }}
+                    </span>
                   </p>
                   <div class="mt-3 flex items-center justify-between gap-3">
                     <span class="text-[12px] font-bold text-burning-orange">
@@ -348,7 +432,7 @@ onBeforeUnmount(() => {
                 v-else
                 class="rounded-[18px] border border-dashed border-cinnamon-ice/25 bg-cream/50 px-4 py-6 text-center text-[13px] leading-relaxed text-noble-black/45"
               >
-                No offer notifications yet.
+                {{ notificationEmptyState }}
               </div>
             </div>
           </transition>
@@ -356,8 +440,10 @@ onBeforeUnmount(() => {
 
         <!-- Chat Icon -->
         <div class="relative hidden md:flex items-stretch group/tooltip">
-          <button
+          <NuxtLink
+            to="/chat"
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            active-class="active-nav-link"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -373,7 +459,13 @@ onBeforeUnmount(() => {
             >
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
-          </button>
+            <span
+              v-if="chatUnreadCount > 0"
+              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
+            >
+              {{ chatUnreadCount }}
+            </span>
+          </NuxtLink>
           <div class="custom-tooltip">
             Chat
             <div class="tooltip-arrow"></div>
@@ -453,10 +545,41 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Profile Icon (Always Visible) -->
+        <!-- Account Actions -->
         <div class="flex items-stretch md:ml-1">
           <div class="flex items-center px-2 md:px-4">
             <div class="h-6 w-px bg-cinnamon-ice/30"></div>
+          </div>
+          <div
+            v-if="accountType === 'ADMIN'"
+            class="relative hidden md:flex items-stretch group/tooltip"
+          >
+            <NuxtLink
+              to="/admin"
+              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+              :class="{ 'active-nav-link': isAdminSectionActive }"
+              active-class="active-nav-link"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              >
+                <path d="M12 3l7 4v5c0 5-3.5 7.74-7 9-3.5-1.26-7-4-7-9V7l7-4Z" />
+                <path d="M9.5 12 11 13.5l3.5-3.5" />
+              </svg>
+            </NuxtLink>
+            <div class="custom-tooltip">
+              Admin Panel
+              <div class="tooltip-arrow"></div>
+            </div>
           </div>
           <div class="relative flex items-stretch group/tooltip">
             <NuxtLink

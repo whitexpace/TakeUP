@@ -11,6 +11,7 @@ export const authErrorCodeSchema = z.enum([
   "AUTH_PROVIDER_MISCONFIG",
   "AUTH_UNAUTHORIZED",
   "AUTH_SESSION_INVALID",
+  "AUTH_ACCOUNT_INACTIVE",
   "AUTH_INTERNAL",
 ])
 

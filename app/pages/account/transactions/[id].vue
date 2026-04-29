@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { onBeforeUnmount } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
+import type { ReviewType } from "../../../../shared/schemas/review"
+import { isChatAvailableForBookingStatus } from "../../../../shared/chat-rules"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
 
 definePageMeta({
@@ -20,6 +23,8 @@ type AuthMeResponse = {
 }
 
 const route = useRoute()
+const router = useRouter()
+const supabase = useSupabaseClient()
 const bookingId = computed(() => {
   const id = route.params.id
   return Array.isArray(id) ? (id[0] ?? "") : (id ?? "")
@@ -49,6 +54,32 @@ if (error.value) {
   throw error.value
 }
 
+const { data: reviewState, refresh: refreshReviewState } = await useAsyncData(
+  () => `booking-review:${bookingId.value || "missing"}`,
+  async () => {
+    if (!bookingId.value) {
+      return {
+        canSubmit: false,
+        review: null,
+        transactionId: null,
+      }
+    }
+
+    return await $fetch<{
+      canSubmit: boolean
+      transactionId: string | null
+      review: null | {
+        id: string
+        rating: number
+        reviewText: string | null
+        isAnonymous: boolean
+        createdAt: string | Date
+      }
+    }>(`/api/reviews/booking/${bookingId.value}`)
+  },
+  { watch: [bookingId] },
+)
+
 const booking = computed(() => {
   if (!data.value) {
     throw createError({
@@ -62,12 +93,36 @@ const booking = computed(() => {
 const isActing = ref(false)
 const actionErrorMessage = ref("")
 const actionSuccessMessage = ref("")
+const proofUploadErrorMessage = ref("")
 
 const currentUserId = computed(() => authData.value?.user.id ?? null)
 const isLender = computed(() => booking.value.lenderId === currentUserId.value)
-const userRole = computed(() => (isLender.value ? "LENDER" : "BORROWER"))
+const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
 const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
+const canUploadHandoffProof = computed(
+  () =>
+    isLender.value &&
+    booking.value.status === "CONFIRMED" &&
+    !booking.value.lenderHandoffProofUploadedAt,
+)
+const canOpenChat = computed(
+  () =>
+    Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
+)
+const isPendingRequest = computed(() => booking.value.status === "PENDING")
+const canCancelRequest = computed(() => !isLender.value && booking.value.status === "PENDING")
+const canBorrowerReturnItem = computed(
+  () =>
+    !isLender.value &&
+    booking.value.status === "CONFIRMED" &&
+    Boolean(booking.value.lenderHandoffProofUploadedAt),
+)
+const requestStageMessage = computed(() =>
+  isLender.value
+    ? "Requested - waiting for you to accept the booking"
+    : "Requested - waiting for lender to accept the booking",
+)
 
 const mappedStatus = computed(() => {
   switch (booking.value.status) {
@@ -99,6 +154,14 @@ const formatDateTime = (date: Date | string) => {
   const formattedDate = formatDate(d)
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
   return `${formattedDate} at ${time}`
+}
+
+const finalDecisionLabel = (
+  decision: NonNullable<BookingDetail["latestDispute"]>["finalDecision"],
+) => {
+  if (decision === "APPROVED") return "Dispute approved"
+  if (decision === "REJECTED") return "Dispute rejected"
+  return "Pending final judgment"
 }
 
 const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
@@ -133,95 +196,175 @@ const backToTransactionsPath = computed(() => {
   return `/account/transactions?role=${userRole.value}`
 })
 
-// Timeline logic
 const timeline = computed(() => {
-  const steps = [
-    {
-      label: "Order Placed",
-      description: isLender.value ? "Borrower placed this order" : "You placed this order",
-      date: formatDate(booking.value.requestedAt),
-      status: "completed",
-    },
-    {
-      label: "Request Approved",
-      description:
-        booking.value.status === "PENDING"
-          ? isLender.value
-            ? "Waiting for your approval"
-            : "Waiting for lender's approval"
-          : "Lender approved the request",
-      date: booking.value.confirmedAt ? formatDate(booking.value.confirmedAt) : "--",
-      status:
-        booking.value.status === "PENDING"
-          ? "current"
-          : ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-            ? "completed"
-            : "upcoming",
-    },
-    {
-      label: "Picked Up",
-      description: "Item picked up at designated location",
-      date: formatDate(booking.value.startDate),
-      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-        ? "completed"
-        : "upcoming",
-    },
-    {
-      label: "In Use",
-      description: "Rental period started",
-      date: formatDate(booking.value.startDate),
-      status: ["CONFIRMED", "RETURNED", "COMPLETED", "IN_DISPUTE"].includes(booking.value.status)
-        ? booking.value.status === "CONFIRMED"
-          ? "current"
-          : "completed"
-        : "upcoming",
-    },
-    {
-      label: "Return Item",
-      description: ["RETURNED", "COMPLETED"].includes(booking.value.status)
-        ? "Item returned successfully"
-        : "Return by the end of rental period",
-      date: booking.value.returnedAt
-        ? formatDate(booking.value.returnedAt)
-        : formatDate(booking.value.endDate),
-      status:
-        booking.value.status === "RETURNED"
-          ? "current"
-          : booking.value.status === "COMPLETED"
-            ? "completed"
-            : "upcoming",
-    },
-    {
-      label: "Completed",
-      description: "Transaction completed after inspection",
-      date: booking.value.completedAt ? formatDate(booking.value.completedAt) : "--",
-      status: booking.value.status === "COMPLETED" ? "current" : "upcoming",
-    },
-  ]
-  return steps
+  const entries = booking.value.timeline ?? []
+  return entries.map((entry, index) => ({
+    ...entry,
+    date: formatDateTime(entry.occurredAt),
+    status: index === entries.length - 1 ? "current" : "completed",
+  }))
 })
 
 const isReturnModalOpen = ref(false)
+const isHandoffProofModalOpen = ref(false)
 const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
+const isSubmittingHandoffProof = ref(false)
+const isReviewModalOpen = ref(false)
+const selectedReviewType = ref<ReviewType | null>(null)
+const isRebuttalModalOpen = ref(false)
+const rebuttalModalStep = ref<"form" | "confirm">("form")
+const isSubmittingRebuttal = ref(false)
+const rebuttalText = ref("")
+const rebuttalNotes = ref("")
+const rebuttalValidationMessage = ref("")
+const isSubmittingReview = ref(false)
+const reviewErrorMessage = ref("")
+const reviewSuccessMessage = ref("")
+const showRewardPopup = ref(false)
+let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
+const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
+
+type SubmittedReviewPayload = {
+  transactionId: string
+  reviewType: ReviewType
+  currentUserRole: "BORROWER" | "LENDER"
+  itemId: string | null
+}
+
+const reviewForm = reactive({
+  rating: 5,
+  reviewText: "",
+  isAnonymous: false,
+})
+const canSubmitReview = computed(() => reviewState.value?.canSubmit ?? false)
+const currentUserReview = computed(() => reviewState.value?.review ?? null)
+const handoffProofFile = ref<File | null>(null)
+const returnProofFile = ref<File | null>(null)
+const earlyReturnProofFile = ref<File | null>(null)
+
+type ProofUploadType = "HANDOFF" | "RETURN"
+type ProofUploadUrlResponse = {
+  token: string
+  path: string
+  publicUrl: string
+  bucket: string
+}
+
+const getFetchErrorMessage = (err: unknown, fallback: string) => {
+  const errorData = (
+    err as {
+      data?: {
+        error?: { message?: string }
+        statusMessage?: string
+      }
+    }
+  )?.data
+
+  return errorData?.error?.message ?? errorData?.statusMessage ?? fallback
+}
+
+const setProofFile = (
+  event: Event,
+  target: typeof handoffProofFile | typeof returnProofFile | typeof earlyReturnProofFile,
+) => {
+  proofUploadErrorMessage.value = ""
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+
+  if (file && !file.type.startsWith("image/")) {
+    target.value = null
+    input.value = ""
+    proofUploadErrorMessage.value = "Please upload an image file as proof."
+    return
+  }
+
+  target.value = file
+}
+
+const setHandoffProofFile = (event: Event) => setProofFile(event, handoffProofFile)
+const setReturnProofFile = (event: Event) => setProofFile(event, returnProofFile)
+const setEarlyReturnProofFile = (event: Event) => setProofFile(event, earlyReturnProofFile)
+
+const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
+  const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
+    method: "POST",
+    body: {
+      bookingId: booking.value.id,
+      proofType,
+      fileName: file.name,
+    },
+  })
+
+  const { error: uploadError } = await supabase.storage
+    .from(signedUpload.bucket)
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
+      contentType: file.type || "image/jpeg",
+      upsert: false,
+    })
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Unable to upload proof image.")
+  }
+
+  return signedUpload.publicUrl
+}
 
 const handleReturn = () => {
   actionErrorMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  returnProofFile.value = null
   isReturnModalOpen.value = true
 }
 
-const confirmReturn = async () => {
-  isSubmittingReturn.value = true
+const handleHandoffProof = () => {
   actionErrorMessage.value = ""
-  actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  handoffProofFile.value = null
+  isHandoffProofModalOpen.value = true
+}
+
+const isEarlyReturnEligible = computed(() => {
+  if (isLender.value || booking.value.status !== "CONFIRMED") return false
+  const now = new Date()
+  const end = new Date(booking.value.endDate)
+  return now < end
+})
+
+interface EarlyReturnPreviewData {
+  refund: {
+    eligible: boolean
+    totalPaidAmount: number
+    nonRefundableFees: number
+    refundableRentalAmount: number
+    usedDurationMs: number
+    unusedDurationMs: number
+    totalDurationMs: number
+    usagePercentage: number
+    unusedRentalValue: number
+    penaltyAmount: number
+    refundAmount: number
+    currency: string
+    reason?: string
+  }
+  actualReturnTime: string | Date
+}
+
+const isEarlyReturnModalOpen = ref(false)
+const earlyReturnPreviewData = ref<EarlyReturnPreviewData | null>(null)
+const isFetchingPreview = ref(false)
+
+const handleEarlyReturn = async () => {
+  actionErrorMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  earlyReturnProofFile.value = null
+  isFetchingPreview.value = true
   try {
-    await $fetch(`/api/bookings/${booking.value.id}/return`, {
-      method: "POST",
-    })
-    await refresh()
-    isReturnModalOpen.value = false
-    isSuccessModalOpen.value = true
-    actionSuccessMessage.value = "Return submitted. The lender was notified to confirm receipt."
+    const data = await $fetch<EarlyReturnPreviewData>(
+      `/api/bookings/${booking.value.id}/early-return-preview`,
+    )
+    earlyReturnPreviewData.value = data
+    isEarlyReturnModalOpen.value = true
   } catch (err: unknown) {
     const errorData = (
       err as {
@@ -235,9 +378,99 @@ const confirmReturn = async () => {
     actionErrorMessage.value =
       errorData?.error?.message ??
       errorData?.statusMessage ??
-      "Unable to submit the return right now."
+      "Unable to fetch early return preview."
+  } finally {
+    isFetchingPreview.value = false
+  }
+}
+
+const confirmEarlyReturn = async () => {
+  if (!earlyReturnProofFile.value) {
+    proofUploadErrorMessage.value = "Upload proof of return before confirming early return."
+    return
+  }
+
+  isSubmittingReturn.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  try {
+    const proofImageUrl = await uploadProofImage(earlyReturnProofFile.value, "RETURN")
+    await $fetch(`/api/bookings/${booking.value.id}/early-return`, {
+      method: "POST",
+      body: { proofImageUrl, returnReason: "Early return initiated by borrower" },
+    })
+    await refresh()
+    isEarlyReturnModalOpen.value = false
+    isSuccessModalOpen.value = true
+    actionSuccessMessage.value = "Early return processed. The lender was notified."
+  } catch (err: unknown) {
+    actionErrorMessage.value =
+      err instanceof Error
+        ? err.message
+        : getFetchErrorMessage(err, "Unable to process early return right now.")
   } finally {
     isSubmittingReturn.value = false
+  }
+}
+
+const confirmReturn = async () => {
+  if (!returnProofFile.value) {
+    proofUploadErrorMessage.value = "Upload proof of return before submitting."
+    return
+  }
+
+  isSubmittingReturn.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
+  try {
+    const proofImageUrl = await uploadProofImage(returnProofFile.value, "RETURN")
+    await $fetch(`/api/bookings/${booking.value.id}/return`, {
+      method: "POST",
+      body: { proofImageUrl },
+    })
+    await refresh()
+    isReturnModalOpen.value = false
+    isSuccessModalOpen.value = true
+    actionSuccessMessage.value = "Return submitted. The lender was notified to confirm receipt."
+  } catch (err: unknown) {
+    actionErrorMessage.value =
+      err instanceof Error
+        ? err.message
+        : getFetchErrorMessage(err, "Unable to submit the return right now.")
+  } finally {
+    isSubmittingReturn.value = false
+  }
+}
+
+const confirmHandoffProof = async () => {
+  if (!handoffProofFile.value) {
+    proofUploadErrorMessage.value = "Upload proof of handoff before marking the item in use."
+    return
+  }
+
+  isSubmittingHandoffProof.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
+
+  try {
+    const proofImageUrl = await uploadProofImage(handoffProofFile.value, "HANDOFF")
+    await $fetch(`/api/bookings/${booking.value.id}/handoff-proof`, {
+      method: "POST",
+      body: { proofImageUrl },
+    })
+    await refresh()
+    isHandoffProofModalOpen.value = false
+    actionSuccessMessage.value = "Handoff proof uploaded. The item is now marked as in use."
+  } catch (err: unknown) {
+    actionErrorMessage.value =
+      err instanceof Error
+        ? err.message
+        : getFetchErrorMessage(err, "Unable to upload handoff proof right now.")
+  } finally {
+    isSubmittingHandoffProof.value = false
   }
 }
 
@@ -267,6 +500,40 @@ const confirmReceipt = async () => {
       errorData?.error?.message ??
       errorData?.statusMessage ??
       "Unable to complete this booking right now."
+  } finally {
+    isActing.value = false
+  }
+}
+
+const cancelRequest = async () => {
+  isActing.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+
+  try {
+    await $fetch(`/api/bookings/${booking.value.id}`, {
+      method: "PATCH",
+      body: {
+        status: "CANCELLED",
+        cancellationReason: "Cancelled by borrower.",
+      },
+    })
+    await refresh()
+    actionSuccessMessage.value = "Booking request cancelled."
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    actionErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to cancel this request right now."
   } finally {
     isActing.value = false
   }
@@ -310,10 +577,362 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
   }
 }
 
-const handleDispute = () => {
-  // Placeholder for dispute logic
-  alert("Dispute filing will be available soon.")
+const latestDispute = computed(() => booking.value.latestDispute)
+const canRaiseDispute = computed(() => booking.value.canRaiseDispute)
+const canSubmitRebuttal = computed(() => Boolean(latestDispute.value?.canSubmitRebuttal))
+const isLatestDisputeRaisedByCurrentUser = computed(
+  () => latestDispute.value?.raisedById === currentUserId.value,
+)
+const isReviewBlockedByDispute = computed(
+  () => booking.value.status === "COMPLETED" && !booking.value.reviewState.isCompleted,
+)
+const showReviewBonusSection = computed(
+  () => booking.value.status === "COMPLETED" && booking.value.reviewState.isCompleted,
+)
+const disputeReportPath = computed(() =>
+  booking.value.transactionId
+    ? {
+        path: "/account/disputes",
+        query: {
+          tab: "report",
+          transaction: booking.value.transactionId,
+        },
+      }
+    : {
+        path: "/account/disputes",
+        query: {
+          tab: "report",
+        },
+      },
+)
+
+const disputeStatusLabel = computed(() => {
+  switch (latestDispute.value?.status) {
+    case "SUBMITTED":
+      return "Dispute under review"
+    case "OPEN":
+      return "Dispute open"
+    case "REJECTED":
+      return "Dispute rejected"
+    case "APPEALED":
+      return "Dispute appealed"
+    case "CLOSED":
+      return "Dispute closed"
+    default:
+      return "No dispute"
+  }
+})
+
+const disputeStatusToneClasses = computed(() => {
+  switch (latestDispute.value?.status) {
+    case "SUBMITTED":
+      return "bg-burning-orange/10 text-burning-orange border border-burning-orange/20"
+    case "OPEN":
+      return "bg-cinnabar-red/10 text-cinnabar-red border border-cinnabar-red/20"
+    case "REJECTED":
+      return "bg-noble-black/5 text-noble-black/70 border border-cinnamon-ice"
+    case "APPEALED":
+      return "bg-blue-estate/10 text-blue-estate border border-blue-estate/20"
+    case "CLOSED":
+      return "bg-green-100 text-green-700 border border-green-200"
+    default:
+      return "bg-cream text-noble-black/60 border border-cinnamon-ice"
+  }
+})
+
+const disputeStatusDescription = computed(() => {
+  switch (latestDispute.value?.status) {
+    case "SUBMITTED":
+      return isLatestDisputeRaisedByCurrentUser.value
+        ? "Your concern was recorded and is being prepared for response."
+        : "A concern was recorded for this transaction."
+    case "OPEN":
+      return canSubmitRebuttal.value
+        ? "A dispute has been opened for this transaction. You may submit one rebuttal while review is in progress."
+        : "A dispute has been opened for this transaction."
+    case "REJECTED":
+      return isLatestDisputeRaisedByCurrentUser.value
+        ? "Your concern was reviewed and the dispute was not opened."
+        : "This concern was reviewed and the dispute was not opened."
+    case "APPEALED":
+      return "Your appeal was submitted and is waiting for the next admin review."
+    case "CLOSED":
+      return latestDispute.value?.finalDecision === "APPROVED"
+        ? "This dispute was upheld, enforced, and closed by admin."
+        : "This dispute was closed after review."
+    default:
+      return "Raise a concern if this transaction needs dispute review."
+  }
+})
+
+const disputeRaisedByName = computed(() => {
+  if (!latestDispute.value) return null
+  const user =
+    latestDispute.value.raisedById === booking.value.borrowerId
+      ? booking.value.borrower.user
+      : booking.value.lender.user
+  return `${user.firstName} ${user.lastName[0]}.`
+})
+
+const rebuttalSubmittedByName = computed(() => {
+  if (!latestDispute.value?.rebuttalBy) return null
+  return `${latestDispute.value.rebuttalBy.firstName} ${latestDispute.value.rebuttalBy.lastName[0]}.`
+})
+
+const handleDispute = async () => {
+  if (!canRaiseDispute.value) return
+  actionErrorMessage.value = ""
+  await navigateTo(disputeReportPath.value)
 }
+
+const resetRebuttalForm = () => {
+  rebuttalText.value = ""
+  rebuttalNotes.value = ""
+  rebuttalValidationMessage.value = ""
+  rebuttalModalStep.value = "form"
+}
+
+const openRebuttalModal = () => {
+  if (!canSubmitRebuttal.value) return
+  actionErrorMessage.value = ""
+  resetRebuttalForm()
+  isRebuttalModalOpen.value = true
+}
+
+const closeRebuttalModal = () => {
+  if (isSubmittingRebuttal.value) return
+  isRebuttalModalOpen.value = false
+  resetRebuttalForm()
+}
+
+const continueRebuttalReview = () => {
+  if (!rebuttalText.value.trim()) {
+    rebuttalValidationMessage.value = "Please provide your rebuttal statement."
+    return
+  }
+
+  rebuttalValidationMessage.value = ""
+  rebuttalModalStep.value = "confirm"
+}
+
+const submitRebuttal = async () => {
+  if (!latestDispute.value?.id) {
+    rebuttalValidationMessage.value = "This dispute is no longer available."
+    rebuttalModalStep.value = "form"
+    return
+  }
+
+  isSubmittingRebuttal.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+
+  try {
+    await $fetch(`/api/disputes/${latestDispute.value.id}/rebuttal`, {
+      method: "POST",
+      body: {
+        rebuttalText: rebuttalText.value.trim(),
+        rebuttalNotes: rebuttalNotes.value.trim() || undefined,
+      },
+    })
+
+    await refresh()
+    closeRebuttalModal()
+    actionSuccessMessage.value = "Your rebuttal has been submitted."
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+        }
+      }
+    )?.data
+
+    rebuttalValidationMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      "Unable to submit your rebuttal right now."
+    rebuttalModalStep.value = "form"
+  } finally {
+    isSubmittingRebuttal.value = false
+  }
+}
+
+const openChat = async () => {
+  if (!booking.value.transactionId || !canOpenChat.value) return
+
+  await router.push({
+    path: "/chat",
+    query: { transactionId: booking.value.transactionId },
+  })
+}
+
+const reviewCounterpartName = computed(() => {
+  const user = isLender.value ? booking.value.borrower.user : booking.value.lender.user
+  return `${user.firstName} ${user.lastName[0]}.`
+})
+
+const reviewContext = computed(() => {
+  if (!booking.value.transactionId || !selectedReviewType.value) return null
+
+  return {
+    transactionId: booking.value.transactionId,
+    reviewType: selectedReviewType.value,
+    currentUserRole: userRole.value,
+    itemName: booking.value.item.name,
+    counterpartName: reviewCounterpartName.value,
+    itemId: booking.value.item.id,
+    targetUserId:
+      selectedReviewType.value === "ITEM_REVIEW"
+        ? null
+        : selectedReviewType.value === "LENDER_REVIEW"
+          ? booking.value.lenderId
+          : booking.value.borrowerId,
+  }
+})
+
+const openReviewModal = (reviewType: ReviewType) => {
+  selectedReviewType.value = reviewType
+  const action = booking.value.reviewState.actions.find((entry) => entry.reviewType === reviewType)
+  if (!action?.canSubmit) return
+  isReviewModalOpen.value = true
+}
+
+const closeReviewModal = () => {
+  isReviewModalOpen.value = false
+  selectedReviewType.value = null
+}
+
+const clearRouteActionQuery = async () => {
+  const { action, ...remainingQuery } = route.query
+  if (action === undefined) return
+
+  await router.replace({
+    query: remainingQuery,
+  })
+}
+
+watch(
+  [() => route.query.action, latestDispute, canSubmitRebuttal],
+  async ([action, dispute, canRebut]) => {
+    if (action !== "rebuttal" || pending.value) return
+
+    if (!dispute) {
+      await clearRouteActionQuery()
+      return
+    }
+
+    if (canRebut) {
+      if (!isRebuttalModalOpen.value) {
+        openRebuttalModal()
+      }
+      await clearRouteActionQuery()
+      return
+    }
+
+    actionErrorMessage.value =
+      dispute.status === "OPEN"
+        ? "You cannot submit a rebuttal for this dispute."
+        : "Rebuttal is no longer available for this dispute."
+    await clearRouteActionQuery()
+  },
+  { immediate: true },
+)
+
+const triggerRewardPopup = () => {
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
+  }
+
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(REVIEW_REWARD_POPUP_STORAGE_KEY, "1")
+  }
+
+  showRewardPopup.value = true
+  rewardPopupTimeout = setTimeout(() => {
+    showRewardPopup.value = false
+    rewardPopupTimeout = null
+  }, 1800)
+}
+
+const shouldShowRewardPopup = (payload: SubmittedReviewPayload) => {
+  if (payload.currentUserRole === "LENDER") {
+    return true
+  }
+
+  const requiredTypes: ReviewType[] = ["LENDER_REVIEW"]
+  if (payload.itemId) {
+    requiredTypes.push("ITEM_REVIEW")
+  }
+
+  return requiredTypes.every((reviewType) => {
+    if (reviewType === payload.reviewType) {
+      return true
+    }
+
+    return (
+      booking.value.reviewState.actions.find((action) => action.reviewType === reviewType)
+        ?.hasSubmitted ?? false
+    )
+  })
+}
+
+const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
+  if (shouldShowRewardPopup(payload)) {
+    triggerRewardPopup()
+  }
+
+  await refresh()
+  actionSuccessMessage.value = "Thanks for your feedback. Your review is now visible here."
+}
+
+const submitReview = async () => {
+  isSubmittingReview.value = true
+  reviewErrorMessage.value = ""
+  reviewSuccessMessage.value = ""
+
+  try {
+    await $fetch("/api/reviews", {
+      method: "POST",
+      body: {
+        bookingId: booking.value.id,
+        rating: reviewForm.rating,
+        reviewText: reviewForm.reviewText,
+        isAnonymous: reviewForm.isAnonymous,
+      },
+    })
+
+    reviewSuccessMessage.value = "Review submitted. Your rewards bonus has been processed."
+    reviewForm.rating = 5
+    reviewForm.reviewText = ""
+    reviewForm.isAnonymous = false
+    await Promise.all([refreshReviewState(), refresh()])
+  } catch (err: unknown) {
+    const errorData = (
+      err as {
+        data?: {
+          error?: { message?: string }
+          statusMessage?: string
+          message?: string
+        }
+      }
+    )?.data
+
+    reviewErrorMessage.value =
+      errorData?.error?.message ??
+      errorData?.statusMessage ??
+      errorData?.message ??
+      "Unable to submit your review right now."
+  } finally {
+    isSubmittingReview.value = false
+  }
+}
+
+onBeforeUnmount(() => {
+  if (rewardPopupTimeout) {
+    clearTimeout(rewardPopupTimeout)
+  }
+})
 </script>
 
 <template>
@@ -383,7 +1002,20 @@ const handleDispute = () => {
           <span class="font-normal">Placed on {{ formatDateTime(booking.requestedAt) }}</span>
         </div>
 
-        <TransactionStatusBadge :status="mappedStatus" :role="userRole" />
+        <span
+          v-if="isPendingRequest"
+          class="inline-flex items-center rounded-md bg-burning-orange px-3 py-1 text-base font-normal font-geist text-white"
+        >
+          Requested
+        </span>
+        <TransactionStatusBadge v-else :status="mappedStatus" :role="userRole" />
+      </div>
+
+      <div
+        v-if="isPendingRequest"
+        class="mb-8 rounded-2xl border border-burning-orange/20 bg-burning-orange/5 px-5 py-4 text-sm font-semibold text-noble-black"
+      >
+        {{ requestStageMessage }}
       </div>
 
       <!-- Main Content Grid -->
@@ -479,13 +1111,62 @@ const handleDispute = () => {
               </button>
             </div>
 
-            <!-- Borrower Action: Return Item -->
             <button
-              v-else-if="!isLender && booking.status === 'CONFIRMED'"
-              class="bg-burning-orange text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-estate transition-colors"
-              @click="handleReturn"
+              v-else-if="canCancelRequest"
+              :disabled="isActing"
+              class="bg-cream border border-burning-orange text-burning-orange px-6 py-2 rounded-xl font-bold hover:bg-burning-orange/10 transition-colors disabled:opacity-50"
+              @click="cancelRequest"
             >
-              Return Item
+              {{ isActing ? "Cancelling..." : "Cancel Request" }}
+            </button>
+
+            <!-- Borrower Action: Return Item / Early Return -->
+            <button
+              v-else-if="canUploadHandoffProof"
+              :disabled="isSubmittingHandoffProof"
+              class="flex items-center justify-center gap-2 bg-blue-estate text-white px-6 py-2 rounded-xl font-bold hover:bg-burning-orange transition-colors disabled:opacity-50"
+              @click="handleHandoffProof"
+            >
+              <span v-if="isSubmittingHandoffProof" class="animate-spin">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </span>
+              <span>Upload Handoff Proof</span>
+            </button>
+
+            <button
+              v-else-if="canBorrowerReturnItem"
+              :disabled="isFetchingPreview"
+              class="flex items-center justify-center gap-2 bg-burning-orange text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-estate transition-colors disabled:opacity-50"
+              @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
+            >
+              <span v-if="isFetchingPreview" class="animate-spin">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              </span>
+              <span>{{ isEarlyReturnEligible ? "Early Return" : "Return Item" }}</span>
             </button>
 
             <button
@@ -592,13 +1273,32 @@ const handleDispute = () => {
               <span>Service Fee</span>
               <span class="font-bold">{{ formatPeso(booking.platformCommission) }}</span>
             </div>
+            <div
+              v-if="booking.refundAmount > 0"
+              class="flex justify-between items-center text-green-700 font-medium"
+            >
+              <div class="flex items-center gap-1.5">
+                <span>Early Return Refund</span>
+                <span class="text-[10px] bg-green-100 px-1.5 py-0.5 rounded text-green-800"
+                  >PROCESSED</span
+                >
+              </div>
+              <span>-{{ formatPeso(booking.refundAmount) }}</span>
+            </div>
             <div class="flex justify-between items-center pt-3 border-t border-cinnamon-ice/30">
               <span class="text-lg font-bold text-noble-black">{{
-                isLender ? "Total Earnings" : "Total Paid"
+                isLender
+                  ? booking.refundAmount > 0
+                    ? "Total Earnings (Adjusted)"
+                    : "Total Earnings"
+                  : booking.refundAmount > 0
+                    ? "Total Paid (Adjusted)"
+                    : "Total Paid"
               }}</span>
               <span class="text-2xl font-bold text-burning-orange">{{
                 formatPeso(
-                  isLender ? booking.totalFee - booking.platformCommission : booking.totalFee,
+                  (isLender ? booking.totalFee - booking.platformCommission : booking.totalFee) -
+                    (booking.refundAmount || 0),
                 )
               }}</span>
             </div>
@@ -676,12 +1376,13 @@ const handleDispute = () => {
                 </div>
               </div>
             </div>
-            <a
-              :href="`mailto:${isLender ? booking.borrower.user.email : booking.lender.user.email}`"
-              class="w-10 h-10 shrink-0 rounded-full bg-blue-estate flex items-center justify-center hover:opacity-90 transition-opacity shadow-sm"
+            <button
+              v-if="canOpenChat"
+              class="inline-flex items-center gap-2 shrink-0 rounded-2xl bg-blue-estate px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-burning-orange transition-colors"
+              @click="openChat"
             >
               <svg
-                class="w-5 h-5"
+                class="w-4 h-4"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -694,34 +1395,398 @@ const handleDispute = () => {
                   stroke-linejoin="round"
                 />
               </svg>
-            </a>
+              Chat
+            </button>
           </div>
         </section>
 
-        <!-- File Dispute Button -->
-        <button
-          class="w-full flex items-center justify-center gap-2 bg-cinnabar-red text-white font-bold py-4 hover:bg-cinnabar-red/90 rounded-2xl transition-colors mt-4"
-          @click="handleDispute"
+        <section class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+            <div>
+              <h2 class="text-lg font-bold text-noble-black">Feedback</h2>
+              <p class="text-sm text-noble-black/60 mt-1">
+                Reviews become available once the transaction is completed.
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="action in booking.reviewState.actions.filter((entry) => entry.canSubmit)"
+                :key="action.reviewType"
+                class="bg-burning-orange text-white px-5 py-2.5 rounded-xl font-bold hover:bg-cinnabar-red transition-colors"
+                @click="openReviewModal(action.reviewType)"
+              >
+                {{ action.label }}
+              </button>
+              <span
+                v-for="action in booking.reviewState.actions.filter((entry) => entry.hasSubmitted)"
+                :key="`${action.reviewType}-submitted`"
+                class="inline-flex items-center rounded-xl bg-indigo-900 px-4 py-2 text-sm font-semibold text-white"
+              >
+                {{ action.submittedLabel }}
+              </span>
+            </div>
+          </div>
+
+          <TransactionReviewList
+            title="Transaction Reviews"
+            :reviews="booking.reviews as any"
+            empty-message="No reviews have been submitted for this transaction yet."
+          />
+        </section>
+
+        <section
+          v-if="booking.transactionId || latestDispute"
+          class="bg-cream border border-cinnamon-ice rounded-3xl p-6"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-            <line x1="12" x2="12" y1="9" y2="13" />
-            <line x1="12" x2="12.01" y1="17" y2="17" />
-          </svg>
-          File Dispute
-        </button>
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 class="text-lg font-bold text-noble-black">Concerns & Disputes</h2>
+              <p class="mt-1 text-sm text-noble-black/60">
+                {{
+                  latestDispute
+                    ? disputeStatusDescription
+                    : isReviewBlockedByDispute
+                      ? "Review actions are unavailable while a dispute is in progress."
+                      : "Raise a concern if this transaction needs dispute review."
+                }}
+              </p>
+            </div>
+
+            <span
+              v-if="latestDispute"
+              class="inline-flex w-fit items-center rounded-full px-4 py-2 text-sm font-bold"
+              :class="disputeStatusToneClasses"
+            >
+              {{ disputeStatusLabel }}
+            </span>
+          </div>
+
+          <div v-if="latestDispute" class="mt-5 space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+            <div class="grid gap-4 sm:grid-cols-3">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Reason
+                </p>
+                <p class="mt-2 text-sm font-semibold text-noble-black">
+                  {{ latestDispute.reason }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Submitted
+                </p>
+                <p class="mt-2 text-sm text-noble-black/80">
+                  {{ formatDateTime(latestDispute.createdAt) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                  Raised By
+                </p>
+                <p class="mt-2 text-sm text-noble-black/80">
+                  {{ disputeRaisedByName ?? "Transaction participant" }}
+                </p>
+              </div>
+            </div>
+
+            <div v-if="latestDispute.description">
+              <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                Description
+              </p>
+              <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
+                {{ latestDispute.description }}
+              </p>
+            </div>
+
+            <div v-if="latestDispute.reviewedAt" class="rounded-2xl bg-cream p-4">
+              <p class="text-sm font-semibold text-noble-black">
+                Reviewed on {{ formatDateTime(latestDispute.reviewedAt) }}
+              </p>
+              <p v-if="latestDispute.reviewedBy" class="mt-1 text-sm text-noble-black/60">
+                Admin reviewer: {{ latestDispute.reviewedBy.firstName }}
+                {{ latestDispute.reviewedBy.lastName }}
+              </p>
+            </div>
+
+            <div
+              v-if="latestDispute.finalDecision"
+              class="rounded-2xl border border-green-200 bg-green-50/70 p-4"
+            >
+              <p class="text-sm font-semibold text-noble-black">
+                {{ finalDecisionLabel(latestDispute.finalDecision) }}
+              </p>
+              <p v-if="latestDispute.finalDecisionAt" class="mt-1 text-sm text-noble-black/60">
+                Final judgment recorded on {{ formatDateTime(latestDispute.finalDecisionAt) }}
+              </p>
+              <p v-if="latestDispute.closedAt" class="mt-1 text-sm text-noble-black/60">
+                Case closed on {{ formatDateTime(latestDispute.closedAt) }}
+              </p>
+              <p
+                v-if="latestDispute.finalDecisionNotes"
+                class="mt-3 text-sm leading-relaxed text-noble-black/80"
+              >
+                {{ latestDispute.finalDecisionNotes }}
+              </p>
+            </div>
+
+            <div
+              v-if="latestDispute.hasRebuttal"
+              class="rounded-2xl border border-cinnamon-ice bg-cream p-4"
+            >
+              <p class="text-sm font-semibold text-noble-black">
+                Rebuttal submitted
+                <span v-if="rebuttalSubmittedByName">by {{ rebuttalSubmittedByName }}</span>
+              </p>
+              <p v-if="latestDispute.rebuttalSubmittedAt" class="mt-1 text-sm text-noble-black/60">
+                Submitted on {{ formatDateTime(latestDispute.rebuttalSubmittedAt) }}
+              </p>
+              <p class="mt-3 text-sm leading-relaxed text-noble-black/80">
+                {{ latestDispute.rebuttalText }}
+              </p>
+              <p
+                v-if="latestDispute.rebuttalNotes"
+                class="mt-3 text-sm leading-relaxed text-noble-black/65"
+              >
+                Additional notes: {{ latestDispute.rebuttalNotes }}
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p v-if="latestDispute?.status === 'SUBMITTED'" class="text-sm text-noble-black/60">
+              This dispute is being prepared for response.
+            </p>
+            <p
+              v-else-if="latestDispute?.status === 'OPEN' && latestDispute?.hasRebuttal"
+              class="text-sm text-noble-black/60"
+            >
+              Rebuttal submitted. This dispute is still under review.
+            </p>
+            <p
+              v-else-if="latestDispute?.status === 'OPEN' && canSubmitRebuttal"
+              class="text-sm text-noble-black/60"
+            >
+              You may submit one rebuttal while this dispute is open.
+            </p>
+            <p v-else-if="isReviewBlockedByDispute" class="text-sm text-noble-black/60">
+              Review actions are unavailable while a dispute is in progress.
+            </p>
+            <p v-else-if="booking.transactionId" class="text-sm text-noble-black/60">
+              Raise a concern if this transaction needs dispute review.
+            </p>
+
+            <div class="flex flex-wrap gap-3">
+              <button
+                v-if="canSubmitRebuttal"
+                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-estate px-6 py-3.5 font-bold text-white transition-colors hover:bg-indigo-900"
+                @click="openRebuttalModal"
+              >
+                Submit Rebuttal
+              </button>
+
+              <button
+                v-if="canRaiseDispute"
+                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-cinnabar-red px-6 py-3.5 font-bold text-white transition-colors hover:bg-cinnabar-red/90"
+                @click="handleDispute"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+                  />
+                  <line x1="12" x2="12" y1="9" y2="13" />
+                  <line x1="12" x2="12.01" y1="17" y2="17" />
+                </svg>
+                Report an Issue
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </template>
+
+    <section
+      v-if="showReviewBonusSection"
+      class="mt-6 rounded-[24px] border border-cinnamon-ice bg-cream p-6"
+    >
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-noble-black">Review and Bonus</h2>
+          <p class="text-sm text-noble-black/60">
+            Submitting a review earns bonus points regardless of the star rating.
+          </p>
+        </div>
+      </div>
+
+      <p v-if="reviewSuccessMessage" class="mt-4 text-sm font-medium text-emerald-700">
+        {{ reviewSuccessMessage }}
+      </p>
+      <p v-if="reviewErrorMessage" class="mt-4 text-sm font-medium text-red-600">
+        {{ reviewErrorMessage }}
+      </p>
+
+      <div
+        v-if="currentUserReview"
+        class="mt-5 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4"
+      >
+        <p class="text-sm font-semibold text-neutral-800">Your review</p>
+        <p class="mt-2 text-sm text-neutral-800/70">Rating: {{ currentUserReview.rating }}/5</p>
+        <p v-if="currentUserReview.reviewText" class="mt-2 text-sm text-neutral-800/70">
+          {{ currentUserReview.reviewText }}
+        </p>
+      </div>
+
+      <form v-else-if="canSubmitReview" class="mt-5 space-y-4" @submit.prevent="submitReview">
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-neutral-800">Your rating</label>
+          <select
+            v-model="reviewForm.rating"
+            class="h-11 w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
+          >
+            <option v-for="rating in [5, 4, 3, 2, 1]" :key="rating" :value="rating">
+              {{ rating }} star{{ rating === 1 ? "" : "s" }}
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-neutral-800">Optional review</label>
+          <textarea
+            v-model="reviewForm.reviewText"
+            rows="4"
+            class="w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 py-3 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
+            placeholder="Share what went well, what could improve, or anything future borrowers/lenders should know."
+          />
+        </div>
+
+        <label class="flex items-center gap-2 text-sm text-neutral-800/70">
+          <input
+            v-model="reviewForm.isAnonymous"
+            type="checkbox"
+            class="rounded border-cinnamon-ice"
+          />
+          Submit anonymously
+        </label>
+
+        <button
+          :disabled="isSubmittingReview"
+          type="submit"
+          class="inline-flex items-center rounded-full bg-burning-orange px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-burning-orange/90 disabled:cursor-not-allowed disabled:bg-burning-orange/40"
+        >
+          {{ isSubmittingReview ? "Submitting..." : "Submit Review" }}
+        </button>
+      </form>
+
+      <p v-else class="mt-5 text-sm text-neutral-800/55">
+        Review submission is not available for this transaction.
+      </p>
+    </section>
+
+    <!-- Handoff Proof Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isHandoffProofModalOpen"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="isHandoffProofModalOpen = false"
+        ></div>
+
+        <div
+          class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+        >
+          <div class="text-center">
+            <div
+              class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#1f3a5f"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" x2="12" y1="3" y2="15" />
+              </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
+            <p class="text-noble-black/60 mb-6 leading-relaxed">
+              Upload proof that you have given the item to the borrower. This will mark the
+              transaction as in use.
+            </p>
+
+            <label
+              class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+            >
+              <span class="block text-sm font-bold text-noble-black">Proof image</span>
+              <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                {{ handoffProofFile?.name || "Choose an image file" }}
+              </span>
+              <input type="file" accept="image/*" class="sr-only" @change="setHandoffProofFile" />
+            </label>
+
+            <p v-if="proofUploadErrorMessage" class="mt-3 text-sm text-red-600">
+              {{ proofUploadErrorMessage }}
+            </p>
+
+            <div class="flex flex-col gap-3 mt-6">
+              <button
+                :disabled="isSubmittingHandoffProof"
+                class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-burning-orange transition-colors flex items-center justify-center disabled:opacity-50"
+                @click="confirmHandoffProof"
+              >
+                <span v-if="isSubmittingHandoffProof" class="animate-spin mr-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                </span>
+                {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
+              </button>
+              <button
+                class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
+                @click="isHandoffProofModalOpen = false"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- Return Confirmation UI (Modal) -->
     <Transition
@@ -734,7 +1799,7 @@ const handleDispute = () => {
     >
       <div
         v-if="isReturnModalOpen"
-        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
       >
         <!-- Backdrop -->
         <div
@@ -768,8 +1833,22 @@ const handleDispute = () => {
             </div>
             <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
             <p class="text-noble-black/60 mb-8 leading-relaxed">
-              Are you sure you want to mark this item as returned? Make sure you have coordinated
-              with the lender for the handover.
+              Upload proof that the item has been returned. The return timestamp will be recorded
+              when this proof is submitted.
+            </p>
+
+            <label
+              class="mb-4 block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+            >
+              <span class="block text-sm font-bold text-noble-black">Return proof image</span>
+              <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                {{ returnProofFile?.name || "Choose an image file" }}
+              </span>
+              <input type="file" accept="image/*" class="sr-only" @change="setReturnProofFile" />
+            </label>
+
+            <p v-if="proofUploadErrorMessage" class="mb-4 text-sm text-red-600">
+              {{ proofUploadErrorMessage }}
             </p>
 
             <div class="flex flex-col gap-3">
@@ -793,7 +1872,7 @@ const handleDispute = () => {
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                   </svg>
                 </span>
-                {{ isSubmittingReturn ? "Processing..." : "Yes, I've returned it" }}
+                {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
               </button>
               <button
                 class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
@@ -818,7 +1897,7 @@ const handleDispute = () => {
     >
       <div
         v-if="isSuccessModalOpen"
-        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
       >
         <!-- Backdrop -->
         <div
@@ -861,6 +1940,433 @@ const handleDispute = () => {
               Great, thanks!
             </button>
           </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isRebuttalModalOpen"
+        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      >
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="closeRebuttalModal"
+        />
+
+        <div
+          class="relative w-full max-w-2xl rounded-[32px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+        >
+          <div v-if="rebuttalModalStep === 'form'">
+            <div class="text-center">
+              <h3 class="text-2xl font-bold text-noble-black">Submit Rebuttal</h3>
+              <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
+                Review the dispute details below, then explain your side of the issue.
+              </p>
+            </div>
+
+            <div class="mt-6 space-y-4">
+              <div
+                v-if="latestDispute"
+                class="rounded-[28px] border border-cinnamon-ice bg-cream p-5"
+              >
+                <p class="text-sm font-bold text-noble-black">Dispute Details</p>
+
+                <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Reason
+                    </p>
+                    <p class="mt-2 text-sm font-semibold text-noble-black">
+                      {{ latestDispute.reason }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Raised By
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ disputeRaisedByName ?? "Transaction participant" }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Submitted
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ formatDateTime(latestDispute.createdAt) }}
+                    </p>
+                  </div>
+                </div>
+
+                <div v-if="latestDispute.description" class="mt-4">
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Description
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
+                    {{ latestDispute.description }}
+                  </p>
+                </div>
+              </div>
+
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black">Rebuttal Statement</span>
+                <textarea
+                  v-model="rebuttalText"
+                  rows="5"
+                  maxlength="2000"
+                  placeholder="Explain your side of the transaction."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
+                ></textarea>
+              </label>
+
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black">Additional Notes</span>
+                <textarea
+                  v-model="rebuttalNotes"
+                  rows="4"
+                  maxlength="2000"
+                  placeholder="Optional additional context for the admin."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
+                ></textarea>
+              </label>
+
+              <p
+                v-if="rebuttalValidationMessage"
+                class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+              >
+                {{ rebuttalValidationMessage }}
+              </p>
+            </div>
+
+            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                class="flex-1 rounded-2xl bg-blue-estate py-4 font-bold text-white transition-colors hover:bg-indigo-900"
+                @click="continueRebuttalReview"
+              >
+                Continue
+              </button>
+              <button
+                class="flex-1 rounded-2xl bg-cream py-4 font-bold text-noble-black transition-colors hover:bg-pale-cashmere"
+                @click="closeRebuttalModal"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div v-else>
+            <div class="text-center">
+              <h3 class="text-2xl font-bold text-noble-black">Confirm Rebuttal</h3>
+              <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
+                Confirm the dispute details and your rebuttal before final submission.
+              </p>
+            </div>
+
+            <div class="mt-6 space-y-4">
+              <div
+                v-if="latestDispute"
+                class="rounded-[28px] border border-cinnamon-ice bg-cream p-5"
+              >
+                <p class="text-sm font-bold text-noble-black">Dispute Details</p>
+
+                <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Reason
+                    </p>
+                    <p class="mt-2 text-sm font-semibold text-noble-black">
+                      {{ latestDispute.reason }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Raised By
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ disputeRaisedByName ?? "Transaction participant" }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                      Submitted
+                    </p>
+                    <p class="mt-2 text-sm text-noble-black/80">
+                      {{ formatDateTime(latestDispute.createdAt) }}
+                    </p>
+                  </div>
+                </div>
+
+                <div v-if="latestDispute.description" class="mt-4">
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Description
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
+                    {{ latestDispute.description }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="rounded-[28px] bg-cream p-5">
+                <div>
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Rebuttal Statement
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black">
+                    {{ rebuttalText.trim() }}
+                  </p>
+                </div>
+
+                <div v-if="rebuttalNotes.trim()">
+                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
+                    Additional Notes
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-noble-black/70">
+                    {{ rebuttalNotes.trim() }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                :disabled="isSubmittingRebuttal"
+                class="flex-1 rounded-2xl bg-blue-estate py-4 font-bold text-white transition-colors hover:bg-indigo-900 disabled:opacity-50"
+                @click="submitRebuttal"
+              >
+                {{ isSubmittingRebuttal ? "Submitting..." : "Submit Rebuttal" }}
+              </button>
+              <button
+                :disabled="isSubmittingRebuttal"
+                class="flex-1 rounded-2xl bg-cream py-4 font-bold text-noble-black transition-colors hover:bg-pale-cashmere disabled:opacity-50"
+                @click="rebuttalModalStep = 'form'"
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Early Return Modal with Refund Preview -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="isEarlyReturnModalOpen"
+        class="fixed inset-0 z-[1000] flex items-center justify-center p-4 overflow-y-auto"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="isEarlyReturnModalOpen = false"
+        ></div>
+
+        <!-- Modal -->
+        <div
+          class="relative bg-white rounded-[32px] w-full max-w-lg p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+        >
+          <div class="text-center mb-6">
+            <h3 class="text-2xl font-bold text-noble-black mb-2">Early Return</h3>
+            <p class="text-noble-black/60 text-sm">
+              Review your partial refund for returning the item earlier than scheduled.
+            </p>
+          </div>
+
+          <div v-if="earlyReturnPreviewData" class="space-y-6">
+            <!-- Unified Refund Summary Card -->
+            <div class="bg-cream rounded-[32px] p-8 border border-cinnamon-ice/30">
+              <div class="space-y-6">
+                <!-- Step 1: The Base -->
+                <div class="flex justify-between items-center">
+                  <div>
+                    <span class="text-sm font-bold text-noble-black">Rental Value</span>
+                    <p class="text-[11px] text-noble-black/40 italic">
+                      Excluding non-refundable fees
+                    </p>
+                  </div>
+                  <span class="text-lg font-bold text-noble-black">{{
+                    formatPeso(earlyReturnPreviewData.refund.refundableRentalAmount)
+                  }}</span>
+                </div>
+
+                <!-- Step 2: The Flow -->
+                <div class="relative pl-6 border-l-2 border-cinnamon-ice/30 py-1 space-y-6">
+                  <!-- Time Factor -->
+                  <div class="flex justify-between items-start text-[13px]">
+                    <div>
+                      <span class="text-noble-black/70 font-medium block">Unused Value</span>
+                      <span class="text-[11px] text-noble-black/40">
+                        Used {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
+                        of booking duration
+                      </span>
+                    </div>
+                    <span class="text-noble-black/70">{{
+                      formatPeso(earlyReturnPreviewData.refund.unusedRentalValue)
+                    }}</span>
+                  </div>
+
+                  <!-- Policy Factor -->
+                  <div class="flex justify-between items-start text-[13px]">
+                    <div>
+                      <span class="text-noble-black/70 font-medium block">Early Return Policy</span>
+                      <span class="text-[11px] text-noble-black/40"
+                        >30% adjustment for reserved availability</span
+                      >
+                    </div>
+                    <span class="text-cinnabar-red font-medium"
+                      >-{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Step 3: The Result -->
+                <div class="pt-6 border-t border-cinnamon-ice/30 flex justify-between items-center">
+                  <span class="text-lg font-bold text-noble-black">Total Refund</span>
+                  <span class="text-3xl font-black text-burning-orange">{{
+                    formatPeso(earlyReturnPreviewData.refund.refundAmount)
+                  }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Validation/Info Box -->
+            <div class="px-2">
+              <div
+                v-if="!earlyReturnPreviewData.refund.eligible"
+                class="bg-cinnabar-red/[0.03] rounded-2xl p-4 border border-cinnabar-red/10"
+              >
+                <div class="flex gap-3">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#e11d48"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="shrink-0 mt-0.5"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <div>
+                    <p class="text-sm font-bold text-cinnabar-red">No refund applicable</p>
+                    <p class="text-xs text-cinnabar-red/60 leading-relaxed mt-1 italic">
+                      {{
+                        earlyReturnPreviewData.refund.reason ||
+                        "Refunds are not available if 70% or more of the booking duration has already been used."
+                      }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p
+                v-else
+                class="text-[11px] text-noble-black/40 text-center italic px-4 leading-relaxed"
+              >
+                By confirming, you agree to the early return policy. Platform fees are
+                non-refundable.
+              </p>
+            </div>
+
+            <label
+              class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+            >
+              <span class="block text-sm font-bold text-noble-black">Return proof image</span>
+              <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                {{ earlyReturnProofFile?.name || "Choose an image file" }}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                class="sr-only"
+                @change="setEarlyReturnProofFile"
+              />
+            </label>
+
+            <p v-if="proofUploadErrorMessage" class="text-sm text-red-600">
+              {{ proofUploadErrorMessage }}
+            </p>
+
+            <div class="flex flex-col gap-3 pt-2">
+              <button
+                :disabled="isSubmittingReturn"
+                class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
+                @click="confirmEarlyReturn"
+              >
+                <span v-if="isSubmittingReturn" class="animate-spin mr-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                </span>
+                {{ isSubmittingReturn ? "Uploading..." : "Upload proof and confirm early return" }}
+              </button>
+              <button
+                class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
+                @click="isEarlyReturnModalOpen = false"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <TransactionReviewModal
+      :open="isReviewModalOpen"
+      :context="reviewContext"
+      @close="closeReviewModal"
+      @submitted="handleReviewSubmitted"
+    />
+
+    <Transition
+      enter-active-class="transition duration-500 ease-out"
+      enter-from-class="opacity-0 scale-75 translate-y-3"
+      enter-to-class="opacity-100 scale-100 translate-y-0"
+      leave-active-class="transition duration-300 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-90"
+    >
+      <div
+        v-if="showRewardPopup"
+        class="pointer-events-none fixed inset-0 z-[140] flex items-center justify-center px-4"
+      >
+        <div class="rounded-full bg-emerald-500 px-7 py-4 text-center text-white shadow-2xl">
+          <p class="text-3xl font-black tracking-tight">+5 points</p>
+          <p class="text-sm font-medium text-white/90">Review bonus earned</p>
         </div>
       </div>
     </Transition>

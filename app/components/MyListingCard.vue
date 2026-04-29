@@ -8,6 +8,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
+  boostListing: [itemId: string]
 }>()
 
 const cardProps = computed(() => {
@@ -31,6 +32,7 @@ const cardProps = computed(() => {
     owner: "You",
     isManagement: true,
     allowNavigation: true,
+    customPath: `/account/listings/${props.item.id}/edit`,
   }
 })
 
@@ -44,11 +46,43 @@ function formatCategory(category: string) {
 
 const isInUse = computed(() => props.item.displayStatus === "IN_USE")
 const isDeactivated = computed(() => props.item.status === "DEACTIVATED")
+const boostExpiresAt = computed(() => {
+  if (!props.item.boostExpiresAt) {
+    return null
+  }
 
+  const value =
+    props.item.boostExpiresAt instanceof Date
+      ? props.item.boostExpiresAt
+      : new Date(props.item.boostExpiresAt)
+
+  return Number.isNaN(value.getTime()) ? null : value
+})
+const hasActiveBoost = computed(() => {
+  if (!boostExpiresAt.value) {
+    return false
+  }
+
+  return boostExpiresAt.value.getTime() > Date.now()
+})
+const isBoostEligible = computed(
+  () => props.item.displayStatus === "ACTIVE" && !hasActiveBoost.value,
+)
 const toggleLabel = computed(() => (isDeactivated.value ? "Activate" : "Deactivate"))
 const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
   isDeactivated.value ? "AVAILABLE" : "DEACTIVATED",
 )
+const boostLabel = computed(() => {
+  if (hasActiveBoost.value) {
+    return "Boost Active"
+  }
+
+  if (!isBoostEligible.value) {
+    return "Boost Unavailable"
+  }
+
+  return "Boost 50 pts"
+})
 </script>
 
 <template>
@@ -61,20 +95,27 @@ const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
         <!-- Edit Button (Primary) -->
         <NuxtLink
           :to="`/account/listings/${item.id}/edit`"
-          class="w-full max-w-[140px] rounded-full bg-burning-orange py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-burning-orange/90 active:scale-95"
+          class="w-full max-w-[140px] rounded-full bg-burning-orange py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-burning-orange/90 active:scale-95 cursor-pointer"
           @click.stop
         >
           Edit Listing
         </NuxtLink>
 
-        <!-- Deactivate/Activate Button -->
-        <div class="relative group/tooltip w-full max-w-[140px]">
+        <button
+          :disabled="!isBoostEligible || isToggling"
+          class="w-full max-w-[140px] rounded-full bg-blue-estate py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-blue-estate/90 active:scale-95 disabled:cursor-not-allowed disabled:bg-blue-estate/40"
+          @click.stop="emit('boostListing', item.id)"
+        >
+          {{ boostLabel }}
+        </button>
+
+        <div class="relative w-full max-w-[140px] group/tooltip">
           <button
             :disabled="isInUse || isToggling"
             class="w-full rounded-full py-2 font-geist text-sm font-semibold shadow-lg transition-all duration-300 active:scale-95 disabled:cursor-not-allowed"
             :class="[
               isInUse
-                ? 'bg-white/10 text-white/30 border border-white/10 backdrop-blur-sm'
+                ? 'border border-white/10 bg-white/10 text-white/30 backdrop-blur-sm'
                 : 'bg-white text-noble-black hover:bg-cream',
               isDeactivated ? 'border-burning-orange text-burning-orange' : '',
             ]"
@@ -83,18 +124,23 @@ const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
             {{ isToggling ? "..." : toggleLabel }}
           </button>
 
-          <!-- Contextual Tooltip for "In Use" state -->
           <div
             v-if="isInUse"
-            class="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 rounded-lg bg-noble-black px-3 py-1.5 text-[11px] font-medium text-white opacity-0 transition-opacity duration-200 group-hover/tooltip:opacity-100 whitespace-nowrap z-30 shadow-xl border border-white/10"
+            class="pointer-events-none absolute -top-10 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-noble-black px-3 py-1.5 text-[11px] font-medium text-white opacity-0 shadow-xl transition-opacity duration-200 group-hover/tooltip:opacity-100"
           >
             Item is currently In Use
-            <!-- Tooltip arrow -->
             <div
-              class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-noble-black border-r border-b border-white/10"
+              class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-white/10 bg-noble-black"
             />
           </div>
         </div>
+      </div>
+
+      <div
+        v-if="hasActiveBoost"
+        class="absolute right-3 top-3 z-20 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm"
+      >
+        Boosted
       </div>
     </template>
   </ItemCard>

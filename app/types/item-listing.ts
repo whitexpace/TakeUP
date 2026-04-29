@@ -5,10 +5,18 @@ export interface ItemAvailabilityRange {
   status: string
 }
 
-export interface ItemPaginationCursor {
+export interface ItemRankingScanCursor {
   id: string
+  boostScore: number
   bookingCount: number
   createdAt: string | Date
+}
+
+export interface ItemPaginationCursor {
+  version: 1
+  scanExhausted: boolean
+  scanCursor: ItemRankingScanCursor | null
+  pendingIds: string[]
 }
 
 export interface ListedItemImage {
@@ -40,6 +48,7 @@ export interface ListedItem {
   viewCount: number
   bookingCount: number
   likeCount: number
+  boostScore: number
   rating: number
   lenderId: string
   ownerName: string
@@ -48,6 +57,7 @@ export interface ListedItem {
   borrowerId: string | null
   categories: string[]
   tags: string[]
+  hasActiveBoost?: boolean
   isLiked?: boolean
 }
 

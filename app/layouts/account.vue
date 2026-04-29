@@ -15,17 +15,25 @@ type AccountLink = {
   to: string
 }
 
-const links: AccountLink[] = [
+const baseLinks: AccountLink[] = [
   { label: "Account Information", to: "/account" },
   { label: "My Wallet", to: "/account/wallet" },
   { label: "My Transactions", to: "/account/transactions" },
   { label: "My Listings", to: "/account/listings" },
   { label: "My Listing Analytics", to: "/account/analytics" },
   { label: "My Rewards", to: "/account/rewards" },
+  { label: "My Reviews", to: "/account/reviews" },
 ]
+const links = computed<AccountLink[]>(() => baseLinks)
 
 const isActive = (link: AccountLink) => {
   if (link.to === "/account") return route.path === "/account"
+
+  // "Booking Requests" (/account/requests) should highlight "My Listings"
+  if (link.to === "/account/listings" && route.path.startsWith("/account/requests")) {
+    return true
+  }
+
   return route.path.startsWith(link.to)
 }
 

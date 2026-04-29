@@ -76,6 +76,24 @@ enum BookingStatus {
   IN_DISPUTE
 }
 
+enum ReturnStatus {
+  NOT_RETURNED
+  RETURNED
+  EARLY_RETURNED
+}
+
+enum RefundStatus {
+  NONE
+  PENDING
+  PROCESSED
+  NOT_ELIGIBLE
+  FAILED
+}
+
+enum RefundReason {
+  EARLY_RETURN
+}
+
 enum BookingPaymentStatus {
   NOT_REQUIRED
   PENDING
@@ -113,26 +131,43 @@ enum ActorRole {
   @@map("actor_role_enum")
 }
 
-enum DisputeReason {
-  LATE    @map("late")
-  DAMAGED @map("damaged")
-  LOST    @map("lost")
-
-  @@map("dispute_reason_enum")
-}
-
 enum DisputeStatus {
-  OPEN         @map("open")
-  UNDER_REVIEW @map("under_review")
-  RESOLVED     @map("resolved")
-  REJECTED     @map("rejected")
-  APPEALED     @map("appealed")
+  SUBMITTED @map("under_review")
+  OPEN      @map("open")
+  REJECTED  @map("rejected")
+  RESOLVED  @map("resolved")
+  APPEALED  @map("appealed")
+  CLOSED    @map("closed")
 
   @@map("dispute_status_enum")
 }
 
+enum DisputeOutcome {
+  BORROWER_AT_FAULT
+  LENDER_AT_FAULT
+  SHARED_FAULT
+  DISMISSED
+  NO_FAULT
+}
+
+enum DisputeFinalDecision {
+  APPROVED
+  REJECTED
+}
+
+enum DisputeActionType {
+  WARNING
+  POINT_DEDUCTION
+  SUSPENSION
+  BAN
+}
+
 enum NotificationType {
   BOOKING_RETURN_REQUESTED
+  DISPUTE_SUBMITTED
+  DISPUTE_OPENED
+  DISPUTE_RESOLVED
+  DISPUTE_REBUTTAL_SUBMITTED
 }
 
 enum AccountType {
@@ -144,6 +179,48 @@ enum AccountType {
 enum UserStatus {
   ACTIVE
   SUSPENDED
+  BANNED
+  PENDING
+  DEACTIVATED
+}
+
+enum WalletStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum WalletScope {
+  USER
+  SYSTEM
+}
+
+enum WalletTransactionType {
+  TOP_UP
+  PAYMENT
+  REFUND
+  ADJUSTMENT
+  EARNING
+  COMMISSION
+}
+
+enum WalletTransactionMethod {
+  PSEUDO
+  GCASH
+  BANK
+  MAYA
+  SYSTEM
+}
+
+enum WalletTransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum WalletTransactionStatus {
+  SUCCESS
+  FAILED
+  REVERSED
   PENDING
 }
 
@@ -157,6 +234,43 @@ enum RequestOfferStatus {
   PENDING
   ACCEPTED
   DECLINED
+  CANCELLED
+}
+
+enum ReviewType {
+  ITEM_REVIEW
+  LENDER_REVIEW
+  BORROWER_REVIEW
+}
+
+enum RewardSourceType {
+  TRANSACTION_COMPLETED
+  REVIEW_SUBMITTED
+  DISPUTE_RESOLUTION_ADJUSTMENT
+  BOOST_REDEMPTION
+  MANUAL_ADJUSTMENT
+}
+
+enum RewardRoleCategory {
+  BORROWER
+  LENDER
+  GENERAL
+}
+
+enum RewardEventStatus {
+  PENDING
+  APPLIED
+  REVERSED
+  BLOCKED
+}
+
+enum ItemBoostType {
+  STANDARD_24_HOUR
+}
+
+enum ItemBoostStatus {
+  ACTIVE
+  EXPIRED
   CANCELLED
 }
 
@@ -181,6 +295,8 @@ model Item {
   bookingCount     Int           @default(0)
   likeCount        Int           @default(0)
   rating           Float         @default(0)
+  boostScore       Int           @default(0)
+  boostExpiresAt   DateTime?
   lenderId         String
   borrowerId       String?
 
@@ -192,6 +308,7 @@ model Item {
   categories         ItemCategoryOnItem[]
   images             ItemImage[]
   likes              Like[]
+  boosts             ItemBoost[]
   requestOffers      RequestOffer[]
   tags               ItemTagOnItem[]
   transactionReviews TransactionReview[]
@@ -225,6 +342,19 @@ model Booking {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
+  // Early return and refund tracking
+  returnStatus      ReturnStatus  @default(NOT_RETURNED)
+  refundStatus      RefundStatus  @default(NONE)
+  refundAmount      Int           @default(0)
+  refundProcessedAt DateTime?
+  refundReason      RefundReason?
+  actualReturnedAt  DateTime?
+
+  lenderHandoffProofUrl         String?
+  lenderHandoffProofUploadedAt  DateTime?
+  borrowerReturnProofUrl        String?
+  borrowerReturnProofUploadedAt DateTime?
+
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
   lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
@@ -236,6 +366,8 @@ model Booking {
   @@index([lenderId])
   @@index([paymentStatus])
   @@index([status])
+  @@index([returnStatus])
+  @@index([refundStatus])
 }
 
 model AppNotification {
@@ -274,13 +406,16 @@ model RentalTransaction {
   status      TransactionStatus @default(PENDING) @map("current_status")
   updatedAt   DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  borrower   User?                  @relation("transactions_borrower_user_idToUser", fields: [borrowerId], references: [id], onDelete: Restrict)
-  lender     User?                  @relation("transactions_lender_user_idToUser", fields: [lenderId], references: [id], onDelete: Restrict)
-  item       Item?                  @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  disputes   TransactionDispute[]
-  payments   TransactionPayment[]
-  reviews    TransactionReview[]
-  statusLogs TransactionStatusLog[]
+  borrower     User?                    @relation("transactions_borrower_user_idToUser", fields: [borrowerId], references: [id], onDelete: Restrict)
+  lender       User?                    @relation("transactions_lender_user_idToUser", fields: [lenderId], references: [id], onDelete: Restrict)
+  item         Item?                    @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  conversation Conversation?
+  disputes     TransactionDispute[]
+  payments     TransactionPayment[]
+  rewardEvents RewardEvent[]
+  reviewDrafts TransactionReviewDraft[]
+  reviews      TransactionReview[]
+  statusLogs   TransactionStatusLog[]
 
   @@index([borrowerId, status, createdAt(sort: Desc)], map: "idx_transactions_borrower_status")
   @@index([lenderId, status, createdAt(sort: Desc)], map: "idx_transactions_lender_status")
@@ -349,33 +484,95 @@ model ItemTagOnItem {
 }
 
 model User {
-  id                           String                 @id @default(uuid())
-  username                     String
-  email                        String                 @unique
-  firstName                    String
-  middleName                   String?
-  lastName                     String
-  googleSub                    String                 @unique
-  accountType                  AccountType
-  status                       UserStatus
-  points                       Int                    @default(0)
-  admin                        Admin?
-  appNotificationsReceived     AppNotification[]      @relation("app_notifications_recipient_user_idToUser")
-  appNotificationsSent         AppNotification[]      @relation("app_notifications_actor_user_idToUser")
-  borrower                     Borrower?
-  cartEntries                  CartEntry[]
-  lender                       Lender?
-  likes                        Like[]
-  transactionDisputesAdmin     TransactionDispute[]   @relation("transaction_disputes_admin_idToUser")
-  transactionDisputesFiled     TransactionDispute[]   @relation("transaction_disputes_filed_by_user_idToUser")
-  transactionPaymentsPayee     TransactionPayment[]   @relation("transaction_payments_payee_user_idToUser")
-  transactionPaymentsPayer     TransactionPayment[]   @relation("transaction_payments_payer_user_idToUser")
-  transactionReviewsReviewee   TransactionReview[]    @relation("transaction_reviews_reviewee_user_idToUser")
-  transactionReviewsReviewer   TransactionReview[]    @relation("transaction_reviews_reviewer_user_idToUser")
-  transactionStatusLogsChanged TransactionStatusLog[]
-  borrowedTransactions         RentalTransaction[]    @relation("transactions_borrower_user_idToUser")
-  lentTransactions             RentalTransaction[]    @relation("transactions_lender_user_idToUser")
-  requestPosts                 RequestPost[]
+  id                                String                     @id @default(uuid())
+  username                          String
+  email                             String                     @unique
+  firstName                         String
+  middleName                        String?
+  lastName                          String
+  googleSub                         String                     @unique
+  createdAt                         DateTime                   @default(now())
+  location                          String?
+  avatarUrl                         String?
+  bio                               String?
+  pronouns                          String?
+  accountType                       AccountType
+  status                            UserStatus
+  points                            Int                        @default(0)
+  admin                             Admin?
+  appNotificationsReceived          AppNotification[]          @relation("app_notifications_recipient_user_idToUser")
+  appNotificationsSent              AppNotification[]          @relation("app_notifications_actor_user_idToUser")
+  borrower                          Borrower?
+  cartEntries                       CartEntry[]
+  itemBoosts                        ItemBoost[]
+  lender                            Lender?
+  likes                             Like[]
+  transactionDisputesAdmin          TransactionDispute[]       @relation("transaction_disputes_admin_idToUser")
+  transactionDisputesFinalized      TransactionDispute[]       @relation("transaction_disputes_final_decision_by_user_idToUser")
+  transactionDisputesFiled          TransactionDispute[]       @relation("transaction_disputes_filed_by_user_idToUser")
+  transactionDisputesRebuttal       TransactionDispute[]       @relation("transaction_disputes_rebuttal_by_user_idToUser")
+  transactionDisputeActionsApplied  TransactionDisputeAction[] @relation("transaction_dispute_actions_applied_by_user_idToUser")
+  transactionDisputeActionsTargeted TransactionDisputeAction[] @relation("transaction_dispute_actions_target_user_idToUser")
+  transactionPaymentsPayee          TransactionPayment[]       @relation("transaction_payments_payee_user_idToUser")
+  transactionPaymentsPayer          TransactionPayment[]       @relation("transaction_payments_payer_user_idToUser")
+  transactionReviewDraftsReviewer   TransactionReviewDraft[]   @relation("transaction_review_drafts_reviewer_user_idToUser")
+  transactionReviewsReviewee        TransactionReview[]        @relation("transaction_reviews_reviewee_user_idToUser")
+  transactionReviewsReviewer        TransactionReview[]        @relation("transaction_reviews_reviewer_user_idToUser")
+  transactionStatusLogsChanged      TransactionStatusLog[]
+  borrowedTransactions              RentalTransaction[]        @relation("transactions_borrower_user_idToUser")
+  lentTransactions                  RentalTransaction[]        @relation("transactions_lender_user_idToUser")
+  requestPosts                      RequestPost[]
+  rewardEvents                      RewardEvent[]
+  rewards                           UserReward?
+  sentMessages                      Message[]
+  wallet                            Wallet?
+  walletTransactions                WalletTransaction[]
+}
+
+model Wallet {
+  id        String       @id @default(uuid())
+  scope     WalletScope  @default(USER)
+  userId    String?      @unique @map("user_id")
+  systemKey String?      @unique @map("system_key")
+  currency  String       @default("PHP")
+  balance   Decimal      @default(0) @db.Decimal(12, 2)
+  status    WalletStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@index([scope])
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id                String                     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  walletId          String                     @map("wallet_id")
+  userId            String?                    @map("user_id")
+  type              WalletTransactionType
+  method            WalletTransactionMethod
+  direction         WalletTransactionDirection
+  amount            Decimal                    @db.Decimal(12, 2)
+  balanceBefore     Decimal                    @map("balance_before") @db.Decimal(12, 2)
+  balanceAfter      Decimal                    @map("balance_after") @db.Decimal(12, 2)
+  referenceCode     String                     @unique @map("reference_code")
+  relatedEntityType String?                    @map("related_entity_type")
+  relatedEntityId   String?                    @map("related_entity_id")
+  status            WalletTransactionStatus    @default(SUCCESS)
+  metadata          Json                       @default("{}")
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([userId])
+  @@index([referenceCode])
+  @@index([relatedEntityType, relatedEntityId])
+  @@map("wallet_transactions")
 }
 
 model CartEntry {
@@ -420,7 +617,7 @@ model Admin {
 model Lender {
   id           Int    @unique @default(autoincrement())
   userId       String @id
-  lenderRating Int    @default(0)
+  lenderRating Float  @default(0)
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings      Booking[]
@@ -432,7 +629,7 @@ model Borrower {
   id             Int    @unique @default(autoincrement())
   userId         String @id
   borrowStatus   String
-  borrowerRating Int    @default(0)
+  borrowerRating Float  @default(0)
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings      Booking[]
@@ -487,24 +684,57 @@ model RequestOffer {
 }
 
 model TransactionDispute {
-  id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  transactionId String        @map("transaction_id")
-  filedByUserId String        @map("filed_by_user_id")
-  reason        DisputeReason
-  description   String?
-  claimedAmount Decimal       @default(0) @map("claimed_amount") @db.Decimal(12, 2)
-  status        DisputeStatus @default(OPEN)
-  adminId       String?       @map("admin_id")
-  resolution    String?
-  resolvedAt    DateTime?     @map("resolved_at") @db.Timestamptz(6)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                  String                @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId       String                @map("transaction_id")
+  raisedById          String                @map("filed_by_user_id")
+  reason              String
+  description         String?
+  claimedAmount       Decimal               @default(0) @map("claimed_amount") @db.Decimal(12, 2)
+  status              DisputeStatus         @default(SUBMITTED)
+  reviewedById        String?               @map("admin_id")
+  resolution          String?
+  reviewedAt          DateTime?             @map("resolved_at") @db.Timestamptz(6)
+  outcome             DisputeOutcome?
+  finalDecision       DisputeFinalDecision? @map("final_decision")
+  finalDecisionNotes  String?               @map("final_decision_notes")
+  finalDecisionById   String?               @map("final_decided_by_user_id")
+  finalDecisionAt     DateTime?             @map("final_decided_at") @db.Timestamptz(6)
+  requiredActionCount Int                   @default(0) @map("required_action_count")
+  closedAt            DateTime?             @map("closed_at") @db.Timestamptz(6)
+  rebuttalById        String?               @map("rebuttal_by_user_id")
+  rebuttalText        String?               @map("rebuttal_text")
+  rebuttalNotes       String?               @map("rebuttal_notes")
+  rebuttalSubmittedAt DateTime?             @map("rebuttal_submitted_at") @db.Timestamptz(6)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  admin       User?             @relation("transaction_disputes_admin_idToUser", fields: [adminId], references: [id])
-  filedByUser User              @relation("transaction_disputes_filed_by_user_idToUser", fields: [filedByUserId], references: [id])
-  transaction RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  actions         TransactionDisputeAction[]
+  rebuttalBy      User?                      @relation("transaction_disputes_rebuttal_by_user_idToUser", fields: [rebuttalById], references: [id])
+  finalDecisionBy User?                      @relation("transaction_disputes_final_decision_by_user_idToUser", fields: [finalDecisionById], references: [id])
+  reviewedBy      User?                      @relation("transaction_disputes_admin_idToUser", fields: [reviewedById], references: [id])
+  raisedBy        User                       @relation("transaction_disputes_filed_by_user_idToUser", fields: [raisedById], references: [id])
+  transaction     RentalTransaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   @@index([transactionId, status, createdAt(sort: Desc)], map: "idx_disputes_txn_status")
   @@map("transaction_disputes")
+}
+
+model TransactionDisputeAction {
+  id           String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  disputeId    String            @map("dispute_id")
+  type         DisputeActionType
+  targetUserId String            @map("target_user_id")
+  pointsDelta  Int?              @map("points_delta")
+  note         String?
+  appliedById  String            @map("applied_by_user_id")
+  appliedAt    DateTime          @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  appliedBy  User               @relation("transaction_dispute_actions_applied_by_user_idToUser", fields: [appliedById], references: [id], onDelete: Restrict)
+  dispute    TransactionDispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  targetUser User               @relation("transaction_dispute_actions_target_user_idToUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([disputeId, appliedAt(sort: Desc)], map: "idx_dispute_actions_dispute_applied")
+  @@index([targetUserId, appliedAt(sort: Desc)], map: "idx_dispute_actions_target_applied")
+  @@map("transaction_dispute_actions")
 }
 
 model TransactionPayment {
@@ -529,24 +759,47 @@ model TransactionPayment {
 }
 
 model TransactionReview {
-  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  transactionId  String   @map("transaction_id")
-  reviewerUserId String   @map("reviewer_user_id")
-  revieweeUserId String?  @map("reviewee_user_id")
-  itemId         String?  @map("item_id")
-  rating         Int      @db.SmallInt
-  reviewText     String?  @map("review_text")
-  isAnonymous    Boolean  @default(false) @map("is_anonymous")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId  String     @map("transaction_id")
+  reviewerUserId String     @map("reviewer_user_id")
+  reviewType     ReviewType @default(ITEM_REVIEW) @map("review_type")
+  revieweeUserId String?    @map("reviewee_user_id")
+  itemId         String?    @map("item_id")
+  rating         Int        @db.SmallInt
+  reviewText     String     @map("review_text")
+  images         String[]   @default([])
+  isAnonymous    Boolean    @default(false) @map("is_anonymous")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
   item         Item?             @relation(fields: [itemId], references: [id])
+  rewardEvents RewardEvent[]
   revieweeUser User?             @relation("transaction_reviews_reviewee_user_idToUser", fields: [revieweeUserId], references: [id])
   reviewerUser User              @relation("transaction_reviews_reviewer_user_idToUser", fields: [reviewerUserId], references: [id])
   transaction  RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
-  @@unique([transactionId, reviewerUserId], map: "transaction_reviews_transaction_reviewer_unique")
+  @@unique([transactionId, reviewerUserId, reviewType], map: "transaction_reviews_transaction_reviewer_type_unique")
   @@index([revieweeUserId, createdAt(sort: Desc)], map: "idx_reviews_reviewee_created")
   @@map("transaction_reviews")
+}
+
+model TransactionReviewDraft {
+  id             String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId  String     @map("transaction_id")
+  reviewerUserId String     @map("reviewer_user_id")
+  reviewType     ReviewType @default(ITEM_REVIEW) @map("review_type")
+  rating         Int        @default(5) @db.SmallInt
+  reviewText     String     @default("") @map("review_text")
+  images         String[]   @default([])
+  isAnonymous    Boolean    @default(false) @map("is_anonymous")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reviewerUser User              @relation("transaction_review_drafts_reviewer_user_idToUser", fields: [reviewerUserId], references: [id])
+  transaction  RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, reviewerUserId, reviewType], map: "transaction_review_drafts_transaction_reviewer_type_unique")
+  @@index([reviewerUserId, updatedAt(sort: Desc)], map: "idx_review_drafts_reviewer_updated")
+  @@map("transaction_review_drafts")
 }
 
 model TransactionStatusLog {
@@ -566,6 +819,73 @@ model TransactionStatusLog {
   @@map("transaction_status_logs")
 }
 
+model UserReward {
+  id                String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId            String   @unique @map("user_id")
+  availablePoints   Int      @default(0) @map("available_points")
+  totalPointsEarned Int      @default(0) @map("total_points_earned")
+  borrowerPoints    Int      @default(0) @map("borrower_points")
+  lenderPoints      Int      @default(0) @map("lender_points")
+  pendingPoints     Int      @default(0) @map("pending_points")
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([availablePoints])
+  @@index([borrowerPoints])
+  @@index([lenderPoints])
+  @@map("user_rewards")
+}
+
+model RewardEvent {
+  id             String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId         String             @map("user_id")
+  transactionId  String?            @map("transaction_id")
+  reviewId       String?            @map("review_id")
+  itemBoostId    String?            @map("item_boost_id")
+  idempotencyKey String             @unique @map("idempotency_key")
+  sourceType     RewardSourceType   @map("source_type")
+  roleCategory   RewardRoleCategory @default(GENERAL) @map("role_category")
+  pointsDelta    Int                @map("points_delta")
+  status         RewardEventStatus  @default(PENDING)
+  metadata       Json               @default("{}")
+  appliedAt      DateTime?          @map("applied_at") @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  itemBoost   ItemBoost?         @relation(fields: [itemBoostId], references: [id], onDelete: SetNull)
+  review      TransactionReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  transaction RentalTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([transactionId, status])
+  @@index([reviewId])
+  @@index([itemBoostId])
+  @@map("reward_events")
+}
+
+model ItemBoost {
+  id          String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  itemId      String          @map("item_id")
+  userId      String          @map("user_id")
+  pointsSpent Int             @map("points_spent")
+  boostType   ItemBoostType   @map("boost_type")
+  boostScore  Int             @map("boost_score")
+  status      ItemBoostStatus @default(ACTIVE)
+  startsAt    DateTime        @map("starts_at") @db.Timestamptz(6)
+  expiresAt   DateTime        @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  rewardEvents RewardEvent[]
+  item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, status, expiresAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("item_boosts")
+}
+
 model RequestPost {
   id             String   @id @default(uuid())
   requesterId    String
@@ -583,4 +903,48 @@ model RequestPost {
   @@index([requesterId])
   @@index([requestedTo])
   @@index([createdAt])
+}
+
+model AccountDeletionAuditLog {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  deletedUserId    String   @map("deleted_user_id")
+  deletedUserEmail String?  @map("deleted_user_email")
+  deletedUsername  String?  @map("deleted_username")
+  deletedAt        DateTime @default(now()) @map("deleted_at") @db.Timestamptz(6)
+  details          Json     @default("{}")
+
+  @@index([deletedUserId])
+  @@index([deletedAt(sort: Desc)])
+  @@map("account_deletion_audit_logs")
+}
+
+model Conversation {
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  transactionId String   @unique @map("transaction_id")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transaction RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@index([transactionId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  conversationId String    @map("conversation_id")
+  senderUserId   String    @map("sender_user_id")
+  body           String
+  imageUrl       String?   @map("image_url")
+  isRead         Boolean   @default(false) @map("is_read")
+  readAt         DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, isRead])
+  @@index([senderUserId])
+  @@map("messages")
 }

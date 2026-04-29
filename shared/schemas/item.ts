@@ -248,10 +248,18 @@ export const itemFilterSchema = z.object({
 
 export const listItemsSchema = itemFilterSchema.optional()
 
-export const itemPaginationCursorSchema = z.object({
+export const itemRankingScanCursorSchema = z.object({
   id: z.string().uuid(),
+  boostScore: z.number().int().min(0),
   bookingCount: z.number().int().min(0),
   createdAt: z.coerce.date(),
+})
+
+export const itemPaginationCursorSchema = z.object({
+  version: z.literal(1).default(1),
+  scanExhausted: z.boolean().default(false),
+  scanCursor: itemRankingScanCursorSchema.nullable().default(null),
+  pendingIds: z.array(z.string().uuid()).default([]),
 })
 
 export const paginatedItemsSchema = itemFilterSchema

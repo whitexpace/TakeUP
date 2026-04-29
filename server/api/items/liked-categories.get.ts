@@ -1,4 +1,9 @@
 import { createContext } from "../../trpc/context"
+import {
+  buildPublicVisibleItemWhere,
+  isPublicVisibleItem,
+  ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES,
+} from "../../utils/item-visibility"
 
 export default defineEventHandler(async (event) => {
   const ctx = await createContext(event)
@@ -7,25 +12,55 @@ export default defineEventHandler(async (event) => {
     return []
   }
 
-  const categories = await ctx.prisma.itemCategoryOnItem.findMany({
+  const now = new Date()
+  const items = await ctx.prisma.item.findMany({
     where: {
-      item: {
-        status: { not: "DELETED" },
-        likes: {
-          some: {
-            userId: ctx.user.id,
+      AND: [
+        buildPublicVisibleItemWhere(now),
+        {
+          likes: {
+            some: {
+              userId: ctx.user.id,
+            },
           },
+        },
+      ],
+    },
+    select: {
+      status: true,
+      categories: {
+        select: {
+          category: true,
+        },
+      },
+      availability: {
+        select: {
+          startDate: true,
+          endDate: true,
+          status: true,
+        },
+      },
+      bookings: {
+        where: {
+          status: { in: [...ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES] },
+        },
+        select: {
+          startDate: true,
+          endDate: true,
+          status: true,
         },
       },
     },
-    distinct: ["category"],
-    select: {
-      category: true,
-    },
-    orderBy: {
-      category: "asc",
-    },
   })
 
-  return categories.map((entry) => entry.category)
+  const categories = new Set<string>()
+  for (const item of items) {
+    if (!isPublicVisibleItem(item, now)) continue
+
+    for (const entry of item.categories) {
+      categories.add(entry.category)
+    }
+  }
+
+  return [...categories].sort()
 })

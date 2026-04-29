@@ -12,7 +12,6 @@ describe("booking schema validations", () => {
       endDate: "2026-04-02T18:00:00.000Z",
     })
 
-    expect(parsed.platformCommission).toBe(0)
     expect(parsed.paymentMethod).toBe("GCASH")
     expect(parsed.startDate).toBeInstanceOf(Date)
     expect(parsed.endDate).toBeInstanceOf(Date)

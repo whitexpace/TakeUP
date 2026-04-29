@@ -1,25 +1,32 @@
 <script setup lang="ts">
+import { useWallet } from "~/composables/use-wallet"
+
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
+
+const {
+  transactions,
+  isBalanceVisible,
+  linkedAccounts,
+  toggleBalanceVisibility,
+  topUpPseudo,
+  formattedBalance,
+  maskedBalance,
+} = useWallet()
 </script>
 
 <template>
-  <div class="space-y-6 font-geist">
-    <div>
-      <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold">My Wallet</h1>
-      <p class="text-neutral-800 text-base sm:text-lg tracking-wide mt-1">
-        Track your balance, credits, and payout settings.
-      </p>
-    </div>
-
-    <section class="bg-cream rounded-[20px] border border-cinnamon-ice p-6 sm:p-8">
-      <h2 class="text-lg sm:text-xl font-semibold text-neutral-800">Wallet Overview</h2>
-      <p class="text-neutral-800/70 mt-2">
-        Wallet modules are coming soon. This page is ready for balance cards, cash-in/out actions,
-        and payout history.
-      </p>
-    </section>
-  </div>
+  <WalletOverview
+    title="My Wallet"
+    subtitle="Manage your TakeUP wallet balance and linked accounts"
+    :transactions="transactions"
+    :is-balance-visible="isBalanceVisible"
+    :formatted-balance="formattedBalance"
+    :masked-balance="maskedBalance"
+    :linked-accounts="linkedAccounts"
+    :on-toggle-balance="toggleBalanceVisibility"
+    :on-top-up="topUpPseudo"
+  />
 </template>
