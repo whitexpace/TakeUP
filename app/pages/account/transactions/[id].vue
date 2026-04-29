@@ -14,13 +14,6 @@ definePageMeta({
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type BookingDetail = NonNullable<RouterOutputs["booking"]["byId"]>
-type AuthMeResponse = {
-  user: {
-    id: string
-    email: string
-    name: string
-  }
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -32,9 +25,8 @@ const bookingId = computed(() => {
 
 const orderIdForDisplay = computed(() => bookingId.value.slice(0, 16).toUpperCase())
 
-const { data: authData } = await useAsyncData("auth:me", () =>
-  $fetch<AuthMeResponse>("/api/auth/me"),
-)
+const { authUser } = useAuthUser()
+const currentUserId = computed(() => authUser.value?.id ?? null)
 
 const { data, pending, error, refresh } = await useAsyncData(
   () => `booking:${bookingId.value || "missing"}`,
@@ -95,7 +87,6 @@ const actionErrorMessage = ref("")
 const actionSuccessMessage = ref("")
 const proofUploadErrorMessage = ref("")
 
-const currentUserId = computed(() => authData.value?.user.id ?? null)
 const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
 const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")

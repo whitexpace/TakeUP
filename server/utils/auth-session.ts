@@ -7,12 +7,14 @@ export type SessionUser = {
   id: string
   email: string
   name: string
+  accountType?: string | null
 }
 
 type SessionPayload = {
   sub: string
   email: string
   name: string
+  accountType?: string | null
   iat: number
   exp: number
 }
@@ -56,6 +58,7 @@ export function createSessionToken(
       sub: user.id,
       email: user.email,
       name: user.name,
+      accountType: user.accountType ?? null,
       iat: now,
       exp,
     } satisfies SessionPayload),
@@ -115,6 +118,7 @@ export function verifySessionToken(
       id: parsed.sub,
       email: parsed.email,
       name: parsed.name,
+      accountType: parsed.accountType ?? null,
     },
     exp: parsed.exp,
   }

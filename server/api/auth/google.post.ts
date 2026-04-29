@@ -21,46 +21,38 @@ type AuthUserRow = {
   id: string
   email: string
   name: string
+  accountType: string | null
   status: "ACTIVE" | "SUSPENDED" | "BANNED" | "PENDING" | "DEACTIVATED"
 }
 
 async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promise<AuthUserRow> {
+  const userSelect = {
+    id: true,
+    email: true,
+    username: true,
+    googleSub: true,
+    status: true,
+    accountType: true,
+  } as const
+
   // Try to find existing user by googleSub
   let user = await db.user.findUnique({
     where: { googleSub: identity.googleSub },
-    select: {
-      id: true,
-      email: true,
-      username: true,
-      googleSub: true,
-      status: true,
-    },
+    select: userSelect,
   })
 
   if (!user) {
     // Fallback lookup by email to avoid duplicate records when the provider subject changes.
     user = await db.user.findUnique({
       where: { email: identity.email },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        googleSub: true,
-        status: true,
-      },
+      select: userSelect,
     })
 
     if (user && user.googleSub !== identity.googleSub) {
       user = await db.user.update({
         where: { id: user.id },
         data: { googleSub: identity.googleSub },
-        select: {
-          id: true,
-          email: true,
-          username: true,
-          googleSub: true,
-          status: true,
-        },
+        select: userSelect,
       })
     }
 
@@ -76,13 +68,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
           accountType: "BORROWER",
           status: "ACTIVE",
         },
-        select: {
-          id: true,
-          email: true,
-          username: true,
-          googleSub: true,
-          status: true,
-        },
+        select: userSelect,
       })
     }
   } else if (user.email !== identity.email) {
@@ -90,13 +76,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
     user = await db.user.update({
       where: { googleSub: identity.googleSub },
       data: { email: identity.email },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        googleSub: true,
-        status: true,
-      },
+      select: userSelect,
     })
   }
 
@@ -104,13 +84,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
     user = await db.user.update({
       where: { id: user.id },
       data: { status: "ACTIVE" },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        googleSub: true,
-        status: true,
-      },
+      select: userSelect,
     })
   }
 
@@ -122,6 +96,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
     id: user.id,
     email: user.email,
     name: user.username,
+    accountType: user.accountType,
     status: user.status,
   }
 }
@@ -137,7 +112,7 @@ export default defineEventHandler(async (event) => {
     const user = await upsertAuthUser(prisma, identity)
 
     const { token, expiresAt } = createSessionToken(
-      { id: user.id, email: user.email, name: user.name },
+      { id: user.id, email: user.email, name: user.name, accountType: user.accountType },
       runtimeConfig.jwtSecret,
     )
 

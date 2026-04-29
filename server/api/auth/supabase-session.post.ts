@@ -5,11 +5,13 @@ import {
   sessionCookieMaxAgeSeconds,
   sessionCookieName,
 } from "../../utils/auth-session"
+import { verifySupabaseJwt } from "../../utils/verify-supabase-jwt"
 
 export default defineEventHandler(async (event) => {
   const runtimeConfig = useRuntimeConfig(event)
   const supabaseUrl = runtimeConfig.public.supabase?.url
   const supabaseAnonKey = runtimeConfig.public.supabase?.key
+  const supabaseJwtSecret = runtimeConfig.supabaseJwtSecret
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw createError({ statusCode: 500, statusMessage: "Supabase not configured." })
@@ -22,42 +24,57 @@ export default defineEventHandler(async (event) => {
 
   const accessToken = authHeader.slice("Bearer ".length).trim()
 
-  let supabaseUser: Record<string, unknown>
-  try {
-    supabaseUser = await $fetch<Record<string, unknown>>(`${supabaseUrl}/auth/v1/user`, {
-      headers: { authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
-    })
-  } catch {
-    throw createError({ statusCode: 401, statusMessage: "Invalid Supabase token." })
+  // --- Verify the Supabase access token ---
+  let email: string
+  let supabaseSub: string
+
+  // Fast path: verify locally if SUPABASE_JWT_SECRET is configured (eliminates external HTTP call)
+  const localPayload = supabaseJwtSecret
+    ? verifySupabaseJwt(accessToken, supabaseJwtSecret)
+    : null
+
+  if (localPayload) {
+    email = localPayload.email.toLowerCase()
+    supabaseSub = localPayload.sub
+  } else {
+    // Slow path: verify via Supabase API (fallback or only option)
+    let supabaseUser: Record<string, unknown>
+    try {
+      supabaseUser = await $fetch<Record<string, unknown>>(`${supabaseUrl}/auth/v1/user`, {
+        headers: { authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+      })
+    } catch {
+      throw createError({ statusCode: 401, statusMessage: "Invalid Supabase token." })
+    }
+
+    email = (typeof supabaseUser.email === "string" ? supabaseUser.email : "").toLowerCase()
+    supabaseSub = typeof supabaseUser.sub === "string" ? supabaseUser.sub : ""
+
+    const identities = Array.isArray(supabaseUser.identities) ? supabaseUser.identities : []
+    for (const entry of identities) {
+      if (entry && typeof entry === "object") {
+        const identity = entry as Record<string, unknown>
+        if (identity.provider === "google") {
+          supabaseSub =
+            (identity.provider_id as string | undefined) ??
+            (identity.id as string | undefined) ??
+            supabaseSub
+        }
+      }
+    }
   }
 
-  const email = (typeof supabaseUser.email === "string" ? supabaseUser.email : "").toLowerCase()
   if (!email.endsWith("@up.edu.ph")) {
     throw createError({ statusCode: 403, statusMessage: "Only @up.edu.ph accounts are allowed." })
   }
 
-  const identities = Array.isArray(supabaseUser.identities) ? supabaseUser.identities : []
-  let googleSub: string | null = null
-  for (const entry of identities) {
-    if (entry && typeof entry === "object") {
-      const identity = entry as Record<string, unknown>
-      if (identity.provider === "google") {
-        googleSub =
-          (identity.provider_id as string | undefined) ??
-          (identity.id as string | undefined) ??
-          null
-      }
-    }
-  }
-  if (!googleSub && typeof supabaseUser.sub === "string") googleSub = supabaseUser.sub
-
   let user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, username: true, status: true },
+    select: { id: true, email: true, username: true, status: true, accountType: true },
   })
 
   let isNewUser = false
-  if (!user && googleSub) {
+  if (!user && supabaseSub) {
     const username = email.split("@")[0] ?? "user"
     user = await prisma.user.create({
       data: {
@@ -65,13 +82,13 @@ export default defineEventHandler(async (event) => {
         username,
         firstName: username,
         lastName: "User",
-        googleSub,
+        googleSub: supabaseSub,
         accountType: "LENDER",
         status: "ACTIVE",
         lender: { create: { lenderRating: 0 } },
         borrower: { create: { borrowStatus: "ACTIVE", borrowerRating: 0 } },
       },
-      select: { id: true, email: true, username: true, status: true },
+      select: { id: true, email: true, username: true, status: true, accountType: true },
     })
     isNewUser = true
   }
@@ -84,7 +101,7 @@ export default defineEventHandler(async (event) => {
     user = await prisma.user.update({
       where: { id: user.id },
       data: { status: "ACTIVE" },
-      select: { id: true, email: true, username: true, status: true },
+      select: { id: true, email: true, username: true, status: true, accountType: true },
     })
   }
 
@@ -109,7 +126,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const { token, expiresAt } = createSessionToken(
-    { id: user.id, email: user.email, name: user.username },
+    { id: user.id, email: user.email, name: user.username, accountType: user.accountType },
     runtimeConfig.jwtSecret,
   )
 

@@ -79,6 +79,8 @@ const actionLabel = (type: ResolutionActionType) => {
   }
 }
 
+const requestFetch = useRequestFetch()
+
 const {
   data: queueData,
   pending,
@@ -86,11 +88,10 @@ const {
 } = await useAsyncData(
   () => `admin:disputes:${activeStatus.value}`,
   () =>
-    $fetch<RouterOutputs["dispute"]["list"]>("/api/disputes", {
+    requestFetch<RouterOutputs["dispute"]["list"]>("/api/disputes", {
       query: { status: activeStatus.value },
     }),
   {
-    server: false,
     watch: [activeStatus],
   },
 )

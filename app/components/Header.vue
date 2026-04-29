@@ -65,22 +65,12 @@ const bridgeAndLoadAccountType = async () => {
     return
   }
 
-  const bridgedAccessToken = useState<string | null>("header-bridged-access-token", () => null)
+  const { ensureBridged } = useSessionBridge()
+  await ensureBridged(session.access_token)
 
-  try {
-    if (bridgedAccessToken.value !== session.access_token) {
-      await $fetch("/api/auth/supabase-session", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-      bridgedAccessToken.value = session.access_token
-    }
-
-    const response = await $fetch<{ user: { accountType: string | null } }>("/api/auth/me")
-    accountType.value = response.user.accountType
-  } catch {
-    accountType.value = null
-  }
+  const { fetch: fetchAuthUser } = useAuthUser()
+  const authUser = await fetchAuthUser()
+  accountType.value = authUser?.accountType ?? null
 }
 
 watch(user, () => {

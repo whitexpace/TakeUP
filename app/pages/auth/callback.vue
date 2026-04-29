@@ -42,10 +42,8 @@ onMounted(async () => {
     }
 
     // Bridge Supabase session → custom JWT so account/listing APIs work
-    await $fetch("/api/auth/supabase-session", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    }).catch(() => undefined)
+    const { ensureBridged } = useSessionBridge()
+    await ensureBridged(session.access_token)
 
     await navigateTo("/dashboard")
   } catch (error) {

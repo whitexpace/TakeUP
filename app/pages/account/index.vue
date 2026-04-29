@@ -1,26 +1,10 @@
 <script setup lang="ts">
+import type { AuthMeUser } from "~/composables/use-auth-user"
+
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
-
-type AuthMeResponse = {
-  user: {
-    id: string
-    email: string
-    name: string
-    username: string
-    firstName: string
-    middleName: string | null
-    lastName: string
-    accountType: string | null
-    createdAt: string | null
-    location: string | null
-    avatarUrl: string | null
-    bio: string | null
-    pronouns: string | null
-  }
-}
 
 type UsernameAvailabilityResponse = {
   username: string
@@ -83,19 +67,18 @@ const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
 const avatarBucket = runtimeConfig.public.userAvatarBucket
 
-const {
-  data: authData,
-  refresh: refreshAuthData,
-  pending: isAuthDataPending,
-} = useAsyncData("account:auth-me", () => $fetch<AuthMeResponse>("/api/auth/me"), {
-  server: false, // Only fetch on client after middleware runs
-  watch: [user], // Refetch if user changes
-})
+const { authUser: cachedAuthUser, fetch: fetchAuthUser, refresh: refreshAuthUser } = useAuthUser()
 
+// Provide a compatible shape for existing template refs (authData.value?.user.X → authData.value?.user.X)
+const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
+const refreshAuthData = refreshAuthUser
+const isAuthDataPending = ref(true)
 const isHydrated = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   isHydrated.value = true
+  await fetchAuthUser()
+  isAuthDataPending.value = false
 })
 
 const isInitialPageLoading = computed(

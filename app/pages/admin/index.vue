@@ -1,8 +1,11 @@
 <script setup lang="ts">
 definePageMeta({
   layout: "admin",
-  middleware: "admin-auth",
+  middleware: [
+    "admin-auth",
+    function () {
+      return navigateTo("/admin/disputes", { replace: true, redirectCode: 302 })
+    },
+  ],
 })
-
-await navigateTo("/admin/disputes", { replace: true })
 </script>
