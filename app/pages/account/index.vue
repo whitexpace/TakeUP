@@ -879,55 +879,6 @@ const deleteAccount = async () => {
       <section
         class="rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-5 shadow-[0_8px_24px_rgba(32,33,36,0.04)] sm:px-7 sm:py-6"
       >
-        <div class="space-y-1">
-          <h2 class="text-[22px] font-semibold text-noble-black">Notifications</h2>
-          <p class="text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-            Manage how you receive notifications
-          </p>
-        </div>
-
-        <div class="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 class="text-[20px] font-medium text-noble-black/90">Email Notifications</h3>
-            <p class="mt-1 text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-              Receive updates about your transactions
-            </p>
-          </div>
-
-          <div class="flex h-11 w-[137px] shrink-0 items-center justify-center self-center">
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="emailNotificationsEnabled"
-              class="relative inline-flex h-8 w-16 items-center rounded-full transition-colors duration-200"
-              :class="emailNotificationsEnabled ? 'bg-burning-orange' : 'bg-cinnamon-ice'"
-              @click="emailNotificationsEnabled = !emailNotificationsEnabled"
-            >
-              <span class="sr-only">Toggle email notifications</span>
-              <span
-                class="absolute left-2 text-[10px] font-medium tracking-[0.3px] text-white transition-opacity duration-200"
-                :class="emailNotificationsEnabled ? 'opacity-100' : 'opacity-0'"
-              >
-                ON
-              </span>
-              <span
-                class="absolute right-2 text-[10px] font-medium tracking-[0.3px] text-noble-black transition-opacity duration-200"
-                :class="emailNotificationsEnabled ? 'opacity-0' : 'opacity-100'"
-              >
-                OFF
-              </span>
-              <span
-                class="ml-1 inline-block h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-200"
-                :class="emailNotificationsEnabled ? 'translate-x-[28px]' : 'translate-x-0'"
-              />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-5 shadow-[0_8px_24px_rgba(32,33,36,0.04)] sm:px-7 sm:py-6"
-      >
         <div class="flex items-center gap-3">
           <svg
             width="24"
