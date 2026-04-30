@@ -17,6 +17,11 @@ const { notifications, loadNotifications, markNotificationRead, markAllNotificat
 
 const adminLinks: AdminLink[] = [
   {
+    label: "Users",
+    to: "/admin/users",
+    description: "Manage users, roles, and account settings.",
+  },
+  {
     label: "Dispute Queue",
     to: "/admin/disputes",
     description: "Review submitted rental disputes and appeals.",
