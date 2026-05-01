@@ -9,6 +9,7 @@ export type CommunityOfferStatus = (typeof communityOfferStatuses)[number]
 export interface CommunityMember {
   profileId: number
   userId: string
+  username: string
   name: string
   avatar: string
 }
@@ -80,7 +81,7 @@ export interface CommunityRequestComposerInput {
 
 export interface Reply {
   id: string
-  user: Pick<CommunityMember, "name" | "avatar">
+  user: Pick<CommunityMember, "name" | "avatar" | "username">
   text: string
   upvotes: number
   replies?: Reply[]

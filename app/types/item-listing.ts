@@ -79,6 +79,7 @@ export interface ItemCardViewModel {
   price?: string | number
   priceUnit?: "hour" | "day"
   owner: string
+  ownerUsername?: string
   isLiked?: boolean
 }
 

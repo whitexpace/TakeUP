@@ -144,9 +144,18 @@
     <!-- Owner Section -->
     <div v-if="!isManagement" class="px-3 py-2 sm:px-5 sm:py-4 flex items-center bg-white">
       <span
-        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate"
-        >by {{ owner }}</span
+        v-if="ownerUsername"
+        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-60 truncate hover:text-burning-orange hover:opacity-100 hover:underline transition-all duration-200 cursor-pointer"
+        @click.stop="navigateToProfile"
       >
+        by {{ owner }}
+      </span>
+      <span
+        v-else
+        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate"
+      >
+        by {{ owner }}
+      </span>
     </div>
   </div>
 </template>
@@ -170,6 +179,7 @@ const props = defineProps<{
   price?: string | number
   priceUnit?: "hour" | "day"
   owner: string
+  ownerUsername?: string
   isLiked?: boolean
   fromPage?: "likes" | "dashboard"
   isManagement?: boolean
@@ -241,6 +251,12 @@ const navigateToDetails = () => {
   }
 
   router.push(itemDetailPath.value)
+}
+
+const navigateToProfile = () => {
+  if (props.ownerUsername) {
+    navigateTo(`/profile/${props.ownerUsername}`)
+  }
 }
 
 const toggleLike = async () => {
