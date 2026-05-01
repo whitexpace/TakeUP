@@ -688,35 +688,74 @@ onUnmounted(() => {
                 </svg>
               </button>
 
-              <div
-                v-if="activeConversation.otherParticipant?.avatarUrl"
-                class="h-10 w-10 overflow-hidden rounded-full"
+              <NuxtLink
+                v-if="activeConversation.otherParticipant?.username"
+                :to="`/profile/${activeConversation.otherParticipant.username}`"
+                class="flex items-center gap-3 group/participant"
               >
-                <img
-                  :src="activeConversation.otherParticipant.avatarUrl"
-                  :alt="getParticipantName(activeConversation.otherParticipant)"
-                  class="h-full w-full object-cover"
-                />
-              </div>
-              <div
-                v-else
-                class="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white"
-                :class="
-                  getAvatarColor(
-                    activeConversation.otherParticipant?.id ?? activeConversation.conversationId,
-                  )
-                "
-              >
-                {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
-              </div>
+                <div
+                  v-if="activeConversation.otherParticipant?.avatarUrl"
+                  class="h-10 w-10 overflow-hidden rounded-full group-hover/participant:scale-105 transition-transform"
+                >
+                  <img
+                    :src="activeConversation.otherParticipant.avatarUrl"
+                    :alt="getParticipantName(activeConversation.otherParticipant)"
+                    class="h-full w-full object-cover"
+                  />
+                </div>
+                <div
+                  v-else
+                  class="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white group-hover/participant:scale-105 transition-transform"
+                  :class="
+                    getAvatarColor(
+                      activeConversation.otherParticipant?.id ?? activeConversation.conversationId,
+                    )
+                  "
+                >
+                  {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
+                </div>
 
-              <div class="flex flex-col">
-                <span class="text-[15px] font-bold leading-tight">{{
-                  getParticipantName(activeConversation.otherParticipant)
-                }}</span>
-                <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
-                  activeConversation.item.name
-                }}</span>
+                <div class="flex flex-col">
+                  <span
+                    class="text-[15px] font-bold leading-tight group-hover:text-burning-orange transition-colors"
+                    >{{ getParticipantName(activeConversation.otherParticipant) }}</span
+                  >
+                  <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
+                    activeConversation.item.name
+                  }}</span>
+                </div>
+              </NuxtLink>
+              <div v-else class="flex items-center gap-3">
+                <div
+                  v-if="activeConversation.otherParticipant?.avatarUrl"
+                  class="h-10 w-10 overflow-hidden rounded-full"
+                >
+                  <img
+                    :src="activeConversation.otherParticipant.avatarUrl"
+                    :alt="getParticipantName(activeConversation.otherParticipant)"
+                    class="h-full w-full object-cover"
+                  />
+                </div>
+                <div
+                  v-else
+                  class="flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white"
+                  :class="
+                    getAvatarColor(
+                      activeConversation.otherParticipant?.id ?? activeConversation.conversationId,
+                    )
+                  "
+                >
+                  {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
+                </div>
+
+                <div class="flex flex-col">
+                  <span class="text-[15px] font-bold leading-tight">{{
+                    getParticipantName(activeConversation.otherParticipant)
+                  }}</span>
+                  <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
+                    activeConversation.item.name
+                  }}</span>
+                </div>
               </div>
             </div>
 

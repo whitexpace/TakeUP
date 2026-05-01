@@ -461,6 +461,7 @@ watch(
             :price="item.price"
             :price-unit="item.priceUnit"
             :owner="item.owner"
+            :owner-username="item.ownerUsername"
             :is-liked="item.isLiked"
             @like-changed="handleLikeChanged"
           />

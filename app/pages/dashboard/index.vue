@@ -105,6 +105,28 @@
       </p>
     </div>
 
+    <!-- User Search Results (Shopee style) -->
+    <div
+      v-if="serverSearchQuery && topMatchingUsers && topMatchingUsers.length > 0"
+      class="mb-10 animate-fade-in"
+    >
+      <div class="flex items-center gap-2 mb-4">
+        <h3
+          class="font-geist font-bold text-noble-black uppercase tracking-wider text-xs opacity-50"
+        >
+          Top Matches
+        </h3>
+        <div class="h-[1px] flex-1 bg-cinnamon-ice/20"></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <UserSearchCard
+          v-for="matchingUser in topMatchingUsers"
+          :key="matchingUser.id"
+          v-bind="matchingUser"
+        />
+      </div>
+    </div>
+
     <!-- Items Grid -->
     <div
       v-if="cardItems.length > 0 || isLoading"
@@ -125,6 +147,7 @@
         :price="item.price"
         :price-unit="item.priceUnit"
         :owner="item.owner"
+        :owner-username="item.ownerUsername"
         :is-liked="item.isLiked"
       />
 
@@ -208,6 +231,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue"
 import type { ItemCardViewModel } from "../../types/item-listing"
+import type { UserSearchResult } from "~/types/user"
 import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
 import { filterListedItemsBySearch } from "../../utils/item-search"
@@ -246,6 +270,18 @@ const serverSearchQuery = ref("")
 const searchTerm = computed(() => searchInput.value.trim())
 const INITIAL_DASHBOARD_PAGE_SIZE = 8
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
+
+// User Search Logic
+const { data: topMatchingUsers } = await useAsyncData(
+  () => `user-search-${serverSearchQuery.value}`,
+  async () => {
+    if (!serverSearchQuery.value) return [] as UserSearchResult[]
+    return await $fetch<UserSearchResult[]>("/api/users/search", {
+      query: { q: serverSearchQuery.value },
+    })
+  },
+  { watch: [serverSearchQuery] },
+)
 
 const clearSearch = () => {
   searchInput.value = ""
@@ -503,3 +539,20 @@ watch(
   { deep: true },
 )
 </script>
+
+<style scoped>
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>
