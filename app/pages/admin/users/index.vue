@@ -291,14 +291,20 @@ const clearFilters = () => {
                     {{ user.firstName.charAt(0) }}{{ user.lastName.charAt(0) }}
                   </div>
                   <div>
-                    <p class="text-sm font-medium text-noble-black group-hover:text-burning-orange transition-colors duration-200">
+                    <p
+                      class="text-sm font-medium text-noble-black group-hover:text-burning-orange transition-colors duration-200"
+                    >
                       {{ user.firstName }} {{ user.lastName }}
                     </p>
                     <p class="text-xs text-gray-500">@{{ user.username }}</p>
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200">{{ user.email }}</td>
+              <td
+                class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200"
+              >
+                {{ user.email }}
+              </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span
                   :class="[
@@ -333,7 +339,9 @@ const clearFilters = () => {
                   </span>
                 </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200">
+              <td
+                class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200"
+              >
                 {{ new Date(user.createdAt).toLocaleDateString() }}
               </td>
             </tr>
