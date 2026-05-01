@@ -274,31 +274,31 @@ const clearFilters = () => {
               >
                 Joined
               </th>
-              <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
-              >
-                Actions
-              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-cinnamon-ice">
-            <tr v-for="user in users" :key="user.id" class="hover:bg-gray-50 transition-colors">
+            <tr
+              v-for="user in users"
+              :key="user.id"
+              class="user-row group cursor-pointer transition-all duration-200 hover:bg-orange-50 hover:shadow-md hover:border-burning-orange/30"
+              @click="viewUserProfile(user.id)"
+            >
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-3">
                   <div
-                    class="w-10 h-10 rounded-full bg-gradient-to-br from-burning-orange to-cinnabar-red flex items-center justify-center text-white text-sm font-semibold"
+                    class="w-10 h-10 rounded-full bg-gradient-to-br from-burning-orange to-cinnabar-red flex items-center justify-center text-white text-sm font-semibold group-hover:scale-110 transition-transform duration-200"
                   >
                     {{ user.firstName.charAt(0) }}{{ user.lastName.charAt(0) }}
                   </div>
                   <div>
-                    <p class="text-sm font-medium text-noble-black">
+                    <p class="text-sm font-medium text-noble-black group-hover:text-burning-orange transition-colors duration-200">
                       {{ user.firstName }} {{ user.lastName }}
                     </p>
                     <p class="text-xs text-gray-500">@{{ user.username }}</p>
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ user.email }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200">{{ user.email }}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span
                   :class="[
@@ -333,16 +333,8 @@ const clearFilters = () => {
                   </span>
                 </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200">
                 {{ new Date(user.createdAt).toLocaleDateString() }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right">
-                <button
-                  class="px-3 py-2 text-xs font-medium text-burning-orange hover:text-cinnabar-red hover:bg-orange-50 rounded-lg transition-colors"
-                  @click="viewUserProfile(user.id)"
-                >
-                  View Profile
-                </button>
               </td>
             </tr>
           </tbody>
