@@ -557,13 +557,32 @@ const getAuthHeaders = async () => {
   }
 }
 
-const enumerateRequestedDates = (startDate: string, endDate: string) => {
+const enumerateRequestedDates = (
+  startDate: string,
+  startTime: string,
+  endDate: string,
+  endTime: string,
+) => {
+  const start = new Date(`${startDate}T${startTime}`)
+  const end = new Date(`${endDate}T${endTime}`)
+
+  if (startDate === endDate) {
+    return [start.toISOString(), end.toISOString()]
+  }
+
   const dates: string[] = []
   const cursor = new Date(`${startDate}T00:00:00`)
-  const end = new Date(`${endDate}T00:00:00`)
+  const endDay = new Date(`${endDate}T00:00:00`)
 
-  while (cursor.getTime() <= end.getTime()) {
-    dates.push(new Date(cursor).toISOString())
+  while (cursor.getTime() <= endDay.getTime()) {
+    const currentDayTime = cursor.getTime()
+    if (currentDayTime === new Date(`${startDate}T00:00:00`).getTime()) {
+      dates.push(start.toISOString())
+    } else if (currentDayTime === endDay.getTime()) {
+      dates.push(end.toISOString())
+    } else {
+      dates.push(new Date(cursor).toISOString())
+    }
     cursor.setDate(cursor.getDate() + 1)
   }
 
@@ -726,7 +745,12 @@ const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
       body: {
         itemNeeded: payload.itemNeeded,
         referenceImageUrl: payload.referenceImageUrl ?? null,
-        requestedDates: enumerateRequestedDates(payload.startDate, payload.endDate),
+        requestedDates: enumerateRequestedDates(
+          payload.startDate,
+          payload.startTime,
+          payload.endDate,
+          payload.endTime,
+        ),
         priceRange: [payload.minimumPrice, payload.maximumPrice],
         description: payload.description,
         status: "OPEN",
