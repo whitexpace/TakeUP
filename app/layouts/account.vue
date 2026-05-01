@@ -3,45 +3,190 @@ import { computed, onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 
 const route = useRoute()
-const showMobileSidebar = ref(false)
+const isSidebarOpen = ref(true)
+const isMobile = ref(false)
 const showLogoutModal = ref(false)
 const isHeaderVisible = ref(true)
+
 const hideSidebar = computed(() => Boolean(route.meta.hideAccountSidebar))
 const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
   useNotifications()
 
-type AccountLink = {
-  label: string
-  to: string
+const user = useSupabaseUser()
+const supabase = useSupabaseClient()
+
+type AuthMeResponse = {
+  user: {
+    id: string
+    email: string
+    name: string
+    username: string
+    firstName: string
+    middleName: string | null
+    lastName: string
+    accountType: string | null
+    avatarUrl: string | null
+  }
 }
 
-const baseLinks: AccountLink[] = [
-  { label: "Account Information", to: "/account" },
-  { label: "My Wallet", to: "/account/wallet" },
-  { label: "My Transactions", to: "/account/transactions" },
-  { label: "My Listings", to: "/account/listings" },
-  { label: "My Listing Analytics", to: "/account/analytics" },
-  { label: "My Rewards", to: "/account/rewards" },
-  { label: "My Reviews", to: "/account/reviews" },
-]
-const links = computed<AccountLink[]>(() => baseLinks)
+const { data: authData } = useAsyncData(
+  "account:auth-me",
+  () => $fetch<AuthMeResponse>("/api/auth/me"),
+  {
+    server: false,
+    watch: [user],
+  },
+)
 
-const isActive = (link: AccountLink) => {
-  if (link.to === "/account") return route.path === "/account"
+// Helper to safely extract string from metadata
+const asNonEmptyString = (val: unknown) =>
+  typeof val === "string" && val.trim() ? val.trim() : null
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value !== "object" || value === null) return null
+  return value as Record<string, unknown>
+}
 
-  // "Booking Requests" (/account/requests) should highlight "My Listings"
-  if (link.to === "/account/listings" && route.path.startsWith("/account/requests")) {
-    return true
+const getIdentityMetadata = (authUser: unknown) => {
+  const authUserRecord = asRecord(authUser)
+  const identities = authUserRecord?.identities
+  if (!Array.isArray(identities)) return []
+
+  return identities
+    .map((identity) => {
+      const identityRecord = asRecord(identity)
+      return asRecord(identityRecord?.identity_data) ?? asRecord(identityRecord?.provider_metadata)
+    })
+    .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
+}
+
+const buildNameFromSource = (source: Record<string, unknown> | null) => {
+  if (!source) return null
+  const directName =
+    asNonEmptyString(source.full_name) ||
+    asNonEmptyString(source.name) ||
+    asNonEmptyString(source.display_name)
+  if (directName) return directName
+
+  const firstName =
+    asNonEmptyString(source.given_name) ||
+    asNonEmptyString(source.first_name) ||
+    asNonEmptyString(source.firstName)
+  const lastName =
+    asNonEmptyString(source.family_name) ||
+    asNonEmptyString(source.last_name) ||
+    asNonEmptyString(source.lastName)
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
+  return fullName || null
+}
+
+const getAvatarFromSource = (source: Record<string, unknown> | null) => {
+  if (!source) return null
+  return (
+    asNonEmptyString(source.picture) ||
+    asNonEmptyString(source.avatar_url) ||
+    asNonEmptyString(source.photo_url) ||
+    asNonEmptyString(source.profile_image) ||
+    asNonEmptyString(source.image) ||
+    asNonEmptyString(source.avatarUrl)
+  )
+}
+
+const fullName = computed(() => {
+  const authUser = user.value
+  if (!authUser) return "Loading..."
+
+  // 1. Try DB name first (Highest priority for local edits)
+  const u = authData.value?.user
+  if (u) {
+    const dbParts = [u.firstName, u.middleName, u.lastName].filter(Boolean)
+    if (dbParts.length > 0) return dbParts.join(" ")
+    if (u.name && u.name !== u.username) return u.name
   }
 
-  return route.path.startsWith(link.to)
+  const authUserRecord = asRecord(authUser)
+  const metadataSources = [
+    asRecord(authUserRecord?.user_metadata),
+    asRecord(authUserRecord?.app_metadata),
+    ...getIdentityMetadata(authUser),
+  ]
+
+  // 2. Try metadata fields as fallback
+  for (const source of metadataSources) {
+    const name = buildNameFromSource(source)
+    if (name) return name
+  }
+
+  return authUser.email?.split("@")[0] || "User"
+})
+
+const profileAvatar = computed(() => {
+  const authUser = user.value
+  if (!authUser) return null
+
+  // 1. Try DB avatar first
+  const dbAvatar = asNonEmptyString(authData.value?.user.avatarUrl)
+  if (dbAvatar) return dbAvatar
+
+  const authUserRecord = asRecord(authUser)
+  const metadataSources = [
+    asRecord(authUserRecord?.user_metadata),
+    asRecord(authUserRecord?.app_metadata),
+    ...getIdentityMetadata(authUser),
+  ]
+
+  // 2. Try metadata sources as fallback
+  for (const source of metadataSources) {
+    const avatar = getAvatarFromSource(source)
+    if (avatar) return avatar
+  }
+
+  return null
+})
+
+const fallbackColors = ["bg-burning-orange", "bg-cinnamon-ice", "bg-wahoo", "bg-blue-estate"]
+
+const fallbackBgClass = computed(() => {
+  const userId = authData.value?.user.id
+  if (!userId) return "bg-burning-orange"
+  // Simple deterministic hash based on userId
+  const hash = userId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  return fallbackColors[hash % fallbackColors.length]
+})
+
+const firstInitial = computed(() => {
+  return fullName.value.charAt(0).toUpperCase()
+})
+
+const toggleSidebar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value
 }
 
-const supabase = useSupabaseClient()
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024
+  if (isMobile.value) {
+    isSidebarOpen.value = false
+  } else {
+    isSidebarOpen.value = true
+  }
+}
+
+onMounted(() => {
+  void loadNotifications()
+  handleResize()
+  window.addEventListener("resize", handleResize)
+})
+
+const isActive = (to: string) => {
+  if (to === "/account") return route.path === "/account"
+  if (to === "/account/listings" && route.path.startsWith("/account/requests")) {
+    return true
+  }
+  return route.path.startsWith(to)
+}
 
 const openLogoutModal = () => {
   showLogoutModal.value = true
-  showMobileSidebar.value = false
+  if (isMobile.value) isSidebarOpen.value = false
 }
 
 const cancelLogout = () => {
@@ -55,74 +200,334 @@ const confirmLogout = async () => {
   await navigateTo("/")
 }
 
-onMounted(() => {
-  void loadNotifications()
+const navGroups = computed(() => {
+  const groups = [
+    {
+      title: "Personal",
+      links: [
+        { label: "Account Information", to: "/account", icon: "user" },
+        { label: "My Wallet", to: "/account/wallet", icon: "wallet" },
+        { label: "My Transactions", to: "/account/transactions", icon: "transactions" },
+      ],
+    },
+    {
+      title: "My Listings",
+      links: [
+        { label: "All Listings", to: "/account/listings", icon: "listings" },
+        { label: "Analytics", to: "/account/analytics", icon: "analytics" },
+      ],
+    },
+    {
+      title: "My Perks",
+      links: [
+        { label: "Rewards", to: "/account/rewards", icon: "rewards" },
+        { label: "Reviews", to: "/account/reviews", icon: "reviews" },
+      ],
+    },
+  ]
+
+  if (authData.value?.user.accountType === "ADMIN") {
+    groups.push({
+      title: "Admin",
+      links: [{ label: "Disputes", to: "/admin/disputes", icon: "dispute" }],
+    })
+  }
+
+  return groups
 })
 </script>
 
 <template>
   <div class="flex h-screen flex-col overflow-hidden font-geist bg-white relative">
-    <!-- Top Navbar -->
+    <!-- Top Header -->
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-account-main-scrollbar"
       @mark-notification-read="markNotificationRead"
       @mark-all-notifications-read="markAllNotificationsRead"
-      @visibility-change="(visible) => (isHeaderVisible = visible)"
+      @visibility-change="(v) => (isHeaderVisible = v)"
     >
-      <template #mobile-menu>
-        <button
-          class="lg:hidden p-2 text-noble-black hover:text-burning-orange transition-colors"
-          aria-label="Open menu"
-          @click="showMobileSidebar = true"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
+      <template #left>
+        <div class="relative flex items-stretch group/tooltip h-full">
+          <button
+            v-if="!hideSidebar"
+            class="flex items-center justify-center px-2 text-noble-black transition-colors hover:text-burning-orange group"
+            aria-label="Toggle Sidebar"
+            @click="toggleSidebar"
           >
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            >
+              <path
+                d="M4 6H20M4 12H20M4 18H20"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <div class="custom-tooltip">
+            Toggle Sidebar
+            <div class="tooltip-arrow"></div>
+          </div>
+        </div>
       </template>
     </Header>
 
-    <!-- Main Content Container -->
-    <div class="relative flex flex-1 overflow-hidden">
-      <!-- Mobile backdrop -->
-      <Transition name="fade">
-        <div
-          v-if="showMobileSidebar && !hideSidebar"
-          class="fixed inset-0 z-30 bg-noble-black/50 lg:hidden"
-          @click="showMobileSidebar = false"
-        />
-      </Transition>
-
-      <!-- Left panel background strip (connects sidebar + logout visually) -->
+    <div class="flex flex-1 overflow-hidden h-screen relative">
+      <!-- Sidebar Overlay for Mobile -->
       <div
-        v-if="!hideSidebar"
-        class="pointer-events-none fixed inset-y-0 left-0 z-[35] w-[300px] lg:w-[360px] bg-cream transition-transform duration-300"
-        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+        v-if="!hideSidebar && isSidebarOpen && isMobile"
+        class="fixed inset-0 bg-noble-black/50 z-40 lg:hidden transition-opacity duration-300"
+        @click="isSidebarOpen = false"
       />
 
       <!-- Left Sidebar -->
       <aside
         v-if="!hideSidebar"
-        class="fixed inset-y-0 left-0 z-40 flex h-full w-[300px] shrink-0 flex-col bg-cream transition-all duration-500 ease-in-out lg:w-[360px]"
-        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+        class="bg-cream flex flex-col shrink-0 border-r border-cinnamon-ice/30 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
+        :class="[
+          isSidebarOpen
+            ? 'translate-x-0 w-[320px]'
+            : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
+          isHeaderVisible ? 'pt-14' : 'pt-0',
+        ]"
       >
-        <div class="flex h-full flex-col" :class="isHeaderVisible ? 'pt-14' : 'pt-0'">
-          <!-- Mobile close button -->
+        <!-- Profile Section -->
+        <div class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30">
+          <div class="flex items-center gap-4">
+            <div class="relative group shrink-0">
+              <!-- Branded Tri-color Border Container (Tight fit) -->
+              <div class="relative w-16 h-16 flex items-center justify-center rounded-full">
+                <!-- SVG Arcs for Border -->
+                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 64 64">
+                  <!-- Cinnamon Ice Arc -->
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r="31"
+                    fill="none"
+                    stroke="#dbbba7"
+                    stroke-width="2"
+                    stroke-dasharray="64.9 129.8"
+                    stroke-linecap="round"
+                  />
+                  <!-- Burning Orange Arc -->
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r="31"
+                    fill="none"
+                    stroke="#ff7124"
+                    stroke-width="2"
+                    stroke-dasharray="64.9 129.8"
+                    stroke-dashoffset="-64.9"
+                    stroke-linecap="round"
+                  />
+                  <!-- Blue Estate Arc -->
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r="31"
+                    fill="none"
+                    stroke="#3b4883"
+                    stroke-width="2"
+                    stroke-dasharray="64.9 129.8"
+                    stroke-dashoffset="-129.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+
+                <div
+                  class="w-[58px] h-[58px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
+                >
+                  <!-- Direct Image Tag for maximum reliability -->
+                  <img
+                    v-if="profileAvatar"
+                    :src="profileAvatar"
+                    class="w-full h-full object-cover"
+                    referrerpolicy="no-referrer"
+                  />
+                  <div
+                    v-else
+                    class="w-full h-full flex items-center justify-center text-white font-bold text-xl"
+                    :class="fallbackBgClass"
+                  >
+                    {{ firstInitial }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="min-w-0 flex-1">
+              <h2 class="font-bold text-[16px] text-noble-black truncate leading-tight mb-0.5">
+                {{ fullName }}
+              </h2>
+              <p class="text-[13px] text-noble-black/50 font-medium truncate">
+                {{ authData?.user.email || "" }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation Groups -->
+        <nav class="flex-1 overflow-y-auto py-8 px-4 custom-sidebar-scrollbar space-y-8">
+          <div v-for="group in navGroups" :key="group.title">
+            <h3 class="px-4 text-[15px] font-extrabold text-cinnamon-ice tracking-wider mb-3">
+              {{ group.title }}
+            </h3>
+            <div class="space-y-1">
+              <NuxtLink
+                v-for="link in group.links"
+                :key="link.label"
+                :to="link.to"
+                class="group flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200"
+                :class="
+                  isActive(link.to)
+                    ? 'bg-burning-orange/15 text-burning-orange font-bold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
+                    : 'text-noble-black/70 hover:bg-pale-cashmere/50 hover:text-noble-black border-l-4 border-transparent'
+                "
+                @click="isMobile && (isSidebarOpen = false)"
+              >
+                <!-- Icons -->
+                <div class="shrink-0 transition-transform duration-200 group-hover:scale-110">
+                  <svg
+                    v-if="link.icon === 'user'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'wallet'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"
+                    />
+                    <path d="M16 12h5" />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'transactions'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'listings'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'analytics'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="18" y1="20" x2="18" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'rewards'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="8" r="7" />
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'reviews'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.9A8.38 8.38 0 0 1 4 11.3a8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+                    />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'dispute'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <span class="text-[15px] truncate">{{ link.label }}</span>
+              </NuxtLink>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Logout Button -->
+        <div class="px-4 py-2.5 border-t border-cinnamon-ice/30">
           <button
-            class="absolute right-4 p-2 text-noble-black/50 hover:text-noble-black lg:hidden"
-            :class="isHeaderVisible ? 'top-16' : 'top-4'"
-            @click="showMobileSidebar = false"
+            class="flex items-center gap-3 w-full px-4 py-1.5 rounded-xl text-noble-black/70 hover:bg-cinnabar-red/10 hover:text-cinnabar-red transition-all duration-200"
+            @click="openLogoutModal"
           >
             <svg
               width="20"
@@ -130,84 +535,25 @@ onMounted(() => {
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="2"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
+            <span class="font-medium text-[15px]">Log Out</span>
           </button>
-
-          <!-- Sidebar Title -->
-          <div class="px-8 pt-10 pb-6">
-            <h2 class="font-bold text-[25px] text-blue-estate">MY ACCOUNT</h2>
-          </div>
-
-          <!-- Navigation Links -->
-          <nav class="flex flex-col pb-24">
-            <NuxtLink
-              v-for="link in links"
-              :key="link.label"
-              :to="link.to"
-              class="block w-full px-8 py-3 text-[18px] transition-all duration-200"
-              :class="
-                isActive(link)
-                  ? 'bg-burning-orange text-white font-medium'
-                  : 'text-noble-black bg-cream font-normal hover:bg-pale-cashmere'
-              "
-              @click="showMobileSidebar = false"
-            >
-              {{ link.label }}
-            </NuxtLink>
-          </nav>
         </div>
       </aside>
 
-      <!-- Logout Section (Pinned to bottom-left of screen) -->
-      <div
-        v-if="!hideSidebar"
-        class="fixed bottom-0 left-0 z-50 w-[300px] lg:w-[360px] bg-cream transition-transform duration-300"
-        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
-      >
-        <button
-          class="flex items-center gap-3 w-full px-8 py-5 group transition-all duration-200 text-noble-black"
-          @click="openLogoutModal"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="transition-colors duration-200 group-hover:text-burning-orange"
-          >
-            <path
-              d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-              stroke="currentColor"
-              stroke-width="1"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span
-            class="font-normal text-[18px] transition-colors duration-200 group-hover:text-burning-orange"
-            >Log Out</span
-          >
-        </button>
-      </div>
-
-      <!-- Page Content Slot -->
+      <!-- Main Content Area -->
       <main
-        class="custom-account-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-white transition-all duration-500 ease-in-out"
-        :class="hideSidebar ? '' : 'lg:ml-[360px]'"
+        class="flex-1 bg-white overflow-y-auto custom-account-main-scrollbar transition-all duration-500 ease-in-out relative"
+        :class="isHeaderVisible ? 'pt-14' : 'pt-0'"
       >
-        <div
-          :class="[
-            hideSidebar
-              ? 'px-4 pb-4 sm:px-6 sm:pb-6 lg:px-12 lg:pb-8'
-              : 'px-4 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8',
-            isHeaderVisible ? 'pt-24' : 'pt-10',
-          ]"
-        >
+        <div class="mx-auto px-6 sm:px-12 lg:px-16 xl:px-20 py-8 pt-10 max-w-[1400px]">
           <slot />
         </div>
       </main>
@@ -217,7 +563,7 @@ onMounted(() => {
     <Teleport to="body">
       <div
         v-if="showLogoutModal"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 font-geist"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
       >
         <div
           class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm transition-opacity"
@@ -245,54 +591,52 @@ onMounted(() => {
                 />
               </svg>
             </div>
-            <h3 class="text-2xl font-bold text-blue-estate mb-2">Confirm Logout</h3>
+            <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Logout</h3>
             <p class="text-noble-black/50 mb-8 font-medium">Are you sure you want to log out?</p>
             <div
               class="w-full bg-cream rounded-xl p-5 mb-8 text-left space-y-4 border border-cinnamon-ice/30"
             >
-              <div class="flex items-center gap-3">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
+              <div class="flex items-center gap-3 text-noble-black/70">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <path
-                    d="M8 12L11 15L16 9"
-                    stroke="white"
-                    stroke-width="1.5"
+                    d="M20 6L9 17L4 12"
+                    stroke="currentColor"
+                    stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   />
                 </svg>
-                <span class="text-noble-black text-[15px] font-light leading-tight"
+                <span class="text-[14px] font-medium leading-tight"
                   >Requests will remain pending</span
                 >
               </div>
-              <div class="flex items-center gap-3">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" class="fill-blue-estate" />
+              <div class="flex items-center gap-3 text-noble-black/70">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <path
-                    d="M8 12L11 15L16 9"
-                    stroke="white"
-                    stroke-width="1.5"
+                    d="M20 6L9 17L4 12"
+                    stroke="currentColor"
+                    stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   />
                 </svg>
-                <span class="text-noble-black text-[15px] font-light leading-tight"
+                <span class="text-[14px] font-medium leading-tight"
                   >You can review them after logging back in</span
                 >
               </div>
             </div>
             <div class="flex flex-col sm:flex-row gap-3 w-full">
               <button
-                class="flex-1 px-6 py-3 border-[0.5px] border-cinnamon-ice rounded-lg text-noble-black font-medium hover:bg-pale-cashmere transition-colors duration-200 focus:outline-none"
+                class="flex-1 px-6 py-3 bg-cream rounded-xl text-noble-black font-semibold hover:bg-pale-cashmere transition-all duration-200"
                 @click="cancelLogout"
               >
-                Go Back
+                Cancel
               </button>
               <button
-                class="flex-1 px-6 py-3 bg-burning-orange text-white rounded-lg font-medium hover:bg-cinnabar-red transition-colors duration-200 focus:outline-none"
+                class="flex-1 px-6 py-3 bg-burning-orange text-white rounded-xl font-semibold hover:bg-cinnabar-red shadow-lg shadow-burning-orange/20 transition-all duration-200"
                 @click="confirmLogout"
               >
-                Log Out Anyway
+                Log Out
               </button>
             </div>
           </div>
@@ -304,7 +648,7 @@ onMounted(() => {
 
 <style scoped>
 .custom-account-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 .custom-account-main-scrollbar::-webkit-scrollbar-track {
@@ -312,27 +656,78 @@ onMounted(() => {
 }
 
 .custom-account-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%");
+  background: theme("colors.cinnamon-ice / 40%");
   border-radius: 20px;
 }
 
 .custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
+  background: theme("colors.cinnamon-ice / 60%");
 }
 
-.custom-account-main-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.noble-black / 10%") transparent;
+.custom-sidebar-scrollbar::-webkit-scrollbar {
+  width: 3px;
 }
-</style>
 
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s;
+.custom-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
-.fade-enter-from,
-.fade-leave-to {
+
+.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice / 30%");
+  border-radius: 20px;
+}
+
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
   opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
 }
 </style>

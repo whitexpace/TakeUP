@@ -52,7 +52,7 @@
       <!-- Left Sidebar -->
       <aside
         v-if="!hideSidebar"
-        class="bg-cream flex-col shrink-0 border-r border-cinnamon-ice transition-all duration-500 ease-in-out z-50 overflow-y-auto custom-sidebar-scrollbar fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
+        class="bg-cream flex-col shrink-0 border-r border-cinnamon-ice/40 transition-all duration-500 ease-in-out z-50 overflow-y-auto custom-sidebar-scrollbar fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
         :class="[
           isSidebarOpen
             ? 'translate-x-0 w-80'

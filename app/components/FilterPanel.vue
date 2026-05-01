@@ -17,7 +17,7 @@
           Clear all
         </button>
       </div>
-      <div class="w-full h-[1px] bg-cinnamon-ice/50 mt-4 -mb-4"></div>
+      <div class="w-full h-[1px] bg-cinnamon-ice/30 mt-4 -mb-4"></div>
     </div>
 
     <!-- Listing Types -->
@@ -62,20 +62,15 @@
           >
             <div class="relative flex items-center justify-center">
               <input
-                v-model="selectedListingTypes"
-                type="checkbox"
+                v-model="internalSelectedListingType"
+                type="radio"
                 :value="type"
-                class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/60 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
+                name="listingType"
+                class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/40 rounded-full checked:border-burning-orange transition-all duration-300 cursor-pointer"
               />
-              <svg
-                class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="3"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+              <div
+                class="absolute w-2.5 h-2.5 bg-burning-orange rounded-full opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
+              ></div>
             </div>
             <span
               class="ml-3 font-geist text-[14px] text-noble-black/80 group-hover:text-noble-black transition-colors duration-300"
@@ -85,7 +80,7 @@
           </label>
         </div>
       </transition>
-      <div class="w-full h-[1px] bg-cinnamon-ice/50"></div>
+      <div class="w-full h-[1px] bg-cinnamon-ice/30"></div>
     </div>
 
     <!-- Categories -->
@@ -129,7 +124,7 @@
                 v-model="categorySearch"
                 type="text"
                 placeholder="Search categories"
-                class="w-full h-[44px] bg-white rounded-[12px] border border-cinnamon-ice/60 px-4 pr-10 font-geist text-[14px] text-noble-black placeholder:text-noble-black/45 focus:outline-none focus:border-burning-orange transition-colors"
+                class="w-full h-[44px] bg-white rounded-[12px] border border-cinnamon-ice/40 px-4 pr-10 font-geist text-[14px] text-noble-black placeholder:text-noble-black/45 focus:outline-none focus:border-burning-orange transition-colors"
                 @focus="openCategoryDropdown"
                 @input="openCategoryDropdown"
               />
@@ -157,7 +152,7 @@
 
             <div
               v-if="isCategoryDropdownOpen"
-              class="absolute left-0 right-0 mt-2 max-h-60 overflow-y-auto rounded-[12px] border border-cinnamon-ice/60 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.08)] z-20"
+              class="absolute left-0 right-0 mt-2 max-h-60 overflow-y-auto rounded-[12px] border border-cinnamon-ice/40 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.08)] z-20"
             >
               <button
                 v-for="cat in filteredCategoryOptions"
@@ -184,7 +179,7 @@
             <div
               v-for="cat in selectedCategoryEntries"
               :key="cat.name"
-              class="inline-flex max-w-full items-center gap-2 rounded-[10px] border border-cinnamon-ice/60 bg-white px-3 py-2"
+              class="inline-flex max-w-full items-center gap-2 rounded-[10px] border border-cinnamon-ice/40 bg-white px-3 py-2"
             >
               <span class="font-geist text-[13px] text-noble-black/85 truncate">
                 {{ cat.name }}
@@ -215,7 +210,7 @@
           </div>
         </div>
       </transition>
-      <div class="w-full h-[1px] bg-cinnamon-ice/50"></div>
+      <div class="w-full h-[1px] bg-cinnamon-ice/30"></div>
     </div>
 
     <!-- Price Range -->
@@ -265,7 +260,7 @@
                   type="radio"
                   name="priceRange"
                   :value="price.label"
-                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/60 rounded-full checked:border-burning-orange transition-all duration-300 cursor-pointer"
+                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/40 rounded-full checked:border-burning-orange transition-all duration-300 cursor-pointer"
                 />
                 <div
                   class="absolute w-2.5 h-2.5 bg-burning-orange rounded-full scale-0 peer-checked:scale-100 transition-transform duration-300 pointer-events-none"
@@ -285,7 +280,7 @@
           </label>
         </div>
       </transition>
-      <div class="w-full h-[1px] bg-cinnamon-ice/50"></div>
+      <div class="w-full h-[1px] bg-cinnamon-ice/30"></div>
     </div>
 
     <!-- Rating -->
@@ -335,7 +330,7 @@
                   type="radio"
                   name="rating"
                   :value="rate.value"
-                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/60 rounded-full checked:border-burning-orange transition-all duration-300 cursor-pointer"
+                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/40 rounded-full checked:border-burning-orange transition-all duration-300 cursor-pointer"
                 />
                 <div
                   class="absolute w-2.5 h-2.5 bg-burning-orange rounded-full scale-0 peer-checked:scale-100 transition-transform duration-300 pointer-events-none"
@@ -372,7 +367,7 @@
           </label>
         </div>
       </transition>
-      <div class="w-full h-[1px] bg-cinnamon-ice/50"></div>
+      <div class="w-full h-[1px] bg-cinnamon-ice/30"></div>
     </div>
 
     <!-- Condition -->
@@ -421,7 +416,7 @@
                   v-model="selectedConditions"
                   type="checkbox"
                   :value="cond.name"
-                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/60 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
+                  class="peer appearance-none w-[18px] h-[18px] border-[1.5px] border-cinnamon-ice/40 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
                 />
                 <svg
                   class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
@@ -447,7 +442,7 @@
           </label>
         </div>
       </transition>
-      <div class="w-full h-[1px] bg-cinnamon-ice/50"></div>
+      <div class="w-full h-[1px] bg-cinnamon-ice/30"></div>
     </div>
 
     <!-- Availability Date -->
@@ -518,7 +513,7 @@
           </div>
         </div>
       </transition>
-      <div class="w-full h-[1px] bg-cinnamon-ice/50"></div>
+      <div class="w-full h-[1px] bg-cinnamon-ice/30"></div>
     </div>
   </div>
 </template>
@@ -560,6 +555,14 @@ const emit = defineEmits<{
 
 // ── Local reactive state synced with props ────────────────────────────────────
 const selectedListingTypes = ref<string[]>(props.selectedListingTypes ?? [])
+
+const internalSelectedListingType = computed({
+  get: () => selectedListingTypes.value[0] || "",
+  set: (val) => {
+    selectedListingTypes.value = val ? [val] : []
+  },
+})
+
 const selectedCategories = ref<string[]>(props.selectedCategories ?? [])
 const selectedPriceRange = ref<string>(props.selectedPriceRange ?? "")
 const selectedRating = ref<number | null>(props.selectedRating ?? null)

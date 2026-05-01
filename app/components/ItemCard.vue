@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto relative group"
+    class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full min-w-[260px] max-w-[360px] mx-auto relative group"
     :class="canNavigate ? 'cursor-pointer' : ''"
     @click="navigateToDetails"
   >
@@ -139,7 +139,7 @@
     </div>
 
     <!-- Divider -->
-    <div v-if="!isManagement" class="h-[1px] bg-cinnamon-ice w-full"></div>
+    <div v-if="!isManagement" class="h-[1px] bg-cinnamon-ice/30 w-full"></div>
 
     <!-- Owner Section -->
     <div v-if="!isManagement" class="px-3 py-2 sm:px-5 sm:py-4 flex items-center bg-white">

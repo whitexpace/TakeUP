@@ -1,5 +1,5 @@
 <template>
-  <div class="container mx-auto px-4 py-8 pt-16 max-w-7xl">
+  <div class="mx-auto px-6 sm:px-12 lg:px-16 xl:px-20 py-8 pt-16 max-w-[1600px]">
     <!-- Header Section -->
     <div class="mb-10">
       <h1 class="font-rewon text-[40px] text-noble-black leading-tight mb-2">
@@ -108,7 +108,7 @@
     <!-- Items Grid -->
     <div
       v-if="cardItems.length > 0 || isLoading"
-      class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6"
+      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-8"
     >
       <ItemCard
         v-for="item in cardItems"
