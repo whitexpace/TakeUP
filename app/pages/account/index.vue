@@ -162,7 +162,7 @@ const getAvatarFromSource = (source: Record<string, unknown> | null) => {
   )
 }
 
-const buildDbFullName = (payload: AuthMeResponse["user"] | undefined) => {
+const buildDbFullName = (payload: AuthMeUser | undefined) => {
   if (!payload) return undefined
 
   const fullName = [payload.firstName, payload.middleName, payload.lastName]

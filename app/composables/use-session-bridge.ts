@@ -8,6 +8,14 @@
  * - In-flight dedup: concurrent callers share a single network request
  */
 
+import type { AuthMeUser } from "./use-auth-user"
+
+type SupabaseSessionBridgeResponse = {
+  ok: boolean
+  expiresAt: string
+  user?: AuthMeUser
+}
+
 // Client-only in-flight promise so concurrent callers share one bridge request
 let inflightBridge: Promise<boolean> | null = null
 
@@ -15,6 +23,7 @@ export const useSessionBridge = () => {
   const bridgedAccessToken = useState<string | null>("session-bridged-access-token", () => null)
   // Hydrated by plugins/session-hydrate.server.ts when the JWT cookie is valid during SSR
   const cookieEmail = useState<string | null>("session-cookie-email", () => null)
+  const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 
   /**
    * Bridge the Supabase access token to a server-side httpOnly JWT cookie.
@@ -37,12 +46,17 @@ export const useSessionBridge = () => {
     // Deduplicate concurrent bridge calls
     if (inflightBridge) return inflightBridge
 
-    inflightBridge = $fetch("/api/auth/supabase-session", {
+    inflightBridge = $fetch<SupabaseSessionBridgeResponse>("/api/auth/supabase-session", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
     })
-      .then(() => {
+      .then((response) => {
         bridgedAccessToken.value = accessToken
+        cookieAccountType.value = response.user?.accountType ?? null
+        if (response.user) {
+          const { setCached } = useAuthUser()
+          setCached(response.user)
+        }
         return true
       })
       .catch(() => false)
@@ -57,6 +71,7 @@ export const useSessionBridge = () => {
   const clear = () => {
     bridgedAccessToken.value = null
     cookieEmail.value = null
+    cookieAccountType.value = null
     inflightBridge = null
   }
 

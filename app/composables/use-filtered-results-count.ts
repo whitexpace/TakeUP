@@ -74,7 +74,9 @@ export const useFilteredResultsCount = ({
   filterParams,
   debounceMs = 75,
 }: UseFilteredResultsCountOptions) => {
-  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
+  const supabase =
+    !import.meta.server && typeof useSupabaseClient === "function" ? useSupabaseClient() : null
+  const canUseSharedCache = !import.meta.server
   const totalResultsCount = ref<number | null>(null)
   const isCountLoading = ref(false)
   const requestVersion = ref(0)
@@ -91,7 +93,10 @@ export const useFilteredResultsCount = ({
     const query = buildResultsCountQuery(searchQuery, filterParams)
     let viewerCacheKey = "anonymous"
     let accessToken: string | undefined
-    if (supabase) {
+    if (import.meta.server) {
+      const event = useRequestEvent()
+      viewerCacheKey = event?.context.authUser?.id ?? viewerCacheKey
+    } else if (supabase) {
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -100,7 +105,7 @@ export const useFilteredResultsCount = ({
     }
 
     const cacheKey = `${viewerCacheKey}:${serializeResultsCountQuery(query)}`
-    const cachedCount = getCachedResultsCount(cacheKey)
+    const cachedCount = canUseSharedCache ? getCachedResultsCount(cacheKey) : null
 
     if (cachedCount !== null) {
       if (version === requestVersion.value) {
@@ -113,32 +118,38 @@ export const useFilteredResultsCount = ({
     isCountLoading.value = true
 
     try {
-      const pendingRequest = pendingResultsCountRequests.get(cacheKey)
+      const pendingRequest = canUseSharedCache ? pendingResultsCountRequests.get(cacheKey) : null
       const count = pendingRequest
         ? await pendingRequest
         : await (() => {
-            const request = $fetch<{ count: number }>("/api/items/count", {
+            const headers = import.meta.server
+              ? useRequestHeaders(["cookie"])
+              : accessToken
+                ? { authorization: `Bearer ${accessToken}` }
+                : undefined
+            const requestOptions = {
               query,
-              ...(accessToken
-                ? {
-                    headers: {
-                      authorization: `Bearer ${accessToken}`,
-                    },
-                  }
-                : {}),
-            }).then((result) => result.count)
+              ...(headers ? { headers } : {}),
+            }
+            const request = $fetch<{ count: number }>("/api/items/count", requestOptions).then(
+              (result) => result.count,
+            )
 
-            pendingResultsCountRequests.set(cacheKey, request)
+            if (canUseSharedCache) {
+              pendingResultsCountRequests.set(cacheKey, request)
+            }
 
             return request.finally(() => {
-              if (pendingResultsCountRequests.get(cacheKey) === request) {
+              if (canUseSharedCache && pendingResultsCountRequests.get(cacheKey) === request) {
                 pendingResultsCountRequests.delete(cacheKey)
               }
             })
           })()
 
       if (version === requestVersion.value) {
-        setCachedResultsCount(cacheKey, count)
+        if (canUseSharedCache) {
+          setCachedResultsCount(cacheKey, count)
+        }
         totalResultsCount.value = count
       }
     } catch {

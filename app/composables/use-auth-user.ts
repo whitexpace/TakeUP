@@ -29,6 +29,11 @@ let inflightRequest: Promise<AuthMeUser | null> | null = null
 export const useAuthUser = () => {
   const authUser = useState<AuthMeUser | null>("auth-user-cache", () => null)
 
+  /** Seed the shared cache from another authenticated endpoint. */
+  const setCached = (user: AuthMeUser | null) => {
+    authUser.value = user
+  }
+
   /** Fetch once; returns cached value on subsequent calls. */
   const fetch = async (): Promise<AuthMeUser | null> => {
     if (import.meta.server) return null
@@ -70,5 +75,5 @@ export const useAuthUser = () => {
     inflightRequest = null
   }
 
-  return { authUser, fetch, refresh, clear }
+  return { authUser, fetch, refresh, clear, setCached }
 }

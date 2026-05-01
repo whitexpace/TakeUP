@@ -7,6 +7,24 @@ import {
 } from "../../utils/auth-session"
 import { verifySupabaseJwt } from "../../utils/verify-supabase-jwt"
 
+const userProfileSelect = {
+  id: true,
+  email: true,
+  username: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  accountType: true,
+  status: true,
+  createdAt: true,
+  location: true,
+  avatarUrl: true,
+  bio: true,
+  pronouns: true,
+  lender: { select: { userId: true } },
+  borrower: { select: { userId: true } },
+}
+
 export default defineEventHandler(async (event) => {
   const runtimeConfig = useRuntimeConfig(event)
   const supabaseUrl = runtimeConfig.public.supabase?.url
@@ -29,9 +47,7 @@ export default defineEventHandler(async (event) => {
   let supabaseSub: string
 
   // Fast path: verify locally if SUPABASE_JWT_SECRET is configured (eliminates external HTTP call)
-  const localPayload = supabaseJwtSecret
-    ? verifySupabaseJwt(accessToken, supabaseJwtSecret)
-    : null
+  const localPayload = supabaseJwtSecret ? verifySupabaseJwt(accessToken, supabaseJwtSecret) : null
 
   if (localPayload) {
     email = localPayload.email.toLowerCase()
@@ -70,7 +86,7 @@ export default defineEventHandler(async (event) => {
 
   let user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, username: true, status: true, accountType: true },
+    select: userProfileSelect,
   })
 
   let isNewUser = false
@@ -88,7 +104,7 @@ export default defineEventHandler(async (event) => {
         lender: { create: { lenderRating: 0 } },
         borrower: { create: { borrowStatus: "ACTIVE", borrowerRating: 0 } },
       },
-      select: { id: true, email: true, username: true, status: true, accountType: true },
+      select: userProfileSelect,
     })
     isNewUser = true
   }
@@ -101,7 +117,7 @@ export default defineEventHandler(async (event) => {
     user = await prisma.user.update({
       where: { id: user.id },
       data: { status: "ACTIVE" },
-      select: { id: true, email: true, username: true, status: true, accountType: true },
+      select: userProfileSelect,
     })
   }
 
@@ -109,20 +125,33 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: "Your account is not active." })
   }
 
-  // Ensure both Lender and Borrower profiles exist (in parallel) - skip for new users
+  // Repair legacy users only when a role profile is actually missing.
   if (!isNewUser) {
-    await Promise.all([
-      prisma.lender.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id, lenderRating: 0 },
-        update: {},
-      }),
-      prisma.borrower.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
-        update: {},
-      }),
-    ])
+    const missingRoleProfileWrites = []
+
+    if (!user.lender) {
+      missingRoleProfileWrites.push(
+        prisma.lender.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, lenderRating: 0 },
+          update: {},
+        }),
+      )
+    }
+
+    if (!user.borrower) {
+      missingRoleProfileWrites.push(
+        prisma.borrower.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, borrowStatus: "ACTIVE", borrowerRating: 0 },
+          update: {},
+        }),
+      )
+    }
+
+    if (missingRoleProfileWrites.length > 0) {
+      await Promise.all(missingRoleProfileWrites)
+    }
   }
 
   const { token, expiresAt } = createSessionToken(
@@ -138,5 +167,23 @@ export default defineEventHandler(async (event) => {
     maxAge: sessionCookieMaxAgeSeconds,
   })
 
-  return { ok: true, expiresAt: expiresAt.toISOString() }
+  return {
+    ok: true,
+    expiresAt: expiresAt.toISOString(),
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.username,
+      username: user.username,
+      firstName: user.firstName,
+      middleName: user.middleName,
+      lastName: user.lastName,
+      accountType: user.accountType,
+      createdAt: user.createdAt,
+      location: user.location,
+      avatarUrl: user.avatarUrl,
+      bio: user.bio,
+      pronouns: user.pronouns,
+    },
+  }
 })

@@ -522,6 +522,10 @@ const removeReferenceImage = async () => {
 
 const uploadReferenceImage = async (file: File) => {
   const userId = await fetchCurrentUserId()
+  if (!userId) {
+    throw new Error("Please sign in again before uploading an image.")
+  }
+
   const storagePath = createStoragePath(file, userId)
 
   const {

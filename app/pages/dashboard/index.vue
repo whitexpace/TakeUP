@@ -388,6 +388,7 @@ const {
   searchQuery: serverSearchQuery,
   filterParams: filters.filterQueryParams,
   pageSize: INITIAL_DASHBOARD_PAGE_SIZE,
+  stateKey: "dashboard-listed-items",
 })
 
 const locallyFilteredItems = computed(() =>
@@ -454,6 +455,17 @@ const scheduleReload = () => {
   scheduleResultsCountRefresh()
 }
 
+const { data: initialDashboardItemsLoaded } = await useAsyncData(
+  "dashboard-initial-listed-items",
+  async () => {
+    await refresh()
+    return true
+  },
+  {
+    default: () => false,
+  },
+)
+
 // Infinite Scroll State
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
@@ -471,7 +483,12 @@ onMounted(() => {
     },
   )
 
-  void reload()
+  if (initialDashboardItemsLoaded.value) {
+    scheduleNextPagePrefetch()
+    void refreshResultsCount()
+  } else {
+    void reload()
+  }
 
   if (loadMoreTrigger.value) {
     observer.observe(loadMoreTrigger.value)

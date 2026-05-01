@@ -149,13 +149,16 @@ const fetchFilterMetadata = async () => {
 // Provide to child pages
 provide("dashboardFilters", filters)
 
-onMounted(async () => {
+onMounted(() => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
-  await loadNotifications()
+
+  const startupTasks: Array<Promise<unknown>> = [loadNotifications()]
   if (!hideSidebar.value) {
-    await fetchFilterMetadata()
+    startupTasks.push(fetchFilterMetadata())
   }
+
+  void Promise.allSettled(startupTasks)
 })
 
 onUnmounted(() => {

@@ -7,5 +7,6 @@ export default defineNuxtPlugin(() => {
   const event = useRequestEvent()
   if (event?.context.authUser?.email) {
     useState("session-cookie-email", () => event.context.authUser!.email)
+    useState("session-cookie-account-type", () => event.context.authUser!.accountType ?? null)
   }
 })

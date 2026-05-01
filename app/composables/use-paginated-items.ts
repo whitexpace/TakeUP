@@ -9,6 +9,8 @@ type UsePaginatedItemsOptions = {
   searchQuery: Ref<string>
   filterParams?: Ref<Record<string, string | undefined>>
   pageSize?: number
+  /** When set, items persist in useState across navigations (survives unmount). */
+  stateKey?: string
 }
 
 type PaginatedItemsQuery = Record<string, number | string | undefined>
@@ -91,23 +93,29 @@ export const usePaginatedItems = ({
   searchQuery,
   filterParams,
   pageSize = 12,
+  stateKey,
 }: UsePaginatedItemsOptions) => {
-  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
-  const items = ref<ListedItem[]>([])
+  const supabase =
+    !import.meta.server && typeof useSupabaseClient === "function" ? useSupabaseClient() : null
+  const canUseSharedCache = !import.meta.server
+  const items: Ref<ListedItem[]> = stateKey
+    ? useState<ListedItem[]>(stateKey, () => [])
+    : ref<ListedItem[]>([])
   const cursor = ref<ItemPaginationCursor | null>(null)
   const isLoading = ref(false)
   const hasMore = ref(true)
   const errorMessage = ref<string | null>(null)
   const requestVersion = ref(0)
   const loadedIds = new Set<string>()
+  const isFreshFetch = ref(false)
 
   const resetState = () => {
-    items.value = []
     cursor.value = null
     hasMore.value = true
     isLoading.value = false
     errorMessage.value = null
     loadedIds.clear()
+    isFreshFetch.value = true
   }
 
   const applyResponse = (response: PaginatedItemsResponse, version: number) => {
@@ -118,7 +126,13 @@ export const usePaginatedItems = ({
       loadedIds.add(item.id)
     }
 
-    items.value = [...items.value, ...uniqueItems]
+    // Fresh fetch — replace items (keeps old items visible during load, then swaps)
+    if (isFreshFetch.value) {
+      items.value = uniqueItems
+      isFreshFetch.value = false
+    } else {
+      items.value = [...items.value, ...uniqueItems]
+    }
     cursor.value = response.nextCursor
     hasMore.value = Boolean(response.nextCursor)
   }
@@ -136,7 +150,10 @@ export const usePaginatedItems = ({
     })
     let viewerCacheKey = "anonymous"
     let accessToken: string | undefined
-    if (supabase) {
+    if (import.meta.server) {
+      const event = useRequestEvent()
+      viewerCacheKey = event?.context.authUser?.id ?? viewerCacheKey
+    } else if (supabase) {
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -145,7 +162,7 @@ export const usePaginatedItems = ({
     }
 
     const cacheKey = `${viewerCacheKey}:${serializePaginatedItemsQuery(query)}`
-    const cachedResponse = getCachedPaginatedItemsResponse(cacheKey)
+    const cachedResponse = canUseSharedCache ? getCachedPaginatedItemsResponse(cacheKey) : null
 
     if (cachedResponse) {
       applyResponse(cachedResponse, version)
@@ -155,25 +172,27 @@ export const usePaginatedItems = ({
     isLoading.value = true
 
     try {
-      const pendingRequest = pendingPaginatedItemsRequests.get(cacheKey)
+      const pendingRequest = canUseSharedCache ? pendingPaginatedItemsRequests.get(cacheKey) : null
       const response = pendingRequest
         ? await pendingRequest
         : await (() => {
-            const request = $fetch<PaginatedItemsResponse>("/api/items", {
+            const headers = import.meta.server
+              ? useRequestHeaders(["cookie"])
+              : accessToken
+                ? { authorization: `Bearer ${accessToken}` }
+                : undefined
+            const requestOptions = {
               query,
-              ...(accessToken
-                ? {
-                    headers: {
-                      authorization: `Bearer ${accessToken}`,
-                    },
-                  }
-                : {}),
-            })
+              ...(headers ? { headers } : {}),
+            }
+            const request = $fetch<PaginatedItemsResponse>("/api/items", requestOptions)
 
-            pendingPaginatedItemsRequests.set(cacheKey, request)
+            if (canUseSharedCache) {
+              pendingPaginatedItemsRequests.set(cacheKey, request)
+            }
 
             return request.finally(() => {
-              if (pendingPaginatedItemsRequests.get(cacheKey) === request) {
+              if (canUseSharedCache && pendingPaginatedItemsRequests.get(cacheKey) === request) {
                 pendingPaginatedItemsRequests.delete(cacheKey)
               }
             })
@@ -181,7 +200,9 @@ export const usePaginatedItems = ({
 
       if (version !== requestVersion.value) return
 
-      setCachedPaginatedItemsResponse(cacheKey, response)
+      if (canUseSharedCache) {
+        setCachedPaginatedItemsResponse(cacheKey, response)
+      }
       applyResponse(response, version)
     } catch {
       if (version === requestVersion.value) {

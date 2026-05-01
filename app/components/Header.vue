@@ -39,10 +39,12 @@ const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const route = useRoute()
+const { authUser, fetch: fetchAuthUser } = useAuthUser()
+const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 const headerRef = ref<HTMLElement | null>(null)
 const showNotifications = ref(false)
 const isVisible = ref(true)
-const accountType = ref<string | null>(null)
+const accountType = ref<string | null>(authUser.value?.accountType ?? cookieAccountType.value)
 const isAccountSectionActive = computed(
   () => route.path === "/account" || route.path.startsWith("/account/"),
 )
@@ -56,6 +58,16 @@ const bridgeAndLoadAccountType = async () => {
     return
   }
 
+  if (authUser.value) {
+    accountType.value = authUser.value.accountType
+    return
+  }
+
+  if (cookieAccountType.value) {
+    accountType.value = cookieAccountType.value
+    return
+  }
+
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -66,15 +78,31 @@ const bridgeAndLoadAccountType = async () => {
   }
 
   const { ensureBridged } = useSessionBridge()
-  await ensureBridged(session.access_token)
+  if (!(await ensureBridged(session.access_token))) {
+    accountType.value = null
+    return
+  }
 
-  const { fetch: fetchAuthUser } = useAuthUser()
-  const authUser = await fetchAuthUser()
-  accountType.value = authUser?.accountType ?? null
+  const fetchedUser = await fetchAuthUser()
+  accountType.value = fetchedUser?.accountType ?? null
+}
+
+let accountTypeLoadTimeout: ReturnType<typeof setTimeout> | null = null
+
+const scheduleAccountTypeLoad = () => {
+  if (accountTypeLoadTimeout !== null) {
+    clearTimeout(accountTypeLoadTimeout)
+  }
+
+  const delay = route.path.startsWith("/dashboard") ? 250 : 0
+  accountTypeLoadTimeout = setTimeout(() => {
+    accountTypeLoadTimeout = null
+    void bridgeAndLoadAccountType()
+  }, delay)
 }
 
 watch(user, () => {
-  void bridgeAndLoadAccountType()
+  scheduleAccountTypeLoad()
 })
 
 watch(isVisible, (val) => {
@@ -253,7 +281,7 @@ watch(() => props.scrollContainerSelector, setupScrollListener)
 onMounted(() => {
   document.addEventListener("pointerdown", handlePointerDownOutside)
   setupScrollListener()
-  void bridgeAndLoadAccountType()
+  scheduleAccountTypeLoad()
   void loadLikesCount()
   void loadChatUnreadCount()
 })
@@ -264,6 +292,10 @@ onBeforeUnmount(() => {
   if (props.scrollContainerSelector) {
     const container = document.querySelector(props.scrollContainerSelector)
     container?.removeEventListener("scroll", handleScroll)
+  }
+  if (accountTypeLoadTimeout !== null) {
+    clearTimeout(accountTypeLoadTimeout)
+    accountTypeLoadTimeout = null
   }
 })
 </script>
