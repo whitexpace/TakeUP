@@ -80,7 +80,7 @@ const filteredConversations = computed(() =>
 
 const canSendMessage = computed(
   () =>
-    Boolean(newMessage.value.trim()) &&
+    Boolean(newMessage.value.trim() || pendingImageFile.value) &&
     !isSending.value &&
     !isUploadingImage.value &&
     !activeConversation.value?.isExpired,
@@ -188,7 +188,11 @@ const getChatPreview = (conversation: (typeof sortedConversations.value)[0]) => 
   const closedPreview = getChatClosedPreviewLabel(conversation.closureState)
   if (closedPreview) return closedPreview
   if (!conversation.lastMessage) return "Start a conversation"
-  return conversation.lastMessage.body.replace(/<[^>]*>?/gm, "").slice(0, 60)
+  const preview = conversation.lastMessage.body
+    .replace(/<[^>]*>?/gm, "")
+    .trim()
+    .slice(0, 60)
+  return preview || "Photo"
 }
 
 const getChatTime = (conversation: (typeof sortedConversations.value)[0]) => {
@@ -859,7 +863,9 @@ onUnmounted(() => {
                     alt="Chat attachment"
                     class="mb-3 max-h-64 w-full rounded-2xl object-cover"
                   />
-                  <p class="whitespace-pre-wrap break-words">{{ message.body }}</p>
+                  <p v-if="message.body.trim()" class="whitespace-pre-wrap break-words">
+                    {{ message.body }}
+                  </p>
                 </div>
 
                 <span
