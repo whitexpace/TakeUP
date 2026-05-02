@@ -1,44 +1,46 @@
 <template>
   <div
-    class="bg-white rounded-[15px] sm:rounded-[20px] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.08)] flex flex-col h-full hover:shadow-lg transition-shadow duration-300 w-full min-w-[260px] max-w-[360px] mx-auto relative group"
+    class="bg-white rounded-[14px] overflow-hidden border border-[#F0EDE8] flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[220px] max-w-[260px] mx-auto relative group"
     :class="canNavigate ? 'cursor-pointer' : ''"
     @click="navigateToDetails"
   >
-    <!-- Image Section (~70% of card) -->
-    <div class="relative aspect-square w-full bg-gray-50">
-      <img v-if="image" :src="image" :alt="name" class="w-full h-full object-cover" />
+    <!-- Image Section (Compact: 180px) -->
+    <div class="relative h-[180px] w-full bg-gray-50 overflow-hidden rounded-t-[12px]">
+      <img
+        v-if="image"
+        :src="image"
+        :alt="name"
+        class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
       <div
         v-else
-        class="flex h-full w-full items-center justify-center bg-cream px-6 text-center font-geist text-[14px] font-medium text-noble-black/45"
+        class="flex h-full w-full items-center justify-center bg-cream px-6 text-center font-geist text-[12px] font-medium text-noble-black/45"
       >
         No image uploaded
       </div>
 
-      <!-- Type Tag -->
+      <!-- Rent/Borrow Badge (Modern Solid Style) -->
       <div
-        class="absolute top-2 sm:top-4 left-2 sm:left-4 px-2 sm:px-4 py-1 sm:py-1.5 min-w-[50px] sm:min-w-[80px] h-[24px] sm:h-[32px] rounded-full font-geist text-[11px] sm:text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm whitespace-nowrap"
+        class="absolute top-[10px] left-[10px] z-10 px-2 py-1 rounded-[6px] font-geist text-[10px] font-bold uppercase tracking-[0.5px] shadow-sm whitespace-nowrap"
         :class="topBadge.className"
       >
         {{ topBadge.label }}
       </div>
 
-      <div
-        v-if="!isManagement"
-        class="absolute top-2 sm:top-4 right-2 sm:right-4 flex items-center gap-1.5 sm:gap-2"
-      >
-        <!-- Like Button -->
+      <div v-if="!isManagement" class="absolute top-[10px] right-[10px] z-10">
+        <!-- Favorite Button (Blurred Circle) -->
         <button
-          class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all duration-150 group active:scale-90"
+          class="w-8 h-8 rounded-full bg-white/90 backdrop-blur-[4px] shadow-[0_2px_6px_rgba(0,0,0,0.1)] flex items-center justify-center transition-all duration-200 active:scale-90 group/heart"
           title="Favorite"
           :aria-pressed="isLiked"
           @click.stop="toggleLike"
         >
           <svg
-            class="w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-150"
+            class="w-4 h-4 transition-all duration-200"
             :class="
               isLiked
-                ? 'fill-cinnabar-red/90 stroke-cinnabar-red/90'
-                : 'stroke-noble-black group-hover:fill-noble-black/10'
+                ? 'fill-burning-orange stroke-burning-orange scale-110'
+                : 'stroke-noble-black group-hover/heart:fill-burning-orange/20 group-hover/heart:stroke-burning-orange'
             "
             viewBox="0 0 24 24"
             fill="none"
@@ -46,7 +48,7 @@
           >
             <path
               d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-              stroke-width="1.5"
+              stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
             />
@@ -58,104 +60,69 @@
       <slot name="image-overlay" />
     </div>
 
-    <!-- Details Section -->
-    <div class="p-3 sm:p-5 flex-1 flex flex-col bg-white">
-      <div
-        class="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-1.5 min-w-0 font-geist font-medium text-[11px] sm:text-[13px] uppercase tracking-wide"
-      >
-        <div class="text-burning-orange min-w-0 truncate">
+    <!-- Content Area (Tightened: 12px padding) -->
+    <div class="p-3 flex-1 flex flex-col justify-between bg-white min-h-0">
+      <!-- Row 1: Category & Trending -->
+      <div class="flex items-center justify-between gap-2 mb-1 min-w-0">
+        <div class="text-[11px] font-bold text-burning-orange truncate uppercase tracking-wider">
           {{ category }}
         </div>
 
-        <template v-if="isTrending">
-          <span class="h-1 w-1 shrink-0 rounded-full bg-noble-black/30" aria-hidden="true" />
-          <span class="inline-flex shrink-0 items-center gap-1 text-blue-estate normal-case">
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M4 16L10 10L14 14L20 8"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M14 8H20V14"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <span>Trending</span>
-          </span>
-        </template>
-      </div>
-
-      <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-2">
-        <h3
-          class="font-geist font-semibold text-[14px] sm:text-[17px] text-noble-black leading-tight truncate w-full"
-        >
-          {{ name }}
-        </h3>
-        <div class="flex items-center gap-1 shrink-0 sm:pt-0.5">
+        <div v-if="isTrending" class="group/trending relative shrink-0 flex items-center">
           <svg
-            class="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-burning-orange"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
+            class="text-blue-estate"
           >
             <path
-              d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+              d="M22 7L13.5 15.5L8.5 10.5L2 17"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M16 7H22V13"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             />
           </svg>
-          <span
-            class="font-geist font-medium text-[11px] sm:text-[13px] text-noble-black opacity-80"
-            >{{ rating }}</span
+          <!-- Custom Tooltip -->
+          <div
+            class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-noble-black px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-lg transition-opacity group-hover/trending:opacity-100 z-30"
           >
-          <span class="font-geist font-light text-[11px] sm:text-[13px] text-noble-black opacity-60"
-            >({{ reviews }})</span
-          >
+            Trending
+            <div
+              class="absolute -bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rotate-45 bg-noble-black"
+            />
+          </div>
         </div>
       </div>
 
-      <div class="mt-auto">
-        <div v-if="price" class="flex items-baseline gap-1">
-          <span class="font-geist font-bold text-[15px] sm:text-[19px] text-burning-orange"
-            >₱{{ price }}</span
-          >
-          <span
-            class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-70"
-            >/{{ displayPriceUnit }}</span
-          >
+      <!-- Row 2: Item Name (14px truncated) -->
+      <h3 class="text-[14px] font-semibold text-noble-black leading-tight truncate mb-2">
+        {{ name }}
+      </h3>
+
+      <!-- Row 3: Price & Rating (Unified Row) -->
+      <div class="flex items-center justify-between gap-2 mt-auto">
+        <div class="flex items-center gap-1 min-w-0">
+          <span class="text-[15px] font-bold text-burning-orange">₱{{ price }}</span>
+          <span class="text-[11px] font-medium text-noble-black/40">/{{ displayPriceUnit }}</span>
+        </div>
+
+        <!-- Refined Rating -->
+        <div v-if="hasGoodRating" class="flex items-center gap-1 shrink-0">
+          <span class="text-[13px] text-[#E8650A]">★</span>
+          <span class="text-[13px] font-semibold text-[#111]">{{ rating }}</span>
+          <span class="text-[12px] font-normal text-[#9CA3AF]">({{ reviews }})</span>
         </div>
       </div>
-    </div>
-
-    <!-- Divider -->
-    <div v-if="!isManagement" class="h-[1px] bg-cinnamon-ice/30 w-full"></div>
-
-    <!-- Owner Section -->
-    <div v-if="!isManagement" class="px-3 py-2 sm:px-5 sm:py-4 flex items-center bg-white">
-      <span
-        v-if="ownerUsername"
-        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-60 truncate hover:text-burning-orange hover:opacity-100 hover:underline transition-all duration-200 cursor-pointer"
-        @click.stop="navigateToProfile"
-      >
-        by {{ owner }}
-      </span>
-      <span
-        v-else
-        class="font-geist font-normal text-[12px] sm:text-[15px] text-noble-black opacity-80 truncate"
-      >
-        by {{ owner }}
-      </span>
     </div>
   </div>
 </template>
@@ -217,25 +184,29 @@ const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")
 const displayPriceUnit = computed(() => props.priceUnit ?? "day")
 const canNavigate = computed(() => !props.isManagement || props.allowNavigation)
 
+const hasGoodRating = computed(() => {
+  const score = parseFloat(String(props.rating))
+  return !isNaN(score) && score >= 3.0
+})
+
 const topBadge = computed(() => {
   if (normalizedStatus.value === "RENTED") {
     return {
       label: props.type === "Borrow" ? "Borrowed" : "Rented",
-      className: "bg-noble-black/90 text-white",
+      className: "bg-noble-black text-white",
     }
   }
 
   if (normalizedStatus.value && normalizedStatus.value !== "AVAILABLE") {
     return {
       label: "Unavailable",
-      className: "bg-white/90 text-noble-black border border-noble-black/10",
+      className: "bg-white text-noble-black border border-noble-black/10",
     }
   }
 
   return {
     label: props.type,
-    className:
-      props.type === "Rent" ? "bg-cinnamon-ice text-noble-black" : "bg-blue-estate text-white",
+    className: props.type === "Rent" ? "bg-cinnamon-ice text-black" : "bg-blue-estate text-white",
   }
 })
 
@@ -253,19 +224,12 @@ const navigateToDetails = () => {
   router.push(itemDetailPath.value)
 }
 
-const navigateToProfile = () => {
-  if (props.ownerUsername) {
-    navigateTo(`/profile/${props.ownerUsername}`)
-  }
-}
-
 const toggleLike = async () => {
   if (isTogglingLike.value) return
 
   let previousValue: boolean | null = null
 
   try {
-    // Check if user is authenticated via Supabase
     const user = useSupabaseUser()
     const supabase = useSupabaseClient()
     if (!user.value) {
@@ -308,7 +272,6 @@ const toggleLike = async () => {
       isLiked.value = nextIsLiked
       resetPaginatedItemsCache()
 
-      // Update global count
       if (nextIsLiked) {
         incrementLikes()
       } else {
@@ -325,7 +288,6 @@ const toggleLike = async () => {
       isLiked.value = previousValue
     }
 
-    // Log more details about the error
     if (error instanceof Error) {
       console.error("Failed to toggle like:", error.message)
     } else {
@@ -336,3 +298,12 @@ const toggleLike = async () => {
   }
 }
 </script>
+
+<style scoped>
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   DASHBOARD_FILTERS_SESSION_STORAGE_KEY,
-  PRICE_RANGES,
   useDashboardFilters,
 } from "../use-dashboard-filters"
 
@@ -41,7 +40,8 @@ describe("useDashboardFilters", () => {
   it("treats no-op selections as inactive filters", () => {
     const filters = useDashboardFilters()
 
-    filters.selectedPriceRange.value = PRICE_RANGES[0]!.label
+    filters.minPrice.value = null
+    filters.maxPrice.value = null
     filters.selectedListingTypes.value = ["For Borrow", "For Rent"]
 
     expect(filters.filterQueryParams.value).toEqual({})
@@ -51,9 +51,8 @@ describe("useDashboardFilters", () => {
   it("makes borrow-only selection override paid price ranges", () => {
     const filters = useDashboardFilters()
 
-    filters.selectedPriceRange.value = PRICE_RANGES.find(
-      (range) => range.bucket === "100to500",
-    )!.label
+    filters.minPrice.value = 100
+    filters.maxPrice.value = 500
     filters.selectedListingTypes.value = ["For Borrow"]
 
     expect(filters.filterQueryParams.value).toEqual({
@@ -65,7 +64,10 @@ describe("useDashboardFilters", () => {
   it("makes rent-only selection override free borrowing price state", () => {
     const filters = useDashboardFilters()
 
-    filters.selectedPriceRange.value = PRICE_RANGES.find((range) => range.bucket === "free")!.label
+    // No direct "free" flag in new logic, but if someone set a price range
+    // and then selected "For Rent", the freeToBorrow flag should be false.
+    filters.minPrice.value = null
+    filters.maxPrice.value = null
     filters.selectedListingTypes.value = ["For Rent"]
     filters.selectedRating.value = 4
 
@@ -80,9 +82,8 @@ describe("useDashboardFilters", () => {
 
     filters.selectedCategories.value = ["Electronics"]
     filters.selectedConditions.value = ["Good"]
-    filters.selectedPriceRange.value = PRICE_RANGES.find(
-      (range) => range.bucket === "under100",
-    )!.label
+    filters.minPrice.value = 0
+    filters.maxPrice.value = 100
     filters.dateFrom.value = "2026-03-10"
     filters.timeFrom.value = "09:00:00"
 
@@ -98,7 +99,8 @@ describe("useDashboardFilters", () => {
       JSON.stringify({
         selectedListingTypes: ["For Rent"],
         selectedCategories: ["Electronics"],
-        selectedPriceRange: PRICE_RANGES.find((range) => range.bucket === "under100")!.label,
+        minPrice: 0,
+        maxPrice: 99,
         selectedRating: 4,
         selectedConditions: ["Good"],
         dateFrom: "2026-03-10",
@@ -112,7 +114,8 @@ describe("useDashboardFilters", () => {
 
     expect(filters.selectedListingTypes.value).toEqual(["For Rent"])
     expect(filters.selectedCategories.value).toEqual(["Electronics"])
-    expect(filters.selectedPriceRange.value).toBe("Under ₱100")
+    expect(filters.minPrice.value).toBe(0)
+    expect(filters.maxPrice.value).toBe(99)
     expect(filters.selectedRating.value).toBe(4)
     expect(filters.selectedConditions.value).toEqual(["Good"])
     expect(filters.dateFrom.value).toBe("2026-03-10")
@@ -145,7 +148,8 @@ describe("useDashboardFilters", () => {
     const filters = useDashboardFilters()
 
     filters.selectedCategories.value = ["Electronics"]
-    filters.selectedPriceRange.value = PRICE_RANGES.find((range) => range.bucket === "free")!.label
+    filters.minPrice.value = 0
+    filters.maxPrice.value = 0
 
     expect(sessionStorageMock.getItem(DASHBOARD_FILTERS_SESSION_STORAGE_KEY)).not.toBeNull()
 
