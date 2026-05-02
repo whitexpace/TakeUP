@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, reactive } from "vue"
+import { computed, onMounted, ref, reactive } from "vue"
 
 definePageMeta({
   layout: "account",
@@ -387,11 +387,11 @@ const saveProfile = async () => {
 }
 
 function getEnhancedErrorMessage(error: unknown): string {
+  // Extract Zod validation errors if present
   const fetchError = error as {
     data?: { data?: Record<string, { _errors: string[] }>; statusMessage?: string }
     message?: string
   }
-  // Extract Zod validation errors if present
   const data = fetchError?.data?.data || fetchError?.data
   if (data) {
     const zodErrors = data as Record<string, { _errors: string[] }>
@@ -415,7 +415,7 @@ const {
   pending: isLoadingDeactivationEligibility,
 } = useAsyncData(
   "account:deactivation-check",
-  () => $fetch<DeactivationEligibilityResponse>("/api/account/deactivation-check"),
+  () => $fetch<DeactivationEligibilityResponse>("/api/account/deactivation-eligibility"),
   {
     server: false,
     immediate: false,
@@ -446,7 +446,7 @@ const deactivateAccount = async () => {
   deactivateAccountError.value = null
 
   try {
-    await $fetch("/api/account/deactivation", { method: "POST" })
+    await $fetch("/api/account/deactivate", { method: "POST" })
     await supabase.auth.signOut()
     await navigateTo("/?deactivated=1", { replace: true })
   } catch (error: unknown) {
@@ -458,7 +458,7 @@ const deactivateAccount = async () => {
 
 const { data: deletionEligibility, refresh: loadDeletionEligibility } = useAsyncData(
   "account:deletion-check",
-  () => $fetch<AccountDeletionEligibilityResponse>("/api/account/deletion-check"),
+  () => $fetch<AccountDeletionEligibilityResponse>("/api/account/deletion"),
   {
     server: false,
     immediate: false,
@@ -741,7 +741,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               </div>
               <button
                 type="button"
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeEditProfileModal"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -1120,18 +1120,19 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             @click="closeDeactivateAccountModal"
           />
           <div
-            class="relative z-10 w-full max-w-xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
-            <div class="flex items-start justify-between gap-4">
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <p class="text-[13px] font-semibold uppercase tracking-[0.2em] text-cinnabar-red">
-                  Danger Zone
+                <h2 class="text-[24px] font-bold text-noble-black">Deactivate Account</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Temporarily hide your profile and listings.
                 </p>
-                <h2 class="mt-2 text-[26px] font-semibold text-noble-black">Deactivate account?</h2>
               </div>
               <button
                 type="button"
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="isDeactivatingAccount"
                 @click="closeDeactivateAccountModal"
               >
@@ -1145,49 +1146,110 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 </svg>
               </button>
             </div>
-            <div class="mt-7 rounded-[18px] border border-cinnamon-ice bg-cream p-5">
-              <p
-                v-if="isLoadingDeactivationEligibility"
-                class="text-[15px] tracking-[0.45px] text-noble-black/70"
-              >
-                Checking eligibility...
-              </p>
-              <template v-else-if="deactivationEligibility?.blockers.length">
-                <h3 class="text-[17px] font-semibold text-noble-black">Deactivation is blocked</h3>
-                <ul class="mt-4 space-y-3">
-                  <li
-                    v-for="blocker in deactivationEligibility.blockers"
-                    :key="blocker.code"
-                    class="rounded-[14px] border border-cinnabar-red/20 bg-white px-4 py-3 text-[14px] text-noble-black/80"
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6">
+                <!-- Eligibility Banner -->
+                <div class="rounded-[16px] border border-cinnamon-ice/20 bg-cream p-5">
+                  <div
+                    v-if="isLoadingDeactivationEligibility"
+                    class="text-[14px] font-medium text-noble-black/60 flex items-center gap-2"
                   >
-                    {{ blocker.message }}
-                  </li>
-                </ul>
-              </template>
-              <template v-else-if="deactivationEligibility?.allowed">
-                <h3 class="text-[17px] font-semibold text-noble-black">Ready to deactivate</h3>
-              </template>
+                    <svg
+                      class="animate-spin"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                    >
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    Checking eligibility...
+                  </div>
+                  <template v-else-if="deactivationEligibility?.blockers.length">
+                    <h3 class="text-[16px] font-bold text-noble-black">Deactivation is blocked</h3>
+                    <ul class="mt-3 space-y-3">
+                      <li
+                        v-for="blocker in deactivationEligibility.blockers"
+                        :key="blocker.code"
+                        class="text-[13px] font-medium text-noble-black/80 flex items-start gap-3"
+                      >
+                        <svg
+                          class="text-cinnabar-red shrink-0 mt-0.5"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="3"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span class="leading-relaxed">{{ blocker.message }}</span>
+                      </li>
+                    </ul>
+                  </template>
+                  <template v-else-if="deactivationEligibility?.allowed">
+                    <div class="flex items-center gap-3 text-success-green">
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <h3 class="text-[16px] font-bold">Account ready to deactivate</h3>
+                    </div>
+                    <p class="mt-2 text-[13px] font-medium text-noble-black/50 leading-relaxed">
+                      All checks passed. You can reactivate your account at any time by signing back
+                      in. Click the button below to proceed.
+                    </p>
+                  </template>
+                  <div v-else class="text-[14px] font-medium text-noble-black/60">
+                    Unable to check eligibility at this time. Please try again later.
+                  </div>
+                </div>
+              </div>
             </div>
-            <p v-if="deactivateAccountError" class="mt-5 text-sm text-cinnabar-red">
-              {{ deactivateAccountError }}
-            </p>
-            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] font-bold text-noble-black transition hover:bg-cream"
-                :disabled="isDeactivatingAccount"
-                @click="closeDeactivateAccountModal"
+
+            <!-- Footer -->
+            <div
+              class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+            >
+              <p
+                v-if="deactivateAccountError"
+                class="text-sm text-cinnabar-red font-medium text-center"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] bg-cinnabar-red px-6 text-[15px] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canDeactivateAccount"
-                @click="deactivateAccount"
-              >
-                Deactivate
-              </button>
+                {{ deactivateAccountError }}
+              </p>
+              <div class="flex gap-3 w-full">
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-gray-200 bg-white text-[15px] font-bold text-noble-black/60 transition-all duration-200 hover:bg-gray-50 disabled:opacity-50"
+                  :disabled="isDeactivatingAccount"
+                  @click="closeDeactivateAccountModal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!canDeactivateAccount"
+                  @click="deactivateAccount"
+                >
+                  {{ isDeactivatingAccount ? "Deactivating..." : "Deactivate" }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1202,13 +1264,19 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             @click="closeDeleteAccountModal"
           />
           <div
-            class="relative z-10 w-full max-w-2xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
-            <div class="flex items-start justify-between gap-4">
-              <h2 class="text-[26px] font-semibold text-cinnabar-red">Delete Account</h2>
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-cinnabar-red">Delete Account</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  This action is permanent and cannot be undone.
+                </p>
+              </div>
               <button
                 type="button"
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeDeleteAccountModal"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -1221,41 +1289,99 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 </svg>
               </button>
             </div>
-            <div
-              class="mt-6 rounded-[20px] border border-cinnabar-red/20 bg-cinnabar-red/5 px-5 py-4 text-[15px] text-noble-black/85"
-            >
-              Required financial and transaction records are retained in an anonymized form for
-              compliance.
-            </div>
-            <div class="mt-8 space-y-5 border-t border-cinnamon-ice/10 pt-6">
-              <label class="block space-y-2">
-                <span class="text-[15px] font-medium text-noble-black"
-                  >Type <span class="font-semibold text-cinnabar-red">DELETE</span> to confirm</span
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6 space-y-6">
+                <div
+                  class="rounded-[16px] border border-cinnabar-red/10 bg-cinnabar-red/[0.03] p-5"
                 >
-                <input
-                  v-model="deleteConfirmationText"
-                  type="text"
-                  class="w-full rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 text-[15px] uppercase text-noble-black outline-none transition focus:border-cinnabar-red"
-                  placeholder="DELETE"
-                />
-              </label>
+                  <div class="flex items-start gap-3 text-cinnabar-red">
+                    <svg
+                      class="shrink-0 mt-0.5"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <p class="text-[13px] font-bold leading-relaxed">
+                      Required financial and transaction records are retained in an anonymized form
+                      for compliance.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <div class="relative group">
+                    <div
+                      class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-cinnabar-red transition-colors duration-300"
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <input
+                      id="delete-confirmation"
+                      v-model="deleteConfirmationText"
+                      type="text"
+                      placeholder=" "
+                      class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-cinnabar-red focus:shadow-[0_0_0_3px_rgba(220,38,38,0.1)] outline-none text-[15px] font-bold text-noble-black transition-all duration-300 uppercase"
+                    />
+                    <label
+                      for="delete-confirmation"
+                      class="absolute left-12 top-4 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-cinnabar-red peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >
+                      Type <span class="font-bold">DELETE</span> to confirm
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] font-bold text-noble-black transition hover:bg-cream"
-                @click="closeDeleteAccountModal"
+
+            <!-- Footer -->
+            <div
+              class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+            >
+              <p
+                v-if="deleteAccountError"
+                class="text-sm text-cinnabar-red font-medium text-center"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] bg-cinnabar-red px-6 text-[15px] font-bold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canDeleteAccount"
-                @click="deleteAccount"
-              >
-                Permanently Delete
-              </button>
+                {{ deleteAccountError }}
+              </p>
+              <div class="flex gap-3 w-full">
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-gray-200 bg-white text-[15px] font-bold text-noble-black/60 transition-all duration-200 hover:bg-gray-50"
+                  @click="closeDeleteAccountModal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!canDeleteAccount"
+                  @click="deleteAccount"
+                >
+                  {{ isDeletingAccount ? "Deleting..." : "Permanently Delete" }}
+                </button>
+              </div>
             </div>
           </div>
         </div>

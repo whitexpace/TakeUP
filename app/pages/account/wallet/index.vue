@@ -18,15 +18,17 @@ const {
 </script>
 
 <template>
-  <WalletOverview
-    title="My Wallet"
-    subtitle="Manage your TakeUP wallet balance and linked accounts"
-    :transactions="transactions"
-    :is-balance-visible="isBalanceVisible"
-    :formatted-balance="formattedBalance"
-    :masked-balance="maskedBalance"
-    :linked-accounts="linkedAccounts"
-    :on-toggle-balance="toggleBalanceVisibility"
-    :on-top-up="topUpPseudo"
-  />
+  <div class="lg:px-12 xl:px-16 pb-10">
+    <WalletOverview
+      title="My Wallet"
+      subtitle="Manage your TakeUP wallet balance and linked accounts"
+      :transactions="transactions"
+      :is-balance-visible="isBalanceVisible"
+      :formatted-balance="formattedBalance"
+      :masked-balance="maskedBalance"
+      :linked-accounts="linkedAccounts"
+      :on-toggle-balance="toggleBalanceVisibility"
+      :on-top-up="topUpPseudo"
+    />
+  </div>
 </template>
