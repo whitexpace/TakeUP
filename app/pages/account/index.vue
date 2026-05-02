@@ -730,7 +730,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         <!-- Edit Profile Modal -->
         <div
           v-if="showEditProfileModal"
-          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <div
             class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
@@ -1121,7 +1121,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         <!-- Deactivate Modal -->
         <div
           v-if="showDeactivateAccountModal"
-          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <div
             class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
@@ -1265,7 +1265,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         <!-- Delete Modal -->
         <div
           v-if="showDeleteAccountModal"
-          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <div
             class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"

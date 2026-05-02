@@ -642,174 +642,189 @@ const submitReview = async () => {
     leave-from-class="opacity-100"
     leave-to-class="opacity-0"
   >
-    <div v-if="open" class="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm" @click="closeModal"></div>
+    <Teleport to="body">
+      <div v-if="open" class="fixed inset-0 z-[1300] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm" @click="closeModal"></div>
 
-      <div
-        class="relative w-full max-w-2xl rounded-[32px] bg-white p-8 shadow-2xl max-h-[90vh] overflow-y-auto"
-      >
-        <div class="flex items-start justify-between gap-4 mb-6">
-          <div>
-            <h2 class="text-2xl font-bold text-noble-black">{{ modalTitle }}</h2>
-            <p v-if="context" class="mt-1 text-sm text-noble-black/60">
-              Share your experience with {{ context.counterpartName }} for {{ context.itemName }}.
-            </p>
-            <p v-if="promptText" class="mt-2 text-sm text-noble-black/50">
-              {{ promptText }}
-            </p>
-          </div>
-
-          <button
-            class="text-noble-black/40 hover:text-noble-black transition-colors"
-            @click="closeModal"
-          >
-            <span class="sr-only">Close review form</span>
-            <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor">
-              <path
-                d="M18 6 6 18M6 6l12 12"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div class="space-y-5">
-          <div>
-            <p class="text-sm font-semibold text-noble-black mb-3">Your rating</p>
-            <div class="flex items-center gap-2">
-              <button
-                v-for="star in 5"
-                :key="star"
-                type="button"
-                class="transition-transform hover:scale-105"
-                @click="rating = star"
-              >
-                <svg
-                  class="w-8 h-8"
-                  viewBox="0 0 24 24"
-                  :fill="star <= rating ? '#ff7124' : 'none'"
-                  :stroke="star <= rating ? '#ff7124' : '#b9b0a7'"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                    d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <label class="block">
-            <span class="text-sm font-semibold text-noble-black">Review</span>
-            <textarea
-              v-model="reviewText"
-              rows="5"
-              maxlength="1000"
-              class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream/60 px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
-              placeholder="Write your review here."
-            ></textarea>
-          </label>
-
-          <p
-            v-if="draftMessage"
-            class="rounded-2xl border border-cinnamon-ice bg-cream/50 px-4 py-3 text-sm text-noble-black/70"
-          >
-            {{ draftMessage }}
-          </p>
-
-          <div v-if="isItemReview" class="rounded-2xl border border-cinnamon-ice bg-cream/40 p-4">
-            <div class="flex items-center justify-between gap-3 mb-3">
-              <div>
-                <p class="text-sm font-semibold text-noble-black">Review Images</p>
-                <p class="text-xs text-noble-black/60">
-                  Optional. Up to {{ MAX_REVIEW_IMAGES }} images, JPG/PNG/WebP, 5 MB each.
-                </p>
-                <p class="mt-1 text-xs text-noble-black/50">
-                  Saved drafts stay with your account and keep uploaded draft images.
-                </p>
-              </div>
-
-              <label
-                class="inline-flex cursor-pointer items-center rounded-xl bg-burning-orange px-4 py-2 text-sm font-semibold text-white hover:bg-cinnabar-red transition-colors"
-              >
-                Add Images
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  class="sr-only"
-                  @change="handleImageSelection"
-                />
-              </label>
+        <div
+          class="relative w-full max-w-2xl rounded-[32px] bg-white p-8 shadow-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div class="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h2 class="text-2xl font-bold text-noble-black">{{ modalTitle }}</h2>
+              <p v-if="context" class="mt-1 text-sm text-noble-black/60">
+                Share your experience with {{ context.counterpartName }} for {{ context.itemName }}.
+              </p>
+              <p v-if="promptText" class="mt-2 text-sm text-noble-black/50">
+                {{ promptText }}
+              </p>
             </div>
 
-            <div v-if="persistedDraftImages.length > 0" class="flex flex-wrap gap-3">
-              <div v-for="image in persistedDraftImages" :key="image" class="relative">
-                <img
-                  :src="getReviewImageUrl(image)"
-                  :alt="`${modalTitle} draft image`"
-                  class="h-24 w-24 rounded-2xl object-cover border border-cinnamon-ice/70"
+            <button
+              class="text-noble-black/40 hover:text-noble-black transition-colors"
+              @click="closeModal"
+            >
+              <span class="sr-only">Close review form</span>
+              <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor">
+                <path
+                  d="M18 6 6 18M6 6l12 12"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
                 />
+              </svg>
+            </button>
+          </div>
+
+          <div class="space-y-5">
+            <div>
+              <p class="text-sm font-semibold text-noble-black mb-3">Your rating</p>
+              <div class="flex items-center gap-2">
                 <button
+                  v-for="star in 5"
+                  :key="star"
                   type="button"
-                  class="absolute -top-2 -right-2 rounded-full bg-noble-black p-1 text-white"
-                  @click="removePersistedDraftImage(image)"
+                  class="transition-transform hover:scale-105"
+                  @click="rating = star"
                 >
-                  <span class="sr-only">Remove saved image</span>
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor">
-                    <path d="M18 6 6 18M6 6l12 12" stroke-width="2" stroke-linecap="round" />
+                  <svg
+                    class="w-8 h-8"
+                    viewBox="0 0 24 24"
+                    :fill="star <= rating ? '#ff7124' : 'none'"
+                    :stroke="star <= rating ? '#ff7124' : '#b9b0a7'"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                      d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
+                    />
                   </svg>
                 </button>
               </div>
             </div>
-          </div>
 
-          <label class="flex items-center gap-3 text-sm text-noble-black/70">
-            <input
-              v-model="isAnonymous"
-              type="checkbox"
-              class="h-4 w-4 rounded border-cinnamon-ice text-burning-orange focus:ring-burning-orange"
-            />
-            Submit anonymously
-          </label>
+            <label class="block">
+              <span class="text-sm font-semibold text-noble-black">Review</span>
+              <textarea
+                v-model="reviewText"
+                rows="5"
+                maxlength="1000"
+                class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream/60 px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
+                placeholder="Write your review here."
+              ></textarea>
+            </label>
 
-          <p
-            v-if="statusMessage"
-            class="rounded-2xl border border-cinnamon-ice bg-cream/50 px-4 py-3 text-sm text-noble-black/70"
-          >
-            {{ statusMessage }}
-          </p>
-
-          <p
-            v-if="errorMessage"
-            class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
-          >
-            {{ errorMessage }}
-          </p>
-
-          <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-            <button
-              type="button"
-              class="rounded-2xl bg-cream px-5 py-3 text-sm font-semibold text-noble-black hover:bg-pale-cashmere transition-colors"
-              @click="closeModal"
+            <p
+              v-if="draftMessage"
+              class="rounded-2xl border border-cinnamon-ice bg-cream/50 px-4 py-3 text-sm text-noble-black/70"
             >
-              Cancel
-            </button>
-            <button
-              type="button"
-              :disabled="!canSubmit"
-              class="rounded-2xl bg-burning-orange px-5 py-3 text-sm font-semibold text-white hover:bg-cinnabar-red transition-colors disabled:opacity-60"
-              @click="submitReview"
+              {{ draftMessage }}
+            </p>
+
+            <div v-if="isItemReview" class="rounded-2xl border border-cinnamon-ice bg-cream/40 p-4">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <p class="text-sm font-semibold text-noble-black">Review Images</p>
+                  <p class="text-xs text-noble-black/60">
+                    Optional. Up to {{ MAX_REVIEW_IMAGES }} images, JPG/PNG/WebP, 5 MB each.
+                  </p>
+                  <p class="mt-1 text-xs text-noble-black/50">
+                    Saved drafts stay with your account and keep uploaded draft images.
+                  </p>
+                </div>
+
+                <label
+                  class="inline-flex cursor-pointer items-center rounded-xl bg-burning-orange px-4 py-2 text-sm font-semibold text-white hover:bg-cinnabar-red transition-colors"
+                >
+                  Add Images
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    class="sr-only"
+                    @change="handleImageSelection"
+                  />
+                </label>
+              </div>
+
+              <div v-if="persistedDraftImages.length > 0" class="flex flex-wrap gap-3">
+                <div v-for="image in persistedDraftImages" :key="image" class="relative">
+                  <img
+                    :src="getReviewImageUrl(image)"
+                    :alt="`${modalTitle} draft image`"
+                    class="h-24 w-24 rounded-2xl object-cover border border-cinnamon-ice/70"
+                  />
+                  <button
+                    type="button"
+                    class="absolute -top-2 -right-2 rounded-full bg-noble-black p-1 text-white"
+                    @click="removePersistedDraftImage(image)"
+                  >
+                    <span class="sr-only">Remove saved image</span>
+                    <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor">
+                      <path d="M18 6 6 18M6 6l12 12" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <label class="flex items-center gap-3 text-sm text-noble-black/70">
+              <input
+                v-model="isAnonymous"
+                type="checkbox"
+                class="h-4 w-4 rounded border-cinnamon-ice text-burning-orange focus:ring-burning-orange"
+              />
+              Submit anonymously
+            </label>
+
+            <p
+              v-if="statusMessage"
+              class="rounded-2xl border border-cinnamon-ice bg-cream/50 px-4 py-3 text-sm text-noble-black/70"
             >
-              {{ isSubmitting ? "Submitting..." : "Submit Review" }}
-            </button>
+              {{ statusMessage }}
+            </p>
+
+            <p
+              v-if="errorMessage"
+              class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+            >
+              {{ errorMessage }}
+            </p>
+
+            <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+              <button
+                type="button"
+                class="rounded-2xl bg-cream px-5 py-3 text-sm font-semibold text-noble-black hover:bg-pale-cashmere transition-colors"
+                @click="closeModal"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                :disabled="!canSubmit"
+                class="rounded-2xl bg-burning-orange px-5 py-3 text-sm font-semibold text-white hover:bg-cinnabar-red transition-colors disabled:opacity-60"
+                @click="submitReview"
+              >
+                {{ isSubmitting ? "Submitting..." : "Submit Review" }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </Transition>
 </template>
+
+<style scoped>
+.custom-modal-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice / 40%");
+  border-radius: 20px;
+}
+</style>

@@ -575,17 +575,21 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
   top: 50%;
   left: 100%;
   transform: translateY(-50%) translateX(12px);
-  background: #111;
-  color: white;
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-  opacity: 0;
   pointer-events: none;
-  transition: all 0.2s ease;
+  opacity: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .custom-tooltip::before {
@@ -596,7 +600,18 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
   transform: translateY(-50%);
   border-width: 5px;
   border-style: solid;
-  border-color: transparent #111 transparent transparent;
+  border-color: transparent theme("colors.cinnamon-ice / 30%") transparent transparent;
+}
+
+.custom-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: calc(100% - 1px);
+  transform: translateY(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent theme("colors.cream") transparent transparent;
 }
 
 .group\/tooltip:hover .custom-tooltip {
