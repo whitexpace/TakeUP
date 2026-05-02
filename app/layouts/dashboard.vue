@@ -52,10 +52,10 @@
       <!-- Left Sidebar -->
       <aside
         v-if="!hideSidebar"
-        class="bg-cream flex-col shrink-0 border-r border-cinnamon-ice transition-all duration-500 ease-in-out z-50 overflow-y-auto custom-sidebar-scrollbar fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
+        class="bg-cream flex-col shrink-0 border-r border-cinnamon-ice/40 transition-all duration-500 ease-in-out z-50 overflow-y-auto custom-sidebar-scrollbar fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
         :class="[
           isSidebarOpen
-            ? 'translate-x-0 w-80'
+            ? 'translate-x-0 w-[300px]'
             : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
           isHeaderVisible ? 'pt-14' : 'pt-0',
         ]"
@@ -67,7 +67,8 @@
             :filter-metadata="filterMetadata"
             :selected-listing-types="filters.selectedListingTypes.value"
             :selected-categories="filters.selectedCategories.value"
-            :selected-price-range="filters.selectedPriceRange.value"
+            :min-price="filters.minPrice.value"
+            :max-price="filters.maxPrice.value"
             :selected-rating="filters.selectedRating.value"
             :selected-conditions="filters.selectedConditions.value"
             :date-from="filters.dateFrom.value"
@@ -76,7 +77,8 @@
             :time-to="filters.timeTo.value"
             @update:selected-listing-types="(v) => (filters.selectedListingTypes.value = v)"
             @update:selected-categories="(v) => (filters.selectedCategories.value = v)"
-            @update:selected-price-range="(v) => (filters.selectedPriceRange.value = v)"
+            @update:min-price="(v) => (filters.minPrice.value = v)"
+            @update:max-price="(v) => (filters.maxPrice.value = v)"
             @update:selected-rating="(v) => (filters.selectedRating.value = v)"
             @update:selected-conditions="(v) => (filters.selectedConditions.value = v)"
             @update:date-from="(v) => (filters.dateFrom.value = v)"

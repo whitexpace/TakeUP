@@ -20,7 +20,17 @@ const formatCounterpartName = (user: {
   firstName: string
   middleName: string | null
   lastName: string
-}) => `${user.firstName} ${user.lastName[0]}.`
+}) => {
+  const first = (user.firstName || "").trim()
+  const last = (user.lastName || "").trim()
+
+  if (last.toLowerCase() === "user" || !last) {
+    return first.charAt(0).toUpperCase() + first.slice(1)
+  }
+
+  const lastInitial = last.charAt(0).toUpperCase()
+  return `${first} ${lastInitial}.`
+}
 
 export const useTransactions = ({ role, status, searchQuery }: UseTransactionsOptions) => {
   const transactions = ref<TransactionListItem[]>([])

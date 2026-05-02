@@ -86,7 +86,8 @@ export const DASHBOARD_FILTERS_SESSION_STORAGE_KEY = "dashboard:last-used-filter
 type DashboardFilterSessionState = {
   selectedListingTypes: string[]
   selectedCategories: string[]
-  selectedPriceRange: string
+  minPrice: number | null
+  maxPrice: number | null
   selectedRating: number | null
   selectedConditions: string[]
   dateFrom: string
@@ -108,6 +109,10 @@ const normalizeStringArray = (value: unknown) => {
 
 const normalizeString = (value: unknown) => (typeof value === "string" ? value : "")
 
+const normalizeNumber = (value: unknown) => {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
 const normalizeRating = (value: unknown) => {
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
@@ -118,7 +123,8 @@ const normalizeDashboardFilterSessionState = (value: unknown): DashboardFilterSe
   return {
     selectedListingTypes: normalizeStringArray(state.selectedListingTypes),
     selectedCategories: normalizeStringArray(state.selectedCategories),
-    selectedPriceRange: normalizeString(state.selectedPriceRange),
+    minPrice: normalizeNumber(state.minPrice),
+    maxPrice: normalizeNumber(state.maxPrice),
     selectedRating: normalizeRating(state.selectedRating),
     selectedConditions: normalizeStringArray(state.selectedConditions),
     dateFrom: normalizeString(state.dateFrom),
@@ -149,7 +155,8 @@ export const useDashboardFilters = () => {
 
   const selectedListingTypes = ref<string[]>(storedState?.selectedListingTypes ?? [])
   const selectedCategories = ref<string[]>(storedState?.selectedCategories ?? [])
-  const selectedPriceRange = ref<string>(storedState?.selectedPriceRange ?? "")
+  const minPrice = ref<number | null>(storedState?.minPrice ?? null)
+  const maxPrice = ref<number | null>(storedState?.maxPrice ?? null)
   const selectedRating = ref<number | null>(storedState?.selectedRating ?? null)
   const selectedConditions = ref<string[]>(storedState?.selectedConditions ?? [])
   const dateFrom = ref<string>(storedState?.dateFrom ?? "")
@@ -164,7 +171,8 @@ export const useDashboardFilters = () => {
     const state: DashboardFilterSessionState = {
       selectedListingTypes: [...selectedListingTypes.value],
       selectedCategories: [...selectedCategories.value],
-      selectedPriceRange: selectedPriceRange.value,
+      minPrice: minPrice.value,
+      maxPrice: maxPrice.value,
       selectedRating: selectedRating.value,
       selectedConditions: [...selectedConditions.value],
       dateFrom: dateFrom.value,
@@ -176,7 +184,8 @@ export const useDashboardFilters = () => {
     const isDefaultState =
       state.selectedListingTypes.length === 0 &&
       state.selectedCategories.length === 0 &&
-      state.selectedPriceRange === "" &&
+      state.minPrice === null &&
+      state.maxPrice === null &&
       state.selectedRating === null &&
       state.selectedConditions.length === 0 &&
       state.dateFrom === "" &&
@@ -195,7 +204,8 @@ export const useDashboardFilters = () => {
   const clearAll = () => {
     selectedListingTypes.value = []
     selectedCategories.value = []
-    selectedPriceRange.value = ""
+    minPrice.value = null
+    maxPrice.value = null
     selectedRating.value = null
     selectedConditions.value = []
     dateFrom.value = ""
@@ -222,15 +232,8 @@ export const useDashboardFilters = () => {
     if (dbConditions.length) params.conditions = dbConditions.join(",")
 
     // Price Range
-    const priceBucket = PRICE_RANGES.find((p) => p.label === selectedPriceRange.value)
-    if (priceBucket && priceBucket.bucket !== "all") {
-      if (priceBucket.free) {
-        params.freeToBorrow = "true"
-      } else {
-        if (priceBucket.min !== undefined) params.minPrice = String(priceBucket.min)
-        if (priceBucket.max !== undefined) params.maxPrice = String(priceBucket.max)
-      }
-    }
+    if (minPrice.value !== null) params.minPrice = String(minPrice.value)
+    if (maxPrice.value !== null) params.maxPrice = String(maxPrice.value)
 
     const isBorrowOnly =
       selectedListingTypes.value.includes("For Borrow") &&
@@ -272,7 +275,8 @@ export const useDashboardFilters = () => {
     [
       selectedListingTypes,
       selectedCategories,
-      selectedPriceRange,
+      minPrice,
+      maxPrice,
       selectedRating,
       selectedConditions,
       dateFrom,
@@ -290,7 +294,8 @@ export const useDashboardFilters = () => {
     // State (passed to FilterPanel as v-model or props)
     selectedListingTypes,
     selectedCategories,
-    selectedPriceRange,
+    minPrice,
+    maxPrice,
     selectedRating,
     selectedConditions,
     dateFrom,

@@ -182,32 +182,37 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold font-geist">My Listings</h1>
-        <p class="text-neutral-800 text-base sm:text-lg font-normal font-geist tracking-wide mt-1">
-          Manage your listed items for borrow or rent
+  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+    <!-- Page Header -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
+      <section class="space-y-3">
+        <div class="space-y-1">
+          <h1 class="text-[28px] font-bold text-noble-black">My Listings</h1>
+          <div class="w-10 h-[2px] bg-burning-orange"></div>
+        </div>
+        <p class="text-[14px] font-medium text-noble-black/40">
+          Manage your listed items and track their availability.
         </p>
-      </div>
+      </section>
+
       <div class="flex gap-3 shrink-0">
         <NuxtLink
           to="/account/requests"
-          class="inline-flex items-center gap-2 px-5 py-2.5 border border-orange-500 text-orange-600 rounded-[30px] text-sm font-medium font-geist hover:bg-cream transition-colors"
+          class="inline-flex h-11 items-center gap-2 px-6 border-[1.5px] border-burning-orange text-burning-orange rounded-[12px] text-[13px] font-bold hover:bg-burning-orange/5 transition-all"
         >
           View Requests
         </NuxtLink>
         <NuxtLink
           to="/account/listings/new"
-          class="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white rounded-[30px] text-sm font-medium font-geist hover:bg-orange-600 transition-colors"
+          class="inline-flex h-11 items-center gap-2 px-6 bg-burning-orange text-white rounded-[12px] text-[13px] font-bold hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all"
         >
           <svg
-            width="16"
-            height="16"
+            width="18"
+            height="18"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            stroke-width="2.5"
+            stroke-width="3"
           >
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -216,49 +221,65 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="rounded-[24px] border border-cinnamon-ice bg-cream px-4 py-4 sm:px-5">
+    <div
+      class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)] space-y-6"
+    >
+      <!-- Rewards & Boost Status -->
       <div
-        v-if="showBoostIntentBanner"
-        class="mb-4 rounded-[18px] border border-burning-orange/20 bg-burning-orange/5 px-4 py-4 sm:px-5"
+        class="flex flex-col gap-4 rounded-[18px] border border-burning-orange/10 bg-white p-5 sm:flex-row sm:items-center sm:justify-between shadow-sm"
       >
-        <p class="text-sm font-semibold text-neutral-800">Choose a listing to boost</p>
-        <p class="mt-1 text-sm text-neutral-800/60">
-          Select any eligible listing below to spend 50 points and increase its visibility for 24
-          hours.
-        </p>
-      </div>
-
-      <div
-        class="mb-4 flex flex-col gap-2 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div>
-          <p class="text-sm font-semibold text-neutral-800">
-            Available rewards points: {{ rewardsSummary?.availablePoints ?? 0 }}
-          </p>
-          <p class="mt-1 text-sm text-neutral-800/55">
-            Spend 50 points to boost one listing for 24 hours.
-          </p>
+        <div class="flex items-center gap-4">
+          <div
+            class="w-12 h-12 bg-burning-orange/[0.08] text-burning-orange rounded-full flex items-center justify-center shrink-0"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="8" r="7" />
+              <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-[15px] font-bold text-noble-black">
+              Available: {{ rewardsSummary?.availablePoints ?? 0 }} points
+            </p>
+            <p class="mt-0.5 text-[13px] text-noble-black/40 font-medium">
+              {{
+                showBoostIntentBanner
+                  ? "Select an eligible listing below to activate boost."
+                  : "Spend 50 points to boost visibility for 24 hours."
+              }}
+            </p>
+          </div>
         </div>
         <NuxtLink
           to="/account/rewards"
-          class="inline-flex w-fit items-center rounded-full border border-burning-orange px-4 py-2 text-sm font-medium text-burning-orange transition-colors hover:bg-burning-orange hover:text-white"
+          class="h-10 px-6 inline-flex items-center justify-center rounded-[10px] bg-burning-orange/[0.08] text-burning-orange font-bold text-[13px] transition-all hover:bg-burning-orange/[0.12]"
         >
           Open Rewards
         </NuxtLink>
       </div>
 
-      <div class="flex flex-col gap-4 xl:flex-row xl:items-center">
+      <div class="flex flex-col gap-6 xl:flex-row xl:items-center">
+        <!-- HD Search Bar -->
         <div
-          class="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] border border-cinnamon-ice bg-white px-4 py-3"
+          class="flex min-w-0 flex-1 items-center gap-3 rounded-[12px] border border-gray-200 bg-white px-4 py-2.5 shadow-sm focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5 transition-all"
         >
           <svg
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            stroke-width="2"
-            class="shrink-0 text-neutral-800/50"
+            stroke-width="3"
+            class="shrink-0 text-noble-black/30"
           >
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
@@ -266,24 +287,25 @@ onBeforeUnmount(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search your listings"
-            class="flex-1 bg-transparent text-neutral-800/70 text-base font-normal font-geist placeholder:text-neutral-800/50 focus:outline-none"
+            placeholder="Search your listings..."
+            class="flex-1 bg-transparent text-noble-black text-[15px] font-medium placeholder:text-noble-black/30 focus:outline-none"
           />
         </div>
 
         <div
-          class="flex flex-col gap-3 xl:min-w-[420px] xl:flex-row xl:items-center xl:justify-end"
+          class="flex flex-col gap-4 xl:min-w-[420px] xl:flex-row xl:items-center xl:justify-end"
         >
+          <!-- Status Filters (Pills) -->
           <div class="flex flex-wrap gap-2">
             <button
               v-for="option in STATUS_OPTIONS"
               :key="option.value"
               type="button"
-              class="rounded-full border px-4 py-2 text-sm font-medium font-geist transition-colors"
+              class="h-9 px-4 rounded-full text-[13px] font-bold transition-all duration-300 border-[1.5px]"
               :class="
                 selectedStatuses.includes(option.value)
-                  ? 'border-burning-orange bg-burning-orange text-white'
-                  : 'border-cinnamon-ice bg-white text-neutral-800 hover:border-burning-orange/40 hover:text-burning-orange'
+                  ? 'border-burning-orange bg-burning-orange text-white shadow-md shadow-burning-orange/20'
+                  : 'border-gray-200 bg-white text-noble-black/50 hover:border-burning-orange/30 hover:text-noble-black'
               "
               @click="toggleStatusFilter(option.value)"
             >
@@ -294,102 +316,139 @@ onBeforeUnmount(() => {
           <div class="relative">
             <button
               type="button"
-              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-cinnamon-ice bg-white px-4 py-2 text-sm font-medium font-geist text-neutral-800 transition-colors hover:border-burning-orange/40 hover:text-burning-orange xl:min-w-[190px]"
+              class="h-9 inline-flex w-full items-center justify-between gap-3 rounded-full border-[1.5px] border-gray-200 bg-white px-5 text-[13px] font-bold text-noble-black/70 transition-all hover:border-burning-orange/30 hover:text-noble-black xl:min-w-[160px]"
               @click="toggleCategoryMenu"
             >
               <span>
                 {{
                   selectedCategories.length > 0
                     ? `Categories (${selectedCategories.length})`
-                    : "Categories"
+                    : "All Categories"
                 }}
               </span>
               <svg
-                class="h-4 w-4 transition-transform duration-200"
+                class="h-4 w-4 transition-transform duration-300"
                 :class="{ 'rotate-180': isCategoryDropdownOpen }"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                stroke-width="3"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 9l-7 7-7-7"
-                />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
 
             <div
               v-if="isCategoryDropdownOpen"
-              class="absolute right-0 z-20 mt-2 w-full min-w-[260px] rounded-[18px] border border-cinnamon-ice bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.08)]"
+              class="absolute right-0 z-20 mt-2 w-full min-w-[280px] rounded-[20px] border border-cinnamon-ice/20 bg-white p-4 shadow-[0_20px_40px_rgba(0,0,0,0.12)] animate-in zoom-in-95 duration-200"
             >
               <input
                 v-model="categorySearch"
                 type="text"
-                placeholder="Search categories"
-                class="mb-3 h-[42px] w-full rounded-[12px] border border-cinnamon-ice/60 px-4 font-geist text-[14px] text-neutral-800 placeholder:text-neutral-800/45 focus:border-burning-orange focus:outline-none"
+                placeholder="Search categories..."
+                class="mb-3 h-10 w-full rounded-[10px] border border-gray-100 bg-gray-50/50 px-4 text-[14px] text-noble-black placeholder:text-noble-black/30 focus:border-burning-orange focus:bg-white focus:outline-none transition-all"
               />
 
-              <div class="max-h-60 space-y-2 overflow-y-auto pr-1">
+              <div class="max-h-64 space-y-1 overflow-y-auto custom-modal-scrollbar pr-1">
                 <label
                   v-for="category in filteredCategoryOptions"
                   :key="category.value"
-                  class="flex cursor-pointer items-center justify-between rounded-[12px] px-3 py-2 hover:bg-cream"
+                  class="flex cursor-pointer items-center justify-between rounded-[10px] px-3 py-2 transition-colors group"
+                  :class="
+                    selectedCategories.includes(category.value)
+                      ? 'bg-burning-orange/5'
+                      : 'hover:bg-gray-50'
+                  "
                 >
-                  <span class="font-geist text-sm text-neutral-800">{{ category.label }}</span>
-                  <input
-                    :checked="selectedCategories.includes(category.value)"
-                    type="checkbox"
-                    class="h-4 w-4 rounded border-cinnamon-ice text-burning-orange focus:ring-burning-orange"
-                    @change="toggleCategoryFilter(category.value)"
-                  />
+                  <span
+                    class="text-[13px] font-semibold transition-colors"
+                    :class="
+                      selectedCategories.includes(category.value)
+                        ? 'text-burning-orange'
+                        : 'text-noble-black/70'
+                    "
+                  >
+                    {{ category.label }}
+                  </span>
+                  <div class="relative flex items-center justify-center">
+                    <input
+                      :checked="selectedCategories.includes(category.value)"
+                      type="checkbox"
+                      class="peer sr-only"
+                      @change="toggleCategoryFilter(category.value)"
+                    />
+                    <div
+                      class="w-5 h-5 rounded-md border-2 border-gray-200 peer-checked:border-burning-orange peer-checked:bg-burning-orange transition-all"
+                    ></div>
+                    <svg
+                      class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
                 </label>
-                <p
-                  v-if="filteredCategoryOptions.length === 0"
-                  class="px-3 py-2 font-geist text-sm text-neutral-800/50"
-                >
-                  No matching categories
-                </p>
               </div>
             </div>
           </div>
-
-          <button
-            v-if="hasActiveFilters"
-            type="button"
-            class="text-sm font-medium font-geist text-burning-orange transition-colors hover:text-blue-estate"
-            @click="clearFilters"
-          >
-            Clear all
-          </button>
         </div>
       </div>
 
+      <!-- Active Filter Tags -->
       <div
         v-if="selectedStatuses.length > 0 || selectedCategoryEntries.length > 0"
-        class="mt-4 flex flex-wrap gap-2"
+        class="flex flex-wrap gap-2 pt-2"
       >
         <button
           v-for="status in selectedStatuses"
           :key="status"
           type="button"
-          class="inline-flex items-center gap-2 rounded-full border border-burning-orange/25 bg-white px-3 py-1.5 text-xs font-medium font-geist text-burning-orange"
+          class="inline-flex items-center gap-2 rounded-lg bg-burning-orange text-white px-3 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm hover:brightness-110 transition-all"
           @click="removeStatusFilter(status)"
         >
           {{ STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status }}
-          <span aria-hidden="true">×</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+          >
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
         </button>
 
         <button
           v-for="category in selectedCategoryEntries"
           :key="category.value"
           type="button"
-          class="inline-flex items-center gap-2 rounded-full border border-cinnamon-ice bg-white px-3 py-1.5 text-xs font-medium font-geist text-neutral-800"
+          class="inline-flex items-center gap-2 rounded-lg bg-gray-100 text-noble-black/50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider hover:bg-gray-200 transition-all"
           @click="removeCategoryFilter(category.value)"
         >
           {{ category.label }}
-          <span aria-hidden="true">×</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+          >
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+
+        <button
+          v-if="hasActiveFilters"
+          type="button"
+          class="text-[12px] font-bold text-burning-orange hover:underline ml-2"
+          @click="clearFilters"
+        >
+          Clear all
         </button>
       </div>
     </div>
@@ -416,23 +475,50 @@ onBeforeUnmount(() => {
 
     <div
       v-else-if="!isLoading && listings.length === 0"
-      class="bg-cream rounded-[20px] border border-cinnamon-ice p-10 text-center space-y-4"
+      class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-16 text-center space-y-5 shadow-sm"
     >
-      <svg
-        width="48"
-        height="48"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        class="text-neutral-800/30 mx-auto"
+      <div
+        class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-sm border border-gray-100"
       >
-        <path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
-        <path d="M16 3H8l-2 4h12l-2-4z" />
-      </svg>
-      <p class="text-neutral-800/60 text-lg font-geist">
-        {{ emptyStateMessage }}
-      </p>
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          class="text-noble-black/20"
+        >
+          <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
+          <path d="M16 3H8l-2 4h12l-2-4z" />
+        </svg>
+      </div>
+      <div>
+        <p class="text-[18px] font-bold text-noble-black">
+          {{ emptyStateMessage }}
+        </p>
+        <p
+          v-if="!searchQuery && !hasActiveFilters"
+          class="mt-1 text-[14px] text-noble-black/40 font-medium"
+        >
+          Start listing items to earn rewards and build your profile.
+        </p>
+      </div>
+      <NuxtLink
+        v-if="!searchQuery && !hasActiveFilters"
+        to="/account/listings/new"
+        class="inline-flex h-11 items-center px-8 bg-burning-orange text-white rounded-[12px] text-[14px] font-bold hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all"
+      >
+        Create Your First Listing
+      </NuxtLink>
+      <button
+        v-else
+        type="button"
+        class="inline-flex h-10 items-center px-6 border-[1.5px] border-burning-orange text-burning-orange rounded-[10px] text-[13px] font-bold hover:bg-burning-orange/5 transition-all"
+        @click="clearFilters"
+      >
+        Clear All Filters
+      </button>
     </div>
 
     <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

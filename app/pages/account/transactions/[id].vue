@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount } from "vue"
+import { ref, computed, watch } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
 import type { ReviewType } from "../../../../shared/schemas/review"
@@ -54,7 +54,7 @@ if (error.value) {
   throw error.value
 }
 
-const { data: reviewState, refresh: refreshReviewState } = await useAsyncData(
+const { refresh: _refreshReviewState } = await useAsyncData(
   () => `booking-review:${bookingId.value || "missing"}`,
   async () => {
     if (!bookingId.value) {
@@ -91,6 +91,7 @@ const booking = computed(() => {
 })
 
 const isActing = ref(false)
+const isDisputeDescriptionExpanded = ref(false)
 const actionErrorMessage = ref("")
 const actionSuccessMessage = ref("")
 const proofUploadErrorMessage = ref("")
@@ -185,6 +186,8 @@ const computeDuration = (startDate: Date | string, endDate: Date | string): stri
   return `${weekPart} and ${dayPart}`
 }
 
+const duration = computed(() => computeDuration(booking.value.startDate, booking.value.endDate))
+
 const itemDetailPath = computed(() =>
   buildItemDetailPath({
     id: booking.value.item.id,
@@ -198,11 +201,23 @@ const backToTransactionsPath = computed(() => {
 
 const timeline = computed(() => {
   const entries = booking.value.timeline ?? []
-  return entries.map((entry, index) => ({
-    ...entry,
-    date: formatDateTime(entry.occurredAt),
-    status: index === entries.length - 1 ? "current" : "completed",
-  }))
+  return entries.map((entry, index) => {
+    let description = entry.description
+
+    // Deduplicate and refine descriptions
+    if (entry.label === "In use") {
+      description = "Item picked up by borrower"
+    } else if (entry.label === "Returned" && booking.value.refundAmount > 0) {
+      description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
+    }
+
+    return {
+      ...entry,
+      description,
+      date: formatDateTime(entry.occurredAt),
+      status: index === entries.length - 1 ? "current" : "completed",
+    }
+  })
 })
 
 const isReturnModalOpen = ref(false)
@@ -218,27 +233,44 @@ const isSubmittingRebuttal = ref(false)
 const rebuttalText = ref("")
 const rebuttalNotes = ref("")
 const rebuttalValidationMessage = ref("")
-const isSubmittingReview = ref(false)
-const reviewErrorMessage = ref("")
-const reviewSuccessMessage = ref("")
-const showRewardPopup = ref(false)
-let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
-const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
 
-type SubmittedReviewPayload = {
-  transactionId: string
-  reviewType: ReviewType
-  currentUserRole: "BORROWER" | "LENDER"
-  itemId: string | null
-}
+const parsedDisputeDescription = computed(() => {
+  if (!latestDispute.value?.description) return null
+  const desc = latestDispute.value.description
 
-const reviewForm = reactive({
-  rating: 5,
-  reviewText: "",
-  isAnonymous: false,
+  const extract = (label: string) => {
+    const regex = new RegExp(`${label}:\\s*([^\\n]+)`, "i")
+    const match = desc.match(regex)
+    return match && match[1] ? match[1].trim() : null
+  }
+
+  let summary = null
+  const summaryIndex = desc.indexOf("Summary:")
+  if (summaryIndex !== -1) {
+    const summaryText = desc.substring(summaryIndex + 8).trim()
+    const evidenceIndex = summaryText.indexOf("Evidence filenames:")
+    summary = evidenceIndex !== -1 ? summaryText.substring(0, evidenceIndex).trim() : summaryText
+  }
+
+  const fullTransaction = extract("Transaction")
+  let transactionRef = null
+  let itemName = null
+  if (fullTransaction) {
+    const parts = fullTransaction.split("•").map((s) => s.trim())
+    transactionRef = parts[0]
+    itemName = parts[1]
+  }
+
+  return {
+    resolution: extract("Requested resolution"),
+    transactionRef,
+    itemName,
+    otherParty: extract("Other party"),
+    summary,
+    evidence: extract("Evidence filenames"),
+  }
 })
-const canSubmitReview = computed(() => reviewState.value?.canSubmit ?? false)
-const currentUserReview = computed(() => reviewState.value?.review ?? null)
+
 const handoffProofFile = ref<File | null>(null)
 const returnProofFile = ref<File | null>(null)
 const earlyReturnProofFile = ref<File | null>(null)
@@ -284,7 +316,6 @@ const setProofFile = (
 
 const setHandoffProofFile = (event: Event) => setProofFile(event, handoffProofFile)
 const setReturnProofFile = (event: Event) => setProofFile(event, returnProofFile)
-const setEarlyReturnProofFile = (event: Event) => setProofFile(event, earlyReturnProofFile)
 
 const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
   const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
@@ -384,36 +415,6 @@ const handleEarlyReturn = async () => {
   }
 }
 
-const confirmEarlyReturn = async () => {
-  if (!earlyReturnProofFile.value) {
-    proofUploadErrorMessage.value = "Upload proof of return before confirming early return."
-    return
-  }
-
-  isSubmittingReturn.value = true
-  actionErrorMessage.value = ""
-  actionSuccessMessage.value = ""
-  proofUploadErrorMessage.value = ""
-  try {
-    const proofImageUrl = await uploadProofImage(earlyReturnProofFile.value, "RETURN")
-    await $fetch(`/api/bookings/${booking.value.id}/early-return`, {
-      method: "POST",
-      body: { proofImageUrl, returnReason: "Early return initiated by borrower" },
-    })
-    await refresh()
-    isEarlyReturnModalOpen.value = false
-    isSuccessModalOpen.value = true
-    actionSuccessMessage.value = "Early return processed. The lender was notified."
-  } catch (err: unknown) {
-    actionErrorMessage.value =
-      err instanceof Error
-        ? err.message
-        : getFetchErrorMessage(err, "Unable to process early return right now.")
-  } finally {
-    isSubmittingReturn.value = false
-  }
-}
-
 const confirmReturn = async () => {
   if (!returnProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of return before submitting."
@@ -430,10 +431,10 @@ const confirmReturn = async () => {
       method: "POST",
       body: { proofImageUrl },
     })
-    await refresh()
     isReturnModalOpen.value = false
     isSuccessModalOpen.value = true
     actionSuccessMessage.value = "Return submitted. The lender was notified to confirm receipt."
+    await refresh()
   } catch (err: unknown) {
     actionErrorMessage.value =
       err instanceof Error
@@ -461,9 +462,9 @@ const confirmHandoffProof = async () => {
       method: "POST",
       body: { proofImageUrl },
     })
-    await refresh()
     isHandoffProofModalOpen.value = false
     actionSuccessMessage.value = "Handoff proof uploaded. The item is now marked as in use."
+    await refresh()
   } catch (err: unknown) {
     actionErrorMessage.value =
       err instanceof Error
@@ -626,17 +627,17 @@ const disputeStatusLabel = computed(() => {
 const disputeStatusToneClasses = computed(() => {
   switch (latestDispute.value?.status) {
     case "SUBMITTED":
-      return "bg-burning-orange/10 text-burning-orange border border-burning-orange/20"
+      return "bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
     case "OPEN":
-      return "bg-cinnabar-red/10 text-cinnabar-red border border-cinnabar-red/20"
+      return "bg-cinnabar-red/[0.08] text-cinnabar-red border-cinnabar-red/20"
     case "REJECTED":
-      return "bg-noble-black/5 text-noble-black/70 border border-cinnamon-ice"
+      return "bg-noble-black/5 text-noble-black/70 border-cinnamon-ice"
     case "APPEALED":
-      return "bg-blue-estate/10 text-blue-estate border border-blue-estate/20"
+      return "bg-blue-estate/[0.08] text-blue-estate border-blue-estate/20"
     case "CLOSED":
-      return "bg-green-100 text-green-700 border border-green-200"
+      return "bg-success-green/[0.08] text-success-green border-success-green/20"
     default:
-      return "bg-cream text-noble-black/60 border border-cinnamon-ice"
+      return "bg-cream text-noble-black/60 border-cinnamon-ice"
   }
 })
 
@@ -735,9 +736,9 @@ const submitRebuttal = async () => {
       },
     })
 
-    await refresh()
     closeRebuttalModal()
     actionSuccessMessage.value = "Your rebuttal has been submitted."
+    await refresh()
   } catch (err: unknown) {
     const errorData = (
       err as {
@@ -839,747 +840,548 @@ watch(
   { immediate: true },
 )
 
-const triggerRewardPopup = () => {
-  if (rewardPopupTimeout) {
-    clearTimeout(rewardPopupTimeout)
-  }
-
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(REVIEW_REWARD_POPUP_STORAGE_KEY, "1")
-  }
-
-  showRewardPopup.value = true
-  rewardPopupTimeout = setTimeout(() => {
-    showRewardPopup.value = false
-    rewardPopupTimeout = null
-  }, 1800)
-}
-
-const shouldShowRewardPopup = (payload: SubmittedReviewPayload) => {
-  if (payload.currentUserRole === "LENDER") {
-    return true
-  }
-
-  const requiredTypes: ReviewType[] = ["LENDER_REVIEW"]
-  if (payload.itemId) {
-    requiredTypes.push("ITEM_REVIEW")
-  }
-
-  return requiredTypes.every((reviewType) => {
-    if (reviewType === payload.reviewType) {
-      return true
-    }
-
-    return (
-      booking.value.reviewState.actions.find((action) => action.reviewType === reviewType)
-        ?.hasSubmitted ?? false
-    )
-  })
-}
-
-const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
-  if (shouldShowRewardPopup(payload)) {
-    triggerRewardPopup()
-  }
-
+const handleReviewSubmitted = async () => {
   await refresh()
   actionSuccessMessage.value = "Thanks for your feedback. Your review is now visible here."
 }
-
-const submitReview = async () => {
-  isSubmittingReview.value = true
-  reviewErrorMessage.value = ""
-  reviewSuccessMessage.value = ""
-
-  try {
-    await $fetch("/api/reviews", {
-      method: "POST",
-      body: {
-        bookingId: booking.value.id,
-        rating: reviewForm.rating,
-        reviewText: reviewForm.reviewText,
-        isAnonymous: reviewForm.isAnonymous,
-      },
-    })
-
-    reviewSuccessMessage.value = "Review submitted. Your rewards bonus has been processed."
-    reviewForm.rating = 5
-    reviewForm.reviewText = ""
-    reviewForm.isAnonymous = false
-    await Promise.all([refreshReviewState(), refresh()])
-  } catch (err: unknown) {
-    const errorData = (
-      err as {
-        data?: {
-          error?: { message?: string }
-          statusMessage?: string
-          message?: string
-        }
-      }
-    )?.data
-
-    reviewErrorMessage.value =
-      errorData?.error?.message ??
-      errorData?.statusMessage ??
-      errorData?.message ??
-      "Unable to submit your review right now."
-  } finally {
-    isSubmittingReview.value = false
-  }
-}
-
-onBeforeUnmount(() => {
-  if (rewardPopupTimeout) {
-    clearTimeout(rewardPopupTimeout)
-  }
-})
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 px-4 sm:px-0">
+  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
     <NuxtLink
       :to="backToTransactionsPath"
-      class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-6 group"
+      class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        width="20"
-        height="20"
+        width="18"
+        height="18"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        stroke-width="2"
+        stroke-width="2.5"
         stroke-linecap="round"
         stroke-linejoin="round"
         class="transition-transform group-hover:-translate-x-1"
       >
         <path d="m15 18-6-6 6-6" />
       </svg>
-      <span class="text-lg font-medium">Back to My Transactions</span>
+      <span class="text-[15px] font-bold">Back to My Transactions</span>
     </NuxtLink>
 
     <template v-if="pending">
-      <div class="flex flex-col gap-6 animate-pulse">
+      <div class="flex flex-col gap-8 animate-pulse">
         <div class="h-10 w-48 bg-cream rounded-xl"></div>
-        <div class="h-6 w-96 bg-cream rounded-xl"></div>
-        <div class="h-64 bg-cream rounded-3xl"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div class="lg:col-span-3 space-y-6">
+            <div class="h-64 bg-cream rounded-[24px]"></div>
+            <div class="h-96 bg-cream rounded-[24px]"></div>
+          </div>
+          <div class="lg:col-span-2 space-y-6">
+            <div class="h-80 bg-cream rounded-[24px]"></div>
+          </div>
+        </div>
       </div>
     </template>
 
     <template v-else-if="booking">
-      <!-- Page Title -->
-      <h1 class="text-[25px] font-bold text-noble-black mb-2">Order Details</h1>
-
-      <!-- Order Info Bar -->
+      <!-- Redesigned Page Header Strip -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-        <div class="flex flex-wrap items-center gap-3 text-[15px] text-noble-black/80">
-          <div class="flex items-center gap-2">
-            <span class="font-normal uppercase tracking-wide"
-              >ORDER ID. {{ orderIdForDisplay }}</span
+        <div class="space-y-1.5">
+          <h1 class="text-[24px] font-bold text-noble-black leading-tight">Order Details</h1>
+          <div class="flex flex-wrap items-center gap-2.5 text-[13px] text-gray-500 font-medium">
+            <div
+              class="flex items-center gap-1.5 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
             >
-            <button
-              class="text-stone-400 hover:text-noble-black transition-colors"
-              @click="copyOrderId"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <span>ORDER ID. {{ orderIdForDisplay }}</span>
+              <button
+                class="hover:text-burning-orange transition-colors"
+                title="Copy Order ID"
+                @click="copyOrderId"
               >
-                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-              </svg>
-            </button>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </button>
+            </div>
+            <span class="opacity-30 select-none">·</span>
+            <span>Placed on {{ formatDateTime(booking.requestedAt) }}</span>
           </div>
-          <div class="hidden sm:block w-px h-4 bg-stone-300"></div>
-          <span class="font-normal">Placed on {{ formatDateTime(booking.requestedAt) }}</span>
         </div>
 
-        <span
-          v-if="isPendingRequest"
-          class="inline-flex items-center rounded-md bg-burning-orange px-3 py-1 text-base font-normal font-geist text-white"
-        >
-          Requested
-        </span>
-        <TransactionStatusBadge v-else :status="mappedStatus" :role="userRole" />
+        <div class="shrink-0">
+          <span
+            v-if="isPendingRequest"
+            class="inline-flex items-center rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
+          >
+            Requested
+          </span>
+          <TransactionStatusBadge
+            v-else
+            :status="mappedStatus"
+            :role="userRole"
+            class="!rounded-full !px-3 !py-1 !text-[11px] !font-bold !uppercase !tracking-wider"
+          />
+        </div>
       </div>
 
-      <div
-        v-if="isPendingRequest"
-        class="mb-8 rounded-2xl border border-burning-orange/20 bg-burning-orange/5 px-5 py-4 text-sm font-semibold text-noble-black"
-      >
-        {{ requestStageMessage }}
-      </div>
+      <!-- Two-Column Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+        <!-- Left Column (60%) -->
+        <div class="lg:col-span-3 space-y-8">
+          <div
+            v-if="isPendingRequest"
+            class="rounded-[20px] border border-burning-orange/10 bg-burning-orange/[0.03] px-5 py-4 text-[14px] font-bold text-noble-black flex items-start gap-3"
+          >
+            <svg
+              class="text-burning-orange mt-0.5 shrink-0"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            {{ requestStageMessage }}
+          </div>
 
-      <!-- Main Content Grid -->
-      <div class="space-y-6">
-        <!-- Section 1: Item Details -->
-        <NuxtLink
-          :to="itemDetailPath"
-          class="block bg-cream border border-cinnamon-ice rounded-3xl p-6 group transition-colors hover:border-burning-orange/50"
-        >
-          <h2 class="text-lg font-bold text-noble-black mb-4">Item Details</h2>
-          <div class="flex flex-col sm:flex-row gap-6">
-            <div class="shrink-0 block">
-              <img
-                v-if="booking.item.thumbnailImage"
-                :src="booking.item.thumbnailImage"
-                :alt="booking.item.name"
-                class="w-full sm:w-32 h-48 sm:h-32 object-cover rounded-2xl shrink-0 group-hover:opacity-90 transition-opacity"
-              />
-              <div
-                v-else
-                class="w-full sm:w-32 h-48 sm:h-32 bg-cinnamon-ice/40 rounded-2xl shrink-0 flex items-center justify-center group-hover:bg-cinnamon-ice/50 transition-colors"
+          <!-- Section 1: Item Details -->
+          <div
+            class="bg-white border border-[#F0EDE8] rounded-[24px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] relative group"
+          >
+            <div class="flex items-center justify-between mb-6">
+              <h2 class="text-[18px] font-bold text-noble-black">Item Details</h2>
+              <NuxtLink
+                :to="itemDetailPath"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-burning-orange font-bold text-[13px] hover:bg-burning-orange/5 transition-all"
               >
+                View Full Listing
                 <svg
-                  class="w-12 h-12 text-cinnamon-ice"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  viewBox="0 0 24 24"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
                   <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
                   />
                 </svg>
-              </div>
+              </NuxtLink>
             </div>
-            <div class="flex flex-col justify-center gap-1">
-              <h3
-                class="text-xl font-bold text-noble-black group-hover:text-burning-orange transition-colors"
-              >
-                {{ booking.item.name }}
-              </h3>
-              <p class="text-sm text-noble-black/70 line-clamp-2 max-w-xl">
-                {{ booking.item.description || "No description provided." }}
-              </p>
-              <div class="flex items-center gap-2 mt-2 text-sm font-medium text-noble-black/80">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                  <line x1="16" x2="16" y1="2" y2="6" />
-                  <line x1="8" x2="8" y1="2" y2="6" />
-                  <line x1="3" x2="21" y1="10" y2="10" />
-                </svg>
-                {{ formatDate(booking.startDate) }} - {{ formatDate(booking.endDate) }}
-              </div>
-              <span class="text-burning-orange text-sm font-bold mt-2 group-hover:underline">
-                View Full Listing
-              </span>
-            </div>
-          </div>
-        </NuxtLink>
-
-        <!-- Section 2: Order Timeline -->
-        <section class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-            <h2 class="text-lg font-bold text-noble-black">Order Timeline</h2>
-
-            <!-- Lender Actions -->
-            <div v-if="canRespond" class="flex gap-2">
-              <button
-                :disabled="isActing"
-                class="bg-burning-orange text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-estate transition-colors disabled:opacity-50"
-                @click="respondToBooking('CONFIRMED')"
-              >
-                Approve Request
-              </button>
-              <button
-                :disabled="isActing"
-                class="bg-cream border border-burning-orange text-burning-orange px-6 py-2 rounded-xl font-bold hover:bg-burning-orange/10 transition-colors disabled:opacity-50"
-                @click="respondToBooking('CANCELLED')"
-              >
-                Decline
-              </button>
-            </div>
-
-            <button
-              v-else-if="canCancelRequest"
-              :disabled="isActing"
-              class="bg-cream border border-burning-orange text-burning-orange px-6 py-2 rounded-xl font-bold hover:bg-burning-orange/10 transition-colors disabled:opacity-50"
-              @click="cancelRequest"
-            >
-              {{ isActing ? "Cancelling..." : "Cancel Request" }}
-            </button>
-
-            <!-- Borrower Action: Return Item / Early Return -->
-            <button
-              v-else-if="canUploadHandoffProof"
-              :disabled="isSubmittingHandoffProof"
-              class="flex items-center justify-center gap-2 bg-blue-estate text-white px-6 py-2 rounded-xl font-bold hover:bg-burning-orange transition-colors disabled:opacity-50"
-              @click="handleHandoffProof"
-            >
-              <span v-if="isSubmittingHandoffProof" class="animate-spin">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-              </span>
-              <span>Upload Handoff Proof</span>
-            </button>
-
-            <button
-              v-else-if="canBorrowerReturnItem"
-              :disabled="isFetchingPreview"
-              class="flex items-center justify-center gap-2 bg-burning-orange text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-estate transition-colors disabled:opacity-50"
-              @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
-            >
-              <span v-if="isFetchingPreview" class="animate-spin">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-              </span>
-              <span>{{ isEarlyReturnEligible ? "Early Return" : "Return Item" }}</span>
-            </button>
-
-            <button
-              v-else-if="canConfirmReceipt"
-              :disabled="isActing"
-              class="bg-blue-estate text-white px-6 py-2 rounded-xl font-bold hover:bg-burning-orange transition-colors disabled:opacity-50"
-              @click="confirmReceipt"
-            >
-              Confirm Receipt
-            </button>
-          </div>
-
-          <p
-            v-if="actionSuccessMessage"
-            class="mb-4 text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-200"
-          >
-            {{ actionSuccessMessage }}
-          </p>
-          <p
-            v-if="actionErrorMessage"
-            class="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-200"
-          >
-            {{ actionErrorMessage }}
-          </p>
-
-          <div class="space-y-0 ml-2">
-            <div
-              v-for="(step, index) in timeline"
-              :key="index"
-              class="relative flex gap-6 pb-8 last:pb-0"
-            >
-              <!-- Timeline Line -->
-              <div
-                v-if="index !== timeline.length - 1"
-                class="absolute left-[11px] top-6 bottom-0 w-0.5 bg-cinnamon-ice/30"
-              ></div>
-
-              <!-- Timeline Icon/Circle -->
-              <div class="relative z-10 mt-1">
+            <div class="flex flex-col sm:flex-row gap-6">
+              <div class="shrink-0 relative">
+                <img
+                  v-if="booking.item.thumbnailImage"
+                  :src="booking.item.thumbnailImage"
+                  :alt="booking.item.name"
+                  class="w-24 h-24 object-cover rounded-[12px] border border-gray-100 shadow-sm"
+                />
                 <div
-                  v-if="step.status === 'completed'"
-                  class="w-6 h-6 rounded-full bg-blue-estate flex items-center justify-center"
+                  v-else
+                  class="w-24 h-24 bg-cinnamon-ice/10 rounded-[12px] border border-gray-100 flex items-center justify-center"
                 >
                   <svg
-                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-8 h-8 text-cinnamon-ice/40"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div class="flex flex-col justify-center min-w-0">
+                <h3 class="text-[18px] font-semibold text-noble-black leading-tight mb-1 truncate">
+                  {{ booking.item.name }}
+                </h3>
+                <p class="text-[13px] text-gray-500 font-medium mb-4">
+                  Condition:
+                  {{
+                    booking.item.condition
+                      ?.replace("_", " ")
+                      .toLowerCase()
+                      .replace(/\b\w/g, (l) => l.toUpperCase())
+                  }}
+                </p>
+                <div
+                  class="flex items-center gap-2.5 text-[12px] font-bold text-gray-600 bg-gray-100 w-fit px-4 py-2 rounded-full border border-gray-200/50 shadow-sm"
+                >
+                  <svg
                     width="14"
                     height="14"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="white"
-                    stroke-width="4"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="text-gray-400"
+                  >
+                    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                    <line x1="16" x2="16" y1="2" y2="6" />
+                    <line x1="8" x2="8" y1="2" y2="6" />
+                    <line x1="3" x2="21" y1="10" y2="10" />
+                  </svg>
+                  <span
+                    >{{ formatDate(booking.startDate) }} - {{ formatDate(booking.endDate) }}</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Order Timeline -->
+          <section
+            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+          >
+            <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
+              <h2 class="text-[20px] font-bold text-noble-black">Order Timeline</h2>
+            </div>
+
+            <div
+              v-if="actionSuccessMessage"
+              class="mb-6 flex items-center gap-3 text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-4 rounded-[14px]"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              {{ actionSuccessMessage }}
+            </div>
+
+            <div
+              v-if="actionErrorMessage"
+              class="mb-6 flex items-center gap-3 text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-4 rounded-[14px]"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {{ actionErrorMessage }}
+            </div>
+
+            <div class="space-y-0 relative pl-1">
+              <div
+                v-for="(step, index) in timeline"
+                :key="index"
+                class="relative flex gap-6 pb-12 last:pb-0"
+              >
+                <!-- Timeline Line -->
+                <div
+                  v-if="index !== timeline.length - 1"
+                  class="absolute left-[15px] top-8 bottom-0 w-[2px]"
+                  :class="step.status === 'completed' ? 'bg-success-green/30' : 'bg-gray-100'"
+                ></div>
+
+                <!-- Timeline Icon (Hollow Precision Style) -->
+                <div class="relative z-10">
+                  <div
+                    v-if="step.status === 'completed'"
+                    class="w-8 h-8 rounded-full bg-white border-2 border-success-green flex items-center justify-center shadow-sm"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#22C55E"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <div
+                    v-else-if="step.status === 'current'"
+                    class="w-8 h-8 rounded-full bg-white border-2 border-burning-orange flex items-center justify-center shadow-sm"
+                  >
+                    <div
+                      class="w-2.5 h-2.5 rounded-full bg-burning-orange shadow-[0_0_8px_rgba(232,101,10,0.4)]"
+                    ></div>
+                  </div>
+                  <div
+                    v-else
+                    class="w-8 h-8 rounded-full bg-white border-2 border-gray-100 flex items-center justify-center"
+                  >
+                    <div class="w-1.5 h-1.5 rounded-full bg-gray-200"></div>
+                  </div>
+                </div>
+
+                <!-- Step Content -->
+                <div
+                  class="flex-1 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4"
+                >
+                  <div class="min-w-0">
+                    <h4 class="text-[14px] font-bold text-noble-black leading-tight">
+                      {{ step.label }}
+                    </h4>
+                    <p
+                      class="mt-1 text-[13px] text-noble-black/45 leading-relaxed max-w-lg font-medium"
+                    >
+                      {{ step.description }}
+                    </p>
+                  </div>
+                  <span
+                    class="text-[11px] font-mono text-noble-black/30 whitespace-nowrap pt-1 uppercase tracking-tighter"
+                  >
+                    {{ step.date }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section 5: Feedback & Reviews -->
+          <section
+            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+          >
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+              <div class="border-l-[3px] border-burning-orange pl-4">
+                <h2 class="text-[20px] font-bold text-noble-black">Your Reviews</h2>
+                <p class="text-[13px] font-medium text-noble-black/40 mt-0.5">
+                  Reviews help maintain trust in the TakeUP community.
+                </p>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="action in booking.reviewState.actions.filter((entry) => entry.canSubmit)"
+                  :key="action.reviewType"
+                  class="bg-burning-orange text-white px-5 py-2 rounded-[12px] text-[13px] font-bold hover:brightness-110 shadow-sm shadow-burning-orange/20 transition-all"
+                  @click="openReviewModal(action.reviewType)"
+                >
+                  {{ action.label }}
+                </button>
+              </div>
+            </div>
+
+            <TransactionReviewList
+              title="Transaction Reviews"
+              :reviews="booking.reviews as any"
+              empty-message="No reviews have been submitted for this transaction yet."
+            />
+
+            <!-- Review Bonus Section -->
+            <div
+              v-if="showReviewBonusSection"
+              class="mt-8 rounded-[18px] border border-burning-orange/10 bg-burning-orange/[0.03] p-5 flex items-center justify-between"
+            >
+              <div>
+                <p class="text-[14px] font-bold text-noble-black">Reviews Completed</p>
+                <p class="text-[12px] text-noble-black/50 font-medium mt-0.5">
+                  Your +5 reward points have been processed.
+                </p>
+              </div>
+              <div
+                class="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-burning-orange/20 shadow-sm"
+              >
+                <svg
+                  class="text-burning-orange"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="8" r="7" />
+                  <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+                </svg>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section 6: Concerns & Disputes -->
+          <section
+            v-if="booking.transactionId || latestDispute"
+            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+          >
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
+              <div class="border-l-[3px] border-burning-orange pl-4">
+                <h2 class="text-[20px] font-bold text-noble-black">Concerns & Disputes</h2>
+                <p
+                  class="mt-1 text-[13px] font-medium text-noble-black/50 leading-relaxed max-w-sm"
+                >
+                  {{
+                    latestDispute
+                      ? disputeStatusDescription
+                      : isReviewBlockedByDispute
+                        ? "Review actions are unavailable while a dispute is in progress."
+                        : "Raise a concern if this transaction needs dispute review."
+                  }}
+                </p>
+              </div>
+
+              <span
+                v-if="latestDispute"
+                class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider border shadow-sm"
+                :class="disputeStatusToneClasses"
+              >
+                {{ disputeStatusLabel }}
+              </span>
+            </div>
+
+            <!-- Redesigned Dispute Metadata Grid -->
+            <div v-if="latestDispute" class="space-y-6">
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-8">
+                <div>
+                  <p
+                    class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
+                  >
+                    Reason
+                  </p>
+                  <p class="text-[14px] font-semibold text-noble-black">
+                    {{ latestDispute.reason }}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
+                  >
+                    Submitted
+                  </p>
+                  <p class="text-[14px] font-semibold text-noble-black">
+                    {{ formatDate(latestDispute.createdAt) }}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
+                  >
+                    Raised By
+                  </p>
+                  <p class="text-[14px] font-semibold text-noble-black">
+                    {{ disputeRaisedByName ?? "Participant" }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Truncated Description -->
+              <div v-if="latestDispute.description" class="relative">
+                <p
+                  class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-2"
+                >
+                  Description
+                </p>
+                <div
+                  class="text-[14px] leading-relaxed text-noble-black/70 overflow-hidden transition-all duration-300"
+                  :class="!isDisputeDescriptionExpanded ? 'max-h-24' : 'max-h-none'"
+                >
+                  {{ latestDispute.description }}
+                </div>
+                <button
+                  v-if="latestDispute.description.length > 200"
+                  class="mt-2 text-burning-orange text-[13px] font-bold hover:underline"
+                  @click="isDisputeDescriptionExpanded = !isDisputeDescriptionExpanded"
+                >
+                  {{ isDisputeDescriptionExpanded ? "Show less" : "Show more" }}
+                </button>
+              </div>
+
+              <!-- Decisions -->
+              <div
+                v-if="latestDispute.finalDecision"
+                class="rounded-[16px] border border-success-green/20 bg-success-green/[0.04] p-5"
+              >
+                <div class="flex items-center gap-2 text-success-green mb-2">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
+                  <p class="text-[14px] font-bold">
+                    {{ finalDecisionLabel(latestDispute.finalDecision) }}
+                  </p>
                 </div>
-                <div
-                  v-else-if="step.status === 'current'"
-                  class="w-6 h-6 rounded-full bg-burning-orange flex items-center justify-center"
+                <p class="text-[12px] font-medium text-noble-black/40">
+                  Final judgment on {{ formatDate(latestDispute.finalDecisionAt!) }}
+                </p>
+                <p
+                  v-if="latestDispute.finalDecisionNotes"
+                  class="mt-3 text-[13px] text-noble-black/70 leading-relaxed italic border-l-2 border-success-green/20 pl-4"
                 >
-                  <div
-                    class="w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center"
-                  >
-                    <div class="w-1 h-1 rounded-full bg-white"></div>
-                  </div>
+                  {{ latestDispute.finalDecisionNotes }}
+                </p>
+              </div>
+
+              <!-- Rebuttal Box -->
+              <div
+                v-if="latestDispute.hasRebuttal"
+                class="rounded-[12px] border border-gray-100 bg-white p-5 shadow-sm"
+              >
+                <div class="flex items-center justify-between gap-4 mb-3">
+                  <p class="text-[13px] font-bold text-noble-black">
+                    Rebuttal by {{ rebuttalSubmittedByName }}
+                  </p>
+                  <span class="text-[11px] font-mono text-noble-black/30">{{
+                    formatDate(latestDispute.rebuttalSubmittedAt!)
+                  }}</span>
                 </div>
-                <div
-                  v-else
-                  class="w-6 h-6 rounded-full bg-cinnamon-ice flex items-center justify-center"
-                >
-                  <div class="w-1.5 h-1.5 rounded-full bg-burning-orange"></div>
-                </div>
-              </div>
-
-              <!-- Step Content -->
-              <div class="flex-1 flex justify-between items-start">
-                <div>
-                  <h4
-                    class="font-bold text-noble-black"
-                    :class="{ 'text-noble-black/40': step.status === 'upcoming' }"
-                  >
-                    {{ step.label }}
-                  </h4>
-                  <p class="text-sm text-noble-black/60">{{ step.description }}</p>
-                </div>
-                <span class="text-sm text-noble-black/40">{{ step.date }}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Section 3: Payment Summary -->
-        <section class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
-          <h2 class="text-lg font-bold text-noble-black mb-4">Payment Summary</h2>
-          <div class="space-y-3 mb-6">
-            <div class="flex justify-between items-center text-noble-black/80">
-              <span>Rental Fee ({{ computeDuration(booking.startDate, booking.endDate) }})</span>
-              <span class="font-bold">{{
-                formatPeso(booking.totalFee - booking.platformCommission)
-              }}</span>
-            </div>
-            <div class="flex justify-between items-center text-noble-black/80">
-              <span>Service Fee</span>
-              <span class="font-bold">{{ formatPeso(booking.platformCommission) }}</span>
-            </div>
-            <div
-              v-if="booking.refundAmount > 0"
-              class="flex justify-between items-center text-green-700 font-medium"
-            >
-              <div class="flex items-center gap-1.5">
-                <span>Early Return Refund</span>
-                <span class="text-[10px] bg-green-100 px-1.5 py-0.5 rounded text-green-800"
-                  >PROCESSED</span
-                >
-              </div>
-              <span>-{{ formatPeso(booking.refundAmount) }}</span>
-            </div>
-            <div class="flex justify-between items-center pt-3 border-t border-cinnamon-ice/30">
-              <span class="text-lg font-bold text-noble-black">{{
-                isLender
-                  ? booking.refundAmount > 0
-                    ? "Total Earnings (Adjusted)"
-                    : "Total Earnings"
-                  : booking.refundAmount > 0
-                    ? "Total Paid (Adjusted)"
-                    : "Total Paid"
-              }}</span>
-              <span class="text-2xl font-bold text-burning-orange">{{
-                formatPeso(
-                  (isLender ? booking.totalFee - booking.platformCommission : booking.totalFee) -
-                    (booking.refundAmount || 0),
-                )
-              }}</span>
-            </div>
-          </div>
-
-          <!-- TakeUP Guarantee Box -->
-          <div class="bg-blue-estate rounded-2xl p-4 flex gap-4 items-start text-white">
-            <div class="p-2 rounded-xl border border-white/20">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-            </div>
-            <div>
-              <h4 class="font-bold">TakeUP Guarantee</h4>
-              <p class="text-xs text-white/80 leading-relaxed mt-0.5">
-                Your deposit is held securely and will be refunded after successful item return and
-                inspection
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Section 4: Lender/Borrower Information -->
-        <section class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
-          <h2 class="text-lg font-bold text-noble-black mb-4">
-            {{ isLender ? "Borrower Information" : "Lender Information" }}
-          </h2>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-4">
-              <!-- Avatar -->
-              <UserAvatar
-                :user-name="
-                  isLender
-                    ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
-                    : `${booking.lender.user.firstName} ${booking.lender.user.lastName}`
-                "
-                size="lg"
-              />
-              <div>
-                <div class="flex items-center gap-1.5">
-                  <h3 class="font-bold text-noble-black">
-                    {{
-                      isLender
-                        ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
-                        : `${booking.lender.user.firstName} ${booking.lender.user.lastName}`
-                    }}
-                  </h3>
-                </div>
-                <div class="flex items-center gap-3 mt-1 text-sm">
-                  <div class="flex items-center gap-1 text-burning-orange font-bold">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon
-                        points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                      />
-                    </svg>
-                    {{
-                      isLender
-                        ? booking.borrower.borrowerRating || "5.0"
-                        : booking.lender.lenderRating || "5.0"
-                    }}
-                  </div>
-                  <span class="text-noble-black/40"
-                    >({{ isLender ? booking.borrower._count?.bookings || 0 : 124 }} bookings)</span
-                  >
-                </div>
-              </div>
-            </div>
-            <button
-              v-if="canOpenChat"
-              class="inline-flex items-center gap-2 shrink-0 rounded-2xl bg-blue-estate px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-burning-orange transition-colors"
-              @click="openChat"
-            >
-              <svg
-                class="w-4 h-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-                  stroke="white"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              Chat
-            </button>
-          </div>
-        </section>
-
-        <section class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-            <div>
-              <h2 class="text-lg font-bold text-noble-black">Feedback</h2>
-              <p class="text-sm text-noble-black/60 mt-1">
-                Reviews become available once the transaction is completed.
-              </p>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="action in booking.reviewState.actions.filter((entry) => entry.canSubmit)"
-                :key="action.reviewType"
-                class="bg-burning-orange text-white px-5 py-2.5 rounded-xl font-bold hover:bg-cinnabar-red transition-colors"
-                @click="openReviewModal(action.reviewType)"
-              >
-                {{ action.label }}
-              </button>
-              <span
-                v-for="action in booking.reviewState.actions.filter((entry) => entry.hasSubmitted)"
-                :key="`${action.reviewType}-submitted`"
-                class="inline-flex items-center rounded-xl bg-indigo-900 px-4 py-2 text-sm font-semibold text-white"
-              >
-                {{ action.submittedLabel }}
-              </span>
-            </div>
-          </div>
-
-          <TransactionReviewList
-            title="Transaction Reviews"
-            :reviews="booking.reviews as any"
-            empty-message="No reviews have been submitted for this transaction yet."
-          />
-        </section>
-
-        <section
-          v-if="booking.transactionId || latestDispute"
-          class="bg-cream border border-cinnamon-ice rounded-3xl p-6"
-        >
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 class="text-lg font-bold text-noble-black">Concerns & Disputes</h2>
-              <p class="mt-1 text-sm text-noble-black/60">
-                {{
-                  latestDispute
-                    ? disputeStatusDescription
-                    : isReviewBlockedByDispute
-                      ? "Review actions are unavailable while a dispute is in progress."
-                      : "Raise a concern if this transaction needs dispute review."
-                }}
-              </p>
-            </div>
-
-            <span
-              v-if="latestDispute"
-              class="inline-flex w-fit items-center rounded-full px-4 py-2 text-sm font-bold"
-              :class="disputeStatusToneClasses"
-            >
-              {{ disputeStatusLabel }}
-            </span>
-          </div>
-
-          <div v-if="latestDispute" class="mt-5 space-y-4 rounded-2xl bg-white p-5 shadow-sm">
-            <div class="grid gap-4 sm:grid-cols-3">
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                  Reason
-                </p>
-                <p class="mt-2 text-sm font-semibold text-noble-black">
-                  {{ latestDispute.reason }}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                  Submitted
-                </p>
-                <p class="mt-2 text-sm text-noble-black/80">
-                  {{ formatDateTime(latestDispute.createdAt) }}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                  Raised By
-                </p>
-                <p class="mt-2 text-sm text-noble-black/80">
-                  {{ disputeRaisedByName ?? "Transaction participant" }}
+                <p class="text-[13px] text-noble-black/70 leading-relaxed">
+                  {{ latestDispute.rebuttalText }}
                 </p>
               </div>
             </div>
 
-            <div v-if="latestDispute.description">
-              <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                Description
-              </p>
-              <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
-                {{ latestDispute.description }}
-              </p>
-            </div>
-
-            <div v-if="latestDispute.reviewedAt" class="rounded-2xl bg-cream p-4">
-              <p class="text-sm font-semibold text-noble-black">
-                Reviewed on {{ formatDateTime(latestDispute.reviewedAt) }}
-              </p>
-              <p v-if="latestDispute.reviewedBy" class="mt-1 text-sm text-noble-black/60">
-                Admin reviewer: {{ latestDispute.reviewedBy.firstName }}
-                {{ latestDispute.reviewedBy.lastName }}
-              </p>
-            </div>
-
-            <div
-              v-if="latestDispute.finalDecision"
-              class="rounded-2xl border border-green-200 bg-green-50/70 p-4"
-            >
-              <p class="text-sm font-semibold text-noble-black">
-                {{ finalDecisionLabel(latestDispute.finalDecision) }}
-              </p>
-              <p v-if="latestDispute.finalDecisionAt" class="mt-1 text-sm text-noble-black/60">
-                Final judgment recorded on {{ formatDateTime(latestDispute.finalDecisionAt) }}
-              </p>
-              <p v-if="latestDispute.closedAt" class="mt-1 text-sm text-noble-black/60">
-                Case closed on {{ formatDateTime(latestDispute.closedAt) }}
-              </p>
-              <p
-                v-if="latestDispute.finalDecisionNotes"
-                class="mt-3 text-sm leading-relaxed text-noble-black/80"
-              >
-                {{ latestDispute.finalDecisionNotes }}
-              </p>
-            </div>
-
-            <div
-              v-if="latestDispute.hasRebuttal"
-              class="rounded-2xl border border-cinnamon-ice bg-cream p-4"
-            >
-              <p class="text-sm font-semibold text-noble-black">
-                Rebuttal submitted
-                <span v-if="rebuttalSubmittedByName">by {{ rebuttalSubmittedByName }}</span>
-              </p>
-              <p v-if="latestDispute.rebuttalSubmittedAt" class="mt-1 text-sm text-noble-black/60">
-                Submitted on {{ formatDateTime(latestDispute.rebuttalSubmittedAt) }}
-              </p>
-              <p class="mt-3 text-sm leading-relaxed text-noble-black/80">
-                {{ latestDispute.rebuttalText }}
-              </p>
-              <p
-                v-if="latestDispute.rebuttalNotes"
-                class="mt-3 text-sm leading-relaxed text-noble-black/65"
-              >
-                Additional notes: {{ latestDispute.rebuttalNotes }}
-              </p>
-            </div>
-          </div>
-
-          <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p v-if="latestDispute?.status === 'SUBMITTED'" class="text-sm text-noble-black/60">
-              This dispute is being prepared for response.
-            </p>
-            <p
-              v-else-if="latestDispute?.status === 'OPEN' && latestDispute?.hasRebuttal"
-              class="text-sm text-noble-black/60"
-            >
-              Rebuttal submitted. This dispute is still under review.
-            </p>
-            <p
-              v-else-if="latestDispute?.status === 'OPEN' && canSubmitRebuttal"
-              class="text-sm text-noble-black/60"
-            >
-              You may submit one rebuttal while this dispute is open.
-            </p>
-            <p v-else-if="isReviewBlockedByDispute" class="text-sm text-noble-black/60">
-              Review actions are unavailable while a dispute is in progress.
-            </p>
-            <p v-else-if="booking.transactionId" class="text-sm text-noble-black/60">
-              Raise a concern if this transaction needs dispute review.
-            </p>
-
-            <div class="flex flex-wrap gap-3">
+            <!-- Dispute Actions -->
+            <div class="mt-8 flex flex-wrap gap-3">
               <button
                 v-if="canSubmitRebuttal"
-                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-estate px-6 py-3.5 font-bold text-white transition-colors hover:bg-indigo-900"
+                class="flex-1 min-w-[160px] h-11 inline-flex items-center justify-center gap-2 rounded-[12px] bg-blue-estate text-white text-[14px] font-bold hover:brightness-110 shadow-sm transition-all"
                 @click="openRebuttalModal"
               >
                 Submit Rebuttal
@@ -1587,17 +1389,16 @@ onBeforeUnmount(() => {
 
               <button
                 v-if="canRaiseDispute"
-                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-cinnabar-red px-6 py-3.5 font-bold text-white transition-colors hover:bg-cinnabar-red/90"
+                class="flex-1 min-w-[160px] h-11 inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[14px] font-bold hover:bg-cinnabar-red hover:text-white transition-all"
                 @click="handleDispute"
               >
                 <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
+                  width="18"
+                  height="18"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="2.5"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
@@ -1607,90 +1408,299 @@ onBeforeUnmount(() => {
                   <line x1="12" x2="12" y1="9" y2="13" />
                   <line x1="12" x2="12.01" y1="17" y2="17" />
                 </svg>
-                Report an Issue
+                Report Issue
               </button>
             </div>
+
+            <!-- Minimal Status Footer Text -->
+            <div
+              v-if="latestDispute?.status === 'OPEN' || latestDispute?.status === 'SUBMITTED'"
+              class="mt-6 flex items-center justify-center px-4"
+            >
+              <span class="text-[13px] font-bold text-noble-black/40 italic">
+                {{
+                  latestDispute.hasRebuttal
+                    ? "Rebuttal submitted. This dispute is still under review."
+                    : disputeStatusDescription
+                }}
+              </span>
+            </div>
+          </section>
+        </div>
+
+        <!-- Right Column (40%, Sticky) -->
+        <aside class="lg:col-span-2 space-y-6 lg:sticky lg:top-8">
+          <!-- Quick Action Buttons -->
+          <div
+            v-if="
+              canRespond ||
+              canCancelRequest ||
+              canUploadHandoffProof ||
+              canBorrowerReturnItem ||
+              canConfirmReceipt
+            "
+            class="space-y-3"
+          >
+            <div v-if="canRespond" class="grid grid-cols-2 gap-3">
+              <button
+                :disabled="isActing"
+                class="h-12 bg-gradient-to-br from-burning-orange to-orange-500 text-white rounded-[12px] font-bold text-[14px] hover:brightness-105 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
+                @click="respondToBooking('CONFIRMED')"
+              >
+                Approve
+              </button>
+              <button
+                :disabled="isActing"
+                class="h-12 bg-white border-2 border-gray-200 text-noble-black/60 rounded-[12px] font-bold text-[14px] hover:bg-gray-50 transition-all disabled:opacity-50"
+                @click="respondToBooking('CANCELLED')"
+              >
+                Decline
+              </button>
+            </div>
+
+            <button
+              v-if="canUploadHandoffProof"
+              :disabled="isSubmittingHandoffProof"
+              class="w-full h-12 flex items-center justify-center gap-2 bg-blue-estate text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
+              @click="handleHandoffProof"
+            >
+              <svg
+                v-if="isSubmittingHandoffProof"
+                class="animate-spin"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              Upload Handoff Proof
+            </button>
+
+            <button
+              v-if="canBorrowerReturnItem"
+              :disabled="isFetchingPreview"
+              class="w-full h-12 flex items-center justify-center gap-2 bg-burning-orange text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
+              @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
+            >
+              <svg
+                v-if="isFetchingPreview"
+                class="animate-spin"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              {{ isEarlyReturnEligible ? "Confirm Early Return" : "Return Item Now" }}
+            </button>
+
+            <button
+              v-if="canConfirmReceipt"
+              :disabled="isActing"
+              class="w-full h-12 bg-blue-estate text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
+              @click="confirmReceipt"
+            >
+              Confirm Item Receipt
+            </button>
+
+            <button
+              v-if="canCancelRequest"
+              :disabled="isActing"
+              class="w-full h-12 bg-white border-2 border-cinnabar-red text-cinnabar-red rounded-[12px] font-bold text-[14px] hover:bg-cinnabar-red/5 transition-all disabled:opacity-50"
+              @click="cancelRequest"
+            >
+              Cancel My Request
+            </button>
           </div>
-        </section>
+
+          <!-- Section 3: Payment Summary (Receipt Card) -->
+          <section
+            class="bg-white border border-[#F0EDE8] rounded-[16px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
+          >
+            <h2 class="text-[16px] font-bold text-noble-black mb-6">Payment Summary</h2>
+            <div class="space-y-4">
+              <div class="flex justify-between items-center text-[14px]">
+                <span class="text-gray-500 font-medium">Rental ({{ duration }})</span>
+                <span class="text-[#111] font-semibold">{{
+                  formatPeso(booking.totalFee - booking.platformCommission)
+                }}</span>
+              </div>
+              <div class="flex justify-between items-center text-[14px]">
+                <span class="text-gray-500 font-medium">Service Fee</span>
+                <span class="text-[#111] font-semibold">{{
+                  formatPeso(booking.platformCommission)
+                }}</span>
+              </div>
+
+              <div
+                v-if="booking.refundAmount > 0"
+                class="flex justify-between items-center text-[14px]"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="text-[#059669] font-bold">Early Return Refund</span>
+                  <span
+                    class="text-[10px] bg-[#D1FAE5] px-1.5 py-0.5 rounded-full text-[#065F46] font-black uppercase"
+                    >PROCESSED</span
+                  >
+                </div>
+                <span class="text-[#059669] font-bold"
+                  >-{{ formatPeso(booking.refundAmount) }}</span
+                >
+              </div>
+
+              <!-- Dashed Separator -->
+              <div
+                class="border-t border-dashed border-gray-200 pt-5 mt-2 flex justify-between items-baseline"
+              >
+                <span class="text-[18px] font-bold text-[#111]">Total Paid</span>
+                <span class="text-[20px] font-bold text-burning-orange">
+                  {{ formatPeso(booking.totalFee - (booking.refundAmount || 0)) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- TakeUP Secure Guarantee (Slim Style) -->
+            <div class="mt-8 pt-6 border-t border-gray-50">
+              <div
+                class="bg-blue-estate/[0.03] border border-blue-estate/10 rounded-[12px] p-4 flex gap-3 items-start"
+              >
+                <div class="shrink-0 text-blue-estate">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                </div>
+                <p class="text-[12px] text-blue-estate font-medium leading-relaxed">
+                  <span class="font-bold">TakeUP Secure.</span> Funds are held safely until the
+                  transaction is fully complete.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section 4: Counterpart Information -->
+          <section class="bg-white border border-[#F0EDE8] rounded-[12px] p-5 shadow-sm">
+            <p class="text-[11px] font-bold text-noble-black/30 uppercase tracking-[0.1em] mb-4">
+              {{ isLender ? "Borrower" : "Lender" }}
+            </p>
+            <div class="flex flex-col gap-5">
+              <div class="flex items-center gap-4 min-w-0">
+                <UserAvatar
+                  :user-name="
+                    isLender
+                      ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
+                      : `${booking.lender.user.firstName} ${booking.lender.user.lastName}`
+                  "
+                  size="lg"
+                  class="shrink-0 ring-4 ring-gray-50"
+                />
+                <div class="min-w-0 flex-1">
+                  <h3 class="font-semibold text-noble-black text-[15px] truncate">
+                    {{
+                      isLender
+                        ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
+                        : `${booking.lender.user.firstName} ${booking.lender.user.lastName}`
+                    }}
+                  </h3>
+                  <div class="flex items-center gap-2 mt-1">
+                    <div
+                      class="flex items-center gap-0.5 text-burning-orange font-bold text-[13px]"
+                    >
+                      <span>{{
+                        isLender
+                          ? booking.borrower.borrowerRating?.toFixed(1) || "5.0"
+                          : booking.lender.lenderRating?.toFixed(1) || "5.0"
+                      }}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon
+                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                        />
+                      </svg>
+                    </div>
+                    <span class="text-noble-black/30 text-[12px] font-medium"
+                      >•
+                      {{ isLender ? booking.borrower._count?.bookings || 0 : 124 }} bookings</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <button
+                v-if="canOpenChat"
+                class="w-full h-10 flex items-center justify-center gap-2 rounded-[10px] bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.12] font-bold text-[13px] transition-all"
+                @click="openChat"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Message {{ isLender ? "Borrower" : "Lender" }}
+              </button>
+            </div>
+          </section>
+        </aside>
       </div>
     </template>
 
-    <section
-      v-if="showReviewBonusSection"
-      class="mt-6 rounded-[24px] border border-cinnamon-ice bg-cream p-6"
-    >
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 class="text-lg font-bold text-noble-black">Review and Bonus</h2>
-          <p class="text-sm text-noble-black/60">
-            Submitting a review earns bonus points regardless of the star rating.
-          </p>
-        </div>
-      </div>
-
-      <p v-if="reviewSuccessMessage" class="mt-4 text-sm font-medium text-emerald-700">
-        {{ reviewSuccessMessage }}
-      </p>
-      <p v-if="reviewErrorMessage" class="mt-4 text-sm font-medium text-red-600">
-        {{ reviewErrorMessage }}
-      </p>
-
+    <div v-else-if="error" class="py-20 text-center">
       <div
-        v-if="currentUserReview"
-        class="mt-5 rounded-[18px] border border-cinnamon-ice/70 bg-white p-4"
+        class="w-20 h-20 bg-cinnabar-red/10 rounded-full flex items-center justify-center mx-auto mb-6"
       >
-        <p class="text-sm font-semibold text-neutral-800">Your review</p>
-        <p class="mt-2 text-sm text-neutral-800/70">Rating: {{ currentUserReview.rating }}/5</p>
-        <p v-if="currentUserReview.reviewText" class="mt-2 text-sm text-neutral-800/70">
-          {{ currentUserReview.reviewText }}
-        </p>
-      </div>
-
-      <form v-else-if="canSubmitReview" class="mt-5 space-y-4" @submit.prevent="submitReview">
-        <div>
-          <label class="mb-2 block text-sm font-semibold text-neutral-800">Your rating</label>
-          <select
-            v-model="reviewForm.rating"
-            class="h-11 w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
-          >
-            <option v-for="rating in [5, 4, 3, 2, 1]" :key="rating" :value="rating">
-              {{ rating }} star{{ rating === 1 ? "" : "s" }}
-            </option>
-          </select>
-        </div>
-
-        <div>
-          <label class="mb-2 block text-sm font-semibold text-neutral-800">Optional review</label>
-          <textarea
-            v-model="reviewForm.reviewText"
-            rows="4"
-            class="w-full rounded-[16px] border border-cinnamon-ice bg-white px-4 py-3 text-sm text-neutral-800 focus:border-burning-orange focus:outline-none"
-            placeholder="Share what went well, what could improve, or anything future borrowers/lenders should know."
-          />
-        </div>
-
-        <label class="flex items-center gap-2 text-sm text-neutral-800/70">
-          <input
-            v-model="reviewForm.isAnonymous"
-            type="checkbox"
-            class="rounded border-cinnamon-ice"
-          />
-          Submit anonymously
-        </label>
-
-        <button
-          :disabled="isSubmittingReview"
-          type="submit"
-          class="inline-flex items-center rounded-full bg-burning-orange px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-burning-orange/90 disabled:cursor-not-allowed disabled:bg-burning-orange/40"
+        <svg
+          class="text-cinnabar-red"
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
         >
-          {{ isSubmittingReview ? "Submitting..." : "Submit Review" }}
-        </button>
-      </form>
-
-      <p v-else class="mt-5 text-sm text-neutral-800/55">
-        Review submission is not available for this transaction.
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </div>
+      <h2 class="text-2xl font-bold text-noble-black mb-4">Transaction Not Found</h2>
+      <p class="text-noble-black/50 mb-8 max-w-sm mx-auto">
+        This order might have been removed or you may not have permission to view it.
       </p>
-    </section>
+      <NuxtLink
+        :to="backToTransactionsPath"
+        class="bg-burning-orange text-white px-8 py-3 rounded-[12px] font-bold hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all"
+      >
+        Return to Transactions
+      </NuxtLink>
+    </div>
+
+    <!-- Modals (Preserved original functionality) -->
+    <TransactionReviewModal
+      :open="isReviewModalOpen"
+      :context="reviewContext"
+      @close="closeReviewModal"
+      @submitted="handleReviewSubmitted"
+    />
 
     <!-- Handoff Proof Modal -->
     <Transition
@@ -1701,91 +1711,93 @@ onBeforeUnmount(() => {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div
-        v-if="isHandoffProofModalOpen"
-        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      >
+      <Teleport to="body">
         <div
-          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
-          @click="isHandoffProofModalOpen = false"
-        ></div>
-
-        <div
-          class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          v-if="isHandoffProofModalOpen"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
         >
-          <div class="text-center">
-            <div
-              class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#1f3a5f"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="isHandoffProofModalOpen = false"
+          ></div>
+
+          <div
+            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          >
+            <div class="text-center">
+              <div
+                class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" x2="12" y1="3" y2="15" />
-              </svg>
-            </div>
-            <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
-            <p class="text-noble-black/60 mb-6 leading-relaxed">
-              Upload proof that you have given the item to the borrower. This will mark the
-              transaction as in use.
-            </p>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#1f3a5f"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" x2="12" y1="3" y2="15" />
+                </svg>
+              </div>
+              <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
+              <p class="text-noble-black/60 mb-6 leading-relaxed">
+                Upload proof that you have given the item to the borrower. This will mark the
+                transaction as in use.
+              </p>
 
-            <label
-              class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
-            >
-              <span class="block text-sm font-bold text-noble-black">Proof image</span>
-              <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                {{ handoffProofFile?.name || "Choose an image file" }}
-              </span>
-              <input type="file" accept="image/*" class="sr-only" @change="setHandoffProofFile" />
-            </label>
-
-            <p v-if="proofUploadErrorMessage" class="mt-3 text-sm text-red-600">
-              {{ proofUploadErrorMessage }}
-            </p>
-
-            <div class="flex flex-col gap-3 mt-6">
-              <button
-                :disabled="isSubmittingHandoffProof"
-                class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-burning-orange transition-colors flex items-center justify-center disabled:opacity-50"
-                @click="confirmHandoffProof"
+              <label
+                class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
               >
-                <span v-if="isSubmittingHandoffProof" class="animate-spin mr-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
+                <span class="block text-sm font-bold text-noble-black">Proof image</span>
+                <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                  {{ handoffProofFile?.name || "Choose an image file" }}
                 </span>
-                {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
-              </button>
-              <button
-                class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
-                @click="isHandoffProofModalOpen = false"
-              >
-                Cancel
-              </button>
+                <input type="file" accept="image/*" class="sr-only" @change="setHandoffProofFile" />
+              </label>
+
+              <p v-if="proofUploadErrorMessage" class="mt-3 text-sm text-red-600">
+                {{ proofUploadErrorMessage }}
+              </p>
+
+              <div class="flex flex-col gap-3 mt-6">
+                <button
+                  :disabled="isSubmittingHandoffProof"
+                  class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-burning-orange transition-colors flex items-center justify-center disabled:opacity-50"
+                  @click="confirmHandoffProof"
+                >
+                  <span v-if="isSubmittingHandoffProof" class="animate-spin mr-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                  </span>
+                  {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
+                </button>
+                <button
+                  class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
+                  @click="isHandoffProofModalOpen = false"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Teleport>
     </Transition>
 
     <!-- Return Confirmation UI (Modal) -->
@@ -1797,93 +1809,95 @@ onBeforeUnmount(() => {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div
-        v-if="isReturnModalOpen"
-        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      >
-        <!-- Backdrop -->
+      <Teleport to="body">
         <div
-          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
-          @click="isReturnModalOpen = false"
-        ></div>
-
-        <!-- Modal -->
-        <div
-          class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          v-if="isReturnModalOpen"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
         >
-          <div class="text-center">
-            <div
-              class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#ff7124"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+          <!-- Backdrop -->
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="isReturnModalOpen = false"
+          ></div>
+
+          <!-- Modal -->
+          <div
+            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          >
+            <div class="text-center">
+              <div
+                class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <path d="m15 10-4 4 6 6" />
-                <path d="M4 18V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v7" />
-                <path d="M11 22a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-              </svg>
-            </div>
-            <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
-            <p class="text-noble-black/60 mb-8 leading-relaxed">
-              Upload proof that the item has been returned. The return timestamp will be recorded
-              when this proof is submitted.
-            </p>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#ff7124"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m15 10-4 4 6 6" />
+                  <path d="M4 18V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v7" />
+                  <path d="M11 22a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+                </svg>
+              </div>
+              <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
+              <p class="text-noble-black/60 mb-8 leading-relaxed">
+                Upload proof that the item has been returned. The return timestamp will be recorded
+                when this proof is submitted.
+              </p>
 
-            <label
-              class="mb-4 block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
-            >
-              <span class="block text-sm font-bold text-noble-black">Return proof image</span>
-              <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                {{ returnProofFile?.name || "Choose an image file" }}
-              </span>
-              <input type="file" accept="image/*" class="sr-only" @change="setReturnProofFile" />
-            </label>
-
-            <p v-if="proofUploadErrorMessage" class="mb-4 text-sm text-red-600">
-              {{ proofUploadErrorMessage }}
-            </p>
-
-            <div class="flex flex-col gap-3">
-              <button
-                :disabled="isSubmittingReturn"
-                class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
-                @click="confirmReturn"
+              <label
+                class="mb-4 block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
               >
-                <span v-if="isSubmittingReturn" class="animate-spin mr-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
+                <span class="block text-sm font-bold text-noble-black">Return proof image</span>
+                <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                  {{ returnProofFile?.name || "Choose an image file" }}
                 </span>
-                {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
-              </button>
-              <button
-                class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
-                @click="isReturnModalOpen = false"
-              >
-                Not yet
-              </button>
+                <input type="file" accept="image/*" class="sr-only" @change="setReturnProofFile" />
+              </label>
+
+              <p v-if="proofUploadErrorMessage" class="mb-4 text-sm text-red-600">
+                {{ proofUploadErrorMessage }}
+              </p>
+
+              <div class="flex flex-col gap-3">
+                <button
+                  :disabled="isSubmittingReturn"
+                  class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
+                  @click="confirmReturn"
+                >
+                  <span v-if="isSubmittingReturn" class="animate-spin mr-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                  </span>
+                  {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
+                </button>
+                <button
+                  class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
+                  @click="isReturnModalOpen = false"
+                >
+                  Not yet
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Teleport>
     </Transition>
 
     <!-- Success Modal -->
@@ -1895,53 +1909,55 @@ onBeforeUnmount(() => {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div
-        v-if="isSuccessModalOpen"
-        class="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      >
-        <!-- Backdrop -->
+      <Teleport to="body">
         <div
-          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
-          @click="isSuccessModalOpen = false"
-        ></div>
-
-        <!-- Modal -->
-        <div
-          class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          v-if="isSuccessModalOpen"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
         >
-          <div class="text-center">
-            <div
-              class="w-20 h-20 bg-success-green/10 rounded-full flex items-center justify-center mx-auto mb-6"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#34A853"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <h3 class="text-2xl font-bold text-noble-black mb-2">Success!</h3>
-            <p class="text-noble-black/60 mb-8 leading-relaxed">
-              Your return request has been submitted. The lender will be notified to confirm the
-              receipt of the item.
-            </p>
+          <!-- Backdrop -->
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="isSuccessModalOpen = false"
+          ></div>
 
-            <button
-              class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-indigo-900 transition-colors"
-              @click="isSuccessModalOpen = false"
-            >
-              Great, thanks!
-            </button>
+          <!-- Modal -->
+          <div
+            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          >
+            <div class="text-center">
+              <div
+                class="w-20 h-20 bg-success-green/10 rounded-full flex items-center justify-center mx-auto mb-6"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#34A853"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <h3 class="text-2xl font-bold text-noble-black mb-2">Success!</h3>
+              <p class="text-noble-black/60 mb-8 leading-relaxed">
+                Your return request has been submitted. The lender will be notified to confirm the
+                receipt of the item.
+              </p>
+
+              <button
+                class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-indigo-900 transition-colors"
+                @click="isSuccessModalOpen = false"
+              >
+                Great, thanks!
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </Teleport>
     </Transition>
 
     <Transition
@@ -1952,436 +1968,303 @@ onBeforeUnmount(() => {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div
-        v-if="isRebuttalModalOpen"
-        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      >
+      <Teleport to="body">
         <div
-          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
-          @click="closeRebuttalModal"
-        />
-
-        <div
-          class="relative w-full max-w-2xl rounded-[32px] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          v-if="isRebuttalModalOpen"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
-          <div v-if="rebuttalModalStep === 'form'">
-            <div class="text-center">
-              <h3 class="text-2xl font-bold text-noble-black">Submit Rebuttal</h3>
-              <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
-                Review the dispute details below, then explain your side of the issue.
-              </p>
-            </div>
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="closeRebuttalModal"
+          />
 
-            <div class="mt-6 space-y-4">
-              <div
-                v-if="latestDispute"
-                class="rounded-[28px] border border-cinnamon-ice bg-cream p-5"
-              >
-                <p class="text-sm font-bold text-noble-black">Dispute Details</p>
-
-                <div class="mt-4 grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                      Reason
-                    </p>
-                    <p class="mt-2 text-sm font-semibold text-noble-black">
-                      {{ latestDispute.reason }}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                      Raised By
-                    </p>
-                    <p class="mt-2 text-sm text-noble-black/80">
-                      {{ disputeRaisedByName ?? "Transaction participant" }}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                      Submitted
-                    </p>
-                    <p class="mt-2 text-sm text-noble-black/80">
-                      {{ formatDateTime(latestDispute.createdAt) }}
-                    </p>
-                  </div>
-                </div>
-
-                <div v-if="latestDispute.description" class="mt-4">
-                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                    Description
-                  </p>
-                  <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
-                    {{ latestDispute.description }}
-                  </p>
-                </div>
+          <div
+            class="relative w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] animate-in zoom-in-95 duration-300 overflow-hidden"
+          >
+            <!-- Modal Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0 relative">
+              <div>
+                <h3 class="text-[24px] font-bold text-noble-black">
+                  {{ rebuttalModalStep === "form" ? "Submit Rebuttal" : "Confirm Rebuttal" }}
+                </h3>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  {{
+                    rebuttalModalStep === "form"
+                      ? "Review the dispute details below, then explain your side."
+                      : "Confirm the dispute details and your rebuttal before final submission."
+                  }}
+                </p>
               </div>
-
-              <label class="block">
-                <span class="text-sm font-bold text-noble-black">Rebuttal Statement</span>
-                <textarea
-                  v-model="rebuttalText"
-                  rows="5"
-                  maxlength="2000"
-                  placeholder="Explain your side of the transaction."
-                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
-                ></textarea>
-              </label>
-
-              <label class="block">
-                <span class="text-sm font-bold text-noble-black">Additional Notes</span>
-                <textarea
-                  v-model="rebuttalNotes"
-                  rows="4"
-                  maxlength="2000"
-                  placeholder="Optional additional context for the admin."
-                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
-                ></textarea>
-              </label>
-
-              <p
-                v-if="rebuttalValidationMessage"
-                class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
-              >
-                {{ rebuttalValidationMessage }}
-              </p>
-            </div>
-
-            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
               <button
-                class="flex-1 rounded-2xl bg-blue-estate py-4 font-bold text-white transition-colors hover:bg-indigo-900"
-                @click="continueRebuttalReview"
-              >
-                Continue
-              </button>
-              <button
-                class="flex-1 rounded-2xl bg-cream py-4 font-bold text-noble-black transition-colors hover:bg-pale-cashmere"
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeRebuttalModal"
               >
-                Cancel
-              </button>
-            </div>
-          </div>
-
-          <div v-else>
-            <div class="text-center">
-              <h3 class="text-2xl font-bold text-noble-black">Confirm Rebuttal</h3>
-              <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
-                Confirm the dispute details and your rebuttal before final submission.
-              </p>
-            </div>
-
-            <div class="mt-6 space-y-4">
-              <div
-                v-if="latestDispute"
-                class="rounded-[28px] border border-cinnamon-ice bg-cream p-5"
-              >
-                <p class="text-sm font-bold text-noble-black">Dispute Details</p>
-
-                <div class="mt-4 grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                      Reason
-                    </p>
-                    <p class="mt-2 text-sm font-semibold text-noble-black">
-                      {{ latestDispute.reason }}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                      Raised By
-                    </p>
-                    <p class="mt-2 text-sm text-noble-black/80">
-                      {{ disputeRaisedByName ?? "Transaction participant" }}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                      Submitted
-                    </p>
-                    <p class="mt-2 text-sm text-noble-black/80">
-                      {{ formatDateTime(latestDispute.createdAt) }}
-                    </p>
-                  </div>
-                </div>
-
-                <div v-if="latestDispute.description" class="mt-4">
-                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                    Description
-                  </p>
-                  <p class="mt-2 text-sm leading-relaxed text-noble-black/80">
-                    {{ latestDispute.description }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="rounded-[28px] bg-cream p-5">
-                <div>
-                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                    Rebuttal Statement
-                  </p>
-                  <p class="mt-2 text-sm leading-relaxed text-noble-black">
-                    {{ rebuttalText.trim() }}
-                  </p>
-                </div>
-
-                <div v-if="rebuttalNotes.trim()">
-                  <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                    Additional Notes
-                  </p>
-                  <p class="mt-2 text-sm leading-relaxed text-noble-black/70">
-                    {{ rebuttalNotes.trim() }}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-              <button
-                :disabled="isSubmittingRebuttal"
-                class="flex-1 rounded-2xl bg-blue-estate py-4 font-bold text-white transition-colors hover:bg-indigo-900 disabled:opacity-50"
-                @click="submitRebuttal"
-              >
-                {{ isSubmittingRebuttal ? "Submitting..." : "Submit Rebuttal" }}
-              </button>
-              <button
-                :disabled="isSubmittingRebuttal"
-                class="flex-1 rounded-2xl bg-cream py-4 font-bold text-noble-black transition-colors hover:bg-pale-cashmere disabled:opacity-50"
-                @click="rebuttalModalStep = 'form'"
-              >
-                Back
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- Early Return Modal with Refund Preview -->
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="isEarlyReturnModalOpen"
-        class="fixed inset-0 z-[1000] flex items-center justify-center p-4 overflow-y-auto"
-      >
-        <!-- Backdrop -->
-        <div
-          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
-          @click="isEarlyReturnModalOpen = false"
-        ></div>
-
-        <!-- Modal -->
-        <div
-          class="relative bg-white rounded-[32px] w-full max-w-lg p-8 shadow-2xl animate-in zoom-in-95 duration-300"
-        >
-          <div class="text-center mb-6">
-            <h3 class="text-2xl font-bold text-noble-black mb-2">Early Return</h3>
-            <p class="text-noble-black/60 text-sm">
-              Review your partial refund for returning the item earlier than scheduled.
-            </p>
-          </div>
-
-          <div v-if="earlyReturnPreviewData" class="space-y-6">
-            <!-- Unified Refund Summary Card -->
-            <div class="bg-cream rounded-[32px] p-8 border border-cinnamon-ice/30">
-              <div class="space-y-6">
-                <!-- Step 1: The Base -->
-                <div class="flex justify-between items-center">
-                  <div>
-                    <span class="text-sm font-bold text-noble-black">Rental Value</span>
-                    <p class="text-[11px] text-noble-black/40 italic">
-                      Excluding non-refundable fees
-                    </p>
-                  </div>
-                  <span class="text-lg font-bold text-noble-black">{{
-                    formatPeso(earlyReturnPreviewData.refund.refundableRentalAmount)
-                  }}</span>
-                </div>
-
-                <!-- Step 2: The Flow -->
-                <div class="relative pl-6 border-l-2 border-cinnamon-ice/30 py-1 space-y-6">
-                  <!-- Time Factor -->
-                  <div class="flex justify-between items-start text-[13px]">
-                    <div>
-                      <span class="text-noble-black/70 font-medium block">Unused Value</span>
-                      <span class="text-[11px] text-noble-black/40">
-                        Used {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
-                        of booking duration
-                      </span>
-                    </div>
-                    <span class="text-noble-black/70">{{
-                      formatPeso(earlyReturnPreviewData.refund.unusedRentalValue)
-                    }}</span>
-                  </div>
-
-                  <!-- Policy Factor -->
-                  <div class="flex justify-between items-start text-[13px]">
-                    <div>
-                      <span class="text-noble-black/70 font-medium block">Early Return Policy</span>
-                      <span class="text-[11px] text-noble-black/40"
-                        >30% adjustment for reserved availability</span
-                      >
-                    </div>
-                    <span class="text-cinnabar-red font-medium"
-                      >-{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}</span
-                    >
-                  </div>
-                </div>
-
-                <!-- Step 3: The Result -->
-                <div class="pt-6 border-t border-cinnamon-ice/30 flex justify-between items-center">
-                  <span class="text-lg font-bold text-noble-black">Total Refund</span>
-                  <span class="text-3xl font-black text-burning-orange">{{
-                    formatPeso(earlyReturnPreviewData.refund.refundAmount)
-                  }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Validation/Info Box -->
-            <div class="px-2">
-              <div
-                v-if="!earlyReturnPreviewData.refund.eligible"
-                class="bg-cinnabar-red/[0.03] rounded-2xl p-4 border border-cinnabar-red/10"
-              >
-                <div class="flex gap-3">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#e11d48"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="shrink-0 mt-0.5"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <div>
-                    <p class="text-sm font-bold text-cinnabar-red">No refund applicable</p>
-                    <p class="text-xs text-cinnabar-red/60 leading-relaxed mt-1 italic">
-                      {{
-                        earlyReturnPreviewData.refund.reason ||
-                        "Refunds are not available if 70% or more of the booking duration has already been used."
-                      }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <p
-                v-else
-                class="text-[11px] text-noble-black/40 text-center italic px-4 leading-relaxed"
-              >
-                By confirming, you agree to the early return policy. Platform fees are
-                non-refundable.
-              </p>
-            </div>
-
-            <label
-              class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
-            >
-              <span class="block text-sm font-bold text-noble-black">Return proof image</span>
-              <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                {{ earlyReturnProofFile?.name || "Choose an image file" }}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                class="sr-only"
-                @change="setEarlyReturnProofFile"
-              />
-            </label>
-
-            <p v-if="proofUploadErrorMessage" class="text-sm text-red-600">
-              {{ proofUploadErrorMessage }}
-            </p>
-
-            <div class="flex flex-col gap-3 pt-2">
-              <button
-                :disabled="isSubmittingReturn"
-                class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
-                @click="confirmEarlyReturn"
-              >
-                <span v-if="isSubmittingReturn" class="animate-spin mr-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6L18 18"
                     stroke="currentColor"
                     stroke-width="2"
                     stroke-linecap="round"
-                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6 py-4">
+              <div v-if="rebuttalModalStep === 'form'">
+                <div class="space-y-6">
+                  <!-- Dispute Details Card -->
+                  <div
+                    v-if="latestDispute"
+                    class="rounded-[14px] border border-[#FEE2E2] bg-white p-5 border-l-[4px] border-l-[#DC2626] shadow-sm"
+                  >
+                    <!-- 3-Column Metadata Grid -->
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                      <div>
+                        <p
+                          class="text-[10px] font-bold uppercase tracking-wider text-noble-black/40 mb-1"
+                        >
+                          Reason
+                        </p>
+                        <p class="text-[13px] font-semibold text-noble-black leading-tight">
+                          {{ latestDispute.reason }}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          class="text-[10px] font-bold uppercase tracking-wider text-noble-black/40 mb-1"
+                        >
+                          Raised By
+                        </p>
+                        <p class="text-[13px] font-semibold text-noble-black leading-tight">
+                          {{ disputeRaisedByName ?? "Participant" }}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          class="text-[10px] font-bold uppercase tracking-wider text-noble-black/40 mb-1"
+                        >
+                          Submitted
+                        </p>
+                        <p class="text-[13px] font-semibold text-noble-black leading-tight">
+                          {{ formatDate(latestDispute.createdAt) }}
+                        </p>
+                      </div>
+                    </div>
+
+                    <!-- Parsed Description List -->
+                    <div class="pt-5 border-t border-[#F5F5F5] space-y-3">
+                      <div
+                        v-if="parsedDisputeDescription?.resolution"
+                        class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4"
+                      >
+                        <span class="text-[11px] font-bold text-noble-black/40 w-32 shrink-0"
+                          >Requested Resolution</span
+                        >
+                        <span class="text-[12px] font-medium text-noble-black/70">{{
+                          parsedDisputeDescription.resolution
+                        }}</span>
+                      </div>
+                      <div
+                        v-if="parsedDisputeDescription?.transactionRef"
+                        class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4"
+                      >
+                        <span class="text-[11px] font-bold text-noble-black/40 w-32 shrink-0"
+                          >Transaction ID</span
+                        >
+                        <span class="text-[12px] font-mono font-medium text-noble-black/70">{{
+                          parsedDisputeDescription.transactionRef
+                        }}</span>
+                      </div>
+                      <div
+                        v-if="parsedDisputeDescription?.itemName"
+                        class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4"
+                      >
+                        <span class="text-[11px] font-bold text-noble-black/40 w-32 shrink-0"
+                          >Item</span
+                        >
+                        <span class="text-[12px] font-medium text-noble-black/70">{{
+                          parsedDisputeDescription.itemName
+                        }}</span>
+                      </div>
+                      <div
+                        v-if="parsedDisputeDescription?.otherParty"
+                        class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4"
+                      >
+                        <span class="text-[11px] font-bold text-noble-black/40 w-32 shrink-0"
+                          >Other Party</span
+                        >
+                        <span class="text-[12px] font-medium text-noble-black/70">{{
+                          parsedDisputeDescription.otherParty
+                        }}</span>
+                      </div>
+
+                      <div v-if="parsedDisputeDescription?.summary" class="pt-2">
+                        <p class="text-[11px] font-bold text-noble-black/40 mb-1">Details</p>
+                        <p class="text-[12px] text-noble-black/70 leading-relaxed line-clamp-4">
+                          {{ parsedDisputeDescription.summary }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="space-y-4">
+                    <label class="block">
+                      <span class="text-[13px] font-semibold text-[#374151]"
+                        >Rebuttal Statement <span class="text-red-500">*</span></span
+                      >
+                      <div class="relative mt-2">
+                        <textarea
+                          v-model="rebuttalText"
+                          rows="5"
+                          maxlength="800"
+                          placeholder="Explain your side of the transaction."
+                          class="w-full min-h-[120px] rounded-[10px] border-[1.5px] border-gray-200 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition-all focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)]"
+                        ></textarea>
+                        <div
+                          class="absolute bottom-3 right-3 text-[11px] font-bold text-noble-black/40"
+                        >
+                          {{ rebuttalText.length }} / 800
+                        </div>
+                      </div>
+                    </label>
+
+                    <label class="block">
+                      <span class="text-[13px] font-semibold text-[#374151]">Additional Notes</span>
+                      <div class="relative mt-2">
+                        <textarea
+                          v-model="rebuttalNotes"
+                          rows="4"
+                          maxlength="500"
+                          placeholder="Optional context for the admin."
+                          class="w-full min-h-[100px] rounded-[10px] border-[1.5px] border-gray-200 bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition-all focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)]"
+                        ></textarea>
+                        <div
+                          class="absolute bottom-3 right-3 text-[11px] font-bold text-noble-black/40"
+                        >
+                          {{ rebuttalNotes.length }} / 500
+                        </div>
+                      </div>
+                      <p class="mt-2 text-[12px] text-noble-black/40 font-medium italic ml-1">
+                        This is optional and only visible to the moderation team.
+                      </p>
+                    </label>
+                  </div>
+
+                  <p
+                    v-if="rebuttalValidationMessage"
+                    class="rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-600"
+                  >
+                    {{ rebuttalValidationMessage }}
+                  </p>
+                </div>
+              </div>
+
+              <div v-else class="space-y-6">
+                <div
+                  v-if="latestDispute"
+                  class="rounded-[14px] border border-gray-100 bg-[#F9FAFB] p-5"
+                >
+                  <p
+                    class="text-[12px] font-bold uppercase tracking-wider text-noble-black/40 mb-3"
+                  >
+                    Dispute Summary
+                  </p>
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p class="text-[11px] font-bold text-noble-black/40">Reason</p>
+                      <p class="text-[13px] font-semibold text-noble-black">
+                        {{ latestDispute.reason }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] font-bold text-noble-black/40">Submitted</p>
+                      <p class="text-[13px] font-semibold text-noble-black">
+                        {{ formatDateTime(latestDispute.createdAt) }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-[14px] border border-gray-200 bg-white p-6 space-y-6 shadow-sm">
+                  <div>
+                    <p
+                      class="text-[11px] font-bold uppercase tracking-wider text-noble-black/40 mb-2"
+                    >
+                      Your Rebuttal
+                    </p>
+                    <p class="text-[14px] leading-relaxed text-noble-black font-medium">
+                      {{ rebuttalText.trim() }}
+                    </p>
+                  </div>
+
+                  <div v-if="rebuttalNotes.trim()" class="pt-4 border-t border-gray-100">
+                    <p
+                      class="text-[11px] font-bold uppercase tracking-wider text-noble-black/40 mb-2"
+                    >
+                      Additional Notes
+                    </p>
+                    <p class="text-[14px] leading-relaxed text-noble-black/70 font-medium italic">
+                      {{ rebuttalNotes.trim() }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 pt-4 pb-8 shrink-0 flex flex-col sm:flex-row gap-3 w-full">
+              <button
+                :disabled="isSubmittingRebuttal"
+                type="button"
+                class="flex-1 h-12 rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="
+                  rebuttalModalStep === 'form' ? closeRebuttalModal() : (rebuttalModalStep = 'form')
+                "
+              >
+                {{ rebuttalModalStep === "form" ? "Cancel" : "Back" }}
+              </button>
+              <button
+                :disabled="isSubmittingRebuttal"
+                class="flex-1 h-12 rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                @click="rebuttalModalStep === 'form' ? continueRebuttalReview() : submitRebuttal()"
+              >
+                <span v-if="isSubmittingRebuttal" class="flex items-center justify-center gap-2">
+                  <svg
+                    class="animate-spin"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
                   >
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                   </svg>
+                  Processing...
                 </span>
-                {{ isSubmittingReturn ? "Uploading..." : "Upload proof and confirm early return" }}
-              </button>
-              <button
-                class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
-                @click="isEarlyReturnModalOpen = false"
-              >
-                Cancel
+                <span v-else>
+                  {{ rebuttalModalStep === "form" ? "Submit Rebuttal" : "Confirm & Submit" }}
+                </span>
               </button>
             </div>
           </div>
         </div>
-      </div>
-    </Transition>
-
-    <TransactionReviewModal
-      :open="isReviewModalOpen"
-      :context="reviewContext"
-      @close="closeReviewModal"
-      @submitted="handleReviewSubmitted"
-    />
-
-    <Transition
-      enter-active-class="transition duration-500 ease-out"
-      enter-from-class="opacity-0 scale-75 translate-y-3"
-      enter-to-class="opacity-100 scale-100 translate-y-0"
-      leave-active-class="transition duration-300 ease-in"
-      leave-from-class="opacity-100 scale-100"
-      leave-to-class="opacity-0 scale-90"
-    >
-      <div
-        v-if="showRewardPopup"
-        class="pointer-events-none fixed inset-0 z-[140] flex items-center justify-center px-4"
-      >
-        <div class="rounded-full bg-emerald-500 px-7 py-4 text-center text-white shadow-2xl">
-          <p class="text-3xl font-black tracking-tight">+5 points</p>
-          <p class="text-sm font-medium text-white/90">Review bonus earned</p>
-        </div>
-      </div>
+      </Teleport>
     </Transition>
   </div>
 </template>
 
 <style scoped>
-.custom-time-scrollbar::-webkit-scrollbar {
-  width: 4px;
+.custom-modal-scrollbar::-webkit-scrollbar {
+  width: 5px;
 }
-.custom-time-scrollbar::-webkit-scrollbar-track {
+.custom-modal-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-.custom-time-scrollbar::-webkit-scrollbar-thumb {
-  background: #dbbba7;
-  border-radius: 10px;
+.custom-modal-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice / 40%");
+  border-radius: 20px;
 }
 </style>

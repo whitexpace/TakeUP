@@ -86,16 +86,16 @@ const boostLabel = computed(() => {
 </script>
 
 <template>
-  <ItemCard v-bind="cardProps">
+  <ItemCard v-bind="cardProps" class="group/mcard">
     <template #image-overlay>
       <!-- Dark blurred overlay with a smooth fade-in transition -->
       <div
-        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-noble-black/70 px-4 backdrop-blur-sm transition-opacity duration-300 ease-in-out opacity-0 group-hover:opacity-100"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2.5 bg-noble-black/75 px-5 backdrop-blur-[2px] transition-all duration-300 ease-in-out opacity-0 group-hover/mcard:opacity-100"
       >
         <!-- Edit Button (Primary) -->
         <NuxtLink
           :to="`/account/listings/${item.id}/edit`"
-          class="w-full max-w-[140px] rounded-full bg-burning-orange py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-burning-orange/90 active:scale-95 cursor-pointer"
+          class="w-full h-10 flex items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[13px] font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95"
           @click.stop
         >
           Edit Listing
@@ -103,21 +103,21 @@ const boostLabel = computed(() => {
 
         <button
           :disabled="!isBoostEligible || isToggling"
-          class="w-full max-w-[140px] rounded-full bg-blue-estate py-2 text-center font-geist text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:bg-blue-estate/90 active:scale-95 disabled:cursor-not-allowed disabled:bg-blue-estate/40"
+          class="w-full h-10 flex items-center justify-center rounded-[10px] bg-blue-estate text-[13px] font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:bg-blue-estate/30 disabled:hover:translate-y-0"
           @click.stop="emit('boostListing', item.id)"
         >
           {{ boostLabel }}
         </button>
 
-        <div class="relative w-full max-w-[140px] group/tooltip">
+        <div class="relative w-full group/tooltip">
           <button
             :disabled="isInUse || isToggling"
-            class="w-full rounded-full py-2 font-geist text-sm font-semibold shadow-lg transition-all duration-300 active:scale-95 disabled:cursor-not-allowed"
+            class="w-full h-10 flex items-center justify-center rounded-[10px] text-[13px] font-bold transition-all duration-300 active:scale-95 disabled:cursor-not-allowed"
             :class="[
               isInUse
-                ? 'border border-white/10 bg-white/10 text-white/30 backdrop-blur-sm'
-                : 'bg-white text-noble-black hover:bg-cream',
-              isDeactivated ? 'border-burning-orange text-burning-orange' : '',
+                ? 'bg-white/10 text-white/30 border border-white/10'
+                : 'bg-white/10 text-white border border-white/20 hover:bg-white hover:text-noble-black',
+              isDeactivated ? 'bg-burning-orange text-white border-none' : '',
             ]"
             @click.stop="emit('toggleStatus', item.id, toggleTarget)"
           >
@@ -138,8 +138,20 @@ const boostLabel = computed(() => {
 
       <div
         v-if="hasActiveBoost"
-        class="absolute right-3 top-3 z-20 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm"
+        class="absolute right-3 top-3 z-20 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/30 flex items-center gap-1"
       >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 5 5L20 7" />
+        </svg>
         Boosted
       </div>
     </template>
