@@ -43,4 +43,19 @@
     background-repeat: no-repeat;
     border: none !important;
   }
+
+  .user-row {
+    @apply transition-all duration-200;
+  }
+
+  .user-row:hover {
+    @apply bg-orange-50 shadow-md;
+    transform: translateY(-1px);
+    border-color: rgb(244 115 80 / 0.3);
+  }
+
+  .user-row:active {
+    @apply bg-orange-100;
+    transform: translateY(0);
+  }
 }

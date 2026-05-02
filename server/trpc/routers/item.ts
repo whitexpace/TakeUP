@@ -1231,6 +1231,13 @@ export const itemRouter = router({
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
     await expireActiveBoosts(ctx.prisma)
     const now = new Date()
+    const viewer = ctx.user
+      ? await ctx.prisma.user.findUnique({
+          where: { id: ctx.user.id },
+          select: { accountType: true },
+        })
+      : null
+    const isAdmin = viewer?.accountType === "ADMIN"
     const itemInclude = {
       ...buildPublicItemInclude(ctx.user?.id ?? null),
       transactionReviews: {
@@ -1245,20 +1252,22 @@ export const itemRouter = router({
     } satisfies Prisma.ItemInclude
 
     const item = await ctx.prisma.item.findFirst({
-      where: {
-        id: input.id,
-        OR: [
-          { lender: { user: { status: "ACTIVE" } } },
-          ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
-        ],
-      },
+      where: isAdmin
+        ? { id: input.id }
+        : {
+            id: input.id,
+            OR: [
+              { lender: { user: { status: "ACTIVE" } } },
+              ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
+            ],
+          },
       include: itemInclude,
     })
 
     if (!item) return null
 
     const isOwner = ctx.user?.id === item.lenderId
-    if (!isOwner && !isPublicVisibleItem(item, now)) return null
+    if (!isOwner && !isAdmin && !isPublicVisibleItem(item, now)) return null
 
     // Increment view count without delaying the item detail response.
     const updateItem = (

@@ -218,6 +218,7 @@ const profileInitial = computed(() => {
   return trimmedName ? trimmedName.charAt(0).toUpperCase() : "U"
 })
 
+const _emailNotificationsEnabled = ref(true)
 const showEditProfileModal = ref(false)
 const showDeleteAccountModal = ref(false)
 const showDeactivateAccountModal = ref(false)

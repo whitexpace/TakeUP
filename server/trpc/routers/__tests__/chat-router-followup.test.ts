@@ -160,6 +160,26 @@ describe("chatRouter follow-up", () => {
     expect(result.imageUrl).toBe("https://example.com/chat.jpg")
   })
 
+  it("allows an image-only message", async () => {
+    const ctx = makeContext()
+
+    const result = await caller(ctx).sendMessage({
+      conversationId: CONV_ID,
+      body: "",
+      imageUrl: "https://example.com/chat.jpg",
+    })
+
+    expect(ctx.prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          body: "",
+        }),
+      }),
+    )
+    expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(result.imageUrl).toBe("https://example.com/chat.jpg")
+  })
+
   it("creates a persisted transaction dispute for a chat report", async () => {
     const ctx = makeContext()
 

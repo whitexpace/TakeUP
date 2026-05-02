@@ -43,7 +43,19 @@ const fromPage = computed(() => {
   return typeof from === "string" ? from : null
 })
 
+const adminUserId = computed(() => {
+  const id = route.query.adminUserId
+  return typeof id === "string" ? id : null
+})
+
 const backNavigationPath = computed(() => {
+  if (fromPage.value === "admin-user-listings" && adminUserId.value) {
+    return {
+      path: `/admin/users/${adminUserId.value}`,
+      query: { tab: "listings" },
+    }
+  }
+
   if (fromPage.value === "likes") {
     return "/likes"
   }
@@ -52,6 +64,10 @@ const backNavigationPath = computed(() => {
 })
 
 const backNavigationLabel = computed(() => {
+  if (fromPage.value === "admin-user-listings") {
+    return "Back to admin user listings"
+  }
+
   if (fromPage.value === "likes") {
     return "Back to liked items"
   }
