@@ -5,12 +5,9 @@ import { useNotifications } from "../composables/use-notifications"
 const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
-const showLogoutModal = ref(false)
 const isHeaderVisible = ref(true)
 
-const hideSidebar = computed(() => Boolean(route.meta.hideAccountSidebar))
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+const hideSidebar = computed(() => route.meta.hideAccountSidebar === true)
 
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
@@ -25,26 +22,53 @@ type AuthMeResponse = {
     middleName: string | null
     lastName: string
     accountType: string | null
+    createdAt: string | null
+    location: string | null
     avatarUrl: string | null
+    bio: string | null
+    pronouns: string | null
   }
 }
 
-const { data: authData } = useAsyncData(
-  "account:auth-me",
-  () => $fetch<AuthMeResponse>("/api/auth/me"),
-  {
-    server: false,
-    watch: [user],
-  },
+const { data: authData } = await useAsyncData("account:auth-me", () =>
+  $fetch<AuthMeResponse>("/api/auth/me"),
 )
 
-// Helper to safely extract string from metadata
-const asNonEmptyString = (val: unknown) =>
-  typeof val === "string" && val.trim() ? val.trim() : null
+onMounted(() => {
+  isMobile.value = window.innerWidth < 1024
+  if (isMobile.value) isSidebarOpen.value = false
+
+  window.addEventListener("resize", () => {
+    isMobile.value = window.innerWidth < 1024
+    if (!isMobile.value && !isSidebarOpen.value) {
+      isSidebarOpen.value = true
+    }
+  })
+})
+
+const toggleSidebar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value
+}
+
+const handleSignOut = async () => {
+  await supabase.auth.signOut()
+  navigateTo("/")
+}
+
+const isActive = (path: string) => {
+  if (path === "/account") {
+    return route.path === "/account"
+  }
+  return route.path.startsWith(path)
+}
+
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (typeof value !== "object" || value === null) return null
   return value as Record<string, unknown>
 }
+
+const asNonEmptyString = (val: unknown) =>
+  typeof val === "string" && val.trim() ? val.trim() : null
 
 const getIdentityMetadata = (authUser: unknown) => {
   const authUserRecord = asRecord(authUser)
@@ -57,26 +81,6 @@ const getIdentityMetadata = (authUser: unknown) => {
       return asRecord(identityRecord?.identity_data) ?? asRecord(identityRecord?.provider_metadata)
     })
     .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
-}
-
-const buildNameFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return null
-  const directName =
-    asNonEmptyString(source.full_name) ||
-    asNonEmptyString(source.name) ||
-    asNonEmptyString(source.display_name)
-  if (directName) return directName
-
-  const firstName =
-    asNonEmptyString(source.given_name) ||
-    asNonEmptyString(source.first_name) ||
-    asNonEmptyString(source.firstName)
-  const lastName =
-    asNonEmptyString(source.family_name) ||
-    asNonEmptyString(source.last_name) ||
-    asNonEmptyString(source.lastName)
-  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
-  return fullName || null
 }
 
 const getAvatarFromSource = (source: Record<string, unknown> | null) => {
@@ -98,44 +102,41 @@ const fullName = computed(() => {
   // 1. Try DB name first (Highest priority for local edits)
   const u = authData.value?.user
   if (u) {
-    const dbParts = [u.firstName, u.middleName, u.lastName].filter(Boolean)
+    const first = (u.firstName || "").trim()
+    const last = (u.lastName || "").trim()
+
+    if (last.toLowerCase() === "user" || !last) {
+      return first.charAt(0).toUpperCase() + first.slice(1)
+    }
+
+    const dbParts = [first, u.middleName, last].filter(Boolean)
     if (dbParts.length > 0) return dbParts.join(" ")
     if (u.name && u.name !== u.username) return u.name
   }
 
   const authUserRecord = asRecord(authUser)
-  const metadataSources = [
-    asRecord(authUserRecord?.user_metadata),
-    asRecord(authUserRecord?.app_metadata),
-    ...getIdentityMetadata(authUser),
-  ]
+  const metadata = asRecord(authUserRecord?.user_metadata)
+  const metaName = asNonEmptyString(metadata?.full_name) || asNonEmptyString(metadata?.name)
+  if (metaName) return metaName
 
-  // 2. Try metadata fields as fallback
-  for (const source of metadataSources) {
-    const name = buildNameFromSource(source)
-    if (name) return name
-  }
-
-  return authUser.email?.split("@")[0] || "User"
+  const email = (authUserRecord?.email as string | undefined) || null
+  return email?.split("@")[0] || "User"
 })
 
 const profileAvatar = computed(() => {
-  const authUser = user.value
-  if (!authUser) return null
-
   // 1. Try DB avatar first
-  const dbAvatar = asNonEmptyString(authData.value?.user.avatarUrl)
-  if (dbAvatar) return dbAvatar
+  if (authData.value?.user.avatarUrl) return authData.value.user.avatarUrl
 
+  // 2. Try Identity/Google metadata fallback
+  const authUser = user.value
   const authUserRecord = asRecord(authUser)
-  const metadataSources = [
+  const sources = [
     asRecord(authUserRecord?.user_metadata),
     asRecord(authUserRecord?.app_metadata),
     ...getIdentityMetadata(authUser),
   ]
 
-  // 2. Try metadata sources as fallback
-  for (const source of metadataSources) {
+  for (const source of sources) {
     const avatar = getAvatarFromSource(source)
     if (avatar) return avatar
   }
@@ -143,62 +144,21 @@ const profileAvatar = computed(() => {
   return null
 })
 
-const fallbackColors = ["bg-burning-orange", "bg-cinnamon-ice", "bg-wahoo", "bg-blue-estate"]
+const firstInitial = computed(() => {
+  const name = fullName.value.trim()
+  return name ? name.charAt(0).toUpperCase() : "U"
+})
 
 const fallbackBgClass = computed(() => {
   const userId = authData.value?.user.id
   if (!userId) return "bg-burning-orange"
-  // Simple deterministic hash based on userId
-  const hash = userId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  return fallbackColors[hash % fallbackColors.length]
-})
-
-const firstInitial = computed(() => {
-  return fullName.value.charAt(0).toUpperCase()
-})
-
-const toggleSidebar = () => {
-  isSidebarOpen.value = !isSidebarOpen.value
-}
-
-const handleResize = () => {
-  isMobile.value = window.innerWidth < 1024
-  if (isMobile.value) {
-    isSidebarOpen.value = false
-  } else {
-    isSidebarOpen.value = true
+  const colors = ["bg-burning-orange", "bg-cinnamon-ice", "bg-wahoo", "bg-blue-estate"]
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash)
   }
-}
-
-onMounted(() => {
-  void loadNotifications()
-  handleResize()
-  window.addEventListener("resize", handleResize)
+  return colors[Math.abs(hash) % colors.length]
 })
-
-const isActive = (to: string) => {
-  if (to === "/account") return route.path === "/account"
-  if (to === "/account/listings" && route.path.startsWith("/account/requests")) {
-    return true
-  }
-  return route.path.startsWith(to)
-}
-
-const openLogoutModal = () => {
-  showLogoutModal.value = true
-  if (isMobile.value) isSidebarOpen.value = false
-}
-
-const cancelLogout = () => {
-  showLogoutModal.value = false
-}
-
-const confirmLogout = async () => {
-  showLogoutModal.value = false
-  await supabase.auth.signOut()
-  await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
-  await navigateTo("/")
-}
 
 const navGroups = computed(() => {
   const groups = [
@@ -208,12 +168,13 @@ const navGroups = computed(() => {
         { label: "Account Information", to: "/account", icon: "user" },
         { label: "My Wallet", to: "/account/wallet", icon: "wallet" },
         { label: "My Transactions", to: "/account/transactions", icon: "transactions" },
+        { label: "My Disputes", to: "/account/disputes", icon: "dispute" },
       ],
     },
     {
       title: "My Listings",
       links: [
-        { label: "All Listings", to: "/account/listings", icon: "listings" },
+        { label: "All Items", to: "/account/listings", icon: "listings" },
         { label: "Analytics", to: "/account/analytics", icon: "analytics" },
       ],
     },
@@ -229,17 +190,17 @@ const navGroups = computed(() => {
   if (authData.value?.user.accountType === "ADMIN") {
     groups.push({
       title: "Admin",
-      links: [{ label: "Disputes", to: "/admin/disputes", icon: "dispute" }],
+      links: [{ label: "Manage Disputes", to: "/admin/disputes", icon: "admin-dispute" }],
     })
   }
-
   return groups
 })
+
+const { notifications, markNotificationRead, markAllNotificationsRead } = useNotifications()
 </script>
 
 <template>
-  <div class="flex h-screen flex-col overflow-hidden font-geist bg-white relative">
-    <!-- Top Header -->
+  <div class="min-h-screen bg-white">
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-account-main-scrollbar"
@@ -291,16 +252,16 @@ const navGroups = computed(() => {
       <!-- Left Sidebar -->
       <aside
         v-if="!hideSidebar"
-        class="bg-cream flex flex-col shrink-0 border-r border-cinnamon-ice/30 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0"
+        class="bg-cream flex flex-col shrink-0 border-r border-cinnamon-ice/30 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0 overflow-hidden"
         :class="[
           isSidebarOpen
-            ? 'translate-x-0 w-[320px]'
+            ? 'translate-x-0 w-[300px]'
             : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
           isHeaderVisible ? 'pt-14' : 'pt-0',
         ]"
       >
         <!-- Profile Section -->
-        <div class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30">
+        <div class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30 shrink-0">
           <div class="flex items-center gap-4">
             <div class="relative group shrink-0">
               <!-- Branded Tri-color Border Container (Tight fit) -->
@@ -375,18 +336,20 @@ const navGroups = computed(() => {
           </div>
         </div>
 
-        <!-- Navigation Groups -->
-        <nav class="flex-1 overflow-y-auto py-8 px-4 custom-sidebar-scrollbar space-y-8">
+        <!-- Navigation Groups (Tightened for non-scroll) -->
+        <nav class="flex-1 overflow-hidden py-6 px-4 space-y-6">
           <div v-for="group in navGroups" :key="group.title">
-            <h3 class="px-4 text-[15px] font-extrabold text-cinnamon-ice tracking-wider mb-3">
+            <h3
+              class="px-4 text-[11px] font-bold text-noble-black/30 uppercase tracking-[0.15em] mb-2"
+            >
               {{ group.title }}
             </h3>
-            <div class="space-y-1">
+            <div class="space-y-0.5">
               <NuxtLink
                 v-for="link in group.links"
                 :key="link.label"
                 :to="link.to"
-                class="group flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200"
+                class="group flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200"
                 :class="
                   isActive(link.to)
                     ? 'bg-burning-orange/15 text-burning-orange font-bold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
@@ -438,6 +401,23 @@ const navGroups = computed(() => {
                     stroke-linejoin="round"
                   >
                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                  <svg
+                    v-else-if="link.icon === 'dispute'"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
                   <svg
                     v-else-if="link.icon === 'listings'"
@@ -496,11 +476,11 @@ const navGroups = computed(() => {
                     stroke-linejoin="round"
                   >
                     <path
-                      d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.9A8.38 8.38 0 0 1 4 11.3a8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+                      d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
                     />
                   </svg>
                   <svg
-                    v-else-if="link.icon === 'dispute'"
+                    v-else-if="link.icon === 'admin-dispute'"
                     width="20"
                     height="20"
                     viewBox="0 0 24 24"
@@ -511,10 +491,10 @@ const navGroups = computed(() => {
                     stroke-linejoin="round"
                   >
                     <path
-                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                      d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
                     />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                    <path d="m9 14 2 2 4-4" />
                   </svg>
                 </div>
                 <span class="text-[15px] truncate">{{ link.label }}</span>
@@ -523,21 +503,24 @@ const navGroups = computed(() => {
           </div>
         </nav>
 
-        <!-- Logout Button -->
-        <div class="px-4 py-2.5 border-t border-cinnamon-ice/30">
+        <!-- Log Out Section -->
+        <div class="p-4 border-t border-cinnamon-ice/30 mt-auto">
           <button
-            class="flex items-center gap-3 w-full px-4 py-1.5 rounded-xl text-noble-black/70 hover:bg-cinnabar-red/10 hover:text-cinnabar-red transition-all duration-200"
-            @click="openLogoutModal"
+            type="button"
+            class="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-cinnabar-red hover:bg-cinnabar-red/5 transition-all font-bold group"
+            @click="handleSignOut"
           >
             <svg
+              xmlns="http://www.w3.org/2000/svg"
               width="20"
               height="20"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="1.5"
+              stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
+              class="transition-transform group-hover:-translate-x-1"
             >
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
@@ -548,186 +531,76 @@ const navGroups = computed(() => {
         </div>
       </aside>
 
-      <!-- Main Content Area -->
+      <!-- Main Content Container -->
       <main
-        class="flex-1 bg-white overflow-y-auto custom-account-main-scrollbar transition-all duration-500 ease-in-out relative"
-        :class="isHeaderVisible ? 'pt-14' : 'pt-0'"
+        class="flex-1 overflow-y-auto bg-white custom-account-main-scrollbar"
+        :class="[isHeaderVisible ? 'pt-14' : 'pt-0']"
       >
-        <div class="mx-auto px-6 sm:px-12 lg:px-16 xl:px-20 py-8 pt-10 max-w-[1400px]">
+        <div class="py-8">
           <slot />
         </div>
       </main>
     </div>
-
-    <!-- Logout Confirmation Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showLogoutModal"
-        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
-      >
-        <div
-          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm transition-opacity"
-          @click="cancelLogout"
-        />
-        <div
-          class="relative bg-white rounded-2xl w-full max-w-md overflow-hidden transform transition-all scale-100 shadow-2xl"
-        >
-          <div class="p-8 flex flex-col items-center text-center">
-            <div class="w-16 h-16 bg-cream rounded-full flex items-center justify-center mb-6">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                class="text-cinnabar-red"
-              >
-                <path
-                  d="M12 9V11M12 15H12.01M5.07183 19H18.9282C20.4678 19 21.4301 17.3333 20.6603 16L13.7321 4C12.9623 2.66667 11.0378 2.66667 10.268 4L3.33978 16C2.56998 17.3333 3.53223 19 5.07183 19Z"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </div>
-            <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Logout</h3>
-            <p class="text-noble-black/50 mb-8 font-medium">Are you sure you want to log out?</p>
-            <div
-              class="w-full bg-cream rounded-xl p-5 mb-8 text-left space-y-4 border border-cinnamon-ice/30"
-            >
-              <div class="flex items-center gap-3 text-noble-black/70">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M20 6L9 17L4 12"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <span class="text-[14px] font-medium leading-tight"
-                  >Requests will remain pending</span
-                >
-              </div>
-              <div class="flex items-center gap-3 text-noble-black/70">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M20 6L9 17L4 12"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <span class="text-[14px] font-medium leading-tight"
-                  >You can review them after logging back in</span
-                >
-              </div>
-            </div>
-            <div class="flex flex-col sm:flex-row gap-3 w-full">
-              <button
-                class="flex-1 px-6 py-3 bg-cream rounded-xl text-noble-black font-semibold hover:bg-pale-cashmere transition-all duration-200"
-                @click="cancelLogout"
-              >
-                Cancel
-              </button>
-              <button
-                class="flex-1 px-6 py-3 bg-burning-orange text-white rounded-xl font-semibold hover:bg-cinnabar-red shadow-lg shadow-burning-orange/20 transition-all duration-200"
-                @click="confirmLogout"
-              >
-                Log Out
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <style scoped>
-.custom-account-main-scrollbar::-webkit-scrollbar {
-  width: 5px;
-}
-
-.custom-account-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-account-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 40%");
-  border-radius: 20px;
-}
-
-.custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.cinnamon-ice / 60%");
-}
-
 .custom-sidebar-scrollbar::-webkit-scrollbar {
-  width: 3px;
+  width: 4px;
 }
-
 .custom-sidebar-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 30%");
-  border-radius: 20px;
+  background: #dbbba7;
+  border-radius: 10px;
+}
+
+.custom-account-main-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-account-main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-account-main-scrollbar::-webkit-scrollbar-thumb {
+  background: #dbbba7;
+  border-radius: 10px;
+}
+.custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ff7124;
 }
 
 .custom-tooltip {
   position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(10px);
-  background-color: theme("colors.cream");
-  color: theme("colors.noble-black");
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%) translateX(12px);
+  background: #111;
+  color: white;
   padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-  pointer-events: none;
   opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease,
-    visibility 0.2s;
-  z-index: 1200;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.custom-tooltip::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent #111 transparent transparent;
 }
 
 .group\/tooltip:hover .custom-tooltip {
   opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(14px);
-}
-
-.tooltip-arrow {
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
-}
-
-.tooltip-arrow::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  left: -5px;
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 5px solid theme("colors.cream");
+  transform: translateY(-50%) translateX(16px);
 }
 </style>

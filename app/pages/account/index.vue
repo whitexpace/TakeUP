@@ -141,7 +141,14 @@ const getAvatarFromSource = (source: Record<string, unknown> | null) => {
 
 const buildDbFullName = (u: AuthMeResponse["user"] | undefined) => {
   if (!u) return null
-  const parts = [u.firstName, u.middleName, u.lastName].filter(Boolean)
+  const first = (u.firstName || "").trim()
+  const last = (u.lastName || "").trim()
+
+  if (last.toLowerCase() === "user" || !last) {
+    return first.charAt(0).toUpperCase() + first.slice(1)
+  }
+
+  const parts = [first, u.middleName, last].filter(Boolean)
   return parts.length > 0 ? parts.join(" ") : null
 }
 
@@ -559,7 +566,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 </script>
 
 <template>
-  <div class="space-y-6 pb-10 font-geist lg:px-12 xl:px-16">
+  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <!-- Main Content Area -->
     <template v-if="isHydrated && authData">
       <section class="space-y-3">

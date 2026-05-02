@@ -63,6 +63,7 @@ const bookingInclude = {
       id: true,
       name: true,
       description: true,
+      condition: true,
       lenderId: true,
       rateOption: true,
       rentalFee: true,

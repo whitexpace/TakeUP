@@ -18,7 +18,7 @@ const {
 </script>
 
 <template>
-  <div class="lg:px-12 xl:px-16 pb-10">
+  <div class="mx-auto max-w-[1100px] lg:px-16 xl:px-24 pb-10">
     <WalletOverview
       title="My Wallet"
       subtitle="Manage your TakeUP wallet balance and linked accounts"

@@ -22,10 +22,12 @@ const props = withDefaults(
     title?: string
     reviews: ReviewEntry[]
     emptyMessage?: string
+    showStatus?: boolean
   }>(),
   {
     title: "Reviews",
     emptyMessage: "No reviews yet.",
+    showStatus: false,
   },
 )
 
@@ -56,13 +58,8 @@ const getReviewImageUrl = (image: string) =>
 </script>
 
 <template>
-  <section class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
-    <div class="flex items-center justify-between gap-3 mb-5">
-      <h2 class="text-lg font-bold text-noble-black">{{ props.title }}</h2>
-      <span class="text-sm text-noble-black/50">{{ props.reviews.length }} total</span>
-    </div>
-
-    <div v-if="props.reviews.length === 0" class="text-sm text-noble-black/60">
+  <div class="space-y-4">
+    <div v-if="props.reviews.length === 0" class="text-sm text-noble-black/60 py-4 italic">
       {{ props.emptyMessage }}
     </div>
 
@@ -70,35 +67,41 @@ const getReviewImageUrl = (image: string) =>
       <article
         v-for="review in props.reviews"
         :key="review.id"
-        class="rounded-2xl bg-white border border-cinnamon-ice/60 p-4"
+        class="rounded-[16px] bg-white border border-gray-100 p-6 shadow-sm hover:shadow-md transition-all duration-300"
       >
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-start justify-between gap-4 mb-6">
+          <div class="flex items-center gap-4 min-w-0">
             <img
               v-if="review.reviewer.avatarUrl"
               :src="review.reviewer.avatarUrl"
               :alt="review.reviewer.displayName"
-              class="w-10 h-10 rounded-full object-cover"
+              class="w-12 h-12 rounded-full object-cover border border-gray-100 shadow-sm"
             />
             <div
               v-else
-              class="w-10 h-10 rounded-full bg-burning-orange/10 text-burning-orange flex items-center justify-center text-xs font-bold"
+              class="w-12 h-12 rounded-full bg-burning-orange text-white flex items-center justify-center text-sm font-bold shadow-sm"
             >
               {{ initialsFor(review.reviewer.displayName) }}
             </div>
 
             <div class="min-w-0">
-              <p class="text-sm font-semibold text-noble-black truncate">
-                {{ review.reviewer.displayName }}
+              <div class="flex items-center gap-2">
+                <p class="text-[16px] font-bold text-noble-black truncate">
+                  {{ review.reviewer.displayName }}
+                </p>
+                <span
+                  class="inline-flex items-center rounded-full bg-burning-orange/[0.08] px-2.5 py-0.5 text-[10px] font-bold text-burning-orange uppercase tracking-wider border border-burning-orange/10"
+                >
+                  {{ review.typeLabel }}
+                </span>
+              </div>
+              <p class="text-[12px] text-noble-black/40 font-medium mt-1.5">
+                {{ formatDate(review.createdAt) }}
               </p>
-              <p class="text-xs font-medium text-burning-orange/80 mt-0.5">
-                {{ review.typeLabel }}
-              </p>
-              <p class="text-xs text-noble-black/50">{{ formatDate(review.createdAt) }}</p>
             </div>
           </div>
 
-          <div class="flex items-center gap-1 text-burning-orange shrink-0">
+          <div class="flex items-center gap-0.5 text-burning-orange shrink-0 pt-1">
             <svg
               v-for="star in 5"
               :key="star"
@@ -106,32 +109,32 @@ const getReviewImageUrl = (image: string) =>
               viewBox="0 0 24 24"
               :fill="star <= review.rating ? 'currentColor' : 'none'"
               :stroke="star <= review.rating ? 'currentColor' : 'currentColor'"
+              stroke-width="1.5"
             >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                stroke-width="1.5"
                 d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
               />
             </svg>
           </div>
         </div>
 
-        <p class="mt-3 text-sm leading-6 text-noble-black/80">
+        <p class="text-[14px] leading-relaxed text-[#374151] font-medium">
           {{ review.reviewText }}
         </p>
 
-        <div v-if="review.images.length > 0" class="mt-4 flex flex-wrap gap-3">
+        <div v-if="review.images.length > 0" class="mt-4 flex flex-wrap gap-2">
           <img
             v-for="image in review.images"
             :key="image"
             :src="getReviewImageUrl(image)"
             :alt="`${review.typeLabel} image`"
-            class="h-20 w-20 rounded-2xl object-cover border border-cinnamon-ice/70"
+            class="h-16 w-16 rounded-[10px] object-cover border border-gray-100 shadow-sm transition-transform hover:scale-105"
             loading="lazy"
           />
         </div>
       </article>
     </div>
-  </section>
+  </div>
 </template>
