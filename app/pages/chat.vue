@@ -6,7 +6,7 @@ import { useNotifications } from "../composables/use-notifications"
 import { insertTextAtSelection } from "../utils/chat-composer"
 import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
 import { getChatClosedPreviewLabel } from "../../shared/chat-rules"
-import { containsModeratedContent } from "../../shared/chat-moderation"
+import { containsModeratedContent, sanitizeChatMessage } from "../../shared/chat-moderation"
 
 definePageMeta({
   layout: false,
@@ -188,7 +188,7 @@ const getChatPreview = (conversation: (typeof sortedConversations.value)[0]) => 
   const closedPreview = getChatClosedPreviewLabel(conversation.closureState)
   if (closedPreview) return closedPreview
   if (!conversation.lastMessage) return "Start a conversation"
-  const preview = conversation.lastMessage.body
+  const preview = sanitizeChatMessage(conversation.lastMessage.body)
     .replace(/<[^>]*>?/gm, "")
     .trim()
     .slice(0, 60)
@@ -765,7 +765,7 @@ onUnmounted(() => {
 
             <div class="flex items-center gap-2">
               <button
-                class="rounded-full border border-cinnamon-ice/40 px-3 py-2 text-[12px] font-semibold text-noble-black/60 transition-colors hover:border-cinnabar-red/30 hover:text-cinnabar-red disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-full border border-burning-orange/60 px-3 py-2 text-[12px] font-semibold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="isReporting"
                 @click="openReportModal"
               >
@@ -842,7 +842,7 @@ onUnmounted(() => {
               <div
                 v-for="message in messages"
                 :key="message.id"
-                class="flex max-w-[85%] flex-col lg:max-w-[75%]"
+                class="flex max-w-[85%] flex-col lg:max-w-[70%] min-w-0"
                 :class="[
                   message.senderUserId !== activeConversation.otherParticipant?.id
                     ? 'self-end items-end'
@@ -850,7 +850,7 @@ onUnmounted(() => {
                 ]"
               >
                 <div
-                  class="relative rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm"
+                  class="relative rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm min-w-0"
                   :class="[
                     message.senderUserId !== activeConversation.otherParticipant?.id
                       ? 'rounded-tr-none bg-blue-estate text-white'
@@ -863,8 +863,11 @@ onUnmounted(() => {
                     alt="Chat attachment"
                     class="mb-3 max-h-64 w-full rounded-2xl object-cover"
                   />
-                  <p v-if="message.body.trim()" class="whitespace-pre-wrap break-words">
-                    {{ message.body }}
+                  <p
+                    v-if="message.body.trim()"
+                    class="whitespace-pre-wrap break-all md:break-words overflow-hidden"
+                  >
+                    {{ sanitizeChatMessage(message.body) }}
                   </p>
                 </div>
 
@@ -931,7 +934,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-else class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4">
+          <div v-else class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4 pb-6">
             <div
               v-if="pendingImagePreviewUrl"
               class="mb-3 flex items-start gap-3 rounded-2xl border border-cinnamon-ice/20 bg-cream/70 p-3"
@@ -954,29 +957,37 @@ onUnmounted(() => {
             </div>
 
             <div class="flex items-end gap-2 lg:gap-3">
+              <!-- Photo Icon (Outside) -->
+              <button
+                class="mb-1 rounded-full p-2 text-noble-black/40 transition-colors hover:bg-cream hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                :disabled="isUploadingImage"
+                @click="triggerPhotoPicker"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <circle cx="8.5" cy="10" r="1.5" />
+                  <path d="m21 15-4.2-4.2a1 1 0 0 0-1.4 0L9 17" />
+                </svg>
+              </button>
+
               <div
                 class="relative flex flex-1 items-end rounded-[24px] border border-cinnamon-ice/20 bg-cream transition-all duration-300 focus-within:border-burning-orange/50"
               >
-                <button
-                  class="mb-1 ml-2 rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
-                  type="button"
-                  :disabled="isUploadingImage"
-                  @click="triggerPhotoPicker"
+                <!-- Aa Icon (Inside Left) -->
+                <div
+                  class="mb-1 ml-3 flex h-8 w-8 items-center justify-center text-[15px] font-bold italic tracking-tighter text-noble-black/25 select-none"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                  >
-                    <rect x="3" y="5" width="18" height="14" rx="2" />
-                    <circle cx="8.5" cy="10" r="1.5" />
-                    <path d="m21 15-4.2-4.2a1 1 0 0 0-1.4 0L9 17" />
-                  </svg>
-                </button>
+                  Aa
+                </div>
 
                 <textarea
                   ref="textareaRef"
@@ -1122,49 +1133,91 @@ onUnmounted(() => {
       </main>
     </div>
 
-    <transition name="fade">
-      <div
-        v-if="showReportModal"
-        class="fixed inset-0 z-40 flex items-center justify-center bg-noble-black/35 px-4"
-      >
-        <div class="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
-          <h2 class="text-lg font-bold">Report This Chat</h2>
-          <p class="mt-2 text-sm leading-relaxed text-noble-black/60">
-            Submit a report for inappropriate chat behavior. This creates a transaction dispute tied
-            to the current conversation.
-          </p>
-          <label
-            class="mt-4 block text-sm font-semibold text-noble-black/70"
-            for="chat-report-description"
+    <Teleport to="body">
+      <transition name="fade">
+        <div
+          v-if="showReportModal"
+          class="fixed inset-0 z-[2000] flex items-center justify-center bg-noble-black/35 px-4"
+        >
+          <div
+            class="w-full max-w-lg rounded-[28px] bg-white shadow-2xl overflow-hidden flex flex-col"
           >
-            Additional details (optional)
-          </label>
-          <textarea
-            id="chat-report-description"
-            v-model="reportDescription"
-            rows="4"
-            maxlength="1000"
-            class="mt-2 w-full rounded-2xl border border-cinnamon-ice/30 bg-cream/40 px-4 py-3 text-sm outline-none transition-colors focus:border-cinnabar-red/40 focus:bg-white"
-            placeholder="Describe what happened in this conversation."
-          ></textarea>
-          <p v-if="reportError" class="mt-3 text-sm text-cinnabar-red">{{ reportError }}</p>
-          <div class="mt-6 flex justify-end gap-2">
-            <button
-              class="rounded-full border border-cinnamon-ice/30 px-4 py-2 text-sm font-semibold text-noble-black/60 transition-colors hover:border-cinnamon-ice/50 hover:text-noble-black"
-              @click="closeReportModal"
-            >
-              Cancel
-            </button>
-            <button
-              class="rounded-full bg-cinnabar-red px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-cinnabar-red/90 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="isReporting"
-              @click="handleSubmitReport"
-            >
-              {{ isReporting ? "Submitting..." : "Submit Report" }}
-            </button>
+            <!-- Header -->
+            <div class="px-8 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Report This Chat</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Submit a report for inappropriate chat behavior.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="closeReportModal"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6L18 18"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Content -->
+            <div class="px-8 py-4 flex-1">
+              <p class="text-sm leading-relaxed text-noble-black/60 mb-6">
+                This will flag the conversation for review by our team and initiate a dispute
+                process for this transaction if necessary.
+              </p>
+
+              <div class="relative">
+                <label
+                  class="block text-[13px] font-bold uppercase tracking-wider text-noble-black/50 mb-2"
+                  for="chat-report-description"
+                >
+                  Report Details
+                </label>
+                <textarea
+                  id="chat-report-description"
+                  v-model="reportDescription"
+                  rows="5"
+                  maxlength="500"
+                  class="w-full rounded-[12px] border-[1.5px] border-gray-200 bg-white px-4 py-3.5 text-sm outline-none transition-all focus:border-cinnabar-red focus:ring-4 focus:ring-cinnabar-red/5"
+                  placeholder="Describe what happened in this conversation..."
+                ></textarea>
+                <div class="flex justify-between items-center mt-2">
+                  <p v-if="reportError" class="text-[12px] font-medium text-cinnabar-red">
+                    {{ reportError }}
+                  </p>
+                  <div class="ml-auto text-[11px] font-bold text-gray-400 tabular-nums">
+                    {{ reportDescription.length }} / 500
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-8 py-6 bg-gray-50/50 border-t border-gray-100 flex gap-3">
+              <button
+                class="flex-1 h-12 rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-bold text-cinnabar-red transition-all hover:bg-cinnabar-red/5"
+                @click="closeReportModal"
+              >
+                Cancel
+              </button>
+              <button
+                class="flex-1 h-12 rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all shadow-lg shadow-cinnabar-red/20 hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isReporting || !reportDescription.trim()"
+                @click="handleSubmitReport"
+              >
+                {{ isReporting ? "Submitting..." : "Submit Report" }}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </transition>
+      </transition>
+    </Teleport>
   </div>
 </template>

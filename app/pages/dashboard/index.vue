@@ -124,7 +124,9 @@
 
     <!-- User Search Results (Shopee style) -->
     <div
-      v-if="serverSearchQuery && topMatchingUsers && topMatchingUsers.length > 0"
+      v-if="
+        serverSearchQuery && (isSearchingUsers || (topMatchingUsers && topMatchingUsers.length > 0))
+      "
       class="mb-10 animate-fade-in"
     >
       <div class="flex items-center gap-2 mb-4">
@@ -136,11 +138,16 @@
         <div class="h-[1px] flex-1 bg-cinnamon-ice/20"></div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <UserSearchCard
-          v-for="matchingUser in topMatchingUsers"
-          :key="matchingUser.id"
-          v-bind="matchingUser"
-        />
+        <template v-if="isSearchingUsers">
+          <UserSearchCardSkeleton v-for="i in 3" :key="`user-skeleton-${i}`" />
+        </template>
+        <template v-else>
+          <UserSearchCard
+            v-for="matchingUser in topMatchingUsers"
+            :key="matchingUser.id"
+            v-bind="matchingUser"
+          />
+        </template>
       </div>
     </div>
 
@@ -289,7 +296,7 @@ const INITIAL_DASHBOARD_PAGE_SIZE = 8
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
 // User Search Logic
-const { data: topMatchingUsers } = await useAsyncData(
+const { data: topMatchingUsers, pending: isSearchingUsers } = await useAsyncData(
   () => `user-search-${serverSearchQuery.value}`,
   async () => {
     if (!serverSearchQuery.value) return [] as UserSearchResult[]

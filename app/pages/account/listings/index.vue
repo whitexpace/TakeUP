@@ -490,9 +490,9 @@ onBeforeUnmount(() => {
     <div class="space-y-8">
       <div
         v-if="(!hasFetched || isLoading) && listings.length === 0"
-        class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5"
       >
-        <div v-for="i in 4" :key="i" class="h-72 rounded-[20px] bg-cream animate-pulse" />
+        <ItemCardSkeleton v-for="i in 4" :key="`listing-skeleton-${i}`" />
       </div>
 
       <div

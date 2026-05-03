@@ -4,50 +4,29 @@
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-burning-orange"></div>
     </div>
 
-    <div v-else-if="profileData" class="max-w-[1200px] mx-auto px-6 py-10 flex flex-col gap-10">
+    <div v-else-if="profileData" class="max-w-[1200px] mx-auto px-6 py-6 flex flex-col gap-6">
       <!-- TOP HERO SECTION -->
-      <header
-        class="relative overflow-hidden rounded-[40px] bg-gradient-to-br from-burning-orange via-orange-600 to-orange-700 p-8 md:p-12 shadow-xl"
-      >
-        <!-- Decorative blobs -->
-        <div
-          class="absolute -top-24 -right-12 w-96 h-96 rounded-full bg-white/10 blur-3xl pointer-events-none"
-        ></div>
-        <div
-          class="absolute -bottom-32 left-1/4 w-80 h-80 rounded-full bg-cinnamon-ice/30 blur-3xl pointer-events-none"
-        ></div>
-        <div
-          class="absolute top-1/4 -left-20 w-64 h-64 rounded-full bg-noble-black/5 blur-2xl pointer-events-none"
-        ></div>
+      <header class="profile-hero shadow-xl">
+        <div class="hero-deco-1"></div>
+        <div class="hero-deco-2"></div>
+        <div class="hero-deco-3"></div>
 
-        <div class="relative z-10 flex flex-col md:flex-row items-center gap-8 md:gap-12 pb-16">
+        <div class="hero-content">
           <!-- User Main Info -->
-          <div
-            class="flex items-center gap-6 md:gap-8 flex-1 w-full text-center md:text-left flex-col md:flex-row"
-          >
-            <div class="relative">
-              <UserAvatar
-                :user-name="profileData.user.name"
-                :avatar-url="profileData.user.avatarUrl"
-                size="lg"
-                class="h-32 w-32 md:h-40 md:w-40 rounded-full border-4 border-white shadow-[0_0_0_4px_rgba(255,255,255,0.2)]"
-              />
-            </div>
-            <div class="flex-1">
-              <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-1">
-                <h1
-                  class="text-3xl md:text-5xl font-black text-white uppercase tracking-tight leading-none"
-                >
-                  {{ profileData.user.name }}
-                </h1>
-              </div>
+          <div class="user-info-group">
+            <UserAvatar
+              :user-name="profileData.user.name"
+              :avatar-url="profileData.user.avatarUrl"
+              size="lg"
+              class="hero-avatar"
+            />
+            <div class="user-text">
+              <h1 class="hero-name">{{ profileData.user.name }}</h1>
 
               <div
                 class="flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1 mb-4"
               >
-                <p class="text-lg md:text-xl font-medium text-white/70">
-                  @{{ profileData.user.username }}
-                </p>
+                <p class="hero-handle">@{{ profileData.user.username }}</p>
                 <span
                   v-if="profileData.user.pronouns"
                   class="px-2 py-0.5 rounded-md bg-white/10 text-white/60 text-xs font-bold uppercase tracking-wider"
@@ -73,96 +52,64 @@
                 </span>
               </div>
 
-              <div
-                v-if="profileData.user.bio"
-                class="text-sm md:text-[14px] text-white/80 italic leading-relaxed max-w-lg mx-auto md:mx-0"
-              >
-                "{{ profileData.user.bio }}"
-              </div>
+              <div v-if="profileData.user.bio" class="hero-bio">"{{ profileData.user.bio }}"</div>
             </div>
           </div>
 
-          <!-- Rating cards -->
-          <div class="flex gap-4 w-full md:w-auto">
-            <!-- Lender Rating -->
-            <div
-              class="flex-1 md:w-40 rounded-[14px] bg-white/12 border border-white/20 p-5 backdrop-blur-md text-center flex flex-col justify-center"
-            >
-              <div class="text-[32px] font-bold text-white leading-none mb-1">
-                {{ profileData.user.rating.toFixed(1)
-                }}<span class="text-base text-white/60 font-normal ml-0.5">/5</span>
+          <!-- Rating & Stats Section -->
+          <div class="hero-stats-group">
+            <div class="flex gap-4">
+              <!-- Lender Rating -->
+              <div class="hero-rating-box flex-1">
+                <div class="hero-rating-val">
+                  <span>{{ profileData.user.rating.toFixed(1) }}</span>
+                  <span class="rating-max">/5</span>
+                </div>
+                <div class="hero-stars">
+                  <span
+                    v-for="i in 5"
+                    :key="i"
+                    class="star"
+                    :class="i <= Math.round(profileData.user.rating) ? 'full' : ''"
+                    >★</span
+                  >
+                </div>
+                <div class="hero-rating-label">Lender</div>
               </div>
-              <div class="flex justify-center gap-0.5 mb-4">
-                <span
-                  v-for="i in 5"
-                  :key="i"
-                  class="text-[13px]"
-                  :class="
-                    i <= Math.round(profileData.user.rating) ? 'text-amber-300' : 'text-white/20'
-                  "
-                  >★</span
-                >
+
+              <!-- Borrower Rating -->
+              <div v-if="profileData.user.borrowerRating > 0" class="hero-rating-box flex-1">
+                <div class="hero-rating-val">
+                  <span>{{ profileData.user.borrowerRating.toFixed(1) }}</span>
+                  <span class="rating-max">/5</span>
+                </div>
+                <div class="hero-stars">
+                  <span
+                    v-for="i in 5"
+                    :key="i"
+                    class="star"
+                    :class="i <= Math.round(profileData.user.borrowerRating) ? 'full' : ''"
+                    >★</span
+                  >
+                </div>
+                <div class="hero-rating-label">Borrower</div>
               </div>
-              <div class="text-[10px] font-bold uppercase tracking-[2px] text-white/60">Lender</div>
             </div>
 
-            <!-- Borrower Rating -->
-            <div
-              v-if="profileData.user.borrowerRating > 0"
-              class="flex-1 md:w-40 rounded-[14px] bg-white/12 border border-white/20 p-5 backdrop-blur-md text-center flex flex-col justify-center"
-            >
-              <div class="text-[32px] font-bold text-white leading-none mb-1">
-                {{ profileData.user.borrowerRating.toFixed(1)
-                }}<span class="text-base text-white/60 font-normal ml-0.5">/5</span>
+            <!-- Stats Grid -->
+            <div class="hero-stats-grid">
+              <div class="hstat">
+                <div class="hstat-val">{{ profileData.user.itemsSold }}</div>
+                <div class="hstat-label">Items Lent</div>
               </div>
-              <div class="flex justify-center gap-0.5 mb-4">
-                <span
-                  v-for="i in 5"
-                  :key="i"
-                  class="text-[13px]"
-                  :class="
-                    i <= Math.round(profileData.user.borrowerRating)
-                      ? 'text-amber-300'
-                      : 'text-white/20'
-                  "
-                  >★</span
-                >
+              <div class="hstat">
+                <div class="hstat-val">{{ profileData.user.activeListings }}</div>
+                <div class="hstat-label">Active Listings</div>
               </div>
-              <div class="text-[10px] font-bold uppercase tracking-[2px] text-white/60">
-                Borrower
+              <div class="hstat">
+                <div class="hstat-val">{{ yearsOnPlatform }}yr</div>
+                <div class="hstat-label">On Platform</div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bottom stats strip -->
-        <div
-          class="absolute bottom-0 left-0 right-0 bg-black/20 backdrop-blur-sm px-6 md:px-12 py-3.5 flex items-center justify-center md:justify-start gap-8 border-t border-white/10"
-        >
-          <div class="flex flex-col items-center md:items-start">
-            <div class="text-xl md:text-[22px] font-bold text-white leading-none">
-              {{ profileData.user.itemsSold }}
-            </div>
-            <div class="text-[10px] font-bold uppercase tracking-[1.5px] text-white/55 mt-1">
-              Items Lent
-            </div>
-          </div>
-          <div class="w-px h-8 bg-white/15 hidden md:block"></div>
-          <div class="flex flex-col items-center md:items-start">
-            <div class="text-xl md:text-[22px] font-bold text-white leading-none">
-              {{ profileData.user.activeListings }}
-            </div>
-            <div class="text-[10px] font-bold uppercase tracking-[1.5px] text-white/55 mt-1">
-              Active Listings
-            </div>
-          </div>
-          <div class="w-px h-8 bg-white/15 hidden md:block"></div>
-          <div class="flex flex-col items-center md:items-start">
-            <div class="text-xl md:text-[22px] font-bold text-white leading-none">
-              {{ yearsOnPlatform }}{{ typeof yearsOnPlatform === "number" ? "yr" : "yr" }}
-            </div>
-            <div class="text-[10px] font-bold uppercase tracking-[1.5px] text-white/55 mt-1">
-              On Platform
             </div>
           </div>
         </div>
@@ -327,19 +274,6 @@
                 class="sticky top-24 rounded-[14px] border border-gray-100 bg-white p-5 shadow-sm"
               >
                 <div class="flex items-center gap-2 text-[13px] font-semibold text-gray-700 mb-4">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    class="text-gray-400"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
                   Role Guide
                 </div>
                 <div class="space-y-4">
@@ -475,7 +409,192 @@ const formatDate = (date: string | Date) => {
 </script>
 
 <style scoped>
-/* Scoped styles kept minimal as most styling is now utility-based */
+/* TOP HERO SECTION */
+.profile-hero {
+  background: theme("colors.burning-orange");
+  border-radius: 40px;
+  padding: 48px;
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  animation: fadeUp 0.45s ease both;
+}
+
+.hero-deco-1 {
+  position: absolute;
+  top: -100px;
+  right: -50px;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: theme("colors.cream / 20%");
+  pointer-events: none;
+}
+.hero-deco-2 {
+  position: absolute;
+  bottom: -150px;
+  left: 10%;
+  width: 350px;
+  height: 350px;
+  border-radius: 50%;
+  background: theme("colors.cinnamon-ice / 40%");
+  pointer-events: none;
+}
+.hero-deco-3 {
+  position: absolute;
+  top: 10%;
+  left: -100px;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: theme("colors.noble-black / 5%");
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 48px;
+  align-items: center;
+}
+
+.user-info-group {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.hero-avatar {
+  width: 160px;
+  height: 160px;
+  border: 6px solid #fff;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.user-text {
+  flex: 1;
+}
+
+.hero-name {
+  font-size: 48px;
+  font-weight: 800;
+  font-family: "Rewon", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: -1px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.hero-handle {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.hero-bio {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  font-style: italic;
+  max-width: 500px;
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.hero-stats-group {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 320px;
+}
+
+.hero-rating-box {
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 24px;
+  padding: 24px;
+  text-align: center;
+  backdrop-filter: blur(10px);
+}
+
+.hero-rating-val {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.rating-max {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 2px;
+}
+
+.hero-stars {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.hero-stars .star {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.hero-stars .star.full {
+  color: #fff;
+}
+
+.hero-rating-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+}
+
+.hero-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+}
+
+.hstat {
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.hstat:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hstat-val {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.hstat-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .tab-content {
   animation: fadeUp 0.45s 0.1s ease both;
 }
@@ -494,5 +613,51 @@ const formatDate = (date: string | Date) => {
 /* Glass card background utility */
 .bg-white\/12 {
   background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+  .hero-content {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .hero-stats-group {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 0;
+  }
+  .hero-rating-box {
+    flex: 1;
+  }
+  .hero-stats-grid {
+    flex: 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-hero {
+    padding: 32px;
+    border-radius: 30px;
+  }
+  .user-info-group {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+  .hero-avatar {
+    width: 120px;
+    height: 120px;
+  }
+  .hero-name {
+    font-size: 32px;
+  }
+  .hero-stats-group {
+    flex-direction: column;
+    width: 100%;
+  }
+  .hero-stats-grid {
+    width: 100%;
+  }
 }
 </style>

@@ -855,10 +855,10 @@ const availabilityRowErrors = computed(() =>
         <div class="space-y-6">
           <div
             class="upload-dropzone group"
+            :class="{ 'is-dragging': isDragging }"
             @click="triggerGalleryUpload"
             @dragover.prevent="isDragging = true"
             @dragleave.prevent="isDragging = false"
-            :class="{ 'is-dragging': isDragging }"
             @drop.prevent="handleDrop"
           >
             <input

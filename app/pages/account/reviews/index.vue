@@ -527,22 +527,23 @@ onBeforeUnmount(() => {
                 :key="transaction.id"
                 class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 mb-4 last:mb-0"
               >
-                <!-- Slim Header -->
+                <!-- Top Zone: Counterparty & Badge -->
                 <div
-                  class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
+                  class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/10 bg-white"
                 >
                   <span class="text-noble-black text-[14px] font-semibold">
                     {{ getCounterpartNameForTransaction(transaction) }}
                   </span>
                   <span
-                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-burning-orange bg-burning-orange/[0.08] border border-burning-orange/20"
+                    class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold text-burning-orange bg-burning-orange/[0.06]"
                   >
-                    Needs Action
+                    NEEDS ACTION
                   </span>
                 </div>
 
-                <!-- Content Row -->
+                <!-- Bottom Zone: Content Row -->
                 <div class="p-5 flex items-center gap-4">
+                  <!-- Thumbnail -->
                   <div class="shrink-0">
                     <img
                       v-if="transaction.item.thumbnailImage"
@@ -572,33 +573,27 @@ onBeforeUnmount(() => {
                       </svg>
                     </div>
                   </div>
-                  <div class="flex-1 min-w-0">
-                    <h4 class="text-[15px] font-bold text-noble-black truncate mb-1">
+
+                  <!-- Center Content Block -->
+                  <div class="flex-1 min-w-0 max-w-[200px]">
+                    <h4 class="text-[14px] font-semibold text-noble-black truncate mb-0.5">
                       {{ transaction.item.name }}
                     </h4>
-                    <div
-                      class="flex items-center gap-1.5 text-[10px] text-noble-black/40 font-bold uppercase tracking-widest"
-                    >
-                      <span>{{
-                        formatRoleLabel(getCurrentUserRoleForTransaction(transaction))
-                      }}</span>
-                      <span class="opacity-30 select-none">·</span>
-                      <span>with {{ getCounterpartNameForTransaction(transaction) }}</span>
-                      <span class="opacity-30 select-none">·</span>
-                      <span>{{ formatShortDate(transaction.endDate) }}</span>
-                      <span class="opacity-30 select-none">·</span>
-                      <span>{{ computeDuration(transaction.startDate, transaction.endDate) }}</span>
+                    <div class="text-[13px] text-noble-black/40 font-medium truncate">
+                      {{ formatShortDate(transaction.endDate) }} ·
+                      {{ computeDuration(transaction.startDate, transaction.endDate) }}
                     </div>
                   </div>
 
-                  <div class="shrink-0 flex flex-col gap-[6px] ml-auto">
+                  <!-- Action Button -->
+                  <div class="shrink-0 ml-auto flex flex-col gap-[6px]">
                     <button
                       v-for="action in transaction.reviewState.actions.filter(
                         (entry) => entry.canSubmit,
                       )"
                       :key="`${transaction.id}-${action.reviewType}`"
                       type="button"
-                      class="h-[34px] px-4 rounded-full bg-burning-orange text-white text-[12px] font-bold transition-all hover:brightness-110 active:scale-95 shadow-sm shadow-burning-orange/20"
+                      class="h-8 px-3 rounded-[8px] bg-burning-orange text-white text-[12px] font-semibold transition-all hover:brightness-110 active:scale-95 shadow-sm shadow-burning-orange/20"
                       @click="openReviewModal(transaction, action.reviewType)"
                     >
                       {{ action.label }}

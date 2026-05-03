@@ -181,6 +181,22 @@ onMounted(() => {
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
               <svg
+                v-else-if="link.label === 'Transactions'"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m17 2 4 4-4 4" />
+                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                <path d="m7 22-4-4 4-4" />
+                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg>
+              <svg
                 v-else-if="link.label === 'Dispute Queue'"
                 width="18"
                 height="18"

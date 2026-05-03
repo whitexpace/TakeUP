@@ -1165,73 +1165,83 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
               <div class="py-6">
                 <!-- Eligibility Banner -->
-                <div class="rounded-[16px] border border-cinnamon-ice/20 bg-cream p-5">
-                  <div
-                    v-if="isLoadingDeactivationEligibility"
-                    class="text-[14px] font-medium text-noble-black/60 flex items-center gap-2"
+                <div
+                  v-if="isLoadingDeactivationEligibility"
+                  class="rounded-[14px] border-[1.5px] border-cinnamon-ice/20 bg-cream p-5 text-[14px] font-medium text-noble-black/60 flex items-center gap-2"
+                >
+                  <svg
+                    class="animate-spin"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
                   >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  Checking eligibility...
+                </div>
+
+                <div
+                  v-else-if="deactivationEligibility?.blockers.length"
+                  class="rounded-[14px] border-[1.5px] border-cinnabar-red/20 bg-cinnabar-red/5 p-5"
+                >
+                  <h3 class="text-[15px] font-semibold text-cinnabar-red">
+                    Deactivation is blocked
+                  </h3>
+                  <ul class="mt-4 space-y-4">
+                    <li
+                      v-for="blocker in deactivationEligibility.blockers"
+                      :key="blocker.code"
+                      class="text-[13px] font-medium text-noble-black/80 flex items-start gap-3"
+                    >
+                      <svg
+                        class="text-cinnabar-red shrink-0 mt-0.5"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path
+                          d="M12 22c5.523 0 9-3.477 9-9s-3.477-9-9-9-9 3.477-9 9 3.477 9 9 9zM12 8a1 1 0 0 1 1 1v4a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1zm0 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"
+                        />
+                      </svg>
+                      <span class="leading-relaxed">{{ blocker.message }}</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div
+                  v-else-if="deactivationEligibility?.allowed"
+                  class="rounded-[14px] border border-cinnamon-ice/20 bg-cream p-5"
+                >
+                  <div class="flex items-center gap-3 text-success-green">
                     <svg
-                      class="animate-spin"
-                      width="16"
-                      height="16"
+                      width="20"
+                      height="20"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
                       stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
                     >
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                      <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    Checking eligibility...
+                    <h3 class="text-[16px] font-bold">Account ready to deactivate</h3>
                   </div>
-                  <template v-else-if="deactivationEligibility?.blockers.length">
-                    <h3 class="text-[16px] font-bold text-noble-black">Deactivation is blocked</h3>
-                    <ul class="mt-3 space-y-3">
-                      <li
-                        v-for="blocker in deactivationEligibility.blockers"
-                        :key="blocker.code"
-                        class="text-[13px] font-medium text-noble-black/80 flex items-start gap-3"
-                      >
-                        <svg
-                          class="text-cinnabar-red shrink-0 mt-0.5"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="3"
-                        >
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="12" y1="8" x2="12" y2="12" />
-                          <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                        <span class="leading-relaxed">{{ blocker.message }}</span>
-                      </li>
-                    </ul>
-                  </template>
-                  <template v-else-if="deactivationEligibility?.allowed">
-                    <div class="flex items-center gap-3 text-success-green">
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <h3 class="text-[16px] font-bold">Account ready to deactivate</h3>
-                    </div>
-                    <p class="mt-2 text-[13px] font-medium text-noble-black/50 leading-relaxed">
-                      All checks passed. You can reactivate your account at any time by signing back
-                      in. Click the button below to proceed.
-                    </p>
-                  </template>
-                  <div v-else class="text-[14px] font-medium text-noble-black/60">
-                    Unable to check eligibility at this time. Please try again later.
-                  </div>
+                  <p class="mt-2 text-[13px] font-medium text-noble-black/50 leading-relaxed">
+                    All checks passed. You can reactivate your account at any time by signing back
+                    in. Click the button below to proceed.
+                  </p>
+                </div>
+
+                <div
+                  v-else
+                  class="rounded-[14px] border border-cinnamon-ice/20 bg-cream p-5 text-[14px] font-medium text-noble-black/60"
+                >
+                  Unable to check eligibility at this time. Please try again later.
                 </div>
               </div>
             </div>
@@ -1249,7 +1259,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-gray-200 bg-white text-[15px] font-bold text-noble-black/60 transition-all duration-200 hover:bg-gray-50 disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-bold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5 disabled:opacity-50"
                   :disabled="isDeactivatingAccount"
                   @click="closeDeactivateAccountModal"
                 >
@@ -1283,7 +1293,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <!-- Header -->
             <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[24px] font-bold text-cinnabar-red">Delete Account</h2>
+                <h2 class="text-[24px] font-bold text-noble-black">Delete Account</h2>
                 <p class="mt-1 text-[13px] font-medium text-noble-black/40">
                   This action is permanent and cannot be undone.
                 </p>
@@ -1382,7 +1392,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-gray-200 bg-white text-[15px] font-bold text-noble-black/60 transition-all duration-200 hover:bg-gray-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-bold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5"
                   @click="closeDeleteAccountModal"
                 >
                   Cancel
