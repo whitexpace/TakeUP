@@ -2,9 +2,9 @@ import { getOrCreateWallet, runWalletSelfHealing } from "../../utils/wallet"
 
 export default defineEventHandler(async (event) => {
   const user = event.context.authUser
-  console.log(
+  console.warn(
     "[wallet:GET] incoming request, authUser:",
-    user ? { id: user.id, email: (user as any).email } : null,
+    user ? { id: user.id, email: (user as { email?: string }).email } : null,
   )
 
   if (!user) {
@@ -13,27 +13,34 @@ export default defineEventHandler(async (event) => {
   }
 
   // Run self-healing in background without blocking the response
-  runWalletSelfHealing(user.id).catch((e) => {
-    console.error("[wallet:GET] self-healing failed (skipping):", e?.message ?? e)
+  runWalletSelfHealing(user.id).catch((e: unknown) => {
+    const err = e as { message?: string }
+    console.error("[wallet:GET] self-healing failed (skipping):", err?.message ?? e)
   })
 
   try {
     const wallet = await getOrCreateWallet(user.id)
-    console.log("[wallet:GET] success — returning wallet", {
+    console.warn("[wallet:GET] success — returning wallet", {
       id: wallet.id,
       userId: wallet.userId,
       balance: wallet.balance?.toString?.() ?? wallet.balance,
       status: wallet.status,
     })
     return wallet
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = err as {
+      name?: string
+      code?: string
+      message?: string
+      meta?: { message?: string }
+    }
     console.error("[wallet:GET] getOrCreateWallet threw for userId=", user.id)
-    console.error("[wallet:GET] error name:", err?.name, "code:", err?.code)
-    console.error("[wallet:GET] error message:", err?.message)
-    if (err?.meta) console.error("[wallet:GET] prisma meta:", err.meta)
+    console.error("[wallet:GET] error name:", error?.name, "code:", error?.code)
+    console.error("[wallet:GET] error message:", error?.message)
+    if (error?.meta) console.error("[wallet:GET] prisma meta:", error.meta)
     throw createError({
       statusCode: 500,
-      message: `Wallet fetch failed: ${err?.meta?.message ?? err?.message ?? "unknown error"}`,
+      message: `Wallet fetch failed: ${error?.meta?.message ?? error?.message ?? "unknown error"}`,
     })
   }
 })

@@ -167,11 +167,14 @@ async function ensureWalletRecord(
 ) {
   const prisma = asWalletPrisma(tx || globalPrisma)
 
-  console.log("[wallet:ensureWalletRecord] called with owner:", owner)
+  console.warn("[wallet:ensureWalletRecord] called with owner:", owner)
 
   try {
     if (owner.scope === WalletScope.USER) {
-      console.log("[wallet:ensureWalletRecord] attempting INSERT for USER scope, userId=", owner.userId)
+      console.warn(
+        "[wallet:ensureWalletRecord] attempting INSERT for USER scope, userId=",
+        owner.userId,
+      )
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO wallets (id, scope, user_id, currency, balance, status, updated_at)
         VALUES (
@@ -185,9 +188,15 @@ async function ensureWalletRecord(
         )
         ON CONFLICT ("user_id") DO NOTHING
       `)
-      console.log("[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for userId=", owner.userId)
+      console.warn(
+        "[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for userId=",
+        owner.userId,
+      )
     } else {
-      console.log("[wallet:ensureWalletRecord] attempting INSERT for SYSTEM scope, systemKey=", owner.systemKey)
+      console.warn(
+        "[wallet:ensureWalletRecord] attempting INSERT for SYSTEM scope, systemKey=",
+        owner.systemKey,
+      )
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO wallets (id, scope, system_key, currency, balance, status, updated_at)
         VALUES (
@@ -201,13 +210,22 @@ async function ensureWalletRecord(
         )
         ON CONFLICT ("system_key") DO NOTHING
       `)
-      console.log("[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for systemKey=", owner.systemKey)
+      console.warn(
+        "[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for systemKey=",
+        owner.systemKey,
+      )
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = err as { code?: string; name?: string; meta?: { code?: string } }
     console.error("[wallet:ensureWalletRecord] INSERT FAILED for owner:", owner)
-    console.error("[wallet:ensureWalletRecord] prisma error code:", err?.code, "name:", err?.name)
-    console.error("[wallet:ensureWalletRecord] prisma meta:", err?.meta)
-    if (err?.meta?.code === "23502") {
+    console.error(
+      "[wallet:ensureWalletRecord] prisma error code:",
+      error?.code,
+      "name:",
+      error?.name,
+    )
+    console.error("[wallet:ensureWalletRecord] prisma meta:", error?.meta)
+    if (error?.meta?.code === "23502") {
       console.error(
         "[wallet:ensureWalletRecord] >>> NOT NULL violation. The INSERT only supplies (scope, user_id|system_key, currency, balance, status).",
       )
@@ -218,9 +236,17 @@ async function ensureWalletRecord(
     throw err
   }
 
-  console.log("[wallet:ensureWalletRecord] now fetching wallet record back from DB for owner:", owner)
+  console.warn(
+    "[wallet:ensureWalletRecord] now fetching wallet record back from DB for owner:",
+    owner,
+  )
   const wallet = await fetchWalletRecord(owner, prisma)
-  console.log("[wallet:ensureWalletRecord] fetched wallet id=", wallet.id, "balance=", wallet.balance?.toString?.() ?? wallet.balance)
+  console.warn(
+    "[wallet:ensureWalletRecord] fetched wallet id=",
+    wallet.id,
+    "balance=",
+    wallet.balance?.toString?.() ?? wallet.balance,
+  )
   return wallet
 }
 
