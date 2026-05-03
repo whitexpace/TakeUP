@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 
 type AdminLink = {
@@ -9,9 +9,11 @@ type AdminLink = {
 }
 
 const route = useRoute()
-const showMobileSidebar = ref(false)
-const showLogoutModal = ref(false)
+const isSidebarOpen = ref(true)
+const isMobile = ref(false)
 const isHeaderVisible = ref(true)
+const showLogoutModal = ref(false)
+
 const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
   useNotifications()
 
@@ -33,17 +35,16 @@ const adminLinks: AdminLink[] = [
   },
 ]
 
-const currentSection = computed(() => {
-  return adminLinks.find((link) => route.path.startsWith(link.to)) ?? adminLinks[0]
-})
-
 const isActive = (link: AdminLink) => route.path.startsWith(link.to)
 
 const supabase = useSupabaseClient()
 
+const toggleSidebar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value
+}
+
 const openLogoutModal = () => {
   showLogoutModal.value = true
-  showMobileSidebar.value = false
 }
 
 const cancelLogout = () => {
@@ -58,6 +59,16 @@ const confirmLogout = async () => {
 }
 
 onMounted(() => {
+  isMobile.value = window.innerWidth < 1024
+  if (isMobile.value) isSidebarOpen.value = false
+
+  window.addEventListener("resize", () => {
+    isMobile.value = window.innerWidth < 1024
+    if (!isMobile.value && !isSidebarOpen.value) {
+      isSidebarOpen.value = true
+    }
+  })
+
   void loadNotifications()
 })
 </script>
@@ -71,185 +82,198 @@ onMounted(() => {
       @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
-      <template #mobile-menu>
-        <button
-          class="lg:hidden p-2 text-noble-black hover:text-burning-orange transition-colors"
-          aria-label="Open admin navigation"
-          @click="showMobileSidebar = true"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
+      <template #left>
+        <div class="relative flex items-stretch group/tooltip h-full">
+          <button
+            class="flex items-center justify-center px-2 text-noble-black transition-colors hover:text-burning-orange group"
+            aria-label="Toggle Sidebar"
+            @click="toggleSidebar"
           >
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            >
+              <path
+                d="M4 6H20M4 12H20M4 18H20"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <div class="custom-tooltip">
+            Toggle Sidebar
+            <div class="tooltip-arrow"></div>
+          </div>
+        </div>
       </template>
     </Header>
 
     <div class="relative flex flex-1 overflow-hidden">
-      <Transition name="fade">
-        <div
-          v-if="showMobileSidebar"
-          class="fixed inset-0 z-30 bg-noble-black/50 lg:hidden"
-          @click="showMobileSidebar = false"
-        />
-      </Transition>
-
+      <!-- Sidebar Overlay for Mobile -->
       <div
-        class="pointer-events-none fixed inset-y-0 left-0 z-[35] w-[300px] lg:w-[360px] bg-blue-estate transition-transform duration-300"
-        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+        v-if="isSidebarOpen && isMobile"
+        class="fixed inset-0 bg-noble-black/50 z-40 lg:hidden transition-opacity duration-300"
+        @click="isSidebarOpen = false"
       />
 
+      <!-- Left Sidebar -->
       <aside
-        class="fixed inset-y-0 left-0 z-40 flex h-full w-[300px] shrink-0 flex-col bg-blue-estate text-white transition-all duration-500 ease-in-out lg:w-[360px]"
-        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+        class="bg-wahoo flex flex-col shrink-0 text-white border-r border-white/10 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0 overflow-hidden"
+        :class="[
+          isSidebarOpen
+            ? 'translate-x-0 w-[300px]'
+            : '-translate-x-full lg:translate-x-0 lg:w-0 lg:opacity-0 lg:pointer-events-none',
+          isHeaderVisible ? 'pt-14' : 'pt-0',
+        ]"
       >
-        <div class="flex h-full flex-col" :class="isHeaderVisible ? 'pt-14' : 'pt-0'">
+        <div class="px-6 pt-10 pb-6 shrink-0">
+          <p class="text-[10px] font-bold uppercase tracking-[2px] text-slate-500">
+            Platform Controls
+          </p>
+          <h2 class="mt-2 text-[20px] font-bold text-white">ADMIN PANEL</h2>
+          <p class="mt-2 max-w-[220px] text-[13px] leading-relaxed text-slate-400">
+            Centralized tools for shared operational workflows and platform revenue.
+          </p>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-4 pt-6 pb-24">
+          <NuxtLink
+            v-for="link in adminLinks"
+            :key="link.to"
+            :to="link.to"
+            class="group flex items-center gap-3 px-4 py-3 transition-all duration-200"
+            :class="
+              isActive(link)
+                ? 'bg-white/10 text-white border-l-[3px] border-orange-600 rounded-r-[8px]'
+                : 'text-slate-400 hover:bg-white/5 border-l-[3px] border-transparent'
+            "
+            @click="isMobile && (isSidebarOpen = false)"
+          >
+            <div
+              class="shrink-0 transition-colors"
+              :class="isActive(link) ? 'text-white' : 'text-slate-600'"
+            >
+              <svg
+                v-if="link.label === 'Users'"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <svg
+                v-else-if="link.label === 'Dispute Queue'"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+                <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+                <path d="M7 21h10" />
+                <path d="M12 3v18" />
+                <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+              </svg>
+              <svg
+                v-else-if="link.label === 'System Wallet'"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+                <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+              </svg>
+            </div>
+            <span class="text-[14px] font-medium">
+              {{ link.label }}
+            </span>
+          </NuxtLink>
+
+          <div class="mx-6 my-4 border-t border-white/10" />
+
+          <NuxtLink
+            to="/account"
+            class="group flex items-center gap-3 px-4 py-3 text-slate-400 transition-all duration-200 hover:bg-white/5 border-l-[3px] border-transparent"
+            @click="isMobile && (isSidebarOpen = false)"
+          >
+            <div class="shrink-0 text-slate-600 transition-colors">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" />
+              </svg>
+            </div>
+            <span class="text-[14px] font-medium">Personal Account</span>
+          </NuxtLink>
+        </nav>
+
+        <!-- Log Out Section -->
+        <div class="p-4 border-t border-white/10 shrink-0">
           <button
-            class="absolute right-4 p-2 text-white/60 hover:text-white lg:hidden"
-            :class="isHeaderVisible ? 'top-16' : 'top-4'"
-            @click="showMobileSidebar = false"
+            class="flex w-full items-center gap-3 px-4 py-3 text-slate-400 group transition-all duration-200 hover:text-white"
+            @click="openLogoutModal"
           >
             <svg
-              width="20"
-              height="20"
+              width="18"
+              height="18"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="currentColor"
-              stroke-width="2"
+              xmlns="http://www.w3.org/2000/svg"
+              class="transition-colors duration-200 text-slate-600 group-hover:text-burning-orange"
             >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
+              <path
+                d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
+            <span class="text-[14px] font-medium transition-colors duration-200"> Log Out </span>
           </button>
-
-          <div class="border-b border-white/10 px-8 pt-10 pb-6">
-            <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-white/60">
-              Platform Controls
-            </p>
-            <h2 class="mt-2 text-[26px] font-bold text-white">ADMIN PANEL</h2>
-            <p class="mt-3 max-w-[250px] text-[14px] leading-relaxed text-white/70">
-              Centralized tools for shared operational workflows and platform revenue.
-            </p>
-          </div>
-
-          <nav class="flex flex-col gap-2 px-4 pt-6 pb-24">
-            <NuxtLink
-              v-for="link in adminLinks"
-              :key="link.to"
-              :to="link.to"
-              class="block rounded-[20px] px-4 py-4 transition-all duration-200"
-              :class="
-                isActive(link)
-                  ? 'bg-white text-blue-estate shadow-sm'
-                  : 'bg-white/5 text-white hover:bg-white/10'
-              "
-              @click="showMobileSidebar = false"
-            >
-              <p class="text-[16px] font-semibold">
-                {{ link.label }}
-              </p>
-              <p
-                class="mt-1 text-[13px] leading-relaxed"
-                :class="isActive(link) ? 'text-blue-estate/70' : 'text-white/60'"
-              >
-                {{ link.description }}
-              </p>
-            </NuxtLink>
-
-            <NuxtLink
-              to="/account"
-              class="mt-4 block rounded-[20px] border border-white/15 px-4 py-4 text-white transition-colors duration-200 hover:bg-white/10"
-              @click="showMobileSidebar = false"
-            >
-              <p class="text-[16px] font-semibold">Personal Account</p>
-              <p class="mt-1 text-[13px] leading-relaxed text-white/60">
-                Return to profile details, wallet, listings, and personal transactions.
-              </p>
-            </NuxtLink>
-          </nav>
         </div>
       </aside>
 
-      <div
-        class="fixed bottom-0 left-0 z-50 w-[300px] lg:w-[360px] border-t border-white/10 bg-blue-estate transition-transform duration-300"
-        :class="showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
-      >
-        <button
-          class="flex w-full items-center gap-3 px-8 py-5 text-white group transition-all duration-200"
-          @click="openLogoutModal"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="transition-colors duration-200 group-hover:text-burning-orange"
-          >
-            <path
-              d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-              stroke="currentColor"
-              stroke-width="1"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span
-            class="text-[18px] font-normal transition-colors duration-200 group-hover:text-burning-orange"
-          >
-            Log Out
-          </span>
-        </button>
-      </div>
-
       <main
-        class="custom-admin-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-[#f9f8f6] transition-all duration-500 ease-in-out lg:ml-[360px]"
+        class="custom-admin-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-white"
+        :class="[isHeaderVisible ? 'pt-14' : 'pt-0']"
       >
-        <div
-          :class="[
-            isHeaderVisible ? 'pt-24' : 'pt-10',
-            'px-4 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8',
-          ]"
-        >
-          <section
-            class="rounded-[30px] border border-cinnamon-ice/35 bg-white px-6 py-6 shadow-[0_20px_50px_rgba(25,28,38,0.04)] sm:px-8"
-          >
-            <div
-              class="flex flex-col gap-3 border-b border-cinnamon-ice/35 pb-6 sm:flex-row sm:items-end sm:justify-between"
-            >
-              <div>
-                <p class="text-[12px] font-bold uppercase tracking-[0.16em] text-burning-orange">
-                  Admin Workspace
-                </p>
-                <h1 class="mt-2 text-[28px] font-bold text-blue-estate">
-                  {{ currentSection?.label ?? "Admin Panel" }}
-                </h1>
-                <p class="mt-2 max-w-2xl text-[15px] leading-relaxed text-noble-black/60">
-                  {{ currentSection?.description ?? "Manage platform-level operations." }}
-                </p>
-              </div>
-
-              <NuxtLink
-                to="/account"
-                class="inline-flex items-center rounded-full border border-cinnamon-ice px-4 py-2 text-[13px] font-semibold text-blue-estate transition-colors duration-200 hover:border-burning-orange hover:text-burning-orange"
-              >
-                Back to My Account
-              </NuxtLink>
-            </div>
-
-            <div class="pt-6">
-              <slot />
-            </div>
-          </section>
+        <div class="py-8">
+          <div class="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
+            <slot />
+          </div>
         </div>
       </main>
     </div>
@@ -257,7 +281,7 @@ onMounted(() => {
     <Teleport to="body">
       <div
         v-if="showLogoutModal"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 font-geist"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
       >
         <div
           class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm transition-opacity"
@@ -309,3 +333,84 @@ onMounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.custom-sidebar-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-admin-main-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice");
+  border-radius: 10px;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.burning-orange");
+}
+
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+</style>

@@ -4,7 +4,6 @@ import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "~~/server/trpc/routers"
 import type { ReviewType } from "~~/shared/schemas/review"
 import type { TransactionListItem } from "~/composables/use-transactions"
-import { normalizeReviewImageUrl } from "~/utils/review-image"
 
 definePageMeta({
   layout: "account",
@@ -20,9 +19,6 @@ type ReviewsTab = "PENDING" | "DRAFTS" | "HISTORY"
 const activeTab = ref<ReviewsTab>("PENDING")
 const searchQuery = ref("")
 const user = useSupabaseUser()
-const runtimeConfig = useRuntimeConfig()
-const reviewImageBucket = runtimeConfig.public.itemImageBucket
-const supabaseUrl = runtimeConfig.public.supabase.url
 
 const {
   data: transactionsData,
@@ -64,7 +60,6 @@ const {
 const {
   data: leaderboardData,
   pending: leaderboardPending,
-  error: leaderboardError,
   refresh: refreshLeaderboard,
 } = await useAsyncData("account-review-leaderboards", async () => {
   const [borrowersResponse, lendersResponse] = await Promise.all([
@@ -230,12 +225,6 @@ const getCounterpartNameForTransaction = (transaction: TransactionListItem) => {
   return `${counterpart.firstName} ${counterpart.lastName[0]}.`
 }
 
-const getReviewImageUrl = (image: string) =>
-  normalizeReviewImageUrl(image, {
-    supabaseUrl,
-    bucket: reviewImageBucket,
-  })
-
 const isReviewModalOpen = ref(false)
 const selectedTransactionForReview = ref<TransactionListItem | null>(null)
 const selectedReviewType = ref<ReviewType | null>(null)
@@ -376,102 +365,127 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="space-y-6 font-geist">
-    <NuxtLink
-      to="/account/transactions"
-      class="inline-flex items-center gap-2 text-sm font-medium tracking-wide text-noble-black/80 transition-colors hover:text-burning-orange"
-    >
-      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path
-          d="M15 18l-6-6 6-6"
-          stroke-width="1.7"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      Back to My Transactions
-    </NuxtLink>
-
-    <section class="rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-6 sm:px-8 sm:py-8">
-      <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div class="max-w-3xl">
-          <h1 class="text-2xl font-bold text-noble-black sm:text-[32px]">My Reviews</h1>
-          <p class="mt-3 text-base leading-7 text-noble-black/80 sm:text-lg">
-            Keep track of what you still need to review, save drafts, and manage your review
-            history.
-          </p>
+  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+    <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
+      <section class="space-y-3">
+        <div class="space-y-2">
+          <h1 class="text-[28px] font-semibold text-noble-black leading-tight">My Reviews</h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
+        <p class="text-[16px] font-medium text-noble-black/50">
+          Keep track of what you still need to review, save drafts, and manage your review history.
+        </p>
+      </section>
+    </header>
 
-        <div class="flex flex-wrap gap-3 lg:justify-end">
-          <div
-            class="rounded-2xl bg-white px-4 py-2.5 text-sm font-medium text-noble-black shadow-sm"
-          >
-            {{ pendingReviewCount }} pending
-          </div>
-          <div
-            class="rounded-2xl bg-white px-4 py-2.5 text-sm font-medium text-noble-black shadow-sm"
-          >
-            {{ allDrafts.length }} drafts
-          </div>
-          <div
-            class="rounded-2xl bg-white px-4 py-2.5 text-sm font-medium text-noble-black shadow-sm"
-          >
-            {{ allHistory.length }} posted
-          </div>
-        </div>
+    <!-- Stats Strip -->
+    <div class="flex flex-wrap items-center gap-3 mb-10">
+      <div
+        class="flex items-center gap-2 px-3.5 py-1 rounded-full bg-burning-orange/[0.05] border border-burning-orange/10 text-[13px] font-semibold text-burning-orange"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-burning-orange"></span>
+        {{ pendingReviewCount }} Pending
       </div>
-    </section>
+      <div
+        class="flex items-center gap-2 px-3.5 py-1 rounded-full bg-noble-black/5 border border-noble-black/5 text-[13px] font-semibold text-noble-black/40"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-noble-black/20"></span>
+        {{ allDrafts.length }} Drafts
+      </div>
+      <div
+        class="flex items-center gap-2 px-3.5 py-1 rounded-full bg-success-green/[0.05] border border-success-green/10 text-[13px] font-semibold text-success-green"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-success-green"></span>
+        {{ allHistory.length }} Posted
+      </div>
+    </div>
 
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]">
-      <div class="space-y-6">
-        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_374px]">
-          <div class="grid grid-cols-3 rounded-[20px] border border-cinnamon-ice bg-cream p-2">
-            <button
-              v-for="tab in tabOptions"
-              :key="tab.value"
-              type="button"
-              class="rounded-2xl px-3 py-3 text-sm font-bold transition-colors sm:text-lg"
-              :class="
-                activeTab === tab.value
-                  ? 'bg-burning-orange text-white'
-                  : 'text-noble-black hover:bg-white/80'
-              "
-              @click="activeTab = tab.value"
+    <!-- Tabs & Search Row -->
+    <div
+      class="flex flex-col sm:flex-row sm:items-end justify-between border-b border-cinnamon-ice/15 mb-12 gap-4"
+    >
+      <nav class="flex gap-8">
+        <button
+          v-for="tab in tabOptions"
+          :key="tab.value"
+          type="button"
+          class="relative pb-4 text-[14px] font-bold transition-all"
+          :class="
+            activeTab === tab.value
+              ? 'text-burning-orange'
+              : 'text-noble-black/40 hover:text-noble-black/60'
+          "
+          @click="activeTab = tab.value"
+        >
+          <div class="flex items-center gap-2">
+            {{ tab.label }}
+            <span
+              v-if="tab.value === 'PENDING' && pendingReviewCount > 0"
+              class="px-1.5 py-0.5 rounded-full bg-burning-orange text-white text-[10px] font-bold leading-none"
             >
-              {{ tab.label }}
-            </button>
+              {{ pendingReviewCount }}
+            </span>
           </div>
+          <div
+            v-if="activeTab === tab.value"
+            class="absolute bottom-0 left-0 right-0 h-[2px] bg-burning-orange rounded-full"
+          ></div>
+        </button>
+      </nav>
 
-          <label
-            class="flex items-center gap-3 rounded-[20px] border border-cinnamon-ice bg-white px-4 py-3"
+      <div class="relative w-full sm:max-w-[280px] mb-4 z-20">
+        <svg
+          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noble-black/30 pointer-events-none"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+        >
+          <circle cx="11" cy="11" r="7" stroke-width="2" />
+          <path d="m20 20-3.5-3.5" stroke-width="2" stroke-linecap="round" />
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search by item or person..."
+          class="w-full h-9 bg-white border border-cinnamon-ice/20 rounded-[10px] pl-9 pr-9 text-[13px] text-noble-black outline-none focus:border-burning-orange/40 focus:ring-4 focus:ring-burning-orange/5 shadow-sm transition-all placeholder:text-noble-black/30"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-md text-noble-black/20 hover:text-noble-black/40 hover:bg-noble-black/5 transition-all"
+          @click="searchQuery = ''"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <svg
-              class="h-5 w-5 text-noble-black/50"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-            >
-              <circle cx="11" cy="11" r="7" stroke-width="1.8" />
-              <path d="m20 20-3.5-3.5" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search by item or person..."
-              class="w-full bg-transparent text-base text-noble-black outline-none placeholder:text-noble-black/45"
-            />
-          </label>
-        </div>
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
 
-        <section class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 sm:p-6">
-          <h2 class="text-xl font-bold text-noble-black sm:text-[25px]">{{ sectionTitle }}</h2>
-          <p class="mt-2 text-sm leading-6 text-noble-black/70 sm:text-base">
-            {{ sectionSubtitle }}
-          </p>
+    <div class="grid gap-8 lg:grid-cols-[1fr_340px]">
+      <!-- Main Content -->
+      <div class="space-y-6">
+        <!-- Content Panel -->
+        <div
+          class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+        >
+          <div class="border-l-[3px] border-burning-orange pl-4 mb-6">
+            <h2 class="text-[20px] font-bold text-noble-black">{{ sectionTitle }}</h2>
+            <p class="text-[13px] font-medium text-noble-black/50">{{ sectionSubtitle }}</p>
+          </div>
 
           <p
             v-if="pageActionError"
-            class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+            class="rounded-xl border border-cinnabar-red/20 bg-cinnabar-red/5 px-4 py-3 text-[13px] font-medium text-cinnabar-red mb-4"
           >
             {{ pageActionError }}
           </p>
@@ -480,19 +494,19 @@ onBeforeUnmount(() => {
             <div
               v-for="i in 3"
               :key="i"
-              class="h-28 animate-pulse rounded-2xl border border-cinnamon-ice/50 bg-white/80"
+              class="h-[88px] animate-pulse rounded-[14px] border border-cinnamon-ice/30 bg-white/80"
             />
           </div>
 
           <div
             v-else-if="currentTabErrorMessage"
-            class="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-5 text-sm text-red-600"
+            class="mt-6 rounded-[14px] border border-cinnabar-red/20 bg-cinnabar-red/5 p-5"
           >
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p>{{ currentTabErrorMessage }}</p>
+            <div class="flex items-center justify-between">
+              <p class="text-[13px] font-medium text-cinnabar-red">{{ currentTabErrorMessage }}</p>
               <button
                 type="button"
-                class="inline-flex w-fit rounded-2xl border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-600 hover:text-white"
+                class="text-[13px] font-bold text-cinnabar-red hover:underline"
                 @click="refreshCurrentTab()"
               >
                 Retry
@@ -500,422 +514,518 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-else-if="activeTab === 'PENDING'" class="mt-6 space-y-4">
-            <article
-              v-for="transaction in filteredPendingTransactions"
-              :key="transaction.id"
-              class="rounded-2xl border border-cinnamon-ice bg-white p-4 sm:p-5"
-            >
-              <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <img
-                  v-if="transaction.item.thumbnailImage"
-                  :src="transaction.item.thumbnailImage"
-                  :alt="transaction.item.name"
-                  class="h-[85px] w-[85px] rounded-lg object-cover"
-                />
+          <!-- Internal Scrollable List -->
+          <div v-else class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-4">
+            <div v-if="activeTab === 'PENDING'">
+              <div v-if="filteredPendingTransactions.length === 0" class="py-16 text-center">
+                <p class="text-[14px] font-medium text-noble-black/30">
+                  No reviews pending at the moment.
+                </p>
+              </div>
+              <article
+                v-for="transaction in filteredPendingTransactions"
+                :key="transaction.id"
+                class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 mb-4 last:mb-0"
+              >
+                <!-- Slim Header -->
                 <div
-                  v-else
-                  class="flex h-[85px] w-[85px] items-center justify-center rounded-lg bg-cinnamon-ice/40"
+                  class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
                 >
-                  <svg
-                    class="h-8 w-8 text-cinnamon-ice"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
+                  <span class="text-noble-black text-[14px] font-semibold">
+                    {{ getCounterpartNameForTransaction(transaction) }}
+                  </span>
+                  <span
+                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-burning-orange bg-burning-orange/[0.08] border border-burning-orange/20"
                   >
-                    <path
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
+                    Needs Action
+                  </span>
                 </div>
 
-                <div class="min-w-0 flex-1">
-                  <p class="text-xl font-bold text-noble-black">{{ transaction.item.name }}</p>
-                  <p class="mt-2 text-sm text-noble-black/80">
-                    {{ formatRoleLabel(getCurrentUserRoleForTransaction(transaction)) }} • with
-                    <span class="font-semibold text-blue-estate">
-                      {{ getCounterpartNameForTransaction(transaction) }}
-                    </span>
-                  </p>
-                  <p class="mt-1 text-sm text-noble-black/80">
-                    Completed: {{ formatShortDate(transaction.endDate) }} •
-                    {{ computeDuration(transaction.startDate, transaction.endDate) }}
-                  </p>
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    <span
+                <!-- Content Row -->
+                <div class="p-5 flex items-center gap-4">
+                  <div class="shrink-0">
+                    <img
+                      v-if="transaction.item.thumbnailImage"
+                      :src="transaction.item.thumbnailImage"
+                      class="w-14 h-14 rounded-[10px] object-cover border border-noble-black/5"
+                    />
+                    <div
+                      v-else
+                      class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m7.5 4.27 9 5.15" />
+                        <path
+                          d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+                        />
+                        <path d="m3.3 7 8.7 5 8.7-5" />
+                        <path d="M12 22V12" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h4 class="text-[15px] font-bold text-noble-black truncate mb-1">
+                      {{ transaction.item.name }}
+                    </h4>
+                    <div
+                      class="flex items-center gap-1.5 text-[10px] text-noble-black/40 font-bold uppercase tracking-widest"
+                    >
+                      <span>{{
+                        formatRoleLabel(getCurrentUserRoleForTransaction(transaction))
+                      }}</span>
+                      <span class="opacity-30 select-none">·</span>
+                      <span>with {{ getCounterpartNameForTransaction(transaction) }}</span>
+                      <span class="opacity-30 select-none">·</span>
+                      <span>{{ formatShortDate(transaction.endDate) }}</span>
+                      <span class="opacity-30 select-none">·</span>
+                      <span>{{ computeDuration(transaction.startDate, transaction.endDate) }}</span>
+                    </div>
+                  </div>
+
+                  <div class="shrink-0 flex flex-col gap-[6px] ml-auto">
+                    <button
                       v-for="action in transaction.reviewState.actions.filter(
                         (entry) => entry.canSubmit,
                       )"
-                      :key="`${transaction.id}-${action.reviewType}-tag`"
-                      class="rounded-full bg-burning-orange/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-burning-orange"
+                      :key="`${transaction.id}-${action.reviewType}`"
+                      type="button"
+                      class="h-[34px] px-4 rounded-full bg-burning-orange text-white text-[12px] font-bold transition-all hover:brightness-110 active:scale-95 shadow-sm shadow-burning-orange/20"
+                      @click="openReviewModal(transaction, action.reviewType)"
                     >
                       {{ action.label }}
-                    </span>
+                    </button>
                   </div>
                 </div>
-
-                <div class="flex flex-col gap-2 sm:w-[170px]">
-                  <button
-                    v-for="action in transaction.reviewState.actions.filter(
-                      (entry) => entry.canSubmit,
-                    )"
-                    :key="`${transaction.id}-${action.reviewType}`"
-                    type="button"
-                    class="rounded-2xl bg-burning-orange px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-cinnabar-red"
-                    @click="openReviewModal(transaction, action.reviewType)"
-                  >
-                    {{ action.label }}
-                  </button>
-                </div>
-              </div>
-            </article>
-
-            <div
-              v-if="filteredPendingTransactions.length === 0"
-              class="rounded-2xl border border-cinnamon-ice/70 bg-white px-5 py-10 text-center text-sm text-noble-black/65"
-            >
-              No reviews pending.
+              </article>
             </div>
-          </div>
 
-          <div v-else-if="activeTab === 'DRAFTS'" class="mt-6 space-y-4">
-            <article
-              v-for="draft in filteredDrafts"
-              :key="draft.id"
-              class="rounded-2xl border border-cinnamon-ice bg-white p-4 sm:p-5"
-            >
-              <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <img
-                  v-if="draft.item?.thumbnailImage"
-                  :src="draft.item.thumbnailImage"
-                  :alt="draft.item.name"
-                  class="h-[85px] w-[85px] rounded-lg object-cover"
-                />
-                <div
-                  v-else
-                  class="flex h-[85px] w-[85px] items-center justify-center rounded-lg bg-cinnamon-ice/40"
-                >
-                  <svg
-                    class="h-8 w-8 text-cinnamon-ice"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                  >
-                    <path
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p class="text-xl font-bold text-noble-black">
-                      {{ draft.item?.name ?? "Item unavailable" }}
-                    </p>
-                    <span
-                      class="rounded-full bg-blue-estate/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-estate"
-                    >
-                      {{ draft.typeLabel }}
-                    </span>
-                  </div>
-                  <p class="mt-2 text-sm text-noble-black/80">
-                    {{ formatRoleLabel(draft.role) }} • with
-                    <span class="font-semibold text-blue-estate">{{ draft.counterpartName }}</span>
-                  </p>
-                  <p class="mt-1 text-sm text-noble-black/80">
-                    Last saved {{ formatShortDate(draft.updatedAt) }} • Ref:
-                    {{ draft.transactionReference }}
-                  </p>
-                  <p class="mt-2 line-clamp-2 text-sm leading-6 text-noble-black/70">
-                    {{ draft.reviewText || "No review text saved yet." }}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  class="rounded-2xl bg-burning-orange px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-cinnabar-red"
-                  @click="continueDraft(draft)"
-                >
-                  Continue Draft
-                </button>
+            <div v-else-if="activeTab === 'DRAFTS'">
+              <div v-if="filteredDrafts.length === 0" class="py-16 text-center">
+                <p class="text-[14px] font-medium text-noble-black/30">No drafts saved.</p>
               </div>
-            </article>
-
-            <div
-              v-if="filteredDrafts.length === 0"
-              class="rounded-2xl border border-cinnamon-ice/70 bg-white px-5 py-10 text-center text-sm text-noble-black/65"
-            >
-              No drafts saved yet.
-            </div>
-          </div>
-
-          <div v-else class="mt-6 space-y-4">
-            <article
-              v-for="review in filteredHistory"
-              :key="review.id"
-              class="rounded-2xl border border-cinnamon-ice bg-white p-4 sm:p-5"
-            >
-              <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <img
-                  v-if="review.item?.thumbnailImage"
-                  :src="review.item.thumbnailImage"
-                  :alt="review.item.name"
-                  class="h-[85px] w-[85px] rounded-lg object-cover"
-                />
-                <div
-                  v-else
-                  class="flex h-[85px] w-[85px] items-center justify-center rounded-lg bg-cinnamon-ice/40"
-                >
-                  <svg
-                    class="h-8 w-8 text-cinnamon-ice"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
+              <article
+                v-for="draft in filteredDrafts"
+                :key="draft.id"
+                class="block bg-white rounded-[16px] border border-cinnamon-ice/20 p-5 shadow-sm hover:shadow-md transition-all duration-200 mb-4 last:mb-0"
+              >
+                <div class="flex items-start gap-4">
+                  <img
+                    v-if="draft.item?.thumbnailImage"
+                    :src="draft.item.thumbnailImage"
+                    class="w-14 h-14 rounded-[10px] object-cover border border-noble-black/5"
+                  />
+                  <div
+                    v-else
+                    class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                   >
-                    <path
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </div>
-
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <p class="text-xl font-bold text-noble-black">
-                      {{ review.item?.name ?? review.revieweeName ?? "Review" }}
-                    </p>
-                    <span
-                      class="rounded-full bg-burning-orange/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-burning-orange"
-                    >
-                      {{ review.typeLabel }}
-                    </span>
-                  </div>
-
-                  <p class="mt-2 text-sm text-noble-black/80">
-                    {{ formatRoleLabel(review.role) }} • with
-                    <span class="font-semibold text-blue-estate">{{ review.counterpartName }}</span>
-                  </p>
-                  <p class="mt-1 text-sm text-noble-black/80">
-                    Posted {{ formatShortDate(review.createdAt) }} • Ref:
-                    {{ review.transactionReference }}
-                  </p>
-
-                  <div class="mt-3 flex items-center gap-1 text-burning-orange">
                     <svg
-                      v-for="star in 5"
-                      :key="`${review.id}-${star}`"
-                      class="h-4 w-4"
+                      width="24"
+                      height="24"
                       viewBox="0 0 24 24"
-                      :fill="star <= review.rating ? 'currentColor' : 'none'"
-                      :stroke="star <= review.rating ? 'currentColor' : 'currentColor'"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
                     >
+                      <path d="m7.5 4.27 9 5.15" />
                       <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.5"
-                        d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
+                        d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
                       />
+                      <path d="m3.3 7 8.7 5 8.7-5" />
+                      <path d="M12 22V12" />
                     </svg>
                   </div>
-
-                  <p class="mt-3 text-sm leading-6 text-noble-black/75">{{ review.reviewText }}</p>
-
-                  <div v-if="(review.images as any[]).length > 0" class="mt-4 flex flex-wrap gap-3">
-                    <img
-                      v-for="image in review.images as any[]"
-                      :key="image"
-                      :src="getReviewImageUrl(image)"
-                      :alt="`${review.typeLabel} image`"
-                      class="h-20 w-20 rounded-2xl border border-cinnamon-ice/70 object-cover"
-                    />
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <h4 class="text-[15px] font-bold text-noble-black truncate">
+                        {{ draft.item?.name ?? "Item unavailable" }}
+                      </h4>
+                      <span
+                        class="px-2 py-0.5 rounded-full bg-blue-estate/[0.08] text-blue-estate text-[10px] font-bold uppercase tracking-wider border border-blue-estate/20"
+                        >{{ draft.typeLabel }}</span
+                      >
+                    </div>
+                    <p class="text-[12px] text-noble-black/40 mb-3 uppercase tracking-widest">
+                      {{ formatRoleLabel(draft.role) }} · with {{ draft.counterpartName }}
+                    </p>
+                    <p
+                      class="text-[13px] leading-relaxed text-noble-black/70 italic line-clamp-1 mb-3"
+                    >
+                      "{{ draft.reviewText || "No text yet..." }}"
+                    </p>
+                    <button
+                      type="button"
+                      class="h-8 px-4 rounded-full border-[1.5px] border-burning-orange text-burning-orange text-[12px] font-bold transition-all hover:bg-burning-orange/5 active:scale-95"
+                      @click="continueDraft(draft)"
+                    >
+                      Continue Draft
+                    </button>
                   </div>
                 </div>
-              </div>
-            </article>
+              </article>
+            </div>
 
-            <div
-              v-if="filteredHistory.length === 0"
-              class="rounded-2xl border border-cinnamon-ice/70 bg-white px-5 py-10 text-center text-sm text-noble-black/65"
-            >
-              No reviews submitted yet.
+            <div v-else>
+              <div v-if="filteredHistory.length === 0" class="py-16 text-center">
+                <p class="text-[14px] font-medium text-noble-black/30">No history available yet.</p>
+              </div>
+              <article
+                v-for="review in filteredHistory"
+                :key="review.id"
+                class="block bg-white rounded-[16px] border border-cinnamon-ice/20 p-5 shadow-sm hover:shadow-md transition-all duration-200 mb-4 last:mb-0"
+              >
+                <div class="flex items-start gap-4">
+                  <img
+                    v-if="review.item?.thumbnailImage"
+                    :src="review.item.thumbnailImage"
+                    class="w-12 h-12 rounded-[8px] object-cover border border-noble-black/5"
+                  />
+                  <div
+                    v-else
+                    class="w-12 h-12 rounded-[8px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
+                  >
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m7.5 4.27 9 5.15" />
+                      <path
+                        d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+                      />
+                      <path d="m3.3 7 8.7 5 8.7-5" />
+                      <path d="M12 22V12" />
+                    </svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <h4 class="text-[15px] font-bold text-noble-black truncate">
+                        {{ review.item?.name ?? review.revieweeName }}
+                      </h4>
+                      <div class="flex items-center gap-0.5 text-burning-orange">
+                        <svg
+                          v-for="star in 5"
+                          :key="star"
+                          class="h-3.5 w-3.5"
+                          viewBox="0 0 24 24"
+                          :fill="star <= review.rating ? 'currentColor' : 'none'"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                    <p class="text-[12px] text-noble-black/40 mb-3 uppercase tracking-widest">
+                      {{ formatRoleLabel(review.role) }} · with {{ review.counterpartName }} ·
+                      {{ formatShortDate(review.createdAt) }}
+                    </p>
+                    <p
+                      class="text-[13px] leading-relaxed text-noble-black/70 italic border-l-2 border-cinnamon-ice/30 pl-3"
+                    >
+                      "{{ review.reviewText }}"
+                    </p>
+                  </div>
+                </div>
+              </article>
             </div>
           </div>
-        </section>
-      </div>
-
-      <aside class="space-y-6">
-        <section class="rounded-[20px] border border-cinnamon-ice bg-cream p-6">
-          <h2 class="text-lg font-bold text-noble-black">Your checklist</h2>
-          <div class="mt-4 space-y-4 text-sm leading-7 text-noble-black/80">
-            <p>Quick reminders before you post.</p>
-            <p>Mention communication and timing.</p>
-            <p>Describe condition accurately.</p>
-            <p>Avoid private info or insults.</p>
-          </div>
-
-          <div class="mt-6 rounded-2xl bg-white px-4 py-4">
-            <p class="text-base font-bold text-noble-black">Tip</p>
-            <p class="mt-2 text-sm leading-6 text-noble-black/75">
-              Save a draft if you’re busy, then come back when you’re ready to submit.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            class="mt-6 w-full rounded-2xl bg-burning-orange px-5 py-3 text-base font-medium text-white transition-colors hover:bg-cinnabar-red"
-            @click="activeTab = 'DRAFTS'"
-          >
-            View Drafts
-          </button>
-        </section>
-      </aside>
-    </div>
-
-    <section class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 sm:p-6">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 class="text-xl font-bold text-noble-black sm:text-[25px]">Community Leaderboards</h2>
-          <p class="mt-2 text-sm leading-6 text-noble-black/70 sm:text-base">
-            Top community members ranked by average star rating from available borrower and lender
-            reviews.
-          </p>
         </div>
-
-        <button
-          v-if="leaderboardError"
-          type="button"
-          class="inline-flex w-fit rounded-2xl border border-burning-orange px-4 py-2 text-sm font-medium text-burning-orange transition-colors hover:bg-burning-orange hover:text-white"
-          @click="refreshLeaderboard()"
-        >
-          Retry
-        </button>
       </div>
 
-      <div class="mt-6 grid gap-6 xl:grid-cols-2">
-        <article class="rounded-2xl border border-cinnamon-ice bg-white p-5">
-          <h3 class="text-lg font-bold text-noble-black">Top Borrowers</h3>
-
-          <div v-if="leaderboardPending && !leaderboardData" class="mt-5 space-y-3">
+      <!-- Sidebar -->
+      <aside class="space-y-6 lg:sticky lg:top-24 self-start">
+        <!-- Checklist Card -->
+        <article class="rounded-[16px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm">
+          <div class="flex items-center gap-2 text-noble-black/80 mb-5">
+            <svg
+              class="text-burning-orange"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="m9 11 3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            <h2 class="text-[14px] font-bold">Your checklist</h2>
+          </div>
+          <div class="space-y-3.5">
             <div
-              v-for="index in 5"
-              :key="`borrowers-skeleton-${index}`"
-              class="h-16 animate-pulse rounded-2xl border border-cinnamon-ice/50 bg-cream"
-            />
-          </div>
-
-          <div
-            v-else-if="leaderboardError"
-            class="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-600"
-          >
-            We couldn't load the borrower rankings right now.
-          </div>
-
-          <div
-            v-else-if="borrowerLeaderboard.length === 0"
-            class="mt-5 text-sm text-noble-black/65"
-          >
-            No rankings yet.
-          </div>
-
-          <div v-else class="mt-5 space-y-3">
-            <div
-              v-for="entry in borrowerLeaderboard"
-              :key="`borrower-${entry.user.id}`"
-              class="flex items-center gap-4 rounded-2xl border border-cinnamon-ice/70 bg-cream px-4 py-3"
+              v-for="item in [
+                'Quick reminders before you post.',
+                'Mention communication and timing.',
+                'Describe condition accurately.',
+                'Avoid private info or insults.',
+              ]"
+              :key="item"
+              class="flex items-start gap-3"
             >
               <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-burning-orange/10 text-sm font-bold text-burning-orange"
+                class="w-4 h-4 rounded-full bg-success-green flex items-center justify-center text-white shrink-0 mt-0.5"
               >
-                #{{ entry.rank }}
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="4"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
               </div>
-
-              <UserAvatar
-                :avatar-url="entry.user.avatarUrl"
-                :user-name="entry.user.name"
-                size="md"
-              />
-
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-semibold text-noble-black sm:text-base">
-                  {{ entry.user.name }}
-                </p>
-                <p class="mt-1 text-xs text-noble-black/60 sm:text-sm">
-                  {{ formatReviewCount(entry.reviewCount) }}
-                </p>
-              </div>
-
-              <div class="text-right">
-                <p class="text-sm font-bold text-burning-orange sm:text-base">
-                  {{ entry.averageRating.toFixed(1) }} ★
-                </p>
-              </div>
+              <p class="text-[13px] font-medium text-noble-black/50 leading-tight">{{ item }}</p>
             </div>
           </div>
         </article>
 
-        <article class="rounded-2xl border border-cinnamon-ice bg-white p-5">
-          <h3 class="text-lg font-bold text-noble-black">Top Lenders</h3>
+        <!-- Tip Box -->
+        <div
+          class="rounded-[12px] border border-blue-estate/20 bg-blue-estate/[0.04] p-4 flex gap-3"
+        >
+          <svg
+            class="text-blue-estate shrink-0 mt-0.5"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path
+              d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+            />
+            <path d="M9 18h6" />
+            <path d="M10 22h4" />
+          </svg>
+          <p class="text-[13px] leading-relaxed text-noble-black/60">
+            <span class="text-[12px] font-black uppercase text-blue-estate mr-1">Tip</span>
+            Save a draft if you’re busy, then come back when you’re ready to submit.
+          </p>
+        </div>
 
-          <div v-if="leaderboardPending && !leaderboardData" class="mt-5 space-y-3">
+        <button
+          type="button"
+          class="w-full h-11 rounded-[12px] border-[1.5px] border-burning-orange text-burning-orange font-bold text-[14px] transition-all hover:bg-burning-orange/5 active:scale-95"
+          @click="activeTab = 'DRAFTS'"
+        >
+          View Drafts
+        </button>
+      </aside>
+    </div>
+
+    <!-- Leaderboards -->
+    <section class="mt-16 pt-12 border-t border-cinnamon-ice/20 space-y-8">
+      <div class="border-l-[3px] border-burning-orange pl-4">
+        <h2 class="text-[20px] font-bold text-noble-black">Community Leaderboards</h2>
+        <p class="text-[13px] font-medium text-noble-black/40">
+          Top community members ranked by their engagement and quality reviews.
+        </p>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Borrowers Leaderboard -->
+        <article class="rounded-[20px] border border-cinnamon-ice/30 bg-white p-6 shadow-sm">
+          <h3 class="text-[15px] font-bold mb-6 text-noble-black">Top Borrowers</h3>
+
+          <div v-if="leaderboardPending && !leaderboardData" class="space-y-4">
             <div
-              v-for="index in 5"
-              :key="`lenders-skeleton-${index}`"
-              class="h-16 animate-pulse rounded-2xl border border-cinnamon-ice/50 bg-cream"
+              v-for="i in 5"
+              :key="i"
+              class="h-14 animate-pulse rounded-xl bg-noble-black/[0.02]"
             />
           </div>
-
-          <div
-            v-else-if="leaderboardError"
-            class="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-600"
-          >
-            We couldn't load the lender rankings right now.
-          </div>
-
-          <div v-else-if="lenderLeaderboard.length === 0" class="mt-5 text-sm text-noble-black/65">
-            No rankings yet.
-          </div>
-
-          <div v-else class="mt-5 space-y-3">
+          <div v-else class="space-y-0.5">
             <div
-              v-for="entry in lenderLeaderboard"
-              :key="`lender-${entry.user.id}`"
-              class="flex items-center gap-4 rounded-2xl border border-cinnamon-ice/70 bg-cream px-4 py-3"
+              v-for="entry in borrowerLeaderboard"
+              :key="entry.user.id"
+              class="relative flex items-center gap-4 py-3.5 px-3 -mx-3 transition-all rounded-[14px]"
+              :class="[
+                entry.user.id === user?.id
+                  ? 'bg-burning-orange/[0.04] border border-burning-orange/20 ring-1 ring-burning-orange/5'
+                  : 'border-b border-noble-black/[0.03] last:border-0',
+                entry.rank === 1 ? 'bg-gradient-to-r from-amber-50/40 to-transparent' : '',
+                entry.rank === 2 ? 'bg-noble-black/[0.01]' : '',
+                entry.rank === 3 ? 'bg-orange-50/10' : '',
+              ]"
             >
-              <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-estate/10 text-sm font-bold text-blue-estate"
+              <span
+                class="w-8 text-[22px] font-black leading-none"
+                :class="
+                  entry.rank === 1
+                    ? 'text-amber-200'
+                    : entry.rank === 2
+                      ? 'text-noble-black/10'
+                      : entry.rank === 3
+                        ? 'text-orange-200'
+                        : 'text-noble-black/5'
+                "
+                >#{{ entry.rank }}</span
               >
-                #{{ entry.rank }}
-              </div>
-
               <UserAvatar
                 :avatar-url="entry.user.avatarUrl"
                 :user-name="entry.user.name"
-                size="md"
+                size="sm"
               />
-
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-semibold text-noble-black sm:text-base">
-                  {{ entry.user.name }}
-                </p>
-                <p class="mt-1 text-xs text-noble-black/60 sm:text-sm">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="text-[14px] font-bold text-noble-black truncate">
+                    {{ entry.user.name }}
+                  </p>
+                  <span
+                    v-if="entry.user.id === user?.id"
+                    class="px-1.5 py-0.5 rounded bg-burning-orange text-white text-[9px] font-black uppercase tracking-tighter"
+                    >You</span
+                  >
+                </div>
+                <p class="text-[11px] font-medium text-noble-black/30 uppercase tracking-widest">
                   {{ formatReviewCount(entry.reviewCount) }}
                 </p>
               </div>
-
-              <div class="text-right">
-                <p class="text-sm font-bold text-burning-orange sm:text-base">
-                  {{ entry.averageRating.toFixed(1) }} ★
-                </p>
+              <div class="flex items-center gap-1 font-bold text-[14px]">
+                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
+                <svg
+                  :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                  />
+                </svg>
               </div>
             </div>
+            <!-- Ghost Rows -->
+            <template v-if="borrowerLeaderboard.length < 5">
+              <div
+                v-for="i in 5 - borrowerLeaderboard.length"
+                :key="`ghost-borrower-${i}`"
+                class="flex items-center gap-4 py-3.5 px-3 -mx-3 opacity-[0.35]"
+              >
+                <div class="w-8 h-5 bg-noble-black/10 rounded-md"></div>
+                <div class="w-9 h-9 rounded-full bg-noble-black/10"></div>
+                <div class="flex-1 space-y-2">
+                  <div class="w-20 h-2.5 bg-noble-black/10 rounded-full"></div>
+                  <div class="w-12 h-1.5 bg-noble-black/10 rounded-full"></div>
+                </div>
+                <div class="text-[14px] font-bold text-noble-black/10">--</div>
+              </div>
+            </template>
+          </div>
+        </article>
+
+        <!-- Lenders Leaderboard -->
+        <article class="rounded-[20px] border border-cinnamon-ice/30 bg-white p-6 shadow-sm">
+          <h3 class="text-[15px] font-bold mb-6 text-noble-black">Top Lenders</h3>
+
+          <div v-if="leaderboardPending && !leaderboardData" class="space-y-4">
+            <div
+              v-for="i in 5"
+              :key="i"
+              class="h-14 animate-pulse rounded-xl bg-noble-black/[0.02]"
+            />
+          </div>
+          <div v-else class="space-y-0.5">
+            <div
+              v-for="entry in lenderLeaderboard"
+              :key="entry.user.id"
+              class="relative flex items-center gap-4 py-3.5 px-3 -mx-3 transition-all rounded-[14px]"
+              :class="[
+                entry.user.id === user?.id
+                  ? 'bg-burning-orange/[0.04] border border-burning-orange/20 ring-1 ring-burning-orange/5'
+                  : 'border-b border-noble-black/[0.03] last:border-0',
+                entry.rank === 1 ? 'bg-gradient-to-r from-amber-50/40 to-transparent' : '',
+                entry.rank === 2 ? 'bg-noble-black/[0.01]' : '',
+                entry.rank === 3 ? 'bg-orange-50/10' : '',
+              ]"
+            >
+              <span
+                class="w-8 text-[22px] font-black leading-none"
+                :class="
+                  entry.rank === 1
+                    ? 'text-amber-200'
+                    : entry.rank === 2
+                      ? 'text-noble-black/10'
+                      : entry.rank === 3
+                        ? 'text-orange-200'
+                        : 'text-noble-black/5'
+                "
+                >#{{ entry.rank }}</span
+              >
+              <UserAvatar
+                :avatar-url="entry.user.avatarUrl"
+                :user-name="entry.user.name"
+                size="sm"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="text-[14px] font-bold text-noble-black truncate">
+                    {{ entry.user.name }}
+                  </p>
+                  <span
+                    v-if="entry.user.id === user?.id"
+                    class="px-1.5 py-0.5 rounded bg-burning-orange text-white text-[9px] font-black uppercase tracking-tighter"
+                    >You</span
+                  >
+                </div>
+                <p class="text-[11px] font-medium text-noble-black/30 uppercase tracking-widest">
+                  {{ formatReviewCount(entry.reviewCount) }}
+                </p>
+              </div>
+              <div class="flex items-center gap-1 font-bold text-[14px]">
+                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
+                <svg
+                  :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                  />
+                </svg>
+              </div>
+            </div>
+            <!-- Ghost Rows -->
+            <template v-if="lenderLeaderboard.length < 5">
+              <div
+                v-for="i in 5 - lenderLeaderboard.length"
+                :key="`ghost-lender-${i}`"
+                class="flex items-center gap-4 py-3.5 px-3 -mx-3 opacity-[0.35]"
+              >
+                <div class="w-8 h-5 bg-noble-black/10 rounded-md"></div>
+                <div class="w-9 h-9 rounded-full bg-noble-black/10"></div>
+                <div class="flex-1 space-y-2">
+                  <div class="w-20 h-2.5 bg-noble-black/10 rounded-full"></div>
+                  <div class="w-12 h-1.5 bg-noble-black/10 rounded-full"></div>
+                </div>
+                <div class="text-[14px] font-bold text-noble-black/10">--</div>
+              </div>
+            </template>
           </div>
         </article>
       </div>
@@ -948,3 +1058,19 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+</style>

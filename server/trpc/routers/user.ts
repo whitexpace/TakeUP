@@ -66,6 +66,27 @@ export const userRouter = router({
               _count: {
                 select: { listedItem: true },
               },
+              listedItem: {
+                where: { status: "AVAILABLE" },
+                select: {
+                  id: true,
+                  name: true,
+                  status: true,
+                  rentalFee: true,
+                  freeToBorrow: true,
+                  rateOption: true,
+                  rating: true,
+                  bookingCount: true,
+                  images: {
+                    where: { isPrimary: true },
+                    take: 1,
+                  },
+                  categories: {
+                    select: { category: true },
+                    take: 1,
+                  },
+                },
+              },
             },
           },
           borrower: {
@@ -73,6 +94,25 @@ export const userRouter = router({
               borrowerRating: true,
               _count: {
                 select: { bookings: true },
+              },
+            },
+          },
+          transactionReviewsReviewee: {
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              rating: true,
+              reviewText: true,
+              createdAt: true,
+              isAnonymous: true,
+              reviewType: true,
+              reviewerUser: {
+                select: {
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  avatarUrl: true,
+                },
               },
             },
           },
@@ -92,8 +132,48 @@ export const userRouter = router({
       })
 
       return {
-        ...user,
-        name,
+        user: {
+          id: user.id,
+          username: user.username,
+          name,
+          avatarUrl: user.avatarUrl,
+          createdAt: user.createdAt,
+          bio: user.bio,
+          pronouns: user.pronouns,
+          location: user.location,
+          rating: user.lender?.lenderRating ?? 0,
+          borrowerRating: user.borrower?.borrowerRating ?? 0,
+          itemsSold: user.lender?._count.listedItem ?? 0, // Simplified mapping
+          activeListings: user.lender?._count.listedItem ?? 0,
+        },
+        reviews: user.transactionReviewsReviewee.map((r) => ({
+          id: r.id,
+          rating: r.rating,
+          text: r.reviewText,
+          createdAt: r.createdAt,
+          isAnonymous: r.isAnonymous,
+          reviewType: r.reviewType,
+          reviewer: {
+            username: r.reviewerUser.username,
+            name: formatName(r.reviewerUser),
+            avatarUrl: r.reviewerUser.avatarUrl,
+          },
+        })),
+        items: (user.lender?.listedItem ?? []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          status: item.status,
+          rentalFee: Number(item.rentalFee),
+          freeToBorrow: item.freeToBorrow,
+          rateOption: item.rateOption,
+          rating: item.rating,
+          bookingCount: item.bookingCount,
+          ownerName: name,
+          lenderUsername: user.username,
+          category: item.categories[0]?.category ?? "OTHER",
+          image: item.images[0]?.path ?? null,
+          isLiked: false, // Default for public view
+        })),
       }
     }),
 

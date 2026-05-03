@@ -117,7 +117,9 @@ const handleOpenChat = async () => {
     class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 cursor-pointer group/card"
   >
     <!-- Top Zone: Slim Header -->
-    <div class="flex items-center justify-between px-5 py-3 border-b border-[#F3F0EB] bg-white/50">
+    <div
+      class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
+    >
       <div class="flex items-center gap-3">
         <span class="text-noble-black text-[14px] font-semibold">
           {{ counterpartName }}
@@ -185,7 +187,7 @@ const handleOpenChat = async () => {
         <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
           {{ transaction.item.name }}
         </h4>
-        <div class="flex items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none">
+        <div class="flex items-center gap-1.5 text-[10px] text-gray-400 font-medium leading-none">
           <span class="font-mono tracking-wider">{{
             transaction.id.slice(0, 12).toUpperCase()
           }}</span>
@@ -216,9 +218,7 @@ const handleOpenChat = async () => {
         <div class="flex flex-col items-end">
           <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
           <div class="flex items-baseline gap-1.5">
-            <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider"
-              >Total:</span
-            >
+            <span class="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Total:</span>
             <span class="text-[16px] font-bold text-burning-orange leading-none">{{
               totalLabel
             }}</span>

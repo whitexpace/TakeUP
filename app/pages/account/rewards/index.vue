@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatBoostDateTime, getRemainingBoostTime } from "../../../utils/rewards"
+import { getRemainingBoostTime } from "../../../utils/rewards"
 
 definePageMeta({
   layout: "account",
@@ -32,12 +32,9 @@ const showRewardPopup = ref(false)
 let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
 const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
 
-const {
-  data: summary,
-  pending: summaryPending,
-  error: summaryError,
-  refresh: refreshSummary,
-} = await useAsyncData("rewards:summary", () => $fetch<RewardsSummary>("/api/rewards"))
+const { data: summary } = await useAsyncData("rewards:summary", () =>
+  $fetch<RewardsSummary>("/api/rewards"),
+)
 
 const {
   data: activeBoostsResponse,
@@ -53,14 +50,63 @@ const activeBoosts = computed(() =>
     .map((boost) => {
       const timing = getRemainingBoostTime(boost.boostExpiresAt, new Date(now.value))
 
+      // Calculate percentage for progress bar (remaining / 24 hours)
+      const expiration = new Date(boost.boostExpiresAt).getTime()
+      const start = new Date(boost.boostStartedAt).getTime()
+      const totalDuration = expiration - start
+      const remaining = Math.max(0, expiration - now.value)
+      const progress = Math.min(100, (remaining / totalDuration) * 100)
+
       return {
         ...boost,
         remainingLabel: boost.remainingTime?.trim() || timing.label,
         isExpired: boost.boostStatus !== "ACTIVE" || timing.expired,
+        progress,
       }
     })
     .filter((boost) => !boost.isExpired),
 )
+
+// Progress toward next milestone (arbitrary 1000 pts milestone for the ring demo)
+const NEXT_MILESTONE = 1000
+const milestoneProgress = computed(() => {
+  const current = summary.value?.availablePoints ?? 0
+  return Math.min(100, (current / NEXT_MILESTONE) * 100)
+})
+
+const earnActions = [
+  {
+    id: "borrow",
+    title: "Borrow Items",
+    desc: "Complete borrowing activity to steadily build points.",
+    pts: "+10 pts",
+    link: "/dashboard",
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16h6"/><path d="M19 13v6"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/><path d="m7.5 4.27 9 5.15"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+  },
+  {
+    id: "review",
+    title: "Review Transactions",
+    desc: "Leave timely reviews after completed transactions.",
+    pts: "+5 pts",
+    link: "/account/transactions",
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+  },
+]
+
+const redemptions = [
+  {
+    title: "5% Discount Coupon",
+    cost: 200,
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V5.2a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2V9a2 2 0 0 0 0 6v3.8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V15a2 2 0 0 0 0-6Z"/><path d="M15 3v18"/><path d="m8 10 2 2-2 2"/></svg>',
+  },
+  {
+    title: "₱50 Wallet Credit",
+    cost: 600,
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4Z"/></svg>',
+  },
+]
+
+const canAfford = (cost: number) => (summary.value?.availablePoints ?? 0) >= cost
 
 const triggerRewardPopup = () => {
   if (rewardPopupTimeout) {
@@ -95,328 +141,416 @@ onBeforeUnmount(() => {
     clearTimeout(rewardPopupTimeout)
   }
 })
+
+const formatDateTime = (value: string | Date) => {
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })
+}
 </script>
 
 <template>
-  <div class="space-y-6 font-geist">
-    <section class="space-y-6">
-      <div>
-        <h1 class="text-[25px] font-bold text-neutral-800">My Rewards</h1>
-        <p class="mt-2 text-[18px] text-neutral-800/80">
+  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+    <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
+      <section class="space-y-3">
+        <div class="flex items-center gap-4">
+          <div class="space-y-2">
+            <h1 class="text-[28px] font-semibold text-noble-black leading-tight">My Rewards</h1>
+            <div class="w-10 h-0.5 bg-burning-orange"></div>
+          </div>
+          <div
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-burning-orange/5 border border-burning-orange/20 mt-1"
+          >
+            <span class="text-[13px] font-bold text-burning-orange tracking-tight"
+              >{{ (summary?.availablePoints ?? 0).toLocaleString() }} pts</span
+            >
+          </div>
+        </div>
+        <p class="text-[16px] font-medium text-noble-black/50">
           Quality reviews earn you reward points you can redeem for perks.
         </p>
-      </div>
+      </section>
+    </header>
 
+    <!-- Points Hero Banner (Cream Style) -->
+    <section
+      class="relative w-full overflow-hidden rounded-[32px] border border-cinnamon-ice/20 bg-cream p-8 sm:p-12 mb-12 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
+    >
+      <!-- Radial Glow Decoration -->
       <div
-        class="rounded-[24px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)] sm:p-7"
-      >
-        <div
-          v-if="summaryPending && !summary"
-          class="h-40 animate-pulse rounded-[18px] border border-cinnamon-ice/70 bg-white"
-        />
+        class="absolute -top-24 -right-24 w-64 h-64 bg-burning-orange/5 blur-[80px] rounded-full"
+      ></div>
 
-        <div v-else-if="summaryError" class="rounded-[18px] border border-red-200 bg-white p-5">
-          <p class="text-base font-semibold text-neutral-800">Unable to load your points.</p>
-          <p class="mt-2 text-sm text-neutral-800/60">
-            Try again to view your current rewards balance.
+      <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-10">
+        <div class="text-center sm:text-left">
+          <p class="text-[12px] font-black uppercase tracking-[0.2em] text-noble-black/40 mb-2">
+            Your Points Balance
           </p>
+          <div class="flex items-baseline justify-center sm:justify-start gap-4">
+            <h2
+              class="text-[64px] sm:text-[72px] font-black text-blue-estate leading-none tracking-tighter"
+            >
+              {{ (summary?.availablePoints ?? 0).toLocaleString() }}
+            </h2>
+          </div>
+          <p class="text-[14px] font-semibold text-noble-black/50 mt-2">
+            points available to spend
+          </p>
+        </div>
+
+        <!-- Progress Ring -->
+        <div class="relative flex items-center justify-center">
+          <svg class="w-32 h-32 transform -rotate-90">
+            <circle
+              cx="64"
+              cy="64"
+              r="58"
+              stroke="currentColor"
+              stroke-width="8"
+              fill="transparent"
+              class="text-noble-black/5"
+            />
+            <circle
+              cx="64"
+              cy="64"
+              r="58"
+              stroke="currentColor"
+              stroke-width="8"
+              fill="transparent"
+              stroke-dasharray="364.4"
+              :stroke-dashoffset="364.4 - (364.4 * milestoneProgress) / 100"
+              stroke-linecap="round"
+              class="text-burning-orange transition-all duration-1000 ease-out"
+            />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <p class="text-[10px] font-black uppercase tracking-widest text-noble-black/30 mb-0.5">
+              Next Goal
+            </p>
+            <p class="text-[15px] font-bold text-noble-black">{{ NEXT_MILESTONE }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="space-y-10">
+      <!-- Section 1: How to Earn -->
+      <section
+        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+      >
+        <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
+          <h2 class="text-[20px] font-bold text-noble-black">How to Earn</h2>
+          <p class="text-[13px] font-medium text-noble-black/50">
+            Ways to build your points balance
+          </p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <NuxtLink
+            v-for="action in earnActions"
+            :key="action.id"
+            :to="action.link"
+            class="group flex flex-col gap-5 rounded-[20px] border border-cinnamon-ice/20 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-noble-black/5 hover:border-burning-orange/20"
+          >
+            <div class="flex items-center justify-between">
+              <div
+                class="w-10 h-10 rounded-full bg-burning-orange/[0.05] flex items-center justify-center text-burning-orange group-hover:bg-burning-orange group-hover:text-white transition-colors duration-300"
+                v-html="action.icon"
+              ></div>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                class="text-noble-black/20 group-hover:text-burning-orange group-hover:translate-x-1 transition-all"
+              >
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-[15px] font-bold text-noble-black mb-1">{{ action.title }}</h3>
+              <p class="text-[13px] font-medium text-noble-black/40 leading-relaxed">
+                {{ action.desc }}
+              </p>
+            </div>
+            <div class="mt-auto">
+              <span
+                class="inline-flex items-center px-3 py-1 rounded-full bg-burning-orange/5 text-burning-orange text-[12px] font-bold border border-burning-orange/10"
+              >
+                {{ action.pts }}
+              </span>
+            </div>
+          </NuxtLink>
+        </div>
+      </section>
+
+      <!-- Section 2: Spend Your Points -->
+      <section
+        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+      >
+        <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
+          <h2 class="text-[20px] font-bold text-noble-black">Spend Your Points</h2>
+          <p class="text-[13px] font-medium text-noble-black/50">
+            Redeem your points for exclusive perks or listing visibility
+          </p>
+        </div>
+
+        <div class="grid gap-6 xl:grid-cols-2 items-stretch">
+          <!-- Redeem Perks -->
+          <div class="flex flex-col">
+            <div
+              class="space-y-0 border border-cinnamon-ice/20 bg-white rounded-[20px] overflow-hidden h-full"
+            >
+              <div v-for="(reward, idx) in redemptions" :key="reward.title">
+                <div class="flex items-center justify-between p-5">
+                  <div class="flex items-center gap-4">
+                    <div
+                      class="w-11 h-11 rounded-[12px] bg-noble-black/5 flex items-center justify-center text-blue-estate"
+                      v-html="reward.icon"
+                    ></div>
+                    <div>
+                      <p class="text-[14px] font-bold text-noble-black leading-tight">
+                        {{ reward.title }}
+                      </p>
+                      <p class="text-[12px] font-bold text-burning-orange mt-1">
+                        {{ reward.cost }} pts
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="h-8 px-5 rounded-full text-[13px] font-bold transition-all"
+                    :class="
+                      canAfford(reward.cost)
+                        ? 'bg-burning-orange text-white hover:brightness-110 active:scale-95'
+                        : 'bg-noble-black/5 text-noble-black/30 cursor-not-allowed flex items-center gap-1.5'
+                    "
+                    :disabled="!canAfford(reward.cost)"
+                  >
+                    <svg
+                      v-if="!canAfford(reward.cost)"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    {{ canAfford(reward.cost) ? "Claim" : "Locked" }}
+                  </button>
+                </div>
+                <div
+                  v-if="idx !== redemptions.length - 1"
+                  class="h-[1px] bg-noble-black/5 mx-5"
+                ></div>
+              </div>
+              <div class="mt-auto bg-noble-black/[0.02] px-5 py-3 border-t border-noble-black/5">
+                <p
+                  class="text-[11px] font-bold text-noble-black/30 uppercase tracking-widest text-center"
+                >
+                  Available balance: {{ summary?.availablePoints ?? 0 }} pts
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Boost Now -->
+          <div
+            class="rounded-[20px] border border-cinnamon-ice/20 bg-white p-6 flex flex-col shadow-sm"
+          >
+            <h3 class="text-[16px] font-bold text-noble-black mb-1">Boost a Listing</h3>
+            <p class="text-[13px] font-medium text-noble-black/40 mb-6">
+              Increase visibility for 24 hours.
+            </p>
+
+            <div class="grid grid-cols-2 gap-3 mb-8">
+              <div class="bg-cream rounded-[12px] p-4 border border-cinnamon-ice/10 shadow-sm">
+                <p class="text-[11px] font-bold uppercase tracking-widest text-noble-black/40 mb-1">
+                  Cost
+                </p>
+                <p class="text-[16px] font-black text-burning-orange">
+                  {{ BOOST_CONFIG.pointsCost }} pts
+                </p>
+              </div>
+              <div class="bg-cream rounded-[12px] p-4 border border-cinnamon-ice/10 shadow-sm">
+                <p class="text-[11px] font-bold uppercase tracking-widest text-noble-black/40 mb-1">
+                  Time
+                </p>
+                <p class="text-[16px] font-black text-noble-black">
+                  {{ BOOST_CONFIG.durationHours }}h
+                </p>
+              </div>
+            </div>
+
+            <NuxtLink
+              :to="{ path: '/account/listings', query: { boost: 'true' } }"
+              class="mt-auto h-11 inline-flex items-center justify-center rounded-[12px] bg-burning-orange px-8 text-[15px] font-extrabold text-white shadow-lg shadow-burning-orange/20 transition-all hover:scale-[1.02] active:scale-95"
+            >
+              Boost Now!
+            </NuxtLink>
+            <p class="text-[11px] font-medium text-noble-black/30 mt-4 text-center">
+              Appears at the top of search results
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Active Boosts -->
+      <section
+        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+      >
+        <div class="flex items-center justify-between mb-8">
+          <div class="border-l-[3px] border-burning-orange pl-4">
+            <h2 class="text-[20px] font-bold text-noble-black">Active Boosts</h2>
+            <p class="text-[13px] font-medium text-noble-black/50">Currently promoted listings</p>
+          </div>
+
           <button
+            v-if="boostsError"
             type="button"
-            class="mt-4 inline-flex rounded-[10px] bg-burning-orange px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-burning-orange/90"
-            @click="refreshSummary()"
+            class="inline-flex h-8 items-center px-4 rounded-full border border-burning-orange text-[12px] font-bold text-burning-orange transition-all hover:bg-burning-orange hover:text-white"
+            @click="refreshBoosts()"
           >
             Retry
           </button>
         </div>
 
-        <div v-else class="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:items-center">
-          <div class="flex justify-center lg:justify-end">
-            <div class="flex items-center pl-4 pr-1 lg:pl-14 lg:pr-0">
-              <div class="min-w-[170px] text-center lg:min-w-[210px]">
-                <p class="text-[32px] font-extrabold leading-none text-burning-orange">
-                  {{ (summary?.availablePoints ?? 0).toLocaleString("en-US") }}
-                </p>
-                <p class="mt-2 text-[30px] font-medium leading-none text-neutral-800/80">Points</p>
-              </div>
-              <div class="ml-6 hidden h-36 w-px bg-[#D6D6D6] lg:block" />
-            </div>
-          </div>
-
-          <div>
-            <p class="mb-3 text-[20px] font-bold text-neutral-800">Earn More!</p>
-            <div class="space-y-3">
-              <NuxtLink
-                to="/dashboard"
-                class="flex items-center justify-between gap-4 rounded-[18px] border border-cinnamon-ice/70 bg-white px-5 py-4 transition-colors hover:border-burning-orange/35 hover:bg-burning-orange/[0.03]"
-              >
-                <div>
-                  <p class="text-2xl font-extrabold text-burning-orange sm:text-[28px]">
-                    Borrow Items
-                  </p>
-                  <p class="mt-1 text-sm leading-6 text-neutral-800/60 sm:text-[15px]">
-                    Complete borrowing activity to steadily build points for future boosts.
-                  </p>
-                </div>
-                <span
-                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-burning-orange/10 text-[28px] font-medium leading-none text-[#FF9124]"
-                  >→</span
-                >
-              </NuxtLink>
-
-              <NuxtLink
-                to="/account/transactions"
-                class="flex items-center justify-between gap-4 rounded-[18px] border border-cinnamon-ice/70 bg-white px-5 py-4 transition-colors hover:border-burning-orange/35 hover:bg-burning-orange/[0.03]"
-              >
-                <div>
-                  <p class="text-2xl font-extrabold text-burning-orange sm:text-[28px]">
-                    Review Transactions
-                  </p>
-                  <p class="mt-1 text-sm leading-6 text-neutral-800/60 sm:text-[15px]">
-                    Leave timely reviews after completed transactions to earn extra points.
-                  </p>
-                </div>
-                <span
-                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-burning-orange/10 text-[28px] font-medium leading-none text-[#FF9124]"
-                  >→</span
-                >
-              </NuxtLink>
-            </div>
-          </div>
+        <!-- Loading -->
+        <div v-if="boostsPending && !activeBoostsResponse" class="grid gap-4 sm:grid-cols-2">
+          <div
+            v-for="i in 2"
+            :key="i"
+            class="h-24 animate-pulse rounded-[20px] bg-cream border border-cinnamon-ice/10"
+          />
         </div>
-      </div>
 
-      <div class="grid gap-6 xl:grid-cols-2">
-        <article
-          class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)]"
+        <!-- Empty State -->
+        <div
+          v-else-if="activeBoosts.length === 0"
+          class="flex flex-col items-center justify-center py-12 rounded-[24px] border border-dashed border-cinnamon-ice/30 bg-white"
         >
-          <h2 class="text-[20px] font-bold text-neutral-800">Redeem Points for Rewards!</h2>
-          <p class="mt-2 text-sm leading-6 text-neutral-800/65 sm:text-[15px]">
-            Keep these as lightweight preview rewards for now while the full redemption flow is
-            still being built.
-          </p>
-
-          <div class="mt-5 grid gap-4 sm:grid-cols-2">
-            <div
-              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
+          <div
+            class="w-14 h-14 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/10 mb-4"
+          >
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
-              <div class="flex min-h-[72px] items-center justify-center text-blue-estate">
-                <svg
-                  width="36"
-                  height="36"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M7 4h10a2 2 0 012 2v2H5V6a2 2 0 012-2z" />
-                  <path d="M5 8h14v4a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" />
-                  <path d="M8 14h8v4a2 2 0 01-2 2h-4a2 2 0 01-2-2v-4z" />
-                </svg>
-              </div>
-              <p class="mt-1 text-[13px] font-semibold text-neutral-800">5% Discount Coupon</p>
-              <p class="mt-1 text-[15px] font-semibold text-burning-orange">200 pts</p>
-              <button
-                type="button"
-                class="mt-4 inline-flex w-full items-center justify-center rounded-[10px] bg-burning-orange px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-burning-orange/90"
-              >
-                Claim
-              </button>
-            </div>
-
-            <div
-              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
-            >
-              <div class="flex min-h-[72px] items-center justify-center text-blue-estate">
-                <svg
-                  width="36"
-                  height="36"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 3v18" />
-                  <path d="M17 7c0-2-1.8-3-4-3H9v8h5c2.2 0 4 1 4 3s-1.8 3-4 3H7" />
-                </svg>
-              </div>
-              <p class="mt-1 text-[13px] font-semibold text-neutral-800">₱50 Wallet Credit</p>
-              <p class="mt-1 text-[15px] font-semibold text-burning-orange">600 pts</p>
-              <button
-                type="button"
-                class="mt-4 inline-flex w-full items-center justify-center rounded-[10px] bg-burning-orange px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-burning-orange/90"
-              >
-                Claim
-              </button>
-            </div>
+              <path
+                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+              />
+              <path
+                d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 22 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22 0 0 1-4 2z"
+              />
+              <path d="M9 12H4s.5-1 1-4c2 1 3 2 4 4z" />
+              <path d="M12 15v5s1-.5 4-1c-2-1-3-2-4-4z" />
+            </svg>
           </div>
-        </article>
-
-        <article
-          class="rounded-[20px] border border-cinnamon-ice bg-cream p-5 shadow-[0_10px_30px_rgba(39,45,78,0.06)]"
-        >
-          <h2 class="text-[20px] font-bold text-neutral-800">Boost your Listing!</h2>
-          <p class="mt-2 max-w-[344px] text-[18px] leading-7 text-neutral-800/80">
-            Boost an item listing to increase its visibility!
+          <p class="text-[15px] font-bold text-noble-black/40">No active boosts</p>
+          <p
+            class="text-[13px] font-medium text-noble-black/40 mt-1 mb-6 text-center max-w-[280px]"
+          >
+            Spend 50 points to boost a listing and increase its visibility.
           </p>
-
-          <div class="mt-5 grid gap-4 sm:grid-cols-2">
-            <div
-              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
-            >
-              <p class="text-[15px] font-bold text-neutral-800">Point Cost</p>
-              <p class="mt-1 text-[20px] font-semibold text-burning-orange">
-                {{ BOOST_CONFIG.pointsCost }} pts
-              </p>
-            </div>
-
-            <div
-              class="rounded-[18px] border border-cinnamon-ice/70 bg-white p-4 shadow-[0_6px_18px_rgba(39,45,78,0.04)]"
-            >
-              <p class="text-[15px] font-bold text-neutral-800">Duration</p>
-              <p class="mt-1 text-[20px] font-semibold text-neutral-800">
-                {{ BOOST_CONFIG.durationHours }} hours
-              </p>
-            </div>
-          </div>
-
           <NuxtLink
-            :to="{ path: '/account/listings', query: { boost: 'true' } }"
-            class="mt-5 inline-flex w-full items-center justify-center rounded-[10px] bg-burning-orange px-5 py-3 text-[28px] font-bold leading-none text-white transition-colors hover:bg-burning-orange/90"
+            to="/account/listings"
+            class="text-[14px] font-bold text-burning-orange hover:translate-x-1 transition-transform inline-flex items-center gap-1.5"
           >
-            Boost Now!
+            Boost a Listing →
           </NuxtLink>
-        </article>
-      </div>
-    </section>
-
-    <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-5 sm:p-6">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 class="text-lg font-semibold text-neutral-800 sm:text-xl">Active Boosted Listings</h2>
-          <p class="mt-1 text-sm leading-6 text-neutral-800/65 sm:text-base">
-            Track which listings are currently boosted and how long they have before returning to
-            normal priority.
-          </p>
         </div>
 
-        <button
-          v-if="boostsError"
-          type="button"
-          class="inline-flex w-fit rounded-full border border-burning-orange px-4 py-2 text-sm font-medium text-burning-orange transition-colors hover:bg-burning-orange hover:text-white"
-          @click="refreshBoosts()"
-        >
-          Retry
-        </button>
-      </div>
-
-      <div v-if="boostsPending && !activeBoostsResponse" class="mt-5 grid gap-4 lg:grid-cols-2">
-        <div
-          v-for="index in 2"
-          :key="index"
-          class="h-40 animate-pulse rounded-[22px] border border-cinnamon-ice/70 bg-white"
-        />
-      </div>
-
-      <div
-        v-else-if="boostsError"
-        class="mt-5 rounded-[22px] border border-red-200 bg-white p-5 text-sm text-neutral-800/70"
-      >
-        We couldn't load your active boosts right now. Your points and listings are still safe.
-      </div>
-
-      <div
-        v-else-if="activeBoosts.length === 0"
-        class="mt-5 rounded-[22px] border border-dashed border-cinnamon-ice/80 bg-white px-5 py-10 text-center sm:px-8"
-      >
-        <div
-          class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-burning-orange/10 text-burning-orange"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        <!-- Boost List -->
+        <div v-else class="grid gap-4 sm:grid-cols-2">
+          <article
+            v-for="boost in activeBoosts"
+            :key="boost.id"
+            class="group relative overflow-hidden rounded-[20px] border border-cinnamon-ice/20 bg-white p-4 shadow-sm transition-all hover:shadow-md hover:border-burning-orange/20"
           >
-            <path
-              d="M12 3l2.6 5.26L20 9.27l-4 3.9.94 5.45L12 15.9l-4.94 2.72L8 13.17l-4-3.9 5.4-1.01L12 3z"
-            />
-          </svg>
-        </div>
-        <h3 class="mt-4 text-lg font-semibold text-neutral-800">No active boosted listings</h3>
-        <p class="mt-2 text-sm leading-6 text-neutral-800/60 sm:text-base">
-          Use your points to boost one of your listings and increase its visibility.
-        </p>
-        <NuxtLink
-          :to="{ path: '/account/listings', query: { boost: 'true' } }"
-          class="mt-5 inline-flex rounded-full bg-burning-orange px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-burning-orange/90"
-        >
-          Go to My Listings
-        </NuxtLink>
-      </div>
-
-      <div v-else class="mt-5 grid gap-4 lg:grid-cols-2">
-        <article
-          v-for="boost in activeBoosts"
-          :key="boost.id"
-          class="overflow-hidden rounded-[22px] border border-cinnamon-ice/70 bg-white"
-        >
-          <div class="flex flex-col sm:flex-row">
-            <div class="h-40 bg-cream sm:h-auto sm:w-40 sm:min-w-40">
+            <div class="flex items-start gap-4">
               <img
                 v-if="boost.itemImage"
                 :src="boost.itemImage"
-                :alt="boost.itemName"
-                class="h-full w-full object-cover"
+                class="w-14 h-14 rounded-[10px] object-cover border border-noble-black/5"
               />
               <div
                 v-else
-                class="flex h-full min-h-40 items-center justify-center px-6 text-center text-sm font-medium text-neutral-800/45"
+                class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-[10px] font-bold text-noble-black/20"
               >
-                No image uploaded
+                NO IMG
               </div>
-            </div>
 
-            <div class="flex flex-1 flex-col p-5">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p class="text-lg font-semibold text-neutral-800">{{ boost.itemName }}</p>
-                  <p class="mt-1 text-sm text-emerald-700">Boost Active</p>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <h4 class="text-[14px] font-bold text-noble-black truncate">
+                    {{ boost.itemName }}
+                  </h4>
+                  <div
+                    class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-success-green/[0.08] text-success-green border border-success-green/20"
+                  >
+                    <span class="w-1 h-1 rounded-full bg-success-green animate-pulse"></span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Live</span>
+                  </div>
                 </div>
+                <div class="flex items-center gap-1.5 text-[12px] font-medium text-noble-black/40">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span
+                    >{{ formatDateTime(boost.boostStartedAt) }} →
+                    {{ formatDateTime(boost.boostExpiresAt) }}</span
+                  >
+                </div>
+              </div>
 
-                <div
-                  class="rounded-full bg-burning-orange/10 px-3 py-1 text-sm font-semibold text-burning-orange"
-                >
+              <div class="shrink-0 text-right">
+                <p class="font-mono text-[14px] font-bold text-burning-orange">
                   {{ boost.remainingLabel }}
-                </div>
-              </div>
-
-              <div class="mt-4 grid gap-3 text-sm text-neutral-800/60">
-                <div class="rounded-[18px] bg-cream px-4 py-3">
-                  <p class="font-medium text-neutral-800">Boost window</p>
-                  <p class="mt-1">
-                    {{ formatBoostDateTime(boost.boostStartedAt) }} to
-                    {{ formatBoostDateTime(boost.boostExpiresAt) }}
-                  </p>
-                </div>
-
-                <div class="rounded-[18px] border border-cinnamon-ice/70 px-4 py-3">
-                  This listing will return to normal priority automatically after the timer runs
-                  out.
-                </div>
+                </p>
+                <p
+                  class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 mt-0.5"
+                >
+                  Left
+                </p>
               </div>
             </div>
-          </div>
-        </article>
-      </div>
-    </section>
+
+            <!-- Remaining Time Bar -->
+            <div class="mt-5 h-[4px] w-full rounded-full bg-noble-black/5 overflow-hidden">
+              <div
+                class="h-full bg-burning-orange transition-all duration-1000"
+                :style="{ width: `${boost.progress}%` }"
+              ></div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
 
     <Transition
       enter-active-class="transition duration-500 ease-out"
@@ -438,3 +572,19 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+</style>

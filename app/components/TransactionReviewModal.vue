@@ -690,8 +690,12 @@ const submitReview = async () => {
                   <svg
                     class="w-8 h-8"
                     viewBox="0 0 24 24"
-                    :fill="star <= rating ? '#ff7124' : 'none'"
-                    :stroke="star <= rating ? '#ff7124' : '#b9b0a7'"
+                    :fill="star <= rating ? 'theme(\'colors.burning-orange\')' : 'none'"
+                    :stroke="
+                      star <= rating
+                        ? 'theme(\'colors.burning-orange\')'
+                        : 'theme(\'colors.cinnamon-ice\')'
+                    "
                   >
                     <path
                       stroke-linecap="round"

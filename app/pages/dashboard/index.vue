@@ -13,7 +13,7 @@
       <div class="mt-6 sm:mt-8 flex items-center w-full max-w-3xl">
         <!-- Unified Search Container -->
         <div
-          class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-[#E5E7EB] px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
+          class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
         >
           <!-- Search Icon / Clear Button -->
           <div class="flex items-center justify-center w-10 shrink-0">
@@ -105,7 +105,7 @@
                 <span class="font-medium">{{ suggestion.label }}</span>
               </div>
               <span
-                class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-gray-50 px-2 py-0.5 rounded"
+                class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-noble-black/5 px-2 py-0.5 rounded"
                 >{{ suggestion.type }}</span
               >
             </button>

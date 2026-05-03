@@ -10,8 +10,6 @@ const lenderName = computed(() => {
   return `${user.firstName} ${user.lastName[0]}.`
 })
 
-const requestId = computed(() => `REQUEST ID. ${props.request.id.slice(0, 16).toUpperCase()}`)
-
 const detailPath = computed(() => `/account/transactions/${props.request.id}`)
 
 const formatDate = (value: Date | string) =>
@@ -37,81 +35,96 @@ const requestedTimeFrame = computed(() => {
 const statusBadgeClass = computed(() => {
   switch (props.request.requestStatus) {
     case "PENDING":
-      return "bg-amber-100 text-amber-700"
+      return "bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
     case "APPROVED":
-      return "bg-emerald-100 text-emerald-700"
+      return "bg-success-green/[0.08] text-success-green border-success-green/20"
     case "REJECTED":
-      return "bg-rose-100 text-rose-700"
+      return "bg-cinnabar-red/[0.08] text-cinnabar-red border-cinnabar-red/20"
     default:
-      return "bg-cinnamon-ice/60 text-neutral-800"
+      return "bg-gray-100 text-gray-500 border-gray-200"
   }
 })
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-2xl border-[0.50px] border-cinnamon-ice bg-white font-geist">
+  <NuxtLink
+    :to="detailPath"
+    class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 cursor-pointer group/card"
+  >
+    <!-- Top Zone: Slim Header -->
     <div
-      class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-stone-300/50 px-4 py-3 sm:px-6"
+      class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
     >
-      <span class="mr-auto text-base font-bold tracking-wide text-neutral-800/80">
-        {{ lenderName }}
-      </span>
+      <div class="flex items-center gap-3">
+        <span class="text-noble-black text-[14px] font-semibold">
+          {{ lenderName }}
+        </span>
+      </div>
 
+      <!-- Status Badge -->
       <span
-        class="inline-flex items-center rounded-md px-2.5 py-1 text-sm font-normal leading-none sm:px-3 sm:text-base"
+        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border"
         :class="statusBadgeClass"
       >
         {{ request.requestStatusLabel }}
       </span>
     </div>
 
-    <NuxtLink
-      :to="detailPath"
-      class="flex cursor-pointer items-start gap-3 px-4 py-4 transition-colors hover:bg-cream/50 sm:gap-4 sm:px-6"
-    >
-      <img
-        v-if="request.item.thumbnailImage"
-        :src="request.item.thumbnailImage"
-        :alt="request.item.name"
-        class="h-16 w-16 shrink-0 rounded object-cover sm:h-20 sm:w-20"
-      />
-      <div
-        v-else
-        class="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-cinnamon-ice/40 sm:h-20 sm:w-20"
-      >
-        <svg
-          class="h-7 w-7 text-cinnamon-ice sm:h-8 sm:w-8"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+    <!-- Bottom Zone: Item Row -->
+    <div class="p-5 flex items-center gap-4 relative">
+      <!-- Thumbnail -->
+      <div class="relative shrink-0">
+        <img
+          v-if="request.item.thumbnailImage"
+          :src="request.item.thumbnailImage"
+          :alt="request.item.name"
+          class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+        />
+        <div
+          v-else
+          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
-      </div>
-
-      <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-normal text-neutral-800 sm:text-base">
-          {{ request.item.name }}
-        </p>
-        <p class="mt-1 truncate text-xs font-normal text-neutral-800/80">{{ requestId }}</p>
-        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span class="flex items-center gap-1 text-xs text-neutral-800/80">
-            <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="1" />
-              <line x1="16" y1="2" x2="16" y2="6" stroke-width="1" />
-              <line x1="8" y1="2" x2="8" y2="6" stroke-width="1" />
-              <line x1="3" y1="10" x2="21" y2="10" stroke-width="1" />
-            </svg>
-            Requested {{ requestedDate }}
-          </span>
-          <span class="text-xs text-neutral-800/80">Time frame: {{ requestedTimeFrame }}</span>
+          <svg
+            class="w-6 h-6 text-cinnamon-ice/40"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
         </div>
       </div>
-    </NuxtLink>
-  </div>
+
+      <!-- Item Details -->
+      <div class="flex-1 min-w-0">
+        <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+          {{ request.item.name }}
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-400 font-medium leading-none"
+        >
+          <span class="font-mono tracking-wider">{{ request.id.slice(0, 12).toUpperCase() }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>Requested {{ requestedDate }}</span>
+        </div>
+      </div>
+
+      <!-- Pricing / Extra Info -->
+      <div class="shrink-0 z-10 text-right">
+        <div class="flex flex-col items-end">
+          <p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">
+            Time frame
+          </p>
+          <div class="text-[13px] font-bold text-noble-black leading-none">
+            {{ requestedTimeFrame }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </NuxtLink>
 </template>
