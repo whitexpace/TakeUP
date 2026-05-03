@@ -46,6 +46,7 @@ const formatParticipantName = (user: { firstName: string; lastName: string }, fa
 const counterpartName = computed(() => {
   const user =
     userRole.value === "BORROWER" ? props.transaction.lender.user : props.transaction.borrower.user
+
   return formatParticipantName(user, "Former user")
 })
 
@@ -60,7 +61,7 @@ const lenderName = computed(() =>
 const borrowerRating = computed(() => props.transaction.borrower.borrowerRating)
 const lenderRating = computed(() => props.transaction.lender.lenderRating)
 
-const orderId = computed(() => `ORDER ID. ${props.transaction.id.slice(0, 16).toUpperCase()}`)
+const formatRating = (rating: number | null) => (rating === null ? null : rating.toFixed(1))
 
 const formatDate = (date: Date | string) =>
   new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -117,6 +118,8 @@ const createdAtLabel = computed(() =>
   }),
 )
 
+const shortTransactionId = computed(() => props.transaction.id.slice(0, 12).toUpperCase())
+
 const detailPath = computed(() =>
   isAdminVariant.value
     ? null
@@ -128,10 +131,8 @@ const detailPath = computed(() =>
 const rootComponent = computed(() => (detailPath.value ? "NuxtLink" : "div"))
 const rootBindings = computed(() => (detailPath.value ? { to: detailPath.value } : {}))
 const rootClass = computed(() => [
-  "block overflow-hidden rounded-[16px] border border-cinnamon-ice/35 bg-white font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200",
-  isAdminVariant.value
-    ? "cursor-default"
-    : "cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)]",
+  "block overflow-hidden rounded-[16px] border border-cinnamon-ice/20 bg-white font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200",
+  detailPath.value ? "cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] group/card" : "",
 ])
 
 const canOpenChat = computed(
@@ -140,10 +141,6 @@ const canOpenChat = computed(
 
 const reviewActions = computed(
   () => userTransaction.value?.reviewState.actions.filter((entry) => entry.canSubmit) ?? [],
-)
-
-const submittedReviewActions = computed(
-  () => userTransaction.value?.reviewState.actions.filter((entry) => entry.hasSubmitted) ?? [],
 )
 
 const handleWriteReview = (reviewType: ReviewType) => {
@@ -163,40 +160,57 @@ const handleOpenChat = async () => {
 
 <template>
   <component :is="rootComponent" v-bind="rootBindings" :class="rootClass">
-    <div
-      class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-cinnamon-ice/25 bg-white/80 px-4 py-3 sm:px-5"
-    >
-      <div class="min-w-0 flex-1">
-        <div v-if="isAdminVariant" class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span class="text-[13px] font-semibold text-noble-black sm:text-[14px]">
-            Borrower: {{ borrowerName }}
-          </span>
-          <span
-            v-if="borrowerRating !== null"
-            class="rounded-full bg-burning-orange/10 px-2 py-0.5 text-[11px] font-bold text-burning-orange"
-          >
-            {{ borrowerRating.toFixed(1) }}
-          </span>
-          <span class="hidden text-noble-black/25 sm:inline">|</span>
-          <span class="text-[13px] font-semibold text-noble-black sm:text-[14px]">
-            Lender: {{ lenderName }}
-          </span>
-          <span
-            v-if="lenderRating !== null"
-            class="rounded-full bg-burning-orange/10 px-2 py-0.5 text-[11px] font-bold text-burning-orange"
-          >
-            {{ lenderRating.toFixed(1) }}
-          </span>
+    <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
+      <div
+        v-if="isAdminVariant"
+        class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+      >
+        <div class="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
+              Borrower
+            </span>
+            <span class="truncate text-[14px] font-semibold text-noble-black">
+              {{ borrowerName }}
+            </span>
+            <span
+              v-if="formatRating(borrowerRating)"
+              class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+            >
+              {{ formatRating(borrowerRating) }}
+            </span>
+          </div>
+
+          <div class="hidden h-4 w-px bg-cinnamon-ice/40 lg:block"></div>
+
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
+              Lender
+            </span>
+            <span class="truncate text-[14px] font-semibold text-noble-black">
+              {{ lenderName }}
+            </span>
+            <span
+              v-if="formatRating(lenderRating)"
+              class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+            >
+              {{ formatRating(lenderRating) }}
+            </span>
+          </div>
         </div>
 
-        <div v-else class="flex flex-wrap items-center gap-2">
-          <span class="truncate text-[14px] font-semibold text-noble-black">
+        <TransactionStatusBadge :status="transaction.status" :role="activeRole" context="admin" />
+      </div>
+
+      <div v-else class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-noble-black text-[14px] font-semibold">
             {{ counterpartName }}
           </span>
 
           <button
             v-if="canOpenChat"
-            class="flex h-7 w-7 items-center justify-center rounded-full border border-burning-orange/30 bg-burning-orange/[0.12] text-burning-orange transition-colors hover:bg-burning-orange/[0.2]"
+            class="w-7 h-7 flex items-center justify-center rounded-full bg-burning-orange/[0.12] border border-burning-orange/30 text-burning-orange hover:bg-burning-orange/[0.2] transition-all group/chat"
             title="Open Chat"
             aria-label="Open chat"
             @click.stop.prevent="handleOpenChat"
@@ -210,50 +224,31 @@ const handleOpenChat = async () => {
               stroke-width="2.5"
               stroke-linecap="round"
               stroke-linejoin="round"
+              class="transition-transform group-hover/chat:scale-110"
             >
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </button>
-
-          <button
-            v-for="action in reviewActions"
-            :key="action.reviewType"
-            class="rounded-full bg-burning-orange px-3 py-1 text-[12px] font-bold text-white transition-colors hover:bg-cinnabar-red"
-            @click.stop.prevent="handleWriteReview(action.reviewType)"
-          >
-            {{ action.label }}
-          </button>
-          <span
-            v-for="action in submittedReviewActions"
-            :key="`${action.reviewType}-submitted`"
-            class="rounded-full bg-blue-estate px-3 py-1 text-[12px] font-bold text-white"
-          >
-            {{ action.submittedLabel }}
-          </span>
         </div>
-      </div>
 
-      <TransactionStatusBadge
-        :status="transaction.status"
-        :role="activeRole"
-        :context="isAdminVariant ? 'admin' : 'user'"
-      />
+        <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
+      </div>
     </div>
 
-    <div class="flex items-start gap-3 px-4 py-4 sm:gap-4 sm:px-5">
+    <div class="p-5 flex items-center gap-4 relative">
       <div class="relative shrink-0">
         <img
           v-if="transaction.item.thumbnailImage"
           :src="transaction.item.thumbnailImage"
           :alt="transaction.item.name"
-          class="h-16 w-16 rounded-[10px] border border-cinnamon-ice/30 object-cover"
+          class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
         />
         <div
           v-else
-          class="flex h-16 w-16 items-center justify-center rounded-[10px] border border-cinnamon-ice/30 bg-cinnamon-ice/10"
+          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
         >
           <svg
-            class="h-6 w-6 text-cinnamon-ice/50"
+            class="w-6 h-6 text-cinnamon-ice/40"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -262,37 +257,51 @@ const handleOpenChat = async () => {
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="2"
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
         </div>
       </div>
 
-      <div class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div class="min-w-0">
-          <h4 class="truncate text-[15px] font-bold leading-tight text-noble-black">
-            {{ transaction.item.name }}
-          </h4>
-          <p class="mt-1 truncate font-mono text-[11px] font-semibold text-noble-black/45">
-            {{ orderId }}
-          </p>
-          <div
-            class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-noble-black/60"
-          >
-            <span v-if="isAdminVariant">Logged: {{ createdAtLabel }}</span>
-            <span>{{ dateRange }}</span>
-            <span>{{ duration }}</span>
-            <span v-if="isAdminVariant">Commission: {{ commissionLabel }}</span>
-          </div>
+      <div class="flex-1 min-w-0">
+        <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+          {{ transaction.item.name }}
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none"
+        >
+          <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
+          <span v-else>{{ dateRange }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>{{ duration }}</span>
+          <template v-if="isAdminVariant">
+            <span class="opacity-50 select-none">·</span>
+            <span>Commission {{ commissionLabel }}</span>
+          </template>
         </div>
 
-        <div class="shrink-0 text-left sm:text-right">
-          <p class="text-[13px] font-medium leading-none text-noble-black/45">{{ rateLabel }}</p>
-          <div class="mt-2 flex items-baseline gap-1.5 sm:justify-end">
-            <span class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/45">
-              Total
+        <div v-if="reviewActions.length" class="mt-2.5 flex flex-wrap gap-3 relative z-10">
+          <button
+            v-for="action in reviewActions"
+            :key="action.reviewType"
+            class="text-[12px] font-bold text-burning-orange hover:underline underline-offset-4 transition-all"
+            @click.stop.prevent="handleWriteReview(action.reviewType)"
+          >
+            {{ action.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="shrink-0 z-10 text-right">
+        <div class="flex flex-col items-end">
+          <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
+              Total:
             </span>
-            <span class="text-[16px] font-bold leading-none text-burning-orange">
+            <span class="text-[16px] font-bold text-burning-orange leading-none">
               {{ totalLabel }}
             </span>
           </div>

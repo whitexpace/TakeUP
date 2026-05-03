@@ -1,8 +1,5 @@
 <script setup lang="ts">
 definePageMeta({
-  layout: "admin",
-  middleware: "admin-auth",
+  middleware: ["admin-auth", () => navigateTo("/admin/transactions", { replace: true })],
 })
-
-await navigateTo("/admin/transactions", { replace: true })
 </script>

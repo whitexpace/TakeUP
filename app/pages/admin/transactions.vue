@@ -56,85 +56,100 @@ const resetFilters = async () => {
 </script>
 
 <template>
-  <div class="font-geist">
-    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-      <label
-        class="flex min-h-12 items-center gap-3 rounded-[16px] border border-cinnamon-ice/45 bg-white px-4 transition-colors focus-within:border-burning-orange"
-      >
-        <svg
-          class="h-4 w-4 shrink-0 text-noble-black/35"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+  <div class="font-geist space-y-5">
+    <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px_auto] lg:items-end">
+      <div>
+        <label class="mb-2 block text-[12px] font-bold text-noble-black/50">Search</label>
+        <div
+          class="flex h-12 items-center gap-3 rounded-[12px] border-[1.5px] border-gray-200 bg-white px-5 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
         >
-          <circle cx="11" cy="11" r="8" stroke-width="2" />
-          <path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" />
-        </svg>
-        <span class="sr-only">Search platform transactions</span>
+          <svg
+            class="h-5 w-5 shrink-0 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <circle cx="11" cy="11" r="8" stroke-width="2" />
+            <path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search by transaction ID or item name"
+            class="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-noble-black outline-none placeholder:text-gray-400"
+          />
+          <button
+            v-if="searchQuery"
+            class="text-gray-400 transition-colors hover:text-noble-black"
+            title="Clear search"
+            aria-label="Clear search"
+            @click="searchQuery = ''"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <label>
+        <span class="mb-2 block text-[12px] font-bold text-noble-black/50">Created From</span>
         <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search by transaction ID or item name"
-          class="min-w-0 flex-1 bg-transparent text-[14px] font-medium text-noble-black outline-none placeholder:text-noble-black/40"
+          v-model="createdAtFrom"
+          type="date"
+          class="h-12 w-full rounded-[12px] border-[1.5px] border-gray-200 bg-white px-4 text-[14px] font-medium text-noble-black outline-none transition-all focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
+        />
+      </label>
+
+      <label>
+        <span class="mb-2 block text-[12px] font-bold text-noble-black/50">Created To</span>
+        <input
+          v-model="createdAtTo"
+          type="date"
+          class="h-12 w-full rounded-[12px] border-[1.5px] border-gray-200 bg-white px-4 text-[14px] font-medium text-noble-black outline-none transition-all focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
         />
       </label>
 
       <button
         v-if="hasActiveFilters"
-        class="inline-flex min-h-12 items-center justify-center rounded-[16px] bg-blue-estate px-5 text-[14px] font-bold text-white transition-colors hover:bg-blue-estate/90"
+        class="inline-flex h-12 items-center justify-center rounded-[12px] bg-burning-orange px-5 text-[14px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
         @click="resetFilters"
       >
         Clear Filters
       </button>
     </div>
 
-    <div class="mt-4 grid gap-3 sm:grid-cols-2">
-      <label
-        class="flex flex-col gap-2 rounded-[16px] border border-cinnamon-ice/45 bg-white px-4 py-3 transition-colors focus-within:border-burning-orange"
-      >
-        <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-noble-black/45">
-          Created From
-        </span>
-        <input
-          v-model="createdAtFrom"
-          type="date"
-          class="bg-transparent text-[14px] font-medium text-noble-black outline-none"
-        />
-      </label>
-
-      <label
-        class="flex flex-col gap-2 rounded-[16px] border border-cinnamon-ice/45 bg-white px-4 py-3 transition-colors focus-within:border-burning-orange"
-      >
-        <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-noble-black/45">
-          Created To
-        </span>
-        <input
-          v-model="createdAtTo"
-          type="date"
-          class="bg-transparent text-[14px] font-medium text-noble-black outline-none"
-        />
-      </label>
-    </div>
-
-    <div class="mt-5 rounded-[20px] border border-cinnamon-ice/45 bg-cream/70 p-4 sm:p-5">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <section
+      class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)] sm:p-8"
+    >
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div class="min-w-0">
           <h2 class="text-[18px] font-bold text-noble-black">All Platform Activity</h2>
-          <p class="mt-1 max-w-2xl text-[14px] leading-relaxed text-noble-black/60">
+          <p class="mt-1 max-w-2xl text-[14px] font-medium leading-relaxed text-noble-black/50">
             Borrower, lender, item, status, commission, and payment totals are shown together.
           </p>
         </div>
       </div>
 
-      <div class="mt-4 flex flex-wrap gap-2">
+      <div class="mt-6 flex items-center gap-2 overflow-x-auto py-1">
         <button
           v-for="chip in statusChips"
           :key="chip.label"
-          class="rounded-full border px-3 py-1.5 text-[12px] font-bold transition-colors duration-150"
+          class="shrink-0 rounded-full border-[1.5px] px-[14px] py-1.5 text-[13px] font-bold transition-all duration-200"
           :class="
             activeStatus === chip.value
-              ? 'border-burning-orange bg-burning-orange text-white'
-              : 'border-cinnamon-ice/70 bg-white text-noble-black/70 hover:border-burning-orange/50 hover:text-burning-orange'
+              ? 'border-burning-orange/30 bg-burning-orange/[0.12] text-burning-orange'
+              : 'border-gray-200 bg-white text-noble-black/40 hover:border-gray-300 hover:text-noble-black/60'
           "
           @click="activeStatus = chip.value"
         >
@@ -146,17 +161,27 @@ const resetFilters = async () => {
         <div
           v-for="index in 3"
           :key="index"
-          class="mt-4 h-36 animate-pulse rounded-[16px] bg-cinnamon-ice/40"
+          class="mt-4 h-32 animate-pulse rounded-2xl bg-cinnamon-ice/20"
         />
       </template>
 
       <div
         v-else-if="hasInitialError"
-        class="mt-4 flex flex-col items-center justify-center rounded-[16px] border border-cinnamon-ice/45 bg-white px-4 py-12 text-center"
+        class="flex flex-col items-center justify-center py-12 text-center sm:py-16"
       >
-        <p class="mb-4 text-[14px] text-noble-black/70">{{ error }}</p>
+        <svg
+          class="mb-4 h-12 w-12 text-cinnamon-ice"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <circle cx="12" cy="12" r="10" stroke-width="1.5" />
+          <line x1="12" y1="8" x2="12" y2="12" stroke-width="2" stroke-linecap="round" />
+          <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke-width="2" />
+        </svg>
+        <p class="mb-6 text-[15px] font-medium text-noble-black/50">{{ error }}</p>
         <button
-          class="rounded-full bg-burning-orange px-5 py-2 text-[14px] font-bold text-white transition-colors hover:bg-cinnabar-red"
+          class="rounded-[12px] bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all hover:brightness-110"
           @click="refresh"
         >
           Retry
@@ -165,17 +190,26 @@ const resetFilters = async () => {
 
       <div
         v-else-if="hasEmptyState"
-        class="mt-4 flex flex-col items-center justify-center rounded-[16px] border border-cinnamon-ice/45 bg-white px-4 py-12 text-center"
+        class="flex flex-col items-center justify-center py-16 text-center sm:py-20"
       >
-        <p class="mb-1 text-[14px] font-bold text-noble-black">
+        <div
+          class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-cinnamon-ice/10 text-cinnamon-ice/40"
+        >
+          <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
+            <path d="M3 9h18" stroke-width="1.5" />
+            <path d="M9 21V9" stroke-width="1.5" />
+          </svg>
+        </div>
+        <p class="mb-1 text-[18px] font-bold text-noble-black">
           No transactions matched your filters
         </p>
-        <p class="text-[13px] text-noble-black/55">
+        <p class="max-w-xs text-[14px] font-medium text-noble-black/40">
           Try a different status, date range, or search query.
         </p>
       </div>
 
-      <div v-else class="mt-4 flex flex-col gap-3">
+      <div v-else class="mt-5 flex flex-col gap-4">
         <TransactionCard
           v-for="transaction in transactions"
           :key="transaction.id"
@@ -186,17 +220,17 @@ const resetFilters = async () => {
 
       <div
         v-if="hasMore || (isLoading && transactions.length > 0)"
-        class="mt-5 flex justify-center"
+        class="mt-6 flex justify-center"
       >
         <button
           :disabled="isLoading"
-          class="rounded-full bg-burning-orange px-5 py-2 text-[14px] font-bold text-white transition-colors hover:bg-cinnabar-red disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-[12px] bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           @click="loadMore"
         >
           <span v-if="isLoading">Loading...</span>
           <span v-else>Load More</span>
         </button>
       </div>
-    </div>
+    </section>
   </div>
 </template>
