@@ -83,7 +83,7 @@ const {
   data: queueData,
   pending,
   refresh,
-} = await useAsyncData(
+} = useLazyAsyncData(
   () => `admin:disputes:${activeStatus.value}`,
   () =>
     $fetch<RouterOutputs["dispute"]["list"]>("/api/disputes", {

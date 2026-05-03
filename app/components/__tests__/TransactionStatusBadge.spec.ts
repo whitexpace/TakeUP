@@ -2,7 +2,30 @@ import { describe, expect, it } from "vitest"
 import type { TransactionStatus } from "../../../shared/schemas/transaction"
 
 // Pure logic extracted from TransactionStatusBadge.vue for unit testing
-const getLabel = (status: TransactionStatus, role: "LENDER" | "BORROWER"): string => {
+const getLabel = (
+  status: TransactionStatus,
+  role: "LENDER" | "BORROWER",
+  context: "user" | "admin" = "user",
+): string => {
+  if (context === "admin") {
+    switch (status) {
+      case "PENDING":
+        return "Pending"
+      case "ACTIVE":
+        return "Active"
+      case "COMPLETED":
+        return "Completed"
+      case "CANCELLED":
+        return "Cancelled"
+      case "RETURNED":
+        return "Returned"
+      case "IN_DISPUTE":
+        return "In Dispute"
+      default:
+        return ""
+    }
+  }
+
   switch (status) {
     case "PENDING":
       return role === "BORROWER" ? "To Receive" : "Ready for Approval"
@@ -62,6 +85,13 @@ describe("TransactionStatusBadge logic", () => {
     it("returns 'Item Returned' for RETURNED (both roles)", () => {
       expect(getLabel("RETURNED", "BORROWER")).toBe("Item Returned")
       expect(getLabel("RETURNED", "LENDER")).toBe("Item Returned")
+    })
+
+    it("returns generic admin labels when context is admin", () => {
+      expect(getLabel("PENDING", "BORROWER", "admin")).toBe("Pending")
+      expect(getLabel("ACTIVE", "BORROWER", "admin")).toBe("Active")
+      expect(getLabel("RETURNED", "BORROWER", "admin")).toBe("Returned")
+      expect(getLabel("IN_DISPUTE", "BORROWER", "admin")).toBe("In Dispute")
     })
   })
 

@@ -3,10 +3,30 @@ import type { TransactionStatus } from "../../shared/schemas/transaction"
 
 const props = defineProps<{
   status: TransactionStatus
-  role: "LENDER" | "BORROWER"
+  role?: "LENDER" | "BORROWER"
+  context?: "user" | "admin"
 }>()
 
 const label = computed(() => {
+  if (props.context === "admin") {
+    switch (props.status) {
+      case "PENDING":
+        return "Pending"
+      case "ACTIVE":
+        return "Active"
+      case "COMPLETED":
+        return "Completed"
+      case "CANCELLED":
+        return "Cancelled"
+      case "RETURNED":
+        return "Returned"
+      case "IN_DISPUTE":
+        return "In Dispute"
+      default:
+        return ""
+    }
+  }
+
   switch (props.status) {
     case "PENDING":
       return props.role === "BORROWER" ? "To Receive" : "Ready for Approval"
