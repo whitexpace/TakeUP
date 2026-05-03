@@ -1563,6 +1563,22 @@ const handleReviewSubmitted = async () => {
                   {{ formatPeso(booking.totalFee - (booking.refundAmount || 0)) }}
                 </span>
               </div>
+
+              <div
+                v-if="booking.status === 'CANCELLED' && booking.paymentStatus === 'REFUNDED'"
+                class="flex justify-between items-center text-[14px] mt-1"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="text-[#059669] font-semibold">Refunded to Wallet</span>
+                  <span
+                    class="text-[10px] bg-[#D1FAE5] px-1.5 py-0.5 rounded-full text-[#065F46] font-black uppercase"
+                    >PROCESSED</span
+                  >
+                </div>
+                <span class="text-[16px] font-bold text-[#059669]"
+                  >+{{ formatPeso(booking.totalFee) }}</span
+                >
+              </div>
             </div>
 
             <!-- TakeUP Secure Guarantee (Slim Style) -->
