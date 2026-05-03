@@ -167,33 +167,61 @@ async function ensureWalletRecord(
 ) {
   const prisma = asWalletPrisma(tx || globalPrisma)
 
-  if (owner.scope === WalletScope.USER) {
-    await prisma.$executeRaw(Prisma.sql`
-      INSERT INTO wallets (scope, user_id, currency, balance, status)
-      VALUES (
-        CAST(${WalletScope.USER} AS "WalletScope"),
-        ${owner.userId},
-        'PHP',
-        0,
-        CAST(${WalletStatus.ACTIVE} AS "WalletStatus")
+  console.log("[wallet:ensureWalletRecord] called with owner:", owner)
+
+  try {
+    if (owner.scope === WalletScope.USER) {
+      console.log("[wallet:ensureWalletRecord] attempting INSERT for USER scope, userId=", owner.userId)
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO wallets (id, scope, user_id, currency, balance, status, updated_at)
+        VALUES (
+          gen_random_uuid(),
+          CAST(${WalletScope.USER} AS "WalletScope"),
+          ${owner.userId},
+          'PHP',
+          0,
+          CAST(${WalletStatus.ACTIVE} AS "WalletStatus"),
+          NOW()
+        )
+        ON CONFLICT ("user_id") DO NOTHING
+      `)
+      console.log("[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for userId=", owner.userId)
+    } else {
+      console.log("[wallet:ensureWalletRecord] attempting INSERT for SYSTEM scope, systemKey=", owner.systemKey)
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO wallets (id, scope, system_key, currency, balance, status, updated_at)
+        VALUES (
+          gen_random_uuid(),
+          CAST(${WalletScope.SYSTEM} AS "WalletScope"),
+          ${owner.systemKey},
+          'PHP',
+          0,
+          CAST(${WalletStatus.ACTIVE} AS "WalletStatus"),
+          NOW()
+        )
+        ON CONFLICT ("system_key") DO NOTHING
+      `)
+      console.log("[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for systemKey=", owner.systemKey)
+    }
+  } catch (err: any) {
+    console.error("[wallet:ensureWalletRecord] INSERT FAILED for owner:", owner)
+    console.error("[wallet:ensureWalletRecord] prisma error code:", err?.code, "name:", err?.name)
+    console.error("[wallet:ensureWalletRecord] prisma meta:", err?.meta)
+    if (err?.meta?.code === "23502") {
+      console.error(
+        "[wallet:ensureWalletRecord] >>> NOT NULL violation. The INSERT only supplies (scope, user_id|system_key, currency, balance, status).",
       )
-      ON CONFLICT ("user_id") DO NOTHING
-    `)
-  } else {
-    await prisma.$executeRaw(Prisma.sql`
-      INSERT INTO wallets (scope, system_key, currency, balance, status)
-      VALUES (
-        CAST(${WalletScope.SYSTEM} AS "WalletScope"),
-        ${owner.systemKey},
-        'PHP',
-        0,
-        CAST(${WalletStatus.ACTIVE} AS "WalletStatus")
+      console.error(
+        "[wallet:ensureWalletRecord] >>> Likely culprit: the `id` column lacks a DB-level default (e.g. gen_random_uuid()) and/or `updated_at` is NOT NULL without a default. Prisma's @default(uuid()) and @updatedAt are CLIENT-SIDE — raw SQL bypasses them.",
       )
-      ON CONFLICT ("system_key") DO NOTHING
-    `)
+    }
+    throw err
   }
 
-  return await fetchWalletRecord(owner, prisma)
+  console.log("[wallet:ensureWalletRecord] now fetching wallet record back from DB for owner:", owner)
+  const wallet = await fetchWalletRecord(owner, prisma)
+  console.log("[wallet:ensureWalletRecord] fetched wallet id=", wallet.id, "balance=", wallet.balance?.toString?.() ?? wallet.balance)
+  return wallet
 }
 
 async function lockWallet(
@@ -274,6 +302,7 @@ async function insertWalletTransaction(
   const metadataJson = JSON.stringify(params.metadata ?? {})
   const rows = await client.$queryRaw<WalletTransactionRecord[]>(Prisma.sql`
     INSERT INTO wallet_transactions (
+      id,
       wallet_id,
       user_id,
       type,
@@ -286,9 +315,11 @@ async function insertWalletTransaction(
       related_entity_type,
       related_entity_id,
       status,
-      metadata
+      metadata,
+      updated_at
     )
     VALUES (
+      gen_random_uuid(),
       ${params.walletId},
       ${params.userId},
       CAST(${params.type} AS "WalletTransactionType"),
@@ -301,7 +332,8 @@ async function insertWalletTransaction(
       ${params.relatedEntityType},
       ${params.relatedEntityId},
       CAST(${params.status} AS "WalletTransactionStatus"),
-      CAST(${metadataJson} AS jsonb)
+      CAST(${metadataJson} AS jsonb),
+      NOW()
     )
     RETURNING
       id,
@@ -598,7 +630,6 @@ export async function findSystemCommissionTransaction(
 }
 
 export async function runWalletSelfHealing(userId: string) {
-  const walletPrisma = asWalletPrisma(globalPrisma)
   const relevantBookings = await globalPrisma.booking.findMany({
     where: {
       OR: [{ borrowerId: userId }, { lenderId: userId }],
@@ -613,13 +644,13 @@ export async function runWalletSelfHealing(userId: string) {
 
   for (const booking of relevantBookings) {
     if (booking.borrowerId === userId && booking.refundAmount > 0) {
-      const hasRefund = await walletPrisma.walletTransaction.findFirst({
-        where: { userId, relatedEntityId: booking.id, type: WalletTransactionType.REFUND },
+      const hasRefund = await globalPrisma.walletTransaction.findFirst({
+        where: { userId, relatedEntityId: booking.id, type: "REFUND" },
       })
 
       if (!hasRefund) {
         await creditToWallet(userId, booking.refundAmount, {
-          type: WalletTransactionType.REFUND,
+          type: "REFUND",
           relatedEntityType: BOOKING_ENTITY_TYPE,
           relatedEntityId: booking.id,
         })
@@ -627,8 +658,8 @@ export async function runWalletSelfHealing(userId: string) {
     }
 
     if (booking.lenderId === userId) {
-      const hasEarning = await walletPrisma.walletTransaction.findFirst({
-        where: { userId, relatedEntityId: booking.id, type: WalletTransactionType.EARNING },
+      const hasEarning = await globalPrisma.walletTransaction.findFirst({
+        where: { userId, relatedEntityId: booking.id, type: "EARNING" },
       })
 
       if (!hasEarning) {
@@ -636,7 +667,7 @@ export async function runWalletSelfHealing(userId: string) {
           booking.totalFee - booking.platformCommission - (booking.refundAmount || 0)
         if (netEarnings > 0) {
           await creditToWallet(userId, netEarnings, {
-            type: WalletTransactionType.EARNING,
+            type: "EARNING",
             relatedEntityType: BOOKING_ENTITY_TYPE,
             relatedEntityId: booking.id,
           })

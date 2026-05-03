@@ -27,7 +27,20 @@ export const useWallet = (options: UseWalletOptions = {}) => {
       const data = await $fetch<Wallet>(basePath)
       wallet.value = data
     } catch (error) {
-      console.error("Failed to fetch wallet:", error)
+      const err = error as {
+        status?: number
+        statusCode?: number
+        data?: { message?: string }
+        message?: string
+      }
+      console.error(
+        "[useWallet:fetchWallet] FAILED status=",
+        err?.status ?? err?.statusCode,
+        "url=",
+        basePath,
+      )
+      console.error("[useWallet:fetchWallet] server message:", err?.data?.message ?? err?.message)
+      console.error("[useWallet:fetchWallet] full error:", error)
     } finally {
       isInitialLoading.value = false
     }
