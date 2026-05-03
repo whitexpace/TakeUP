@@ -339,7 +339,7 @@ export const useChat = () => {
       return null
     }
 
-    if (!body.trim()) return null
+    if (!body.trim() && !imageUrl) return null
 
     isSending.value = true
     error.value = null

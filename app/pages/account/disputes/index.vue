@@ -24,17 +24,53 @@ const disputeTabs: Array<{ id: DisputesTab; label: string }> = [
 ]
 
 const issueTypes = [
-  { value: "damage_missing", label: "Damage / Missing parts" },
-  { value: "late_return", label: "No-show / late return" },
-  { value: "policy_violation", label: "Policy violation / harassment" },
-  { value: "other_issue", label: "Other issue" },
+  {
+    value: "damage_missing",
+    label: "Damage / Missing parts",
+    description: "Physical damage or components not returned.",
+    icon: "damage",
+  },
+  {
+    value: "late_return",
+    label: "No-show / late return",
+    description: "Party was late or missed the handoff.",
+    icon: "clock",
+  },
+  {
+    value: "policy_violation",
+    label: "Policy violation",
+    description: "Inappropriate behavior or guide breach.",
+    icon: "shield",
+  },
+  {
+    value: "other_issue",
+    label: "Other issue",
+    description: "Other concerns needing moderation review.",
+    icon: "help",
+  },
 ] as const
 
 const resolutionOptions = [
-  { value: "refund_full", label: "Refund / deposit return (full/partial)" },
-  { value: "replacement_cost", label: "Replacement or repair cost reimbursement" },
-  { value: "late_fee", label: "Late return adjustment or fee review" },
-  { value: "policy_review", label: "Admin review of conduct or policy issue" },
+  {
+    value: "refund",
+    label: "Refund / Deposit Return",
+    description: "Request a full or partial reversal of the rental fee.",
+  },
+  {
+    value: "replacement",
+    label: "Item Replacement",
+    description: "Request the other party to replace or repair the item.",
+  },
+  {
+    value: "warning",
+    label: "Formal Warning",
+    description: "Ask moderation to record a strike on their account.",
+  },
+  {
+    value: "other",
+    label: "Other",
+    description: "Specify a custom resolution for your situation.",
+  },
 ] as const
 
 const activeTab = computed<DisputesTab>(() => {
@@ -81,15 +117,15 @@ const statusLabel = (status: MyDispute["status"]) => {
 const statusClasses = (status: MyDispute["status"]) => {
   switch (status) {
     case "SUBMITTED":
-      return "bg-indigo-900 text-white"
+      return "bg-indigo-900/[0.08] text-indigo-900 border border-indigo-900/20"
     case "OPEN":
-      return "bg-cinnabar-red/10 text-cinnabar-red border border-cinnabar-red/20"
+      return "bg-cinnabar-red/[0.08] text-cinnabar-red border border-cinnabar-red/20"
     case "REJECTED":
       return "bg-noble-black/5 text-noble-black/70 border border-cinnamon-ice"
     case "APPEALED":
-      return "bg-blue-estate/10 text-blue-estate border border-blue-estate/20"
+      return "bg-blue-estate/[0.08] text-blue-estate border border-blue-estate/20"
     case "CLOSED":
-      return "bg-green-100 text-green-700 border border-green-200"
+      return "bg-success-green/[0.08] text-success-green border border-success-green/20"
   }
 }
 
@@ -126,6 +162,13 @@ const myDisputes = computed(() => disputesData.value?.disputes ?? [])
 const recentAppealableDisputes = computed(() =>
   myDisputes.value.filter((dispute) => dispute.canAppeal),
 )
+
+const currentReportStep = ref(1)
+const reportSteps = [
+  { id: 1, label: "Issue Type" },
+  { id: 2, label: "Transaction & Details" },
+  { id: 3, label: "Review & Submit" },
+]
 
 const selectedIssueType = ref<(typeof issueTypes)[number]["value"]>(issueTypes[0].value)
 const selectedResolution = ref<(typeof resolutionOptions)[number]["value"]>(
@@ -212,20 +255,12 @@ const isTransactionLocked = computed(() =>
   ),
 )
 
-const requestedTransactionUnavailable = computed(() =>
-  Boolean(
-    requestedTransactionId.value &&
-    !reportableTransactions.value.some(
-      (transaction) => transaction.transactionId === requestedTransactionId.value,
-    ),
-  ),
-)
-
 const resetReportForm = () => {
   selectedIssueType.value = issueTypes[0].value
   selectedResolution.value = resolutionOptions[0].value
   reportSummary.value = ""
   reportEvidenceFiles.value = []
+  currentReportStep.value = 1
 }
 
 const resetAppealForm = () => {
@@ -348,481 +383,1270 @@ const submitAppeal = async () => {
     isSubmittingAppeal.value = false
   }
 }
+
+const nextStep = () => {
+  if (currentReportStep.value < 3) {
+    currentReportStep.value++
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+}
+
+const prevStep = () => {
+  if (currentReportStep.value > 1) {
+    currentReportStep.value--
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+}
 </script>
 
 <template>
-  <div class="mx-auto flex w-full max-w-[1480px] flex-col items-center pb-20 font-geist">
-    <div class="w-full max-w-[1120px] text-left">
-      <h1 class="text-[38px] font-bold leading-none text-noble-black sm:text-[44px]">Disputes</h1>
-      <p class="mt-3 max-w-[760px] text-base leading-relaxed text-noble-black/60">
-        Report transaction issues, follow dispute updates, and submit appeals when a recent rejected
-        decision is still eligible for review.
-      </p>
+  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+    <!-- Page Header -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-10">
+      <section class="space-y-3">
+        <div class="space-y-1">
+          <h1 class="text-[28px] font-bold text-noble-black">Disputes</h1>
+          <div class="w-10 h-[2px] bg-burning-orange"></div>
+        </div>
+        <p class="text-[14px] font-medium text-noble-black/40">
+          Report transaction issues and track your ongoing disputes.
+        </p>
+      </section>
     </div>
 
-    <div class="mt-10 w-full max-w-[1120px] border-b border-cinnamon-ice/80">
-      <div class="flex w-full max-w-[780px] items-end gap-8 sm:gap-12">
+    <!-- Modern Underline Tabs (Refined) -->
+    <div class="mb-10">
+      <nav class="flex gap-10">
         <button
           v-for="tab in disputeTabs"
           :key="tab.id"
           type="button"
-          class="relative pb-3 text-sm font-semibold transition-colors"
-          :class="
+          class="relative pb-4 text-[18px] font-bold transition-all duration-300 outline-none"
+          :class="[
             activeTab === tab.id
               ? 'text-burning-orange'
-              : 'text-noble-black/60 hover:text-noble-black'
-          "
+              : 'text-noble-black/40 hover:text-noble-black',
+          ]"
           @click="setActiveTab(tab.id)"
         >
           {{ tab.label }}
-          <span
+          <div
             v-if="activeTab === tab.id"
-            class="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-burning-orange"
-          ></span>
+            class="absolute bottom-0 left-0 right-0 h-[2.5px] bg-burning-orange rounded-full transition-all duration-300"
+          ></div>
         </button>
+      </nav>
+    </div>
+
+    <div v-if="actionSuccessMessage || actionErrorMessage" class="space-y-3 mb-8">
+      <div
+        v-if="actionSuccessMessage"
+        class="flex items-center gap-3 text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-4 rounded-[14px]"
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        {{ actionSuccessMessage }}
+      </div>
+      <div
+        v-if="actionErrorMessage"
+        class="flex items-center gap-3 text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-4 rounded-[14px]"
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        {{ actionErrorMessage }}
       </div>
     </div>
 
-    <p
-      v-if="actionSuccessMessage"
-      class="mb-6 w-full max-w-[1120px] rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-left text-sm text-green-700"
-    >
-      {{ actionSuccessMessage }}
-    </p>
-    <p
-      v-if="actionErrorMessage"
-      class="mb-6 w-full max-w-[1120px] rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm text-red-600"
-    >
-      {{ actionErrorMessage }}
-    </p>
-
     <template v-if="activeTab === 'report'">
-      <section class="mt-6 w-full max-w-[1120px] text-left">
-        <div>
-          <h2 class="text-[42px] font-bold leading-none text-noble-black sm:text-[48px]">
-            Report an Issue
-          </h2>
-          <p class="mt-3 text-base text-noble-black/60">
-            Submit details about a problematic transaction for our moderation team to review.
-          </p>
-        </div>
-
-        <div
-          v-if="requestedTransactionUnavailable"
-          class="mt-8 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
-        >
-          The selected transaction is no longer eligible to report. Only transactions completed
-          within the last 15 days can be reported here.
-        </div>
-
-        <div v-if="reportablePending" class="grid gap-4 lg:grid-cols-2">
-          <div
-            v-for="index in 6"
-            :key="index"
-            class="h-24 animate-pulse rounded-3xl bg-white/80"
-          ></div>
-        </div>
-
-        <div
-          v-else-if="!reportableTransactions.length"
-          class="rounded-3xl border border-dashed border-cinnamon-ice bg-white px-6 py-14 text-center"
-        >
-          <p class="text-xl font-bold text-noble-black">No reportable transactions</p>
-          <p class="mt-2 text-sm text-noble-black/60">
-            Transactions become reportable only after they are completed, and only for the next 15
-            days.
-          </p>
-        </div>
-
-        <div v-else class="mt-12 space-y-12">
-          <div>
-            <h3 class="text-[30px] font-bold text-noble-black">Issue Type</h3>
-            <div class="mt-6 flex flex-wrap gap-3">
-              <button
-                v-for="issueType in issueTypes"
-                :key="issueType.value"
-                type="button"
-                class="rounded-full px-5 py-3 text-sm font-semibold transition-colors"
-                :class="
-                  selectedIssueType === issueType.value
-                    ? 'bg-burning-orange text-white shadow-[0_10px_30px_rgba(255,113,36,0.24)]'
-                    : 'bg-pale-cashmere text-noble-black/80 hover:bg-cinnamon-ice/50'
-                "
-                @click="selectedIssueType = issueType.value"
-              >
-                {{ issueType.label }}
-              </button>
-            </div>
-          </div>
-
-          <div class="rounded-[32px] bg-pale-cashmere/45 px-6 py-7 sm:px-7 sm:py-8">
-            <h3 class="text-[34px] font-bold text-noble-black">Transaction Details</h3>
-
-            <div class="mt-8 space-y-6">
-              <div>
-                <label
-                  class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45"
-                >
-                  Which transaction is this related to?
-                </label>
-                <select
-                  v-model="selectedTransactionId"
-                  :disabled="isTransactionLocked"
-                  class="w-full rounded-2xl border border-white bg-white px-4 py-4 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange disabled:cursor-not-allowed disabled:bg-white"
-                >
-                  <option
-                    v-for="transaction in reportableTransactions"
-                    :key="transaction.transactionId"
-                    :value="transaction.transactionId"
-                  >
-                    {{ transaction.transactionReference }} • {{ transaction.item.name }}
-                  </option>
-                </select>
-                <p v-if="isTransactionLocked" class="mt-2 text-xs text-noble-black/45">
-                  This report came from a specific transaction, so it has already been selected.
-                </p>
-              </div>
-
-              <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45"
-                  >
-                    Item Name
-                  </label>
-                  <input
-                    :value="selectedTransaction?.item.name ?? ''"
-                    type="text"
-                    readonly
-                    placeholder="Item name"
-                    class="w-full rounded-2xl border border-white bg-white px-4 py-4 text-sm text-noble-black/75"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    class="mb-3 block text-xs font-bold uppercase tracking-[0.1em] text-noble-black/45"
-                  >
-                    Other Party
-                  </label>
-                  <input
-                    :value="selectedTransaction?.counterpartName ?? ''"
-                    type="text"
-                    readonly
-                    placeholder="Other party"
-                    class="w-full rounded-2xl border border-white bg-white px-4 py-4 text-sm text-noble-black/75"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 class="text-[30px] font-bold text-noble-black">Requested Resolution</h3>
-            <select
-              v-model="selectedResolution"
-              class="mt-5 w-full rounded-2xl border border-cinnamon-ice/60 bg-white px-4 py-4 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
-            >
-              <option v-for="option in resolutionOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
+      <div class="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <!-- Progress Indicator -->
+        <div class="max-w-2xl mx-auto px-4">
+          <div class="relative flex items-center justify-between">
+            <!-- Line background -->
+            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-gray-100"></div>
+            <!-- Progress Line -->
+            <div
+              class="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-burning-orange transition-all duration-500 ease-in-out"
+              :style="{ width: ((currentReportStep - 1) / (reportSteps.length - 1)) * 100 + '%' }"
+            ></div>
 
             <div
-              class="mt-5 rounded-2xl border-l-[4px] border-burning-orange bg-pale-cashmere/75 px-5 py-4"
+              v-for="step in reportSteps"
+              :key="step.id"
+              class="relative z-10 flex flex-col items-center gap-3"
             >
-              <p class="text-sm font-bold text-burning-orange">Tip</p>
-              <p class="mt-1 text-sm leading-relaxed text-noble-black/60">
-                Providing clear photo evidence significantly speeds up the review process.
+              <div
+                class="w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-bold transition-all duration-500 border-2"
+                :class="[
+                  currentReportStep > step.id
+                    ? 'bg-burning-orange border-burning-orange text-white'
+                    : currentReportStep === step.id
+                      ? 'bg-white border-burning-orange text-burning-orange shadow-lg shadow-burning-orange/20'
+                      : 'bg-white border-gray-100 text-gray-300',
+                ]"
+              >
+                <svg
+                  v-if="currentReportStep > step.id"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span v-else>{{ step.id }}</span>
+              </div>
+              <span
+                class="absolute top-12 whitespace-nowrap text-[11px] font-bold uppercase tracking-wider transition-colors duration-500"
+                :class="currentReportStep >= step.id ? 'text-noble-black' : 'text-gray-300'"
+              >
+                {{ step.label }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Content (Two Columns at lg) -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start mt-16">
+          <!-- Left Column: Form Steps (60%) -->
+          <div class="lg:col-span-3 space-y-8 min-h-[400px]">
+            <div v-if="reportablePending" class="space-y-6">
+              <div class="h-32 animate-pulse rounded-3xl bg-cream"></div>
+              <div class="h-64 animate-pulse rounded-3xl bg-cream"></div>
+            </div>
+
+            <div
+              v-else-if="!reportableTransactions.length"
+              class="rounded-[32px] border border-dashed border-cinnamon-ice bg-cream px-6 py-16 text-center"
+            >
+              <div
+                class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-gray-100"
+              >
+                <svg
+                  class="text-noble-black/20"
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+              </div>
+              <p class="text-xl font-bold text-noble-black">No reportable transactions</p>
+              <p class="mt-2 text-sm text-noble-black/50 max-w-[280px] mx-auto leading-relaxed">
+                Transactions become eligible for reporting for 15 days after they are marked as
+                completed.
               </p>
             </div>
+
+            <div v-else>
+              <form @submit.prevent>
+                <!-- Step 1: Issue Type -->
+                <div
+                  v-if="currentReportStep === 1"
+                  class="space-y-8 animate-in fade-in duration-500"
+                >
+                  <div class="space-y-4 border-l-[3px] border-burning-orange pl-4">
+                    <h2 class="text-[22px] font-bold text-noble-black">What's the problem?</h2>
+                    <p class="text-[14px] text-noble-black/50 font-medium">
+                      Select the category that best describes your issue.
+                    </p>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button
+                      v-for="issueType in issueTypes"
+                      :key="issueType.value"
+                      type="button"
+                      class="flex flex-col text-left p-4 rounded-[14px] border-[1.5px] transition-all duration-300 group"
+                      :class="[
+                        selectedIssueType === issueType.value
+                          ? 'bg-[#FFF5EE] border-burning-orange border-2'
+                          : 'bg-white border-gray-200 hover:border-burning-orange/30 shadow-sm',
+                      ]"
+                      @click="selectedIssueType = issueType.value"
+                    >
+                      <div
+                        class="mb-4 transition-colors"
+                        :class="
+                          selectedIssueType === issueType.value
+                            ? 'text-burning-orange'
+                            : 'text-gray-400'
+                        "
+                      >
+                        <svg
+                          v-if="issueType.icon === 'damage'"
+                          width="32"
+                          height="32"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" />
+                          <path d="m3 9 2.45-4.91A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.79 1.09L21 9" />
+                          <path d="M12 3v6" />
+                          <path d="m6.6 13 10.8 6" />
+                          <path d="m6.6 19 10.8-6" />
+                        </svg>
+                        <svg
+                          v-else-if="issueType.icon === 'clock'"
+                          width="32"
+                          height="32"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <svg
+                          v-else-if="issueType.icon === 'shield'"
+                          width="32"
+                          height="32"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          <path d="m12 8-4 4 4 4 4-4-4-4z" />
+                        </svg>
+                        <svg
+                          v-else
+                          width="32"
+                          height="32"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                          <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                      </div>
+                      <span class="text-[14px] font-bold mb-1 text-noble-black">
+                        {{ issueType.label }}
+                      </span>
+                      <span class="text-[12px] text-gray-400 font-medium leading-tight">
+                        {{ issueType.description }}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Step 2: Transaction & Details -->
+                <div
+                  v-if="currentReportStep === 2"
+                  class="space-y-10 animate-in fade-in duration-500"
+                >
+                  <div class="space-y-6">
+                    <div class="space-y-2 border-l-[3px] border-burning-orange pl-4">
+                      <h2 class="text-[16px] font-semibold text-noble-black">
+                        Transaction Details
+                      </h2>
+                      <p class="text-[13px] text-noble-black/40 font-medium">
+                        Select the booking you are reporting.
+                      </p>
+                    </div>
+
+                    <div class="bg-white border border-[#F0EDE8] rounded-[16px] p-6 space-y-6">
+                      <div>
+                        <label
+                          class="block text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-3 ml-1"
+                          >Related Transaction</label
+                        >
+                        <div class="relative">
+                          <select
+                            v-model="selectedTransactionId"
+                            :disabled="isTransactionLocked"
+                            class="w-full h-12 rounded-[10px] border-[1.5px] border-[#E5E7EB] bg-white px-4 text-[14px] text-noble-black font-semibold outline-none transition-all focus:border-burning-orange appearance-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            <option
+                              v-for="transaction in reportableTransactions"
+                              :key="transaction.transactionId"
+                              :value="transaction.transactionId"
+                            >
+                              {{ transaction.transactionReference }} • {{ transaction.item.name }}
+                            </option>
+                          </select>
+                          <div
+                            class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-noble-black/30"
+                          >
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="3"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            >
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </div>
+                        </div>
+                        <p
+                          v-if="isTransactionLocked"
+                          class="mt-2 text-[11px] font-medium text-burning-orange/60 ml-1"
+                        >
+                          ✓ Pre-selected from your order history
+                        </p>
+                      </div>
+
+                      <!-- Confirmation Row (Auto-populated) -->
+                      <div class="grid gap-4 sm:grid-cols-2">
+                        <div class="space-y-2">
+                          <p
+                            class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 ml-1"
+                          >
+                            Item Name
+                          </p>
+                          <div
+                            class="flex items-center gap-3 p-4 rounded-[12px] border border-dashed border-[#E5E7EB] bg-[#F9FAFB]"
+                          >
+                            <div
+                              class="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100"
+                            >
+                              <!-- Placeholder for item thumbnail since backend doesn't provide it yet -->
+                              <svg
+                                class="text-gray-400"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              >
+                                <path d="m7.5 4.27 9 5.15" />
+                                <path
+                                  d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+                                />
+                                <path d="m3.3 7 8.7 5 8.7-5" />
+                                <path d="M12 22V12" />
+                              </svg>
+                            </div>
+                            <span class="text-[14px] font-bold text-noble-black/70 truncate">
+                              {{ selectedTransaction?.item.name ?? "---" }}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div class="space-y-2">
+                          <p
+                            class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 ml-1"
+                          >
+                            Other Party
+                          </p>
+                          <div
+                            class="flex items-center gap-3 p-4 rounded-[12px] border border-dashed border-[#E5E7EB] bg-[#F9FAFB]"
+                          >
+                            <UserAvatar
+                              :user-name="selectedTransaction?.counterpartName || 'U'"
+                              size="sm"
+                              class="shrink-0 ring-2 ring-white"
+                            />
+                            <span class="text-[14px] font-bold text-noble-black/70 truncate">
+                              {{ selectedTransaction?.counterpartName ?? "---" }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="space-y-8">
+                    <!-- Summary -->
+                    <div class="space-y-4">
+                      <div class="space-y-1 border-l-[3px] border-burning-orange pl-4">
+                        <h2 class="text-[16px] font-semibold text-noble-black">Summary</h2>
+                        <p class="text-[13px] text-noble-black/40 font-medium">
+                          Explain your concern in detail.
+                        </p>
+                      </div>
+
+                      <div class="relative">
+                        <textarea
+                          v-model="reportSummary"
+                          rows="6"
+                          maxlength="1000"
+                          placeholder="What happened and when?"
+                          class="w-full min-h-[140px] rounded-[12px] border-[1.5px] border-[#E5E7EB] bg-white p-[14px] text-[15px] text-noble-black font-medium outline-none transition-all focus:border-burning-orange focus:ring-4 focus:ring-burning-orange/10 leading-relaxed shadow-sm"
+                        ></textarea>
+                        <div
+                          class="absolute bottom-3 right-3 text-[12px] font-bold text-[#9CA3AF] pointer-events-none bg-white/80 px-2 rounded"
+                        >
+                          {{ reportSummary.length }} / 1000
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Evidence -->
+                    <div class="space-y-4">
+                      <div class="space-y-1 border-l-[3px] border-burning-orange pl-4">
+                        <h2 class="text-[16px] font-semibold text-noble-black">Evidence</h2>
+                        <p class="text-[13px] text-noble-black/40 font-medium">
+                          Attach photos or documents supporting your claim.
+                        </p>
+                      </div>
+
+                      <div class="relative group cursor-pointer" @click="openReportFilePicker">
+                        <div
+                          class="w-full py-8 px-6 rounded-[12px] border-2 border-dashed border-[#E5E7EB] bg-gray-50/30 flex flex-col items-center justify-center transition-all duration-300 group-hover:border-burning-orange group-hover:bg-[#FFF5EE]"
+                        >
+                          <div
+                            class="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100 mb-4 transition-colors group-hover:text-burning-orange text-[#9CA3AF]"
+                          >
+                            <svg
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            >
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" x2="12" y1="3" y2="15" />
+                            </svg>
+                          </div>
+                          <p class="text-[14px] font-bold text-[#6B7280]">
+                            Drag photos or files here
+                          </p>
+                          <button
+                            type="button"
+                            class="mt-2 text-[13px] font-bold text-burning-orange hover:underline underline-offset-4"
+                          >
+                            Browse files
+                          </button>
+                        </div>
+                      </div>
+
+                      <input
+                        ref="reportFileInput"
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.pdf"
+                        multiple
+                        class="hidden"
+                        @change="handleReportFileChange"
+                      />
+
+                      <div v-if="reportEvidenceFiles.length" class="flex flex-wrap gap-2 mt-2">
+                        <div
+                          v-for="(fileName, index) in reportEvidenceFiles"
+                          :key="index"
+                          class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-burning-orange/[0.08] text-burning-orange text-[12px] font-bold border border-burning-orange/10"
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" x2="12" y1="3" y2="15" />
+                          </svg>
+                          <span class="max-w-[140px] truncate">{{ fileName }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Step 3: Review & Submit -->
+                <div
+                  v-if="currentReportStep === 3"
+                  class="space-y-10 animate-in fade-in duration-500"
+                >
+                  <div class="space-y-4 border-l-[3px] border-burning-orange pl-4">
+                    <h2 class="text-[22px] font-bold text-noble-black">Final Review</h2>
+                    <p class="text-[14px] text-noble-black/50 font-medium">
+                      Please review your report details before submitting for moderation.
+                    </p>
+                  </div>
+
+                  <div
+                    class="bg-cream border border-cinnamon-ice/20 rounded-[28px] p-8 space-y-8 shadow-sm"
+                  >
+                    <div class="grid gap-8 sm:grid-cols-2">
+                      <div>
+                        <p
+                          class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-2"
+                        >
+                          Category
+                        </p>
+                        <p class="text-[16px] font-bold text-noble-black">{{ issueTypeLabel }}</p>
+                      </div>
+                      <div>
+                        <p
+                          class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-2"
+                        >
+                          Item
+                        </p>
+                        <p class="text-[16px] font-bold text-noble-black">
+                          {{ selectedTransaction?.item.name }}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div v-if="reportSummary" class="pt-8 border-t border-cinnamon-ice/10">
+                      <p
+                        class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-3"
+                      >
+                        Your Summary
+                      </p>
+                      <p
+                        class="text-[14px] text-noble-black/70 leading-relaxed italic border-l-2 border-burning-orange/20 pl-4"
+                      >
+                        {{ reportSummary }}
+                      </p>
+                    </div>
+
+                    <div class="pt-8 border-t border-cinnamon-ice/10">
+                      <p
+                        class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-4 ml-1"
+                      >
+                        Proposed Resolution
+                      </p>
+                      <div class="grid gap-3">
+                        <button
+                          v-for="option in resolutionOptions"
+                          :key="option.value"
+                          type="button"
+                          class="flex items-center gap-4 p-4 rounded-[14px] border-[1.5px] transition-all duration-300 text-left"
+                          :class="[
+                            selectedResolution === option.value
+                              ? 'bg-[#FFF5EE] border-burning-orange border-2 shadow-sm'
+                              : 'bg-white border-gray-100 hover:border-burning-orange/30 shadow-sm',
+                          ]"
+                          @click="selectedResolution = option.value"
+                        >
+                          <!-- Radio Circle -->
+                          <div
+                            class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all"
+                            :class="[
+                              selectedResolution === option.value
+                                ? 'border-burning-orange'
+                                : 'border-gray-200',
+                            ]"
+                          >
+                            <div
+                              v-if="selectedResolution === option.value"
+                              class="w-2.5 h-2.5 rounded-full bg-burning-orange"
+                            ></div>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="text-[14px] font-semibold text-noble-black leading-tight">
+                              {{ option.label }}
+                            </p>
+                            <p class="text-[12px] text-noble-black/40 font-medium mt-1 truncate">
+                              {{ option.description }}
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="pt-8 border-t border-cinnamon-ice/10">
+                      <p
+                        class="text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-3"
+                      >
+                        Evidence Files
+                      </p>
+                      <div class="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          class="h-12 px-6 rounded-[14px] bg-blue-estate/[0.08] text-blue-estate hover:bg-blue-estate/[0.12] font-bold text-[13px] transition-all flex items-center gap-2"
+                          @click="openReportFilePicker"
+                        >
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" x2="12" y1="3" y2="15" />
+                          </svg>
+                          {{
+                            reportEvidenceFiles.length
+                              ? `Manage Files (${reportEvidenceFiles.length})`
+                              : "Add Evidence"
+                          }}
+                        </button>
+                        <div
+                          v-if="reportEvidenceFiles.length"
+                          class="flex-1 min-w-0 flex items-center"
+                        >
+                          <p class="text-[12px] text-noble-black/40 font-medium truncate">
+                            {{ reportEvidenceFiles.join(", ") }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Step Navigation Footer (Modernized) -->
+                <div
+                  class="mt-12 pt-5 border-t border-[#F0EDE8] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6"
+                >
+                  <!-- Left: Security Disclaimer -->
+                  <div class="flex items-center gap-2.5 text-[#9CA3AF]">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m12 14 4-4" />
+                      <path d="M3.34 19a10 10 0 1 1 17.32 0Z" />
+                      <path d="m12 14-4-4" />
+                    </svg>
+                    <p class="text-[12px] font-medium leading-none">
+                      False reports may lead to account action
+                    </p>
+                  </div>
+
+                  <!-- Right: Actions -->
+                  <div class="flex items-center gap-3">
+                    <button
+                      v-if="currentReportStep > 1"
+                      type="button"
+                      class="h-11 px-6 rounded-[10px] text-noble-black/40 font-bold text-[14px] hover:bg-gray-50 hover:text-noble-black transition-all"
+                      @click="prevStep"
+                    >
+                      Back
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      class="h-11 px-6 rounded-[10px] text-noble-black/40 font-bold text-[14px] hover:bg-gray-50 hover:text-noble-black transition-all"
+                      @click="setActiveTab('disputes')"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      v-if="currentReportStep < 3"
+                      type="button"
+                      class="h-11 px-8 rounded-[10px] bg-blue-estate text-white font-bold text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all"
+                      @click="nextStep"
+                    >
+                      Continue
+                    </button>
+
+                    <button
+                      v-else
+                      type="button"
+                      :disabled="isSubmittingReport"
+                      class="h-11 px-8 rounded-[10px] bg-burning-orange text-white font-bold text-[14px] hover:brightness-110 shadow-[0_4px_14px_rgba(232,101,10,0.3)] transition-all disabled:opacity-50 disabled:grayscale"
+                      @click="submitReport"
+                    >
+                      <span v-if="isSubmittingReport" class="flex items-center gap-2">
+                        <svg
+                          class="animate-spin"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="3"
+                        >
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                        Submitting...
+                      </span>
+                      <span v-else>Submit Report</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
           </div>
 
-          <div>
-            <h3 class="text-[30px] font-bold text-noble-black">Summary</h3>
-            <p class="mt-3 text-sm text-noble-black/60">
-              Please describe the issue in detail. What happened and when?
-            </p>
-            <textarea
-              v-model="reportSummary"
-              rows="7"
-              maxlength="1600"
-              placeholder="Provide context..."
-              class="mt-5 w-full rounded-2xl border border-cinnamon-ice/60 bg-white px-4 py-4 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
-            ></textarea>
+          <!-- Right Column: Info Panel (40%, Sticky) -->
+          <aside
+            class="lg:col-span-2 space-y-6 lg:sticky lg:top-8 animate-in fade-in slide-in-from-right-4 duration-700"
+          >
+            <div class="bg-white border border-gray-100 rounded-[24px] p-8 shadow-sm">
+              <h3 class="text-[18px] font-bold text-noble-black mb-6">What happens next?</h3>
+              <div class="space-y-6">
+                <div class="flex gap-4">
+                  <div
+                    class="w-8 h-8 rounded-full bg-blue-estate/[0.08] text-blue-estate flex items-center justify-center shrink-0"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-[14px] font-bold text-noble-black">Admin Review</p>
+                    <p class="text-[13px] text-noble-black/50 leading-relaxed mt-1">
+                      Our team typically reviews all reports within 24-48 hours to determine
+                      eligibility.
+                    </p>
+                  </div>
+                </div>
+                <div class="flex gap-4">
+                  <div
+                    class="w-8 h-8 rounded-full bg-blue-estate/[0.08] text-blue-estate flex items-center justify-center shrink-0"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-[14px] font-bold text-noble-black">Dispute Opening</p>
+                    <p class="text-[13px] text-noble-black/50 leading-relaxed mt-1">
+                      If approved, a dispute will be opened and the other party will be notified to
+                      provide their side.
+                    </p>
+                  </div>
+                </div>
+                <div class="flex gap-4">
+                  <div
+                    class="w-8 h-8 rounded-full bg-blue-estate/[0.08] text-blue-estate flex items-center justify-center shrink-0"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m9 12 2 2 4-4" />
+                      <circle cx="12" cy="12" r="10" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-[14px] font-bold text-noble-black">Final Judgment</p>
+                    <p class="text-[13px] text-noble-black/50 leading-relaxed mt-1">
+                      An admin will issue a final decision based on all submitted evidence and
+                      platform policies.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-            <input
-              ref="reportFileInput"
-              type="file"
-              accept=".png,.jpg,.jpeg,.pdf"
-              multiple
-              class="hidden"
-              @change="handleReportFileChange"
-            />
-
-            <div
-              v-if="reportEvidenceFiles.length"
-              class="mt-4 rounded-2xl bg-pale-cashmere/65 px-4 py-3 text-sm text-noble-black/60"
-            >
-              {{ reportEvidenceFiles.join(", ") }}
+              <div class="mt-10 pt-8 border-t border-gray-50">
+                <div
+                  class="bg-[#FFFBF5] border border-[#FED7AA] rounded-[10px] p-4 flex gap-3 items-center"
+                >
+                  <div class="shrink-0 text-burning-orange">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"
+                      />
+                      <path d="M9 18h6" />
+                      <path d="M10 22h4" />
+                    </svg>
+                  </div>
+                  <p class="text-[13px] text-[#6B7280] leading-relaxed">
+                    <span
+                      class="text-[12px] font-bold text-burning-orange uppercase tracking-wider mr-1.5"
+                      >Pro tip</span
+                    >
+                    Detailed photos of damages or proof of messages often resolve disputes twice as
+                    fast.
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <button
-              type="button"
-              class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-burning-orange transition-colors hover:text-cinnabar-red"
-              @click="openReportFilePicker"
-            >
+            <div class="flex items-center gap-3 px-4 text-noble-black/30">
               <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
+                width="16"
+                height="16"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="2"
+                stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-              Add file
-            </button>
-
-            <div
-              class="mt-10 flex flex-col gap-4 border-t border-cinnamon-ice/80 pt-8 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <p class="text-xs text-noble-black/35">False reports may lead to account action.</p>
-
-              <button
-                type="button"
-                :disabled="isSubmittingReport"
-                class="rounded-full bg-burning-orange px-8 py-4 text-sm font-bold text-white shadow-[0_12px_28px_rgba(255,113,36,0.28)] transition-colors hover:bg-cinnabar-red disabled:opacity-50"
-                @click="submitReport"
-              >
-                {{ isSubmittingReport ? "Submitting..." : "Submit report" }}
-              </button>
+              <p class="text-[11px] font-bold uppercase tracking-widest">TakeUP Secure Policy</p>
             </div>
-          </div>
+          </aside>
         </div>
-      </section>
+      </div>
     </template>
 
     <template v-else-if="activeTab === 'disputes'">
-      <section
-        class="mt-6 w-full max-w-[1120px] rounded-[32px] border border-cinnamon-ice bg-cream p-6 text-left sm:p-8"
-      >
-        <div class="mb-6">
-          <h2 class="text-[36px] font-bold text-noble-black">Your Disputes</h2>
-          <p class="mt-2 text-sm text-noble-black/60">
-            Review the status of your submitted concerns and any opened disputes.
-          </p>
-        </div>
-
-        <div v-if="disputesPending" class="space-y-3">
-          <div
-            v-for="index in 3"
-            :key="index"
-            class="h-24 animate-pulse rounded-3xl bg-white/80"
-          ></div>
-        </div>
-
-        <div
-          v-else-if="!myDisputes.length"
-          class="rounded-3xl border border-dashed border-cinnamon-ice bg-white px-6 py-14 text-center"
+      <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <section
+          class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
         >
-          <p class="text-xl font-bold text-noble-black">No disputes yet</p>
-          <p class="mt-2 text-sm text-noble-black/60">
-            Submitted concerns and dispute updates will appear here.
-          </p>
-        </div>
+          <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
+            <h2 class="text-[20px] font-bold text-noble-black">Your Disputes</h2>
+            <p class="text-[13px] font-medium text-noble-black/40 mt-0.5">
+              Review the status of your submitted concerns and any opened disputes.
+            </p>
+          </div>
 
-        <div v-else class="space-y-3">
-          <article
-            v-for="dispute in myDisputes"
-            :key="dispute.id"
-            class="rounded-3xl border border-cinnamon-ice bg-white px-5 py-4 shadow-sm"
+          <div v-if="disputesPending" class="space-y-4">
+            <div
+              v-for="index in 3"
+              :key="index"
+              class="h-32 animate-pulse rounded-2xl bg-white/50 border border-gray-100"
+            ></div>
+          </div>
+
+          <div
+            v-else-if="!myDisputes.length"
+            class="rounded-[24px] border border-dashed border-cinnamon-ice/40 bg-white/40 px-6 py-14 text-center"
           >
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <p class="text-lg font-bold text-blue-estate">
-                    {{ dispute.transactionReference }}
-                  </p>
-                  <span
-                    class="inline-flex rounded-full px-3 py-1 text-xs font-bold"
-                    :class="statusClasses(dispute.status)"
+            <div
+              class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100 shadow-sm"
+            >
+              <svg
+                class="text-noble-black/20"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <p class="text-[18px] font-bold text-noble-black">No disputes yet</p>
+            <p class="mt-1 text-[13px] text-noble-black/40 max-w-[280px] mx-auto">
+              Submitted concerns and dispute updates will appear here.
+            </p>
+          </div>
+
+          <div v-else class="space-y-4">
+            <article
+              v-for="dispute in myDisputes"
+              :key="dispute.id"
+              class="group relative bg-white border border-gray-100 rounded-[22px] overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
+            >
+              <!-- Zone 1: Header / Status -->
+              <div
+                class="flex items-center justify-between px-6 py-4 border-b border-gray-50 bg-gray-50/30"
+              >
+                <div class="flex items-center gap-3">
+                  <div
+                    class="flex items-center gap-1.5 font-mono text-[11px] font-bold text-noble-black/40 bg-white px-2 py-0.5 rounded border border-gray-100"
                   >
-                    {{ statusLabel(dispute.status) }}
-                  </span>
+                    ID. {{ dispute.transactionReference }}
+                  </div>
+                  <span class="text-noble-black/20 font-bold select-none">•</span>
+                  <p class="text-[12px] font-bold text-noble-black/50 uppercase tracking-tight">
+                    {{ dispute.viewerRole?.toLowerCase() || "participant" }}
+                  </p>
+                </div>
+                <span
+                  class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border shadow-sm"
+                  :class="statusClasses(dispute.status)"
+                >
+                  {{ statusLabel(dispute.status) }}
+                </span>
+              </div>
+
+              <!-- Zone 2: Details -->
+              <div class="p-6">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div class="space-y-1">
+                    <h3 class="text-[17px] font-bold text-noble-black leading-tight">
+                      {{ dispute.item?.name ?? "Removed item" }}
+                    </h3>
+                    <p class="text-[13px] font-medium text-noble-black/40">
+                      With <span class="text-noble-black/70">{{ dispute.counterpartName }}</span>
+                    </p>
+                  </div>
+                  <div class="text-left sm:text-right shrink-0">
+                    <p class="text-[13px] font-bold text-noble-black/70">{{ dispute.reason }}</p>
+                    <p class="text-[11px] font-medium text-noble-black/30 mt-0.5">
+                      Submitted {{ formatDate(dispute.createdAt) }}
+                    </p>
+                  </div>
                 </div>
 
-                <p class="mt-2 text-sm font-semibold text-noble-black">
-                  {{ dispute.item?.name ?? "Removed item" }} • with {{ dispute.counterpartName }}
-                </p>
-                <p class="mt-1 text-xs text-noble-black/55">
-                  {{ dispute.reason }}
-                </p>
+                <div
+                  v-if="dispute.description"
+                  class="mt-4 p-4 rounded-xl bg-gray-50/50 border border-gray-100/50"
+                >
+                  <p class="text-[13px] leading-relaxed text-noble-black/60 line-clamp-2 italic">
+                    "{{ dispute.description }}"
+                  </p>
+                </div>
+
+                <!-- Admin Decision Box -->
+                <div
+                  v-if="dispute.finalDecision"
+                  class="mt-5 rounded-[16px] border border-success-green/10 bg-success-green/[0.03] p-4"
+                >
+                  <div class="flex items-center gap-2 text-success-green mb-1.5">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <p class="text-[13px] font-bold">
+                      {{ finalDecisionLabel(dispute.finalDecision) }}
+                    </p>
+                  </div>
+                  <p
+                    v-if="dispute.finalDecisionNotes"
+                    class="text-[13px] text-noble-black/50 leading-relaxed pl-6"
+                  >
+                    {{ dispute.finalDecisionNotes }}
+                  </p>
+                  <p
+                    v-if="dispute.closedAt"
+                    class="mt-2 text-[11px] font-mono text-noble-black/30 pl-6"
+                  >
+                    RESOLVED ON {{ formatDate(dispute.closedAt).toUpperCase() }}
+                  </p>
+                </div>
+
+                <div class="mt-6 flex items-center justify-between gap-4">
+                  <div class="flex gap-2">
+                    <NuxtLink
+                      v-if="dispute.canSubmitRebuttal && dispute.bookingId"
+                      :to="`/account/transactions/${dispute.bookingId}?action=rebuttal`"
+                      class="h-9 px-5 flex items-center justify-center rounded-lg bg-blue-estate text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-blue-estate/20"
+                    >
+                      Submit Rebuttal
+                    </NuxtLink>
+
+                    <div
+                      v-else-if="dispute.hasRebuttal"
+                      class="h-9 px-4 flex items-center justify-center rounded-lg bg-blue-estate/[0.08] text-blue-estate text-[12px] font-bold border border-blue-estate/10"
+                    >
+                      <svg
+                        class="mr-1.5"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Rebuttal submitted
+                    </div>
+                  </div>
+
+                  <NuxtLink
+                    v-if="dispute.bookingId"
+                    :to="`/account/transactions/${dispute.bookingId}`"
+                    class="text-[12px] font-bold text-burning-orange hover:underline flex items-center gap-1"
+                  >
+                    View Details
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </NuxtLink>
+                </div>
               </div>
+            </article>
+          </div>
 
-              <div class="text-right text-xs text-noble-black/45">
-                <p>{{ formatDate(dispute.createdAt) }}</p>
-                <p class="mt-2">
-                  {{ dispute.viewerRole ? dispute.viewerRole.toLowerCase() : "participant" }}
-                </p>
-              </div>
-            </div>
-
-            <p
-              v-if="dispute.description"
-              class="mt-4 line-clamp-2 text-sm leading-relaxed text-noble-black/65"
+          <div class="mt-10 pt-8 border-t border-cinnamon-ice/10 flex justify-end">
+            <button
+              type="button"
+              :disabled="!recentAppealableDisputes.length"
+              class="h-12 px-8 rounded-[14px] bg-white border-2 border-burning-orange text-burning-orange font-bold text-[14px] hover:bg-burning-orange hover:text-white transition-all shadow-sm disabled:opacity-40 disabled:grayscale disabled:pointer-events-none"
+              @click="setActiveTab('appeals')"
             >
-              {{ dispute.description }}
-            </p>
-
-            <div
-              v-if="dispute.finalDecision"
-              class="mt-4 rounded-2xl bg-cream px-4 py-3 text-sm text-noble-black/70"
-            >
-              <p class="font-bold text-noble-black">
-                {{ finalDecisionLabel(dispute.finalDecision) }}
-              </p>
-              <p v-if="dispute.finalDecisionNotes" class="mt-2 line-clamp-3 leading-relaxed">
-                {{ dispute.finalDecisionNotes }}
-              </p>
-              <p v-if="dispute.closedAt" class="mt-2 text-xs text-noble-black/45">
-                Closed {{ formatDate(dispute.closedAt) }}
-              </p>
-            </div>
-
-            <div class="mt-4 flex flex-wrap items-center gap-3">
-              <NuxtLink
-                v-if="dispute.canSubmitRebuttal && dispute.bookingId"
-                :to="`/account/transactions/${dispute.bookingId}`"
-                class="inline-flex items-center rounded-full bg-blue-estate px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-900"
-              >
-                Submit Rebuttal
-              </NuxtLink>
-
-              <span
-                v-else-if="dispute.hasRebuttal"
-                class="inline-flex items-center rounded-full bg-blue-estate/10 px-4 py-2 text-sm font-semibold text-blue-estate"
-              >
-                Rebuttal submitted
-              </span>
-            </div>
-          </article>
-        </div>
-
-        <div class="mt-8 flex justify-end">
-          <button
-            type="button"
-            :disabled="!recentAppealableDisputes.length"
-            class="rounded-full bg-burning-orange px-8 py-4 text-sm font-bold text-white shadow-[0_12px_28px_rgba(255,113,36,0.28)] transition-colors hover:bg-cinnabar-red disabled:cursor-not-allowed disabled:opacity-40"
-            @click="setActiveTab('appeals')"
-          >
-            Appeal a decision
-          </button>
-        </div>
-      </section>
+              Appeal a decision
+            </button>
+          </div>
+        </section>
+      </div>
     </template>
 
     <template v-else>
-      <section
-        class="mt-6 w-full max-w-[1120px] rounded-[32px] border border-cinnamon-ice bg-cream p-6 text-left sm:p-8"
-      >
-        <div class="mb-6">
-          <h2 class="text-[36px] font-bold text-noble-black">Appeal a Dispute Decision</h2>
-          <p class="mt-2 text-sm text-noble-black/60">
-            Appeals are only available for disputes marked “Appeal available”.
-          </p>
-        </div>
-
-        <div
-          v-if="!recentAppealableDisputes.length"
-          class="rounded-3xl border border-dashed border-cinnamon-ice bg-white px-6 py-14 text-center"
+      <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <section
+          class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
         >
-          <p class="text-xl font-bold text-noble-black">No appeal-ready disputes</p>
-          <p class="mt-2 text-sm text-noble-black/60">
-            Recent rejected disputes will appear here when they are still eligible for appeal.
-          </p>
-        </div>
-
-        <div v-else class="space-y-8">
-          <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <div>
-              <label class="block text-base font-bold text-noble-black">Dispute ID</label>
-              <select
-                v-model="selectedAppealDisputeId"
-                class="mt-3 w-full rounded-2xl border border-cinnamon-ice/60 bg-white px-4 py-4 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
-              >
-                <option
-                  v-for="dispute in recentAppealableDisputes"
-                  :key="dispute.id"
-                  :value="dispute.id"
-                >
-                  {{ dispute.transactionReference }} • {{ dispute.item?.name ?? "Removed item" }}
-                </option>
-              </select>
-              <p class="mt-2 text-xs text-noble-black/45">
-                Tip: Choose from your recent disputes list.
-              </p>
-            </div>
-
-            <div>
-              <label class="block text-base font-bold text-noble-black">Evidence (optional)</label>
-              <input
-                ref="appealFileInput"
-                type="file"
-                accept=".png,.jpg,.jpeg,.pdf"
-                multiple
-                class="hidden"
-                @change="handleAppealFileChange"
-              />
-              <div class="mt-3 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  class="inline-flex min-w-[104px] items-center justify-center rounded-full border border-cinnamon-ice bg-white px-5 py-2.5 text-sm font-bold text-noble-black transition-colors hover:border-burning-orange/40"
-                  @click="openAppealFilePicker"
-                >
-                  Add file
-                </button>
-                <span class="text-xs text-noble-black/45">Upload .png, .jpeg, .pdf</span>
-              </div>
-            </div>
+          <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
+            <h2 class="text-[20px] font-bold text-noble-black">Appeal a Dispute Decision</h2>
+            <p class="text-[13px] font-medium text-noble-black/40 mt-0.5">
+              Appeals are only available for disputes marked “Appeal available”.
+            </p>
           </div>
 
           <div
-            v-if="appealEvidenceFiles.length"
-            class="rounded-2xl bg-white px-4 py-3 text-sm text-noble-black/60"
+            v-if="!recentAppealableDisputes.length"
+            class="rounded-[24px] border border-dashed border-cinnamon-ice/40 bg-white/40 px-6 py-14 text-center"
           >
-            {{ appealEvidenceFiles.join(", ") }}
-          </div>
-
-          <div>
-            <label class="block text-base font-bold text-noble-black">Appeal Reason</label>
-            <textarea
-              v-model="appealReason"
-              rows="6"
-              maxlength="2000"
-              placeholder="Explain why the decision should be reconsidered. Reference evidence and timeline."
-              class="mt-3 w-full rounded-2xl border border-cinnamon-ice/60 bg-white px-4 py-4 text-sm text-noble-black outline-none transition-colors focus:border-burning-orange"
-            ></textarea>
-          </div>
-
-          <div class="flex items-end justify-between gap-4 border-t border-cinnamon-ice/80 pt-6">
-            <p class="text-xs text-noble-black/35">Appeals are final after review.</p>
-            <button
-              type="button"
-              :disabled="isSubmittingAppeal"
-              class="rounded-full bg-burning-orange px-8 py-4 text-sm font-bold text-white shadow-[0_12px_28px_rgba(255,113,36,0.28)] transition-colors hover:bg-cinnabar-red disabled:opacity-50"
-              @click="submitAppeal"
+            <div
+              class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100 shadow-sm"
             >
-              {{ isSubmittingAppeal ? "Submitting..." : "Submit appeal" }}
-            </button>
+              <svg
+                class="text-noble-black/20"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <p class="text-[18px] font-bold text-noble-black">No appeal-ready disputes</p>
+            <p class="mt-1 text-[13px] text-noble-black/40 max-w-[280px] mx-auto">
+              Recent rejected disputes will appear here when they are still eligible for appeal.
+            </p>
           </div>
-        </div>
-      </section>
+
+          <div v-else class="space-y-8">
+            <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div class="bg-white border border-gray-100 rounded-[20px] p-6 shadow-sm">
+                <label
+                  class="block text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-4 ml-1"
+                  >Select Dispute to Appeal</label
+                >
+                <div class="relative">
+                  <select
+                    v-model="selectedAppealDisputeId"
+                    class="w-full h-14 rounded-[16px] border border-gray-200 bg-white px-5 text-[15px] text-noble-black font-bold outline-none transition-all focus:border-burning-orange appearance-none cursor-pointer"
+                  >
+                    <option
+                      v-for="dispute in recentAppealableDisputes"
+                      :key="dispute.id"
+                      :value="dispute.id"
+                    >
+                      {{ dispute.transactionReference }} •
+                      {{ dispute.item?.name ?? "Removed item" }}
+                    </option>
+                  </select>
+                  <div
+                    class="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-noble-black/30"
+                  >
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="bg-blue-estate/[0.03] border border-blue-estate/10 rounded-[20px] p-6 flex flex-col items-center justify-center text-center"
+              >
+                <input
+                  ref="appealFileInput"
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.pdf"
+                  multiple
+                  class="hidden"
+                  @change="handleAppealFileChange"
+                />
+                <button
+                  type="button"
+                  class="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-white border border-blue-estate/20 text-blue-estate font-bold text-[13px] hover:bg-white/80 transition-all shadow-sm"
+                  @click="openAppealFilePicker"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" x2="12" y1="3" y2="15" />
+                  </svg>
+                  Attach Files
+                </button>
+                <p class="mt-3 text-[11px] text-blue-estate/40 font-bold uppercase tracking-wider">
+                  {{
+                    appealEvidenceFiles.length
+                      ? `${appealEvidenceFiles.length} files attached`
+                      : "Upload PDF or JPG"
+                  }}
+                </p>
+              </div>
+            </div>
+
+            <div
+              v-if="appealEvidenceFiles.length"
+              class="rounded-xl bg-white/50 border border-gray-100 p-4 text-[12px] text-noble-black/50 font-medium truncate"
+            >
+              {{ appealEvidenceFiles.join(", ") }}
+            </div>
+
+            <div class="space-y-4">
+              <label
+                class="block text-[11px] font-bold uppercase tracking-wider text-noble-black/30 mb-3 ml-1"
+                >Appeal Reason</label
+              >
+              <textarea
+                v-model="appealReason"
+                rows="6"
+                maxlength="2000"
+                placeholder="Explain why the decision should be reconsidered..."
+                class="w-full rounded-[24px] border border-gray-200 bg-white p-6 text-[15px] text-noble-black font-medium outline-none transition-all focus:border-burning-orange leading-relaxed shadow-sm"
+              ></textarea>
+            </div>
+
+            <div
+              class="flex flex-col sm:flex-row items-center justify-between gap-6 pt-8 border-t border-cinnamon-ice/10"
+            >
+              <p class="text-[12px] text-noble-black/30 font-medium italic">
+                Note: Appeals are final and subject to detailed secondary review.
+              </p>
+              <button
+                type="button"
+                :disabled="isSubmittingAppeal"
+                class="h-12 px-10 rounded-[14px] bg-gradient-to-br from-burning-orange to-orange-500 text-white font-bold text-[15px] hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50 disabled:grayscale"
+                @click="submitAppeal"
+              >
+                {{ isSubmittingAppeal ? "Submitting..." : "Submit Appeal Request" }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.notifications-menu-enter-active,
+.notifications-menu-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.notifications-menu-enter-from,
+.notifications-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+</style>

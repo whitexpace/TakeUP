@@ -23,7 +23,7 @@ export default <Config>{
         "success-green": "#34A853",
       },
       fontFamily: {
-        geist: ["Geist", "sans-serif"],
+        geist: ["Helvetica", "Arial", "sans-serif"],
         rewon: ["Rewon", "sans-serif"],
       },
     },

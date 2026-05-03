@@ -43,7 +43,19 @@ const fromPage = computed(() => {
   return typeof from === "string" ? from : null
 })
 
+const adminUserId = computed(() => {
+  const id = route.query.adminUserId
+  return typeof id === "string" ? id : null
+})
+
 const backNavigationPath = computed(() => {
+  if (fromPage.value === "admin-user-listings" && adminUserId.value) {
+    return {
+      path: `/admin/users/${adminUserId.value}`,
+      query: { tab: "listings" },
+    }
+  }
+
   if (fromPage.value === "likes") {
     return "/likes"
   }
@@ -52,6 +64,10 @@ const backNavigationPath = computed(() => {
 })
 
 const backNavigationLabel = computed(() => {
+  if (fromPage.value === "admin-user-listings") {
+    return "Back to admin user listings"
+  }
+
   if (fromPage.value === "likes") {
     return "Back to liked items"
   }
@@ -2322,7 +2338,59 @@ onUnmounted(() => {
             </div>
 
             <!-- Seller Card -->
+            <NuxtLink
+              v-if="item.lenderUsername"
+              :to="`/profile/${item.lenderUsername}`"
+              class="bg-cream rounded-3xl p-5 border border-cinnamon-ice/30 flex items-center gap-4 mt-16 sm:p-6 sm:gap-6 hover:bg-cinnamon-ice/10 transition-colors group/seller"
+            >
+              <div class="flex items-center gap-4 sm:gap-5">
+                <div
+                  class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-cinnamon-ice flex items-center justify-center text-white text-lg sm:text-xl font-bold shrink-0 group-hover/seller:scale-105 transition-transform"
+                >
+                  {{ ownerInitials || "TU" }}
+                </div>
+                <div class="flex flex-col">
+                  <h3
+                    class="text-base sm:text-lg font-semibold text-noble-black group-hover/seller:text-burning-orange transition-colors"
+                  >
+                    {{ ownerName }}
+                  </h3>
+                  <div class="flex items-center gap-1.5 text-sm">
+                    <div class="flex items-center gap-1 text-burning-orange">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon
+                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                        />
+                      </svg>
+                      <span class="font-bold">{{ ratingLabel }}</span>
+                    </div>
+                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                  </div>
+                  <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
+                    Item owner on TakeUP • View Profile
+                  </p>
+                </div>
+              </div>
+              <div
+                class="ml-auto text-noble-black/20 group-hover/seller:text-burning-orange transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+            </NuxtLink>
             <div
+              v-else
               class="bg-cream rounded-3xl p-5 border border-cinnamon-ice/30 flex items-center gap-4 mt-16 sm:p-6 sm:gap-6"
             >
               <div class="flex items-center gap-4 sm:gap-5">

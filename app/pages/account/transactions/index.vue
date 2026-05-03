@@ -83,11 +83,6 @@ const visibleBorrowerRequests = computed(() =>
 )
 
 const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
-  // Build maps to deduplicate transactions that correspond to a booking
-  // already represented by a borrower request card. If a transaction has a
-  // bookingId that matches a request.id we prefer showing the request entry
-  // and skip the transaction entry to avoid duplicate cards for the same
-  // underlying booking.
   const requestIdSet = new Set(visibleBorrowerRequests.value.map((r) => r.id))
 
   const requestEntries = visibleBorrowerRequests.value.map((request) => ({
@@ -113,6 +108,43 @@ const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
     if (rightTime !== leftTime) return rightTime - leftTime
     return right.id.localeCompare(left.id)
   })
+})
+
+const groupedHistoryEntries = computed(() => {
+  const groups: Array<{ title: string; entries: HistoryEntry[] }> = []
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+
+  // Start of this week (Monday)
+  const day = now.getDay() || 7
+  const startOfWeek = today - (day - 1) * 24 * 60 * 60 * 1000
+
+  visibleHistoryEntries.value.forEach((entry) => {
+    const entryDate = new Date(entry.date)
+    const entryTime = new Date(
+      entryDate.getFullYear(),
+      entryDate.getMonth(),
+      entryDate.getDate(),
+    ).getTime()
+
+    let groupTitle = ""
+    if (entryTime === today) {
+      groupTitle = "Today"
+    } else if (entryTime >= startOfWeek) {
+      groupTitle = "This Week"
+    } else {
+      groupTitle = entryDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    }
+
+    const existingGroup = groups.find((g) => g.title === groupTitle)
+    if (existingGroup) {
+      existingGroup.entries.push(entry)
+    } else {
+      groups.push({ title: groupTitle, entries: [entry] })
+    }
+  })
+
+  return groups
 })
 
 const hasVisibleEntries = computed(() => visibleHistoryEntries.value.length > 0)
@@ -184,15 +216,6 @@ const statusChips = computed<StatusChip[]>(() => [
   { label: "To Review", value: "TO_REVIEW" },
   { label: "Cancelled", value: "CANCELLED" },
 ])
-
-const sectionTitle = computed(() =>
-  activeRole.value === "BORROWER" ? "Borrowed Items History" : "Lent Items History",
-)
-const sectionSubtitle = computed(() =>
-  activeRole.value === "BORROWER"
-    ? "Items you've borrowed from other users"
-    : "Items you've lent to other users",
-)
 
 const emptyTitle = computed(() => {
   if (activeStatus.value === "TO_REVIEW") return "No transactions awaiting your review"
@@ -309,29 +332,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="font-geist">
-    <div class="mb-4 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 class="text-neutral-800 text-xl font-bold sm:text-2xl">My Transactions</h1>
-        <p class="mt-1 text-base font-normal tracking-wide text-neutral-800 sm:text-lg">
+  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <section class="space-y-3">
+        <div class="space-y-2">
+          <h1 class="text-[28px] font-semibold text-noble-black">My Transactions</h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
+        </div>
+        <p class="text-[16px] font-medium text-noble-black/50">
           Review your borrowing and lending history
         </p>
-      </div>
-
-      <NuxtLink
-        :to="{ path: '/account/disputes', query: { tab: 'disputes' } }"
-        class="inline-flex items-center justify-center self-start rounded-2xl border border-blue-estate/15 bg-blue-estate px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-indigo-900 sm:self-auto"
-      >
-        Disputes
-      </NuxtLink>
+      </section>
     </div>
 
     <!-- Search bar -->
     <div
-      class="flex items-center gap-2 sm:gap-3 bg-white rounded-[20px] border-[0.50px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5 mb-3 sm:mb-4"
+      class="flex items-center gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-12 px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
     >
       <svg
-        class="w-4 h-4 sm:w-5 sm:h-5 text-stone-400 shrink-0"
+        class="w-5 h-5 text-gray-400 shrink-0"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -342,77 +361,89 @@ onBeforeUnmount(() => {
       <input
         v-model="searchQuery"
         type="text"
-        placeholder="Search by item, owner, or order ID"
-        class="flex-1 bg-transparent outline-none text-stone-400 text-sm sm:text-lg font-normal placeholder:text-stone-400 min-w-0"
+        placeholder="Search transactions..."
+        class="flex-1 bg-transparent outline-none text-noble-black text-[15px] font-medium placeholder:text-gray-400 min-w-0"
       />
-      <svg
-        class="w-4 h-4 sm:w-5 sm:h-5 text-neutral-800/70 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
+      <!-- Clear Search Button -->
+      <button
+        v-if="searchQuery"
+        class="text-gray-400 hover:text-noble-black transition-colors"
+        title="Clear search"
+        @click="searchQuery = ''"
       >
-        <line x1="4" y1="6" x2="20" y2="6" stroke-width="1.5" stroke-linecap="round" />
-        <line x1="8" y1="12" x2="20" y2="12" stroke-width="1.5" stroke-linecap="round" />
-        <line x1="12" y1="18" x2="20" y2="18" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
     </div>
 
     <!-- Tab bar -->
-    <div
-      class="flex items-center rounded-[20px] bg-cream border border-cinnamon-ice h-12 sm:h-16 overflow-hidden mb-3 sm:mb-4"
-    >
-      <!-- Borrow History tab -->
+    <div class="flex items-center border-b border-cinnamon-ice/20 gap-8 px-2 mb-4">
       <button
-        class="flex-1 h-full flex items-center justify-center rounded-[20px] transition-colors duration-200 text-sm sm:text-xl font-medium px-2"
+        class="pb-4 text-[18px] font-semibold transition-all relative"
         :class="
           activeRole === 'BORROWER'
-            ? 'bg-burning-orange text-white'
-            : 'bg-transparent text-neutral-800'
+            ? 'text-burning-orange'
+            : 'text-noble-black/40 hover:text-noble-black/60'
         "
         @click="setRole('BORROWER')"
       >
         Borrow History
+        <div
+          v-if="activeRole === 'BORROWER'"
+          class="absolute bottom-0 left-0 right-0 h-0.5 bg-burning-orange rounded-full"
+        ></div>
       </button>
 
-      <!-- Lend History tab -->
       <button
-        class="flex-1 h-full flex items-center justify-center rounded-[20px] transition-colors duration-200 text-sm sm:text-xl font-medium px-2"
+        class="pb-4 text-[18px] font-semibold transition-all relative"
         :class="
           activeRole === 'LENDER'
-            ? 'bg-burning-orange text-white'
-            : 'bg-transparent text-neutral-800'
+            ? 'text-burning-orange'
+            : 'text-noble-black/40 hover:text-noble-black/60'
         "
         @click="setRole('LENDER')"
       >
         Lend History
+        <div
+          v-if="activeRole === 'LENDER'"
+          class="absolute bottom-0 left-0 right-0 h-0.5 bg-burning-orange rounded-full"
+        ></div>
       </button>
     </div>
 
     <!-- Content panel -->
-    <div class="bg-cream rounded-[20px] border border-cinnamon-ice p-4 sm:p-6">
-      <!-- Section title -->
-      <h2 class="text-neutral-800 text-lg sm:text-xl font-semibold">{{ sectionTitle }}</h2>
-      <p
-        class="text-neutral-800/80 text-sm sm:text-base font-normal tracking-wide mt-1 mb-4 sm:mb-5"
-      >
-        {{ sectionSubtitle }}
-      </p>
-
-      <!-- Status filter chips -->
-      <div class="flex flex-wrap gap-1.5 sm:gap-2 mb-4 sm:mb-6">
-        <button
-          v-for="chip in statusChips"
-          :key="chip.label"
-          class="px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-base font-normal transition-colors duration-150"
-          :class="
-            activeStatus === chip.value
-              ? 'bg-burning-orange text-white'
-              : 'bg-white border-[0.30px] border-orange-500 text-neutral-800'
-          "
-          @click="setStatus(chip.value)"
-        >
-          {{ chip.label }}
-        </button>
+    <div
+      class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+    >
+      <!-- Action & Filter Row -->
+      <div class="flex items-center mb-8">
+        <!-- Status filter chips -->
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <button
+            v-for="chip in statusChips"
+            :key="chip.label"
+            class="px-[14px] py-1.5 rounded-full text-[13px] font-bold transition-all duration-200 shrink-0 border-[1.5px]"
+            :class="
+              activeStatus === chip.value
+                ? 'bg-burning-orange/[0.12] border-burning-orange/30 text-burning-orange'
+                : 'bg-white border-gray-200 text-noble-black/40 hover:border-gray-300 hover:text-noble-black/60'
+            "
+            @click="setStatus(chip.value)"
+          >
+            {{ chip.label }}
+          </button>
+        </div>
       </div>
 
       <!-- Loading skeletons -->
@@ -420,7 +451,7 @@ onBeforeUnmount(() => {
         <div
           v-for="i in 3"
           :key="i"
-          class="animate-pulse bg-cinnamon-ice/40 rounded-2xl h-32 sm:h-40 mb-3 sm:mb-4"
+          class="animate-pulse bg-cinnamon-ice/20 rounded-2xl h-32 mb-4"
         />
       </template>
 
@@ -439,9 +470,9 @@ onBeforeUnmount(() => {
           <line x1="12" y1="8" x2="12" y2="12" stroke-width="2" stroke-linecap="round" />
           <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke-width="2" />
         </svg>
-        <p class="text-neutral-800/80 text-sm sm:text-base mb-4">{{ combinedError }}</p>
+        <p class="text-noble-black/50 text-base mb-6 font-medium">{{ combinedError }}</p>
         <button
-          class="bg-burning-orange text-white rounded-xl px-5 sm:px-6 py-2 text-sm sm:text-base font-normal hover:bg-cinnabar-red transition-colors"
+          class="bg-burning-orange text-white rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:brightness-110 transition-all shadow-lg shadow-burning-orange/20"
           @click="refreshAll"
         >
           Retry
@@ -451,46 +482,71 @@ onBeforeUnmount(() => {
       <!-- Empty state -->
       <div
         v-else-if="hasEmptyState"
-        class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
+        class="flex flex-col items-center justify-center py-16 sm:py-20 text-center"
       >
-        <svg
-          class="w-12 h-12 sm:w-16 sm:h-16 text-cinnamon-ice mb-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+        <div
+          class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
         >
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
-          <path d="M3 9h18" stroke-width="1.5" />
-          <path d="M9 21V9" stroke-width="1.5" />
-        </svg>
-        <p class="text-neutral-800 text-sm sm:text-base font-semibold mb-1">{{ emptyTitle }}</p>
-        <p class="text-neutral-800/60 text-xs sm:text-sm">{{ emptySubtitle }}</p>
+          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
+            <path d="M3 9h18" stroke-width="1.5" />
+            <path d="M9 21V9" stroke-width="1.5" />
+          </svg>
+        </div>
+        <p class="text-noble-black text-[18px] font-bold mb-1">{{ emptyTitle }}</p>
+        <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">{{ emptySubtitle }}</p>
       </div>
 
-      <!-- Transaction list -->
-      <div v-else class="flex flex-col gap-3 sm:gap-4">
-        <template v-for="entry in visibleHistoryEntries" :key="`${entry.kind}-${entry.id}`">
-          <BorrowerRequestCard v-if="entry.kind === 'request'" :request="entry.request" />
-          <TransactionCard
-            v-else
-            :transaction="entry.transaction"
-            :active-role="activeRole"
-            @write-review="openReviewModal"
-          />
-        </template>
+      <!-- Transaction list (Grouped & Internal Scroll) -->
+      <div v-else class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10">
+        <div v-for="group in groupedHistoryEntries" :key="group.title" class="space-y-5">
+          <div class="flex items-center gap-4 px-2 sticky top-0 bg-cream z-20 py-2">
+            <span
+              class="text-[12px] font-bold text-noble-black/30 uppercase tracking-[0.2em] shrink-0"
+            >
+              {{ group.title }}
+            </span>
+            <div class="h-[1px] w-full bg-cinnamon-ice/10"></div>
+          </div>
+
+          <div class="flex flex-col gap-4">
+            <template v-for="entry in group.entries" :key="`${entry.kind}-${entry.id}`">
+              <BorrowerRequestCard v-if="entry.kind === 'request'" :request="entry.request" />
+              <TransactionCard
+                v-else
+                :transaction="entry.transaction"
+                :active-role="activeRole"
+                @write-review="openReviewModal"
+              />
+            </template>
+          </div>
+        </div>
       </div>
 
       <!-- Load More -->
       <div
         v-if="hasMore || (isLoading && visibleTransactions.length > 0)"
-        class="flex justify-center mt-4 sm:mt-6"
+        class="flex justify-center mt-8 sm:mt-10"
       >
         <button
           :disabled="isLoading"
-          class="bg-burning-orange text-white rounded-xl px-5 sm:px-6 py-2 text-sm sm:text-base font-normal disabled:opacity-60 hover:bg-cinnabar-red transition-colors"
+          class="bg-white border-[1.5px] border-burning-orange text-burning-orange rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:bg-burning-orange/5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           @click="loadMore"
         >
-          <span v-if="isLoading">Loading…</span>
+          <span v-if="isLoading" class="flex items-center gap-2">
+            <svg
+              class="animate-spin"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Loading…
+          </span>
           <span v-else>Load More</span>
         </button>
       </div>

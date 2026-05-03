@@ -4,11 +4,22 @@
     class="relative flex flex-col gap-5 rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6 shadow-sm transition-shadow duration-300 hover:shadow-md"
   >
     <div class="flex items-start justify-between gap-4">
-      <div class="flex items-center gap-3 min-w-0">
-        <UserAvatar :avatar-url="request.borrower.avatar" :user-name="request.borrower.name" />
+      <NuxtLink
+        :to="`/profile/${request.borrower.username}`"
+        class="flex items-center gap-3 min-w-0 group/borrower"
+        @click.stop
+      >
+        <UserAvatar
+          :avatar-url="request.borrower.avatar"
+          :user-name="request.borrower.name"
+          class="group-hover/borrower:scale-105 transition-transform"
+        />
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span class="text-[15px] font-bold text-noble-black">{{ request.borrower.name }}</span>
+            <span
+              class="text-[15px] font-bold text-noble-black group-hover:text-burning-orange transition-colors"
+              >{{ request.borrower.name }}</span
+            >
             <span class="text-[12px] text-noble-black/40">{{
               formatRelativeTime(request.createdAt)
             }}</span>
@@ -17,7 +28,7 @@
             Request status: {{ formatRequestStatus(request.status) }}
           </p>
         </div>
-      </div>
+      </NuxtLink>
 
       <div class="ml-4 flex items-start gap-3">
         <span
@@ -208,10 +219,14 @@
           class="rounded-[18px] border border-cinnamon-ice/20 bg-cream px-4 py-4"
         >
           <div class="flex items-start justify-between gap-4">
-            <div class="flex items-start gap-3">
+            <NuxtLink
+              :to="`/profile/${offer.lender.username}`"
+              class="flex items-start gap-3 group/lender"
+              @click.stop
+            >
               <div class="relative">
                 <div
-                  class="h-14 w-14 overflow-hidden rounded-[16px] border border-cinnamon-ice/20 bg-white"
+                  class="h-14 w-14 overflow-hidden rounded-[16px] border border-cinnamon-ice/20 bg-white group-hover/lender:border-burning-orange transition-colors"
                 >
                   <img
                     v-if="offer.itemThumbnailImage"
@@ -231,14 +246,18 @@
                     :avatar-url="offer.lender.avatar"
                     :user-name="offer.lender.name"
                     size="sm"
+                    class="group-hover/lender:scale-110 transition-transform"
                   />
                 </div>
               </div>
               <div class="flex flex-col gap-1">
-                <span class="text-[15px] font-bold text-noble-black">{{ offer.lender.name }}</span>
+                <span
+                  class="text-[15px] font-bold text-noble-black group-hover:text-burning-orange transition-colors"
+                  >{{ offer.lender.name }}</span
+                >
                 <span class="text-[13px] text-noble-black/60">{{ offer.itemName }}</span>
               </div>
-            </div>
+            </NuxtLink>
             <span
               class="rounded-full border border-blue-estate/10 bg-white px-3 py-1 text-[12px] font-bold text-blue-estate"
             >
@@ -401,6 +420,12 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
   year: "numeric",
 })
 
+const timeFormatter = new Intl.DateTimeFormat("en-PH", {
+  hour: "numeric",
+  minute: "numeric",
+  hour12: true,
+})
+
 const formatFee = (fee: number) => {
   return fee === 0 ? "Free" : currencyFormatter.format(fee)
 }
@@ -446,9 +471,22 @@ const formatDateRange = (dates: Date[]) => {
   const end = sorted.at(-1)
 
   if (!start || !end) return "Dates not set"
-  if (start.getTime() === end.getTime()) return `Needed on ${dateFormatter.format(start)}`
 
-  return `${dateFormatter.format(start)} to ${dateFormatter.format(end)}`
+  const startStr = `${dateFormatter.format(start)} at ${timeFormatter.format(start)}`
+  const endStr = `${dateFormatter.format(end)} at ${timeFormatter.format(end)}`
+
+  if (start.getTime() === end.getTime()) return `Needed on ${startStr}`
+
+  // Check if it's the same day but different times
+  if (
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate()
+  ) {
+    return `Needed on ${dateFormatter.format(start)} from ${timeFormatter.format(start)} to ${timeFormatter.format(end)}`
+  }
+
+  return `${startStr} to ${endStr}`
 }
 
 const formatPriceRange = (range: [number, number]) => {

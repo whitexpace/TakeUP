@@ -281,7 +281,7 @@ onBeforeUnmount(() => {
 <template>
   <header
     ref="headerRef"
-    class="fixed top-0 left-0 w-full h-14 bg-white border-b border-cinnamon-ice flex items-center z-[1000] shrink-0 transition-transform duration-500 ease-in-out"
+    class="fixed top-0 left-0 w-full h-14 bg-white border-b border-cinnamon-ice/40 flex items-center z-[1000] shrink-0 transition-transform duration-500 ease-in-out"
     :class="{ '-translate-y-full': !isVisible }"
   >
     <!-- Left Section: Logo & App Name -->

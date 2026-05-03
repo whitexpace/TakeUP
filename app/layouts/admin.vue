@@ -17,9 +17,14 @@ const { notifications, loadNotifications, markNotificationRead, markAllNotificat
 
 const adminLinks: AdminLink[] = [
   {
+    label: "Users",
+    to: "/admin/users",
+    description: "Manage users, roles, and account settings.",
+  },
+  {
     label: "Transactions",
     to: "/admin/transactions",
-    description: "Monitor all borrower and lender transactions across the platform.",
+    description: "Monitor borrower and lender transactions across the platform.",
   },
   {
     label: "Dispute Queue",

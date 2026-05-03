@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, onMounted, ref, reactive } from "vue"
+
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
@@ -38,20 +40,6 @@ type DeactivationEligibilityResponse = {
   blockers: DeactivationBlocker[]
 }
 
-type ProfileUpdateResponse = {
-  user: {
-    id: string
-    username: string
-    firstName: string
-    middleName: string | null
-    lastName: string
-    location: string | null
-    pronouns: string | null
-    bio: string | null
-    avatarUrl: string | null
-  }
-}
-
 type AccountDeletionReason = {
   code:
     | "ACTIVE_TRANSACTIONS"
@@ -83,14 +71,14 @@ const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
 const avatarBucket = runtimeConfig.public.userAvatarBucket
 
-const {
-  data: authData,
-  refresh: refreshAuthData,
-  pending: isAuthDataPending,
-} = useAsyncData("account:auth-me", () => $fetch<AuthMeResponse>("/api/auth/me"), {
-  server: false, // Only fetch on client after middleware runs
-  watch: [user], // Refetch if user changes
-})
+const { data: authData, refresh: refreshAuthData } = useAsyncData(
+  "account:auth-me",
+  () => $fetch<AuthMeResponse>("/api/auth/me"),
+  {
+    server: false,
+    watch: [user],
+  },
+)
 
 const isHydrated = ref(false)
 
@@ -98,25 +86,17 @@ onMounted(() => {
   isHydrated.value = true
 })
 
-const isInitialPageLoading = computed(
-  () => !isHydrated.value || (isAuthDataPending.value && !authData.value),
-)
-
-const asNonEmptyString = (value: unknown) => {
-  if (typeof value !== "string") return undefined
-  const trimmedValue = value.trim()
-  return trimmedValue ? trimmedValue : undefined
-}
-
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (typeof value !== "object" || value === null) return null
   return value as Record<string, unknown>
 }
 
+const asNonEmptyString = (val: unknown) =>
+  typeof val === "string" && val.trim() ? val.trim() : null
+
 const getIdentityMetadata = (authUser: unknown) => {
   const authUserRecord = asRecord(authUser)
   const identities = authUserRecord?.identities
-
   if (!Array.isArray(identities)) return []
 
   return identities
@@ -127,31 +107,12 @@ const getIdentityMetadata = (authUser: unknown) => {
     .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
 }
 
-const parseDate = (value: unknown) => {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value
-  if (typeof value !== "string") return null
-
-  const trimmedValue = value.trim()
-  if (!trimmedValue) return null
-
-  const parsedDate = new Date(trimmedValue)
-  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate
-}
-
-const formatMonthYear = (value: Date | null) => {
-  if (!value) return null
-
-  return new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(value)
-}
-
 const buildNameFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return undefined
-
+  if (!source) return null
   const directName =
     asNonEmptyString(source.full_name) ||
     asNonEmptyString(source.name) ||
     asNonEmptyString(source.display_name)
-
   if (directName) return directName
 
   const firstName =
@@ -162,33 +123,33 @@ const buildNameFromSource = (source: Record<string, unknown> | null) => {
     asNonEmptyString(source.family_name) ||
     asNonEmptyString(source.last_name) ||
     asNonEmptyString(source.lastName)
-
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
-  return fullName || undefined
+  return fullName || null
 }
 
 const getAvatarFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return undefined
-
+  if (!source) return null
   return (
     asNonEmptyString(source.picture) ||
     asNonEmptyString(source.avatar_url) ||
     asNonEmptyString(source.photo_url) ||
     asNonEmptyString(source.profile_image) ||
-    asNonEmptyString(source.image)
+    asNonEmptyString(source.image) ||
+    asNonEmptyString(source.avatarUrl)
   )
 }
 
-const buildDbFullName = (payload: AuthMeResponse["user"] | undefined) => {
-  if (!payload) return undefined
+const buildDbFullName = (u: AuthMeResponse["user"] | undefined) => {
+  if (!u) return null
+  const first = (u.firstName || "").trim()
+  const last = (u.lastName || "").trim()
 
-  const fullName = [payload.firstName, payload.middleName, payload.lastName]
-    .map((part) => asNonEmptyString(part))
-    .filter(Boolean)
-    .join(" ")
-    .trim()
+  if (last.toLowerCase() === "user" || !last) {
+    return first.charAt(0).toUpperCase() + first.slice(1)
+  }
 
-  return fullName || undefined
+  const parts = [first, u.middleName, last].filter(Boolean)
+  return parts.length > 0 ? parts.join(" ") : null
 }
 
 const profileDetails = computed(() => {
@@ -200,31 +161,36 @@ const profileDetails = computed(() => {
     ...getIdentityMetadata(authUser),
   ]
 
-  const fullName =
-    buildDbFullName(authData.value?.user) ||
-    metadataSources.map(buildNameFromSource).find(Boolean) ||
-    asNonEmptyString(authUserRecord?.email) ||
-    "User"
-  const avatarUrl =
-    asNonEmptyString(authData.value?.user.avatarUrl) ||
-    metadataSources.map(getAvatarFromSource).find(Boolean) ||
-    null
+  // 1. Try DB name first (Highest priority for local edits)
+  let fullName = buildDbFullName(authData.value?.user)
+
+  // 2. Try direct metadata fields if DB name is missing
+  if (!fullName) {
+    const meta = authUserRecord?.user_metadata as Record<string, unknown> | undefined
+    fullName = asNonEmptyString(meta?.full_name) || asNonEmptyString(meta?.name)
+  }
+
+  // 3. Try identity data if still missing
+  if (!fullName) {
+    for (const source of metadataSources) {
+      const name = buildNameFromSource(source)
+      if (name) {
+        fullName = name
+        break
+      }
+    }
+  }
+
+  fullName = fullName || asNonEmptyString(authUserRecord?.email)?.split("@")[0] || "User"
+
+  let avatarUrl = asNonEmptyString(authData.value?.user.avatarUrl)
+  if (!avatarUrl) {
+    avatarUrl = metadataSources.map(getAvatarFromSource).find(Boolean) || null
+  }
+
   const email = asNonEmptyString(authUserRecord?.email) || "No email available"
-  const location =
-    asNonEmptyString(authData.value?.user.location) ||
-    metadataSources
-      .map(
-        (source) =>
-          asNonEmptyString(source?.location) ||
-          asNonEmptyString(source?.address) ||
-          asNonEmptyString(source?.city),
-      )
-      .find(Boolean) ||
-    "Location not set"
-  const username =
-    asNonEmptyString(authData.value?.user.username) ||
-    asNonEmptyString(authData.value?.user.name) ||
-    ""
+  const location = asNonEmptyString(authData.value?.user.location) || "Not set"
+  const username = asNonEmptyString(authData.value?.user.username) || "Not set"
   const pronouns = asNonEmptyString(authData.value?.user.pronouns) || ""
   const bio = asNonEmptyString(authData.value?.user.bio) || ""
   const memberSince = formatMonthYear(parseDate(authData.value?.user.createdAt))
@@ -252,28 +218,11 @@ const profileInitial = computed(() => {
   return trimmedName ? trimmedName.charAt(0).toUpperCase() : "U"
 })
 
-const emailNotificationsEnabled = ref(true)
+const _emailNotificationsEnabled = ref(true)
 const showEditProfileModal = ref(false)
 const showDeleteAccountModal = ref(false)
 const showDeactivateAccountModal = ref(false)
-const isLoadingDeletionEligibility = ref(false)
 const isDeletingAccount = ref(false)
-const isSavingProfile = ref(false)
-const isLoadingDeactivationEligibility = ref(false)
-const isDeactivatingAccount = ref(false)
-const profileSaveError = ref("")
-const deactivateAccountError = ref("")
-const deactivationEligibility = ref<DeactivationEligibilityResponse | null>(null)
-const avatarUploadError = ref("")
-const deleteAccountError = ref("")
-const deleteConfirmationText = ref("")
-const usernameStatus = ref<UsernameStatus>("idle")
-const checkedUsername = ref("")
-const initialUsername = ref("")
-const avatarInputRef = ref<HTMLInputElement | null>(null)
-const pendingAvatarFile = ref<File | null>(null)
-const pendingAvatarPreviewUrl = ref<string | null>(null)
-const deletionEligibility = ref<AccountDeletionEligibilityResponse | null>(null)
 
 const profileForm = reactive({
   name: "",
@@ -281,162 +230,40 @@ const profileForm = reactive({
   location: "",
   pronouns: "",
   bio: "",
-  avatarUrl: null as string | null,
 })
 
-let usernameCheckTimeout: ReturnType<typeof setTimeout> | null = null
+const currentAvatarFile = ref<File | null>(null)
+const currentAvatarPreview = ref<string | null>(null)
+const avatarInputRef = ref<HTMLInputElement | null>(null)
+const avatarUploadError = ref<string | null>(null)
 
-const normalizedUsername = computed(() => profileForm.username.trim().toLowerCase())
-
-const usernameHelperText = computed(() => {
-  switch (usernameStatus.value) {
-    case "checking":
-      return "Checking username availability..."
-    case "available":
-      return normalizedUsername.value === initialUsername.value
-        ? "This is your current username."
-        : "Username is available."
-    case "taken":
-      return "That username is already taken."
-    case "invalid":
-      return "Use 3-30 lowercase letters, numbers, periods, or underscores."
-    default:
-      return "Usernames must be 3-30 characters and can include lowercase letters, numbers, periods, and underscores."
-  }
-})
-
-const currentAvatarPreview = computed(() => pendingAvatarPreviewUrl.value || profileForm.avatarUrl)
-
-const canSaveProfile = computed(() => {
-  return (
-    !isSavingProfile.value &&
-    profileForm.name.trim().length > 0 &&
-    normalizedUsername.value.length > 0 &&
-    usernameStatus.value !== "checking" &&
-    usernameStatus.value !== "taken" &&
-    usernameStatus.value !== "invalid"
-  )
-})
-
-const canDeleteAccount = computed(
-  () =>
-    Boolean(deletionEligibility.value?.eligible) &&
-    deleteConfirmationText.value.trim().toUpperCase() === "DELETE" &&
-    !isDeletingAccount.value,
-)
-
-const deletionBlockingReasons = computed(() => deletionEligibility.value?.reasons ?? [])
-
-const canDeactivateAccount = computed(
-  () =>
-    !isLoadingDeactivationEligibility.value &&
-    !isDeactivatingAccount.value &&
-    Boolean(deactivationEligibility.value?.allowed),
-)
-
-const getDeactivationErrorDetails = (error: unknown) => {
-  const errorRecord = asRecord(error)
-  const responseData = asRecord(errorRecord?.data)
-  const nestedData = asRecord(responseData?.data)
-  const blockers = nestedData?.blockers
-  const eligibility =
-    typeof nestedData?.allowed === "boolean" && Array.isArray(blockers)
-      ? (nestedData as DeactivationEligibilityResponse)
-      : null
-
-  return {
-    eligibility,
-    message:
-      asNonEmptyString(responseData?.statusMessage) ||
-      asNonEmptyString(responseData?.message) ||
-      asNonEmptyString(errorRecord?.statusMessage) ||
-      asNonEmptyString(errorRecord?.message) ||
-      "Unable to check account deactivation right now.",
-  }
-}
-
-const revokePendingAvatarPreview = () => {
-  if (!pendingAvatarPreviewUrl.value) return
-  URL.revokeObjectURL(pendingAvatarPreviewUrl.value)
-  pendingAvatarPreviewUrl.value = null
-}
-
-const syncProfileForm = () => {
-  profileForm.name = profileDetails.value.fullName
-  profileForm.username = profileDetails.value.username
-  profileForm.location =
-    profileDetails.value.location === "Location not set" ? "" : profileDetails.value.location
-  profileForm.pronouns = profileDetails.value.pronouns
-  profileForm.bio = profileDetails.value.bio
-  profileForm.avatarUrl = profileDetails.value.avatarUrl
-  initialUsername.value = profileDetails.value.username
-  checkedUsername.value = profileDetails.value.username
-  usernameStatus.value = profileDetails.value.username ? "available" : "idle"
-  profileSaveError.value = ""
-  avatarUploadError.value = ""
-  pendingAvatarFile.value = null
-  revokePendingAvatarPreview()
-}
+const usernameStatus = ref<UsernameStatus>("idle")
+const isSavingProfile = ref(false)
+const profileSaveError = ref<string | null>(null)
 
 const openEditProfileModal = () => {
-  syncProfileForm()
+  const u = authData.value?.user
+  if (u) {
+    const currentFullName = buildDbFullName(u) || profileDetails.value.fullName
+    profileForm.name =
+      currentFullName === "User" || currentFullName === "Loading..." ? "" : currentFullName
+    profileForm.username = u.username === "Not set" || u.username === "UP User" ? "" : u.username
+    profileForm.location = u.location === "Not set" ? "" : u.location || ""
+    profileForm.pronouns = u.pronouns || ""
+    profileForm.bio = u.bio || ""
+    currentAvatarPreview.value = profileDetails.value.avatarUrl
+    currentAvatarFile.value = null
+  }
   showEditProfileModal.value = true
 }
 
 const closeEditProfileModal = () => {
   showEditProfileModal.value = false
-  profileSaveError.value = ""
-  avatarUploadError.value = ""
-  pendingAvatarFile.value = null
-  revokePendingAvatarPreview()
-}
-
-const openDeactivateAccountModal = async () => {
-  showDeactivateAccountModal.value = true
-  isLoadingDeactivationEligibility.value = true
-  deactivateAccountError.value = ""
-  deactivationEligibility.value = null
-
-  try {
-    deactivationEligibility.value = await $fetch<DeactivationEligibilityResponse>(
-      "/api/account/deactivation-eligibility",
-    )
-  } catch (error) {
-    const details = getDeactivationErrorDetails(error)
-    deactivationEligibility.value = details.eligibility
-    deactivateAccountError.value = details.message
-  } finally {
-    isLoadingDeactivationEligibility.value = false
-  }
-}
-
-const closeDeactivateAccountModal = () => {
-  if (isDeactivatingAccount.value) return
-  showDeactivateAccountModal.value = false
-  deactivateAccountError.value = ""
-  deactivationEligibility.value = null
-}
-
-const deactivateAccount = async () => {
-  if (!canDeactivateAccount.value) return
-
-  isDeactivatingAccount.value = true
-  deactivateAccountError.value = ""
-
-  try {
-    await $fetch("/api/account/deactivate", { method: "POST" })
-    await Promise.allSettled([
-      supabase.auth.signOut(),
-      $fetch("/api/auth/logout", { method: "POST" }),
-    ])
-    await navigateTo("/")
-  } catch (error) {
-    const details = getDeactivationErrorDetails(error)
-    deactivationEligibility.value = details.eligibility ?? deactivationEligibility.value
-    deactivateAccountError.value = details.message
-  } finally {
-    isDeactivatingAccount.value = false
-  }
+  currentAvatarFile.value = null
+  currentAvatarPreview.value = null
+  profileSaveError.value = null
+  avatarUploadError.value = null
+  usernameStatus.value = "idle"
 }
 
 const triggerAvatarUpload = () => {
@@ -444,240 +271,243 @@ const triggerAvatarUpload = () => {
 }
 
 const handleAvatarSelect = (event: Event) => {
-  const input = event.target as HTMLInputElement | null
-  const file = input?.files?.[0] ?? null
-  if (input) input.value = ""
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
   if (!file) return
 
-  if (!file.type.startsWith("image/")) {
-    avatarUploadError.value = "Only image files can be used for your profile photo."
+  if (file.size > 2 * 1024 * 1024) {
+    avatarUploadError.value = "Image must be smaller than 2MB"
     return
   }
 
-  avatarUploadError.value = ""
-  pendingAvatarFile.value = file
-  revokePendingAvatarPreview()
-  pendingAvatarPreviewUrl.value = URL.createObjectURL(file)
+  avatarUploadError.value = null
+  currentAvatarFile.value = file
+  currentAvatarPreview.value = URL.createObjectURL(file)
 }
 
-const uploadAvatarFile = async (file: File) => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+const usernameHelperText = computed(() => {
+  if (usernameStatus.value === "checking") return "Checking availability..."
+  if (usernameStatus.value === "available") return "Username is available"
+  if (usernameStatus.value === "taken") return "Username is already taken"
+  if (usernameStatus.value === "invalid") return "Invalid username format"
+  return ""
+})
 
-  const accessToken = session?.access_token
-  if (!accessToken) {
-    throw new Error("You must be signed in to upload a profile photo.")
-  }
-
-  const signedUpload = await $fetch<{ token: string; path: string; publicUrl: string }>(
-    "/api/account/avatar-upload-url",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: {
-        fileName: file.name,
-      },
-    },
-  )
-
-  const { error: uploadError } = await supabase.storage
-    .from(avatarBucket)
-    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
-      upsert: true,
-      contentType: file.type || "application/octet-stream",
-    })
-
-  if (uploadError) {
-    throw new Error(uploadError.message || "Unable to upload your profile photo.")
-  }
-
-  return signedUpload.publicUrl
-}
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  const maybeError = error as {
-    data?: {
-      statusMessage?: string
-      message?: string
+watch(
+  () => profileForm.username,
+  (newVal) => {
+    if (!newVal || newVal === authData.value?.user.username) {
+      usernameStatus.value = "idle"
+      return
     }
-    message?: string
-    statusMessage?: string
-  }
 
-  return (
-    maybeError?.data?.statusMessage ||
-    maybeError?.data?.message ||
-    maybeError?.statusMessage ||
-    maybeError?.message ||
-    fallback
-  )
-}
+    if (!usernameRegex.test(newVal)) {
+      usernameStatus.value = "invalid"
+      return
+    }
 
-const getDeletionEligibilityPayload = (
-  error: unknown,
-): AccountDeletionEligibilityResponse | null => {
-  const maybeError = error as {
-    data?: AccountDeletionEligibilityResponse | { data?: AccountDeletionEligibilityResponse }
-  }
+    void debouncedCheckUsername(newVal)
+  },
+)
 
-  if (maybeError?.data && "eligible" in maybeError.data && "reasons" in maybeError.data) {
-    return maybeError.data
-  }
-
-  const nestedData = (maybeError?.data as { data?: AccountDeletionEligibilityResponse } | undefined)
-    ?.data
-
-  if (nestedData && "eligible" in nestedData && "reasons" in nestedData) {
-    return nestedData
-  }
-
-  return null
+let usernameCheckTimeout: NodeJS.Timeout | null = null
+const debouncedCheckUsername = (username: string) => {
+  if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout)
+  usernameStatus.value = "checking"
+  usernameCheckTimeout = setTimeout(() => {
+    void checkUsernameAvailability(username)
+  }, 500)
 }
 
 const checkUsernameAvailability = async (username: string) => {
-  checkedUsername.value = username
-  usernameStatus.value = "checking"
-
   try {
-    const response = await $fetch<UsernameAvailabilityResponse>(
-      "/api/account/username-availability",
-      {
-        query: { username },
-      },
+    const { available } = await $fetch<UsernameAvailabilityResponse>(
+      `/api/account/username-availability?username=${username}`,
     )
-
-    if (checkedUsername.value !== username) return
-    usernameStatus.value = response.available ? "available" : "taken"
+    usernameStatus.value = available ? "available" : "taken"
   } catch {
-    if (checkedUsername.value !== username) return
-    usernameStatus.value = "invalid"
+    usernameStatus.value = "idle"
   }
 }
 
-watch(
-  normalizedUsername,
-  (value) => {
-    if (!showEditProfileModal.value) return
-
-    if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout)
-
-    if (!value) {
-      usernameStatus.value = "idle"
-      checkedUsername.value = ""
-      return
-    }
-
-    if (!usernameRegex.test(value)) {
-      usernameStatus.value = "invalid"
-      checkedUsername.value = value
-      return
-    }
-
-    if (value === initialUsername.value) {
-      usernameStatus.value = "available"
-      checkedUsername.value = value
-      return
-    }
-
-    usernameCheckTimeout = setTimeout(() => {
-      void checkUsernameAvailability(value)
-    }, 350)
-  },
-  { immediate: false },
-)
-
-onBeforeUnmount(() => {
-  if (usernameCheckTimeout) clearTimeout(usernameCheckTimeout)
-  revokePendingAvatarPreview()
+const canSaveProfile = computed(() => {
+  if (isSavingProfile.value) return false
+  if (
+    usernameStatus.value === "checking" ||
+    usernameStatus.value === "taken" ||
+    usernameStatus.value === "invalid"
+  ) {
+    return false
+  }
+  if (!profileForm.name.trim()) return false
+  if (!profileForm.username.trim()) return false
+  return true
 })
 
 const saveProfile = async () => {
   if (!canSaveProfile.value) return
-
   isSavingProfile.value = true
-  profileSaveError.value = ""
-  avatarUploadError.value = ""
+  profileSaveError.value = null
 
   try {
-    let avatarUrl = profileForm.avatarUrl
+    let avatarUrl = authData.value?.user.avatarUrl || null
 
-    if (pendingAvatarFile.value) {
-      avatarUrl = await uploadAvatarFile(pendingAvatarFile.value)
+    if (currentAvatarFile.value) {
+      const fileExt = currentAvatarFile.value.name.split(".").pop()
+      const fileName = `${authData.value?.user.id}-${Math.random().toString(36).substring(7)}.${fileExt}`
+      const filePath = `avatars/${fileName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from(avatarBucket)
+        .upload(filePath, currentAvatarFile.value)
+
+      if (uploadError) throw uploadError
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(avatarBucket).getPublicUrl(filePath)
+      avatarUrl = publicUrl
     }
 
-    await $fetch<ProfileUpdateResponse>("/api/account/profile", {
+    // IMPORTANT: Send empty strings instead of null for Zod string validation
+    const payload = {
+      name: profileForm.name.trim(),
+      username: profileForm.username.trim().toLowerCase(),
+      location: profileForm.location.trim(),
+      pronouns: profileForm.pronouns.trim(),
+      bio: profileForm.bio.trim(),
+      avatarUrl,
+    }
+
+    await $fetch("/api/account/profile", {
       method: "PATCH",
-      body: {
-        name: profileForm.name.trim(),
-        username: normalizedUsername.value,
-        location: profileForm.location.trim(),
-        pronouns: profileForm.pronouns.trim(),
-        bio: profileForm.bio.trim(),
-        avatarUrl,
-      },
+      body: payload,
     })
 
     await refreshAuthData()
-    closeEditProfileModal()
-  } catch (error) {
-    profileSaveError.value =
-      error instanceof Error ? error.message : "Unable to save your profile right now."
+    showEditProfileModal.value = false
+  } catch (error: unknown) {
+    console.error("Detailed Profile Update Error:", error)
+    profileSaveError.value = getEnhancedErrorMessage(error)
   } finally {
     isSavingProfile.value = false
   }
 }
 
-const loadDeletionEligibility = async () => {
-  isLoadingDeletionEligibility.value = true
-  deleteAccountError.value = ""
+function getEnhancedErrorMessage(error: unknown): string {
+  // Extract Zod validation errors if present
+  const fetchError = error as {
+    data?: { data?: Record<string, { _errors: string[] }>; statusMessage?: string }
+    message?: string
+  }
+  const data = fetchError?.data?.data || fetchError?.data
+  if (data) {
+    const zodErrors = data as Record<string, { _errors: string[] }>
+    if (typeof zodErrors === "object" && zodErrors !== null) {
+      const firstField = Object.keys(zodErrors)[0]
+      if (firstField && zodErrors[firstField]?._errors) {
+        const fieldName = firstField.charAt(0).toUpperCase() + firstField.slice(1)
+        return `${fieldName}: ${zodErrors[firstField]._errors[0]}`
+      }
+    }
+  }
+
+  if (fetchError?.data?.statusMessage) return fetchError.data.statusMessage
+  if (fetchError?.message) return fetchError.message
+  return "Invalid input. Please check your details."
+}
+
+const {
+  data: deactivationEligibility,
+  refresh: loadDeactivationEligibility,
+  pending: isLoadingDeactivationEligibility,
+} = useAsyncData(
+  "account:deactivation-check",
+  () => $fetch<DeactivationEligibilityResponse>("/api/account/deactivation-eligibility"),
+  {
+    server: false,
+    immediate: false,
+  },
+)
+
+const deactivateAccountError = ref<string | null>(null)
+const isDeactivatingAccount = ref(false)
+
+const canDeactivateAccount = computed(() => {
+  return deactivationEligibility.value?.allowed && !isDeactivatingAccount.value
+})
+
+const openDeactivateAccountModal = async () => {
+  deactivateAccountError.value = null
+  showDeactivateAccountModal.value = true
+  await loadDeactivationEligibility()
+}
+
+const closeDeactivateAccountModal = () => {
+  if (isDeactivatingAccount.value) return
+  showDeactivateAccountModal.value = false
+}
+
+const deactivateAccount = async () => {
+  if (!canDeactivateAccount.value) return
+  isDeactivatingAccount.value = true
+  deactivateAccountError.value = null
 
   try {
-    deletionEligibility.value =
-      await $fetch<AccountDeletionEligibilityResponse>("/api/account/deletion")
-  } catch (error) {
-    deletionEligibility.value = null
-    deleteAccountError.value = getErrorMessage(
-      error,
-      "We could not check whether your account is ready for deletion.",
-    )
+    await $fetch("/api/account/deactivate", { method: "POST" })
+    await supabase.auth.signOut()
+    await navigateTo("/?deactivated=1", { replace: true })
+  } catch (error: unknown) {
+    deactivateAccountError.value = getErrorMessage(error, "Failed to deactivate account.")
   } finally {
-    isLoadingDeletionEligibility.value = false
+    isDeactivatingAccount.value = false
   }
 }
 
+const { data: deletionEligibility, refresh: loadDeletionEligibility } = useAsyncData(
+  "account:deletion-check",
+  () => $fetch<AccountDeletionEligibilityResponse>("/api/account/deletion"),
+  {
+    server: false,
+    immediate: false,
+  },
+)
+
+const deleteConfirmationText = ref("")
+const deleteAccountError = ref<string | null>(null)
+
+const canDeleteAccount = computed(() => {
+  return (
+    deletionEligibility.value?.eligible &&
+    deleteConfirmationText.value === "DELETE" &&
+    !isDeletingAccount.value
+  )
+})
+
 const openDeleteAccountModal = async () => {
-  showDeleteAccountModal.value = true
+  deleteAccountError.value = null
   deleteConfirmationText.value = ""
-  deleteAccountError.value = ""
-  deletionEligibility.value = null
+  showDeleteAccountModal.value = true
   await loadDeletionEligibility()
 }
 
 const closeDeleteAccountModal = () => {
+  if (isDeletingAccount.value) return
   showDeleteAccountModal.value = false
-  deleteConfirmationText.value = ""
-  deleteAccountError.value = ""
-  deletionEligibility.value = null
 }
 
 const deleteAccount = async () => {
   if (!canDeleteAccount.value) return
-
   isDeletingAccount.value = true
-  deleteAccountError.value = ""
+  deleteAccountError.value = null
 
   try {
     const {
       data: { session },
     } = await supabase.auth.getSession()
-
     const accessToken = session?.access_token
-    if (!accessToken) {
-      throw new Error("You must be signed in to delete your account.")
-    }
+
+    if (!accessToken) throw new Error("No active session found")
 
     await $fetch("/api/account/deletion", {
       method: "POST",
@@ -691,7 +521,7 @@ const deleteAccount = async () => {
 
     await supabase.auth.signOut()
     await navigateTo("/?accountDeleted=1", { replace: true })
-  } catch (error) {
+  } catch (error: unknown) {
     const eligibilityPayload = getDeletionEligibilityPayload(error)
 
     if (eligibilityPayload) {
@@ -708,282 +538,185 @@ const deleteAccount = async () => {
     isDeletingAccount.value = false
   }
 }
+
+function parseDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatMonthYear(date: Date | null): string | null {
+  if (!date) return null
+  return new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(date)
+}
+
+function getErrorMessage(error: unknown, defaultMsg: string): string {
+  const fetchError = error as { data?: { error?: { message?: string } }; message?: string }
+  if (fetchError?.data?.error?.message) return fetchError.data.error.message
+  if (fetchError?.message) return fetchError.message
+  return defaultMsg
+}
+
+function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibilityResponse | null {
+  const fetchError = error as { data?: AccountDeletionEligibilityResponse }
+  if (fetchError?.data?.eligible !== undefined && Array.isArray(fetchError?.data?.reasons)) {
+    return fetchError.data
+  }
+  return null
+}
 </script>
 
 <template>
-  <div class="space-y-8 pb-10 font-geist lg:px-24 xl:px-32">
-    <section v-if="isInitialPageLoading" class="space-y-6 animate-pulse">
-      <div class="space-y-2">
-        <div class="h-8 w-64 rounded-lg bg-cinnamon-ice/70" />
-        <div class="h-5 w-96 max-w-full rounded-lg bg-cinnamon-ice/60" />
-      </div>
-
-      <div class="rounded-[20px] border border-cinnamon-ice bg-cream px-6 py-6 sm:px-8">
-        <div class="flex items-start justify-between gap-4">
-          <div class="space-y-2">
-            <div class="h-7 w-40 rounded-lg bg-cinnamon-ice/70" />
-            <div class="h-4 w-56 rounded-lg bg-cinnamon-ice/60" />
-          </div>
-          <div class="h-11 w-[137px] rounded-[10px] bg-cinnamon-ice/70" />
-        </div>
-
-        <div class="mt-8 flex items-start gap-5">
-          <div class="h-16 w-16 rounded-full bg-cinnamon-ice/70" />
-          <div class="flex-1 space-y-3">
-            <div class="h-6 w-52 rounded-lg bg-cinnamon-ice/70" />
-            <div class="h-4 w-64 rounded-lg bg-cinnamon-ice/60" />
-            <div class="h-4 w-72 rounded-lg bg-cinnamon-ice/60" />
-          </div>
-        </div>
-      </div>
-
-      <div class="rounded-[20px] border border-cinnamon-ice bg-cream px-6 py-6 sm:px-8">
+  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+    <!-- Main Content Area -->
+    <template v-if="isHydrated && authData">
+      <section class="space-y-3">
         <div class="space-y-2">
-          <div class="h-7 w-44 rounded-lg bg-cinnamon-ice/70" />
-          <div class="h-4 w-64 rounded-lg bg-cinnamon-ice/60" />
+          <h1 class="text-[28px] font-semibold text-noble-black">Account Information</h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <div class="mt-6 h-10 w-24 rounded-full bg-cinnamon-ice/70" />
-      </div>
-    </section>
-
-    <template v-else>
-      <section class="space-y-1">
-        <h1 class="text-[25px] font-bold text-noble-black">Account Information</h1>
-        <p class="text-[18px] font-normal tracking-[0.54px] text-noble-black">
+        <p class="text-[16px] font-medium text-noble-black/50">
           Manage your personal details and account settings.
         </p>
       </section>
 
+      <!-- Profile Card -->
       <section
-        class="min-h-[247px] rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-5 shadow-[0_8px_24px_rgba(32,33,36,0.04)] sm:px-[29px] sm:py-[23px]"
+        class="overflow-hidden rounded-[24px] border border-cinnamon-ice/20 bg-cream shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 class="text-[22px] font-semibold text-noble-black">Profile</h2>
-            <p class="mt-[2px] text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
+        <div
+          class="relative px-5 py-5 bg-gradient-to-br from-cream/95 to-cream/80 backdrop-blur-md border-b border-cinnamon-ice/10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div class="border-l-[3px] border-burning-orange pl-4">
+            <h2 class="text-[20px] font-bold text-noble-black">Profile</h2>
+            <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">
               Your personal information and profile picture
             </p>
           </div>
-
           <button
             type="button"
-            class="inline-flex h-11 w-[137px] items-center justify-center self-start rounded-[10px] bg-burning-orange px-4 text-[15px] font-normal tracking-[0.45px] text-white transition hover:brightness-95"
+            class="inline-flex h-10 items-center justify-center rounded-[12px] bg-burning-orange px-6 text-[14px] font-semibold text-white transition hover:brightness-95 shadow-sm shadow-burning-orange/20"
             @click="openEditProfileModal"
           >
             Edit Profile
           </button>
         </div>
 
-        <div class="mt-8 flex min-w-0 items-start gap-4 sm:mt-[34px] sm:gap-[26px]">
-          <div
-            class="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-burning-orange text-[35px] font-normal tracking-[1.05px] text-white"
-          >
-            <img
-              v-if="profileDetails.avatarUrl"
-              :src="profileDetails.avatarUrl"
-              :alt="profileDetails.fullName"
-              class="h-full w-full object-cover"
-            />
-            <span v-else class="-translate-y-px">{{ profileInitial }}</span>
-          </div>
-
-          <div class="min-w-0 flex-1 pt-1">
-            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-[10px]">
-                  <h3 class="truncate text-[20px] font-semibold text-noble-black">
-                    {{ profileDetails.fullName }}
-                  </h3>
-                  <span
-                    v-if="profileDetails.isVerified"
-                    class="inline-flex h-[21px] items-center rounded-[10px] bg-blue-estate px-[13px] text-[15px] font-normal leading-none text-white"
+        <div class="px-5 py-6 sm:px-6">
+          <div class="flex min-w-0 items-center gap-5 sm:gap-8">
+            <div class="relative group shrink-0">
+              <div class="relative w-[72px] h-[72px] flex items-center justify-center rounded-full">
+                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 72 72">
+                  <circle
+                    cx="36"
+                    cy="36"
+                    r="35"
+                    fill="none"
+                    stroke="#dbbba7"
+                    stroke-width="2.5"
+                    stroke-dasharray="73.3 146.6"
+                    stroke-linecap="round"
+                  />
+                  <circle
+                    cx="36"
+                    cy="36"
+                    r="35"
+                    fill="none"
+                    stroke="#ff7124"
+                    stroke-width="2.5"
+                    stroke-dasharray="73.3 146.6"
+                    stroke-dashoffset="-73.3"
+                    stroke-linecap="round"
+                  />
+                  <circle
+                    cx="36"
+                    cy="36"
+                    r="35"
+                    fill="none"
+                    stroke="#3b4883"
+                    stroke-width="2.5"
+                    stroke-dasharray="73.3 146.6"
+                    stroke-dashoffset="-146.6"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <div
+                  class="w-[64px] h-[64px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
+                >
+                  <img
+                    v-if="profileDetails.avatarUrl"
+                    :src="profileDetails.avatarUrl"
+                    :alt="profileDetails.fullName"
+                    class="h-full w-full object-cover"
+                    referrerpolicy="no-referrer"
+                  />
+                  <div
+                    v-else
+                    class="w-full h-full flex items-center justify-center text-white font-bold text-2xl bg-burning-orange"
                   >
-                    Verified
-                  </span>
+                    {{ profileInitial }}
+                  </div>
                 </div>
               </div>
             </div>
-
-            <div
-              class="mt-[18px] flex flex-col gap-3 text-[15px] font-normal tracking-[0.45px] text-noble-black/80 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-10 lg:gap-y-3"
-            >
-              <div class="flex min-w-0 items-center gap-2">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="shrink-0"
-                >
-                  <path
-                    d="M4 8L10.86 12.8C11.56 13.29 12.44 13.29 13.14 12.8L20 8M5 19H19C20.1 19 21 18.1 21 17V7C21 5.9 20.1 5 19 5H5C3.9 5 3 5.9 3 7V17C3 18.1 3.9 19 5 19Z"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
+            <div class="min-w-0 flex-1 pt-1">
+              <h3 class="truncate text-[18px] font-semibold text-noble-black">
+                {{ profileDetails.fullName }}
+              </h3>
+              <div
+                class="mt-3 flex flex-wrap items-center gap-x-2 text-[14px] font-medium text-noble-black/45"
+              >
                 <span class="truncate">{{ profileDetails.email }}</span>
-              </div>
-
-              <div class="flex min-w-0 items-center gap-2">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="shrink-0"
-                >
-                  <path
-                    d="M12 13.5C13.66 13.5 15 12.16 15 10.5C15 8.84 13.66 7.5 12 7.5C10.34 7.5 9 8.84 9 10.5C9 12.16 10.34 13.5 12 13.5Z"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                  />
-                  <path
-                    d="M19.5 10.5C19.5 16.5 12 21 12 21C12 21 4.5 16.5 4.5 10.5C4.5 6.36 7.86 3 12 3C16.14 3 19.5 6.36 19.5 10.5Z"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
+                <span class="select-none text-noble-black/20">·</span>
                 <span class="truncate">{{ profileDetails.location }}</span>
-              </div>
-
-              <div class="flex min-w-0 items-center gap-2">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="shrink-0"
-                >
-                  <path
-                    d="M7 2V5M17 2V5M3.5 9H20.5M5 4H19C20.1 4 21 4.9 21 6V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V6C3 4.9 3.9 4 5 4Z"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <span>Member since {{ profileDetails.memberSince ?? "N/A" }}</span>
+                <span class="select-none text-noble-black/20">·</span>
+                <span>Joined {{ profileDetails.memberSince ?? "N/A" }}</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
+      <!-- Danger Zone Card -->
       <section
-        class="rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-5 shadow-[0_8px_24px_rgba(32,33,36,0.04)] sm:px-7 sm:py-6"
+        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-5 py-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6"
       >
-        <div class="space-y-1">
-          <h2 class="text-[22px] font-semibold text-noble-black">Notifications</h2>
-          <p class="text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-            Manage how you receive notifications
+        <div class="border-l-[3px] border-burning-orange pl-4">
+          <h2 class="text-[20px] font-bold text-noble-black">Danger Zone</h2>
+          <p class="text-[13px] font-medium text-noble-black/50">
+            Irreversible actions related to your account security and data.
           </p>
         </div>
-
-        <div class="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 class="text-[20px] font-medium text-noble-black/90">Email Notifications</h3>
-            <p class="mt-1 text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-              Receive updates about your transactions
-            </p>
-          </div>
-
-          <div class="flex h-11 w-[137px] shrink-0 items-center justify-center self-center">
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="emailNotificationsEnabled"
-              class="relative inline-flex h-8 w-16 items-center rounded-full transition-colors duration-200"
-              :class="emailNotificationsEnabled ? 'bg-burning-orange' : 'bg-cinnamon-ice'"
-              @click="emailNotificationsEnabled = !emailNotificationsEnabled"
-            >
-              <span class="sr-only">Toggle email notifications</span>
-              <span
-                class="absolute left-2 text-[10px] font-medium tracking-[0.3px] text-white transition-opacity duration-200"
-                :class="emailNotificationsEnabled ? 'opacity-100' : 'opacity-0'"
-              >
-                ON
-              </span>
-              <span
-                class="absolute right-2 text-[10px] font-medium tracking-[0.3px] text-noble-black transition-opacity duration-200"
-                :class="emailNotificationsEnabled ? 'opacity-0' : 'opacity-100'"
-              >
-                OFF
-              </span>
-              <span
-                class="ml-1 inline-block h-6 w-6 rounded-full bg-white shadow-sm transition-transform duration-200"
-                :class="emailNotificationsEnabled ? 'translate-x-[28px]' : 'translate-x-0'"
-              />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-5 shadow-[0_8px_24px_rgba(32,33,36,0.04)] sm:px-7 sm:py-6"
-      >
-        <div class="flex items-center gap-3">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="text-cinnabar-red"
+        <div class="mt-8 space-y-4 border-t border-cinnamon-ice/10 pt-6">
+          <div
+            class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
-            <path
-              d="M12 9V13M12 17H12.01M10.29 3.86L1.82 18C1.65 18.29 1.56 18.62 1.56 18.96C1.56 20.08 2.48 21 3.6 21H20.4C21.52 21 22.44 20.08 22.44 18.96C22.44 18.62 22.35 18.29 22.18 18L13.71 3.86C13.35 3.27 12.7 2.91 12 2.91C11.3 2.91 10.65 3.27 10.29 3.86Z"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <div>
-            <h2 class="text-[22px] font-semibold text-cinnabar-red">Danger Zone</h2>
-            <p class="mt-1 text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-              Irreversible actions for your account
-            </p>
-          </div>
-        </div>
-
-        <div class="mt-8 space-y-5">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 class="text-[20px] font-medium text-noble-black/90">Deactivate Account</h3>
-              <p class="mt-1 text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-                Temporarily disable your account
+            <div class="max-w-md space-y-1">
+              <h3 class="text-[16px] font-bold text-noble-black">Deactivate Account</h3>
+              <p class="text-[13px] font-medium text-noble-black/50">
+                Hide your profile and listings until you sign in again. Your data remains safe.
               </p>
             </div>
-
             <button
               type="button"
-              class="h-11 w-[137px] rounded-[10px] bg-cinnabar-red px-4 text-[15px] font-normal tracking-[0.45px] text-white transition hover:brightness-95"
+              class="h-10 px-6 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-bold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
               @click="openDeactivateAccountModal"
             >
               Deactivate
             </button>
           </div>
-
-          <div class="border-t border-cinnamon-ice" />
-
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 class="text-[20px] font-medium text-noble-black/90">Delete Account</h3>
-              <p class="mt-1 text-[15px] font-normal tracking-[0.45px] text-noble-black/80">
-                Permanently delete your account and remove your visible personal data
+          <div
+            class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
+          >
+            <div class="max-w-md space-y-1">
+              <h3 class="text-[16px] font-bold text-noble-black">Delete Account</h3>
+              <p class="text-[13px] font-medium text-noble-black/50">
+                Permanently erase your account, active listings, and all personal data from TakeUP.
               </p>
             </div>
-
             <button
               type="button"
-              class="h-11 w-[137px] rounded-[10px] bg-cinnabar-red px-4 text-[15px] font-normal tracking-[0.45px] text-white transition hover:brightness-95"
+              class="h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-bold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
               @click="openDeleteAccountModal"
             >
               Delete
@@ -992,34 +725,566 @@ const deleteAccount = async () => {
         </div>
       </section>
 
+      <!-- Modals -->
       <Teleport to="body">
+        <!-- Edit Profile Modal -->
+        <div
+          v-if="showEditProfileModal"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="closeEditProfileModal"
+          />
+          <div
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
+          >
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Edit Profile</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Update your public account details.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="closeEditProfileModal"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6L18 18"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="flex flex-col items-center gap-2 py-6">
+                <div class="relative group cursor-pointer" @click="triggerAvatarUpload">
+                  <div
+                    class="relative w-[96px] h-[96px] flex items-center justify-center rounded-full"
+                  >
+                    <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 96 96">
+                      <circle
+                        cx="48"
+                        cy="48"
+                        r="46.5"
+                        fill="none"
+                        stroke="#dbbba7"
+                        stroke-width="3"
+                        stroke-dasharray="97.4 194.8"
+                        stroke-linecap="round"
+                      />
+                      <circle
+                        cx="48"
+                        cy="48"
+                        r="46.5"
+                        fill="none"
+                        stroke="#ff7124"
+                        stroke-width="3"
+                        stroke-dasharray="97.4 194.8"
+                        stroke-dashoffset="-97.4"
+                        stroke-linecap="round"
+                      />
+                      <circle
+                        cx="48"
+                        cy="48"
+                        r="46.5"
+                        fill="none"
+                        stroke="#3b4883"
+                        stroke-width="3"
+                        stroke-dasharray="97.4 194.8"
+                        stroke-dashoffset="-194.8"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                    <div
+                      class="w-[86px] h-[86px] rounded-full overflow-hidden shadow-sm relative z-10"
+                    >
+                      <img
+                        v-if="currentAvatarPreview"
+                        :src="currentAvatarPreview"
+                        :alt="profileForm.name"
+                        class="h-full w-full object-cover"
+                        referrerpolicy="no-referrer"
+                      />
+                      <div
+                        v-else
+                        class="w-full h-full flex items-center justify-center text-white font-bold text-3xl bg-burning-orange"
+                      >
+                        {{ profileInitial }}
+                      </div>
+                      <div
+                        class="absolute inset-0 bg-noble-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      >
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                          />
+                          <circle cx="12" cy="13" r="4" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div
+                      class="absolute bottom-1 right-1 w-7 h-7 bg-burning-orange rounded-full flex items-center justify-center shadow-md z-20 transition-transform duration-300 group-hover:scale-110"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <input
+                  ref="avatarInputRef"
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  @change="handleAvatarSelect"
+                />
+                <p
+                  v-if="avatarUploadError"
+                  class="mt-2 text-center text-sm text-cinnabar-red font-medium"
+                >
+                  {{ avatarUploadError }}
+                </p>
+              </div>
+
+              <div class="w-full h-[1px] bg-cinnamon-ice/10 mb-8"></div>
+
+              <div class="space-y-5 pb-8">
+                <!-- Inputs -->
+                <div class="relative group">
+                  <div
+                    class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </div>
+                  <input
+                    id="edit-profile-name"
+                    v-model="profileForm.name"
+                    type="text"
+                    placeholder=" "
+                    class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[15px] text-noble-black transition-all duration-300"
+                  />
+                  <label
+                    for="edit-profile-name"
+                    class="absolute left-12 top-4 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >Full Name</label
+                  >
+                </div>
+
+                <div class="space-y-1.5">
+                  <div class="relative group">
+                    <div
+                      class="flex w-full border-[1.5px] border-gray-200 rounded-[10px] bg-white focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] transition-all duration-300 h-[58px]"
+                    >
+                      <div
+                        class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300 z-10"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="4" />
+                          <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 relative">
+                        <input
+                          id="edit-profile-username"
+                          v-model="profileForm.username"
+                          type="text"
+                          placeholder=" "
+                          autocapitalize="off"
+                          autocomplete="off"
+                          spellcheck="false"
+                          class="peer w-full pl-12 pr-10 pt-6 pb-2 bg-transparent outline-none text-[15px] text-noble-black h-full transition-all duration-300"
+                        />
+                        <label
+                          for="edit-profile-username"
+                          class="absolute left-12 top-4 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                          >Username</label
+                        >
+                        <div
+                          v-if="usernameStatus === 'available'"
+                          class="absolute right-3 top-1/2 -translate-y-1/2 mt-2 text-success-green"
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p
+                    v-if="
+                      usernameStatus === 'taken' ||
+                      usernameStatus === 'invalid' ||
+                      usernameStatus === 'checking'
+                    "
+                    class="text-[12px] ml-1"
+                    :class="
+                      usernameStatus === 'taken' || usernameStatus === 'invalid'
+                        ? 'text-cinnabar-red font-medium'
+                        : 'text-noble-black/45'
+                    "
+                  >
+                    {{ usernameHelperText }}
+                  </p>
+                </div>
+
+                <div class="relative group">
+                  <div
+                    class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                  </div>
+                  <input
+                    id="edit-profile-location"
+                    v-model="profileForm.location"
+                    type="text"
+                    placeholder=" "
+                    class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[15px] text-noble-black transition-all duration-300"
+                  />
+                  <label
+                    for="edit-profile-location"
+                    class="absolute left-12 top-4 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >Location</label
+                  >
+                </div>
+
+                <div class="relative group">
+                  <div
+                    class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                      <line x1="9" y1="9" x2="9.01" y2="9" />
+                      <line x1="15" y1="9" x2="15.01" y2="9" />
+                    </svg>
+                  </div>
+                  <input
+                    id="edit-profile-pronouns"
+                    v-model="profileForm.pronouns"
+                    type="text"
+                    placeholder=" "
+                    class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[15px] text-noble-black transition-all duration-300"
+                  />
+                  <label
+                    for="edit-profile-pronouns"
+                    class="absolute left-12 top-4 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >Pronouns</label
+                  >
+                </div>
+
+                <div class="relative group">
+                  <div
+                    class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                  </div>
+                  <textarea
+                    id="edit-profile-bio"
+                    v-model="profileForm.bio"
+                    rows="3"
+                    maxlength="200"
+                    placeholder=" "
+                    class="peer w-full pl-12 pr-4 pt-7 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[15px] text-noble-black transition-all duration-300 resize-none h-28"
+                  />
+                  <label
+                    for="edit-profile-bio"
+                    class="absolute left-12 top-5 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-5 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >Bio</label
+                  >
+                  <div
+                    class="absolute right-4 bottom-2 text-[11px] text-noble-black/30 font-medium"
+                  >
+                    {{ profileForm.bio.length }}/200
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div
+              class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+            >
+              <p v-if="profileSaveError" class="text-sm text-cinnabar-red font-medium text-center">
+                {{ profileSaveError }}
+              </p>
+              <div class="flex gap-3 w-full">
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                  @click="closeEditProfileModal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                  :disabled="!canSaveProfile"
+                  @click="saveProfile"
+                >
+                  {{ isSavingProfile ? "Saving..." : "Save Changes" }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deactivate Modal -->
+        <div
+          v-if="showDeactivateAccountModal"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="closeDeactivateAccountModal"
+          />
+          <div
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
+          >
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Deactivate Account</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Temporarily hide your profile and listings.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isDeactivatingAccount"
+                @click="closeDeactivateAccountModal"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6L18 18"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6">
+                <!-- Eligibility Banner -->
+                <div class="rounded-[16px] border border-cinnamon-ice/20 bg-cream p-5">
+                  <div
+                    v-if="isLoadingDeactivationEligibility"
+                    class="text-[14px] font-medium text-noble-black/60 flex items-center gap-2"
+                  >
+                    <svg
+                      class="animate-spin"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                    >
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    Checking eligibility...
+                  </div>
+                  <template v-else-if="deactivationEligibility?.blockers.length">
+                    <h3 class="text-[16px] font-bold text-noble-black">Deactivation is blocked</h3>
+                    <ul class="mt-3 space-y-3">
+                      <li
+                        v-for="blocker in deactivationEligibility.blockers"
+                        :key="blocker.code"
+                        class="text-[13px] font-medium text-noble-black/80 flex items-start gap-3"
+                      >
+                        <svg
+                          class="text-cinnabar-red shrink-0 mt-0.5"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="3"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span class="leading-relaxed">{{ blocker.message }}</span>
+                      </li>
+                    </ul>
+                  </template>
+                  <template v-else-if="deactivationEligibility?.allowed">
+                    <div class="flex items-center gap-3 text-success-green">
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <h3 class="text-[16px] font-bold">Account ready to deactivate</h3>
+                    </div>
+                    <p class="mt-2 text-[13px] font-medium text-noble-black/50 leading-relaxed">
+                      All checks passed. You can reactivate your account at any time by signing back
+                      in. Click the button below to proceed.
+                    </p>
+                  </template>
+                  <div v-else class="text-[14px] font-medium text-noble-black/60">
+                    Unable to check eligibility at this time. Please try again later.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div
+              class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+            >
+              <p
+                v-if="deactivateAccountError"
+                class="text-sm text-cinnabar-red font-medium text-center"
+              >
+                {{ deactivateAccountError }}
+              </p>
+              <div class="flex gap-3 w-full">
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-gray-200 bg-white text-[15px] font-bold text-noble-black/60 transition-all duration-200 hover:bg-gray-50 disabled:opacity-50"
+                  :disabled="isDeactivatingAccount"
+                  @click="closeDeactivateAccountModal"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!canDeactivateAccount"
+                  @click="deactivateAccount"
+                >
+                  {{ isDeactivatingAccount ? "Deactivating..." : "Deactivate" }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delete Modal -->
         <div
           v-if="showDeleteAccountModal"
-          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <div
             class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
             @click="closeDeleteAccountModal"
           />
           <div
-            class="relative z-10 w-full max-w-2xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
-            <div class="flex items-start justify-between gap-4">
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[26px] font-semibold text-cinnabar-red">
-                  {{ deletionEligibility?.eligible ? "Delete Account" : "Cannot Delete Account" }}
-                </h2>
-                <p class="mt-1 text-[15px] tracking-[0.45px] text-noble-black/70">
-                  {{
-                    deletionEligibility?.eligible
-                      ? "This action is permanent and cannot be undone."
-                      : "Your account cannot be deleted due to the following:"
-                  }}
+                <h2 class="text-[24px] font-bold text-cinnabar-red">Delete Account</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  This action is permanent and cannot be undone.
                 </p>
               </div>
               <button
                 type="button"
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeDeleteAccountModal"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -1033,408 +1298,108 @@ const deleteAccount = async () => {
               </button>
             </div>
 
-            <div
-              class="mt-6 rounded-[20px] border border-cinnabar-red/20 bg-cinnabar-red/5 px-5 py-4 text-[15px] text-noble-black/85"
-            >
-              Deleting your account removes your profile, credentials, listings, and visible user
-              content where possible. Required financial and transaction records are retained in an
-              anonymized form for compliance.
-            </div>
-
-            <div v-if="isLoadingDeletionEligibility" class="mt-6 space-y-3 animate-pulse">
-              <div class="h-5 w-56 rounded-lg bg-cinnamon-ice/70" />
-              <div class="h-20 rounded-[18px] bg-cinnamon-ice/50" />
-              <div class="h-20 rounded-[18px] bg-cinnamon-ice/50" />
-            </div>
-
-            <template v-else>
-              <div
-                v-if="deletionEligibility?.eligible"
-                class="mt-6 rounded-[20px] border border-success-green/25 bg-success-green/10 px-5 py-4"
-              >
-                <h3 class="text-[18px] font-semibold text-noble-black">
-                  Your account is ready to be deleted
-                </h3>
-                <p class="mt-2 text-[15px] tracking-[0.45px] text-noble-black/75">
-                  Please confirm that you want to permanently delete your account. This action
-                  cannot be undone.
-                </p>
-              </div>
-
-              <div
-                v-else-if="deletionBlockingReasons.length > 0"
-                class="mt-6 rounded-[20px] border border-amber-300 bg-amber-50 px-5 py-4"
-              >
-                <h3 class="text-[18px] font-semibold text-noble-black">Cannot Delete Account</h3>
-                <p class="mt-2 text-[15px] tracking-[0.45px] text-noble-black/75">
-                  Your account cannot be deleted due to the following:
-                </p>
-
-                <div class="mt-4 space-y-3">
-                  <div
-                    v-for="reason in deletionBlockingReasons"
-                    :key="reason.code"
-                    class="rounded-[16px] border border-amber-200 bg-white px-4 py-4"
-                  >
-                    <p class="text-[16px] font-semibold text-noble-black">{{ reason.title }}</p>
-                    <p class="mt-2 text-[15px] tracking-[0.45px] text-noble-black/80">
-                      {{ reason.message }}
-                    </p>
-                    <div v-if="reason.details?.length" class="mt-3 space-y-2">
-                      <div
-                        v-for="detail in reason.details"
-                        :key="`${reason.code}-${detail.title}-${detail.subtitle ?? ''}`"
-                        class="rounded-[14px] bg-amber-50 px-3 py-3"
-                      >
-                        <p class="text-[15px] font-medium text-noble-black">
-                          {{ detail.title }}
-                        </p>
-                        <p v-if="detail.subtitle" class="mt-1 text-[14px] text-noble-black/70">
-                          {{ detail.subtitle }}
-                        </p>
-                      </div>
-                    </div>
-                    <p class="mt-2 text-[14px] font-medium text-burning-orange">
-                      {{ reason.nextStep }}
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6 space-y-6">
+                <div
+                  class="rounded-[16px] border border-cinnabar-red/10 bg-cinnabar-red/[0.03] p-5"
+                >
+                  <div class="flex items-start gap-3 text-cinnabar-red">
+                    <svg
+                      class="shrink-0 mt-0.5"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <p class="text-[13px] font-bold leading-relaxed">
+                      Required financial and transaction records are retained in an anonymized form
+                      for compliance.
                     </p>
                   </div>
                 </div>
-              </div>
 
-              <div
-                v-else-if="!deleteAccountError"
-                class="mt-6 rounded-[20px] border border-cinnamon-ice bg-cream px-5 py-4 text-[15px] text-noble-black/75"
+                <div class="space-y-4">
+                  <div class="relative group">
+                    <div
+                      class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-cinnabar-red transition-colors duration-300"
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <input
+                      id="delete-confirmation"
+                      v-model="deleteConfirmationText"
+                      type="text"
+                      placeholder=" "
+                      class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-cinnabar-red focus:shadow-[0_0_0_3px_rgba(220,38,38,0.1)] outline-none text-[15px] font-bold text-noble-black transition-all duration-300 uppercase"
+                    />
+                    <label
+                      for="delete-confirmation"
+                      class="absolute left-12 top-4 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-cinnabar-red peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >
+                      Type <span class="font-bold">DELETE</span> to confirm
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div
+              class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+            >
+              <p
+                v-if="deleteAccountError"
+                class="text-sm text-cinnabar-red font-medium text-center"
               >
-                We could not determine your deletion eligibility yet. Please refresh this check and
-                try again.
-              </div>
-
-              <div v-if="deletionEligibility?.eligible" class="mt-6 space-y-3">
-                <label class="block space-y-2">
-                  <span class="text-[15px] font-medium text-noble-black">
-                    Type <span class="font-semibold text-cinnabar-red">DELETE</span> to confirm
-                  </span>
-                  <input
-                    v-model="deleteConfirmationText"
-                    type="text"
-                    autocomplete="off"
-                    class="w-full rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 text-[15px] uppercase text-noble-black outline-none transition focus:border-cinnabar-red"
-                    placeholder="DELETE"
-                    @input="
-                      deleteConfirmationText = (
-                        $event.target as HTMLInputElement
-                      ).value.toUpperCase()
-                    "
-                  />
-                </label>
-              </div>
-            </template>
-
-            <p v-if="deleteAccountError" class="mt-5 text-sm text-cinnabar-red">
-              {{ deleteAccountError }}
-            </p>
-
-            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream"
-                :disabled="isLoadingDeletionEligibility || isDeletingAccount"
-                @click="loadDeletionEligibility"
-              >
-                Refresh Check
-              </button>
-              <div class="flex flex-col gap-3 sm:flex-row">
+                {{ deleteAccountError }}
+              </p>
+              <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-gray-200 bg-white text-[15px] font-bold text-noble-black/60 transition-all duration-200 hover:bg-gray-50"
                   @click="closeDeleteAccountModal"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  class="inline-flex h-11 items-center justify-center rounded-[10px] bg-cinnabar-red px-6 text-[15px] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="!canDeleteAccount"
                   @click="deleteAccount"
                 >
-                  {{ isDeletingAccount ? "Deleting..." : "Permanently Delete Account" }}
+                  {{ isDeletingAccount ? "Deleting..." : "Permanently Delete" }}
                 </button>
               </div>
             </div>
           </div>
         </div>
-
-        <div
-          v-if="showEditProfileModal"
-          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
-        >
-          <div
-            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
-            @click="closeEditProfileModal"
-          />
-          <div
-            class="relative z-10 w-full max-w-2xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
-          >
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <h2 class="text-[26px] font-semibold text-noble-black">Edit Profile</h2>
-                <p class="mt-1 text-[15px] tracking-[0.45px] text-noble-black/70">
-                  Update your public account details.
-                </p>
-              </div>
-              <button
-                type="button"
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere"
-                @click="closeEditProfileModal"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <div class="mt-8 flex flex-col items-center gap-4">
-              <div
-                class="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-burning-orange text-[42px] text-white"
-              >
-                <img
-                  v-if="currentAvatarPreview"
-                  :src="currentAvatarPreview"
-                  :alt="profileForm.name || profileDetails.fullName"
-                  class="h-full w-full object-cover"
-                />
-                <span v-else>{{ profileInitial }}</span>
-              </div>
-
-              <input
-                ref="avatarInputRef"
-                type="file"
-                accept="image/*"
-                class="hidden"
-                @change="handleAvatarSelect"
-              />
-
-              <button
-                type="button"
-                class="inline-flex h-10 items-center justify-center rounded-[10px] bg-blue-estate px-5 text-[14px] text-white transition hover:brightness-110"
-                @click="triggerAvatarUpload"
-              >
-                Change Profile Photo
-              </button>
-
-              <p v-if="avatarUploadError" class="text-center text-sm text-cinnabar-red">
-                {{ avatarUploadError }}
-              </p>
-            </div>
-
-            <div class="mt-8 space-y-5">
-              <label class="block space-y-2">
-                <span class="text-[15px] font-medium text-noble-black">Name</span>
-                <input
-                  v-model="profileForm.name"
-                  type="text"
-                  class="w-full rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 text-[15px] text-noble-black outline-none transition focus:border-burning-orange"
-                  placeholder="Juan Dela Cruz"
-                />
-              </label>
-
-              <label class="block space-y-2">
-                <span class="text-[15px] font-medium text-noble-black">Username</span>
-                <div
-                  class="flex items-center rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 transition focus-within:border-burning-orange"
-                >
-                  <span class="mr-2 text-[15px] text-noble-black/60">@</span>
-                  <input
-                    v-model="profileForm.username"
-                    type="text"
-                    autocapitalize="off"
-                    autocomplete="off"
-                    spellcheck="false"
-                    class="w-full bg-transparent text-[15px] text-noble-black outline-none"
-                    placeholder="juandelacruz"
-                  />
-                </div>
-                <p
-                  class="text-[13px]"
-                  :class="
-                    usernameStatus === 'taken' || usernameStatus === 'invalid'
-                      ? 'text-cinnabar-red'
-                      : usernameStatus === 'available'
-                        ? 'text-success-green'
-                        : 'text-noble-black/65'
-                  "
-                >
-                  {{ usernameHelperText }}
-                </p>
-              </label>
-
-              <label class="block space-y-2">
-                <span class="text-[15px] font-medium text-noble-black">Location</span>
-                <input
-                  v-model="profileForm.location"
-                  type="text"
-                  class="w-full rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 text-[15px] text-noble-black outline-none transition focus:border-burning-orange"
-                  placeholder="Buhisan, Cebu City"
-                />
-              </label>
-
-              <label class="block space-y-2">
-                <span class="text-[15px] font-medium text-noble-black">Pronouns</span>
-                <input
-                  v-model="profileForm.pronouns"
-                  type="text"
-                  class="w-full rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 text-[15px] text-noble-black outline-none transition focus:border-burning-orange"
-                  placeholder="she/her, he/him, they/them"
-                />
-              </label>
-
-              <label class="block space-y-2">
-                <span class="text-[15px] font-medium text-noble-black">Bio</span>
-                <textarea
-                  v-model="profileForm.bio"
-                  rows="4"
-                  maxlength="200"
-                  class="w-full resize-none rounded-[14px] border border-cinnamon-ice bg-cream px-4 py-3 text-[15px] text-noble-black outline-none transition focus:border-burning-orange"
-                  placeholder="Tell other users a little bit about yourself."
-                />
-                <p class="text-right text-[12px] text-noble-black/50">
-                  {{ profileForm.bio.length }}/200
-                </p>
-              </label>
-            </div>
-
-            <p v-if="profileSaveError" class="mt-5 text-sm text-cinnabar-red">
-              {{ profileSaveError }}
-            </p>
-
-            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream"
-                @click="closeEditProfileModal"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] bg-burning-orange px-6 text-[15px] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canSaveProfile"
-                @click="saveProfile"
-              >
-                {{ isSavingProfile ? "Saving..." : "Save Changes" }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Teleport>
-
-      <Teleport to="body">
-        <div
-          v-if="showDeactivateAccountModal"
-          class="fixed inset-0 z-[1200] flex items-center justify-center p-4 font-geist"
-        >
-          <div
-            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
-            @click="closeDeactivateAccountModal"
-          />
-          <div
-            class="relative z-10 w-full max-w-xl rounded-[28px] border border-cinnamon-ice bg-white p-6 shadow-2xl sm:p-8"
-          >
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p class="text-[13px] font-semibold uppercase tracking-[0.2em] text-cinnabar-red">
-                  Danger Zone
-                </p>
-                <h2 class="mt-2 text-[26px] font-semibold text-noble-black">Deactivate account?</h2>
-                <p class="mt-2 text-[15px] leading-6 tracking-[0.45px] text-noble-black/70">
-                  Your public profile and listings will be hidden. Your history stays saved, and you
-                  can reactivate later by signing in again.
-                </p>
-              </div>
-              <button
-                type="button"
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-cream text-noble-black transition hover:bg-pale-cashmere disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="isDeactivatingAccount"
-                @click="closeDeactivateAccountModal"
-              >
-                <span class="sr-only">Close deactivation dialog</span>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <div class="mt-7 rounded-[18px] border border-cinnamon-ice bg-cream p-5">
-              <p
-                v-if="isLoadingDeactivationEligibility"
-                class="text-[15px] tracking-[0.45px] text-noble-black/70"
-              >
-                Checking active rentals, future bookings, and open disputes...
-              </p>
-
-              <template v-else-if="deactivationEligibility?.blockers.length">
-                <h3 class="text-[17px] font-semibold text-noble-black">Deactivation is blocked</h3>
-                <p class="mt-2 text-[14px] leading-6 tracking-[0.42px] text-noble-black/70">
-                  Resolve these items first so other users are not left with active obligations.
-                </p>
-                <ul class="mt-4 space-y-3">
-                  <li
-                    v-for="blocker in deactivationEligibility.blockers"
-                    :key="blocker.code"
-                    class="rounded-[14px] border border-cinnabar-red/20 bg-white px-4 py-3 text-[14px] leading-5 text-noble-black/80"
-                  >
-                    {{ blocker.message }}
-                  </li>
-                </ul>
-              </template>
-
-              <template v-else-if="deactivationEligibility?.allowed">
-                <h3 class="text-[17px] font-semibold text-noble-black">Ready to deactivate</h3>
-                <p class="mt-2 text-[14px] leading-6 tracking-[0.42px] text-noble-black/70">
-                  No active rentals, future confirmed bookings, or open disputes were found.
-                </p>
-              </template>
-
-              <p v-else class="text-[15px] tracking-[0.45px] text-noble-black/70">
-                We could not confirm your eligibility yet. Try again before deactivating.
-              </p>
-            </div>
-
-            <p v-if="deactivateAccountError" class="mt-5 text-sm text-cinnabar-red">
-              {{ deactivateAccountError }}
-            </p>
-
-            <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] border border-cinnamon-ice px-6 text-[15px] text-noble-black transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="isDeactivatingAccount"
-                @click="closeDeactivateAccountModal"
-              >
-                Keep Account Active
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-11 items-center justify-center rounded-[10px] bg-cinnabar-red px-6 text-[15px] text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canDeactivateAccount"
-                @click="deactivateAccount"
-              >
-                {{ isDeactivatingAccount ? "Deactivating..." : "Deactivate Account" }}
-              </button>
-            </div>
-          </div>
-        </div>
       </Teleport>
     </template>
+
+    <!-- Skeleton Loader for SSR -->
+    <section v-else class="space-y-6 animate-pulse">
+      <div class="h-8 w-64 rounded-lg bg-cinnamon-ice/70" />
+      <div class="rounded-[20px] border border-cinnamon-ice bg-cream h-64 shadow-sm" />
+    </section>
   </div>
 </template>
