@@ -24,6 +24,11 @@ const adminLinks: AdminLink[] = [
     description: "Manage users, roles, and account settings.",
   },
   {
+    label: "Transactions",
+    to: "/admin/transactions",
+    description: "Monitor borrower and lender transactions across the platform.",
+  },
+  {
     label: "Dispute Queue",
     to: "/admin/disputes",
     description: "Review submitted rental disputes and appeals.",
