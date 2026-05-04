@@ -1,4 +1,4 @@
-import type { AuthErrorCode } from "../../shared/schemas/auth"
+import type { AuthErrorCode } from "#shared/schemas/auth"
 
 const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   AUTH_DOMAIN_NOT_ALLOWED: "Only up.edu.ph email addresses are allowed.",

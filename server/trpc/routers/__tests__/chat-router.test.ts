@@ -8,7 +8,7 @@ import {
   CHAT_DISPUTE_NOTICE,
   CHAT_ENDED_NOTICE,
   CHAT_IN_DISPUTE_PREVIEW,
-} from "../../../../shared/chat-rules"
+} from "#shared/chat-rules"
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const OTHER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"

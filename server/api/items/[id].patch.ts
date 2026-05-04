@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server"
 import { createError, getRouterParam, readBody } from "h3"
-import { updateItemSchema } from "../../../shared/schemas/item"
+import { updateItemSchema } from "#shared/schemas/item"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TransactionStatus } from "../../shared/schemas/transaction"
+import type { TransactionStatus } from "#shared/schemas/transaction"
 
 const props = defineProps<{
   status: TransactionStatus

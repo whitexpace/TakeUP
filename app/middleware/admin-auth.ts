@@ -1,5 +1,7 @@
 /**
  * Ensures users navigating to /admin/* have a valid session and admin access.
+ * On the server, verifies admin status from the JWT session cookie for instant SSR.
+ * On the client, caches verification so subsequent navigations are instant.
  */
 type AdminAuthCache = {
   accessToken: string | null
@@ -10,8 +12,20 @@ type AdminAuthCache = {
 export default defineNuxtRouteMiddleware(async (to) => {
   if (!to.path.startsWith("/admin")) return
 
-  if (import.meta.server) return
+  // --- Server-side: check JWT session directly for SSR ---
+  if (import.meta.server) {
+    const event = useRequestEvent()
+    const authUser = event?.context.authUser
+    if (!authUser) {
+      return navigateTo("/")
+    }
+    if (authUser.accountType !== "ADMIN") {
+      return navigateTo("/account")
+    }
+    return
+  }
 
+  // --- Client-side: bridge Supabase session and verify admin status ---
   const supabase = useSupabaseClient()
   const {
     data: { session },
@@ -28,16 +42,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo("/")
   }
 
-  const bridgedAccessToken = useState<string | null>("admin-bridged-access-token", () => null)
-  if (bridgedAccessToken.value !== session.access_token) {
-    try {
-      await $fetch("/api/auth/supabase-session", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-    } finally {
-      bridgedAccessToken.value = session.access_token
-    }
+  const verifiedAccessToken = useState<string | null>("admin-verified-access-token", () => null)
+
+  // Skip both bridge and admin check if we already verified this token
+  if (verifiedAccessToken.value === session.access_token) return
+
+  const { ensureBridged } = useSessionBridge()
+  if (!(await ensureBridged(session.access_token))) {
+    return navigateTo("/")
   }
 
   if (authCache.value.checked && authCache.value.accessToken === session.access_token) {
@@ -49,16 +61,20 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   try {
-    const response = await $fetch<{ user: { accountType: string | null } }>("/api/auth/me")
+    const { fetch: fetchAuthUser } = useAuthUser()
+    const authUser = await fetchAuthUser()
+
     authCache.value = {
       accessToken: session.access_token,
-      accountType: response.user.accountType,
+      accountType: authUser?.accountType ?? null,
       checked: true,
     }
 
-    if (response.user.accountType !== "ADMIN") {
+    if (authUser?.accountType !== "ADMIN") {
       return navigateTo("/account")
     }
+
+    verifiedAccessToken.value = session.access_token
   } catch {
     authCache.value = { accessToken: null, accountType: null, checked: false }
     return navigateTo("/account")

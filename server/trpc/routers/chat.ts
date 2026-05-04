@@ -11,8 +11,8 @@ import {
   reportConversationSchema,
   sendMessageSchema,
   transactionConversationSchema,
-} from "../../../shared/schemas/chat"
-import { sanitizeChatMessage } from "../../../shared/chat-moderation"
+} from "#shared/schemas/chat"
+import { sanitizeChatMessage } from "#shared/chat-moderation"
 import {
   ACTIVE_DISPUTE_STATUSES,
   SUBMITTED_DISPUTE_STATUS,
@@ -24,7 +24,7 @@ import {
   getChatClosureState,
   isChatClosed,
   isChatAvailableForTransactionStatus,
-} from "../../../shared/chat-rules"
+} from "#shared/chat-rules"
 
 const participantSelect = {
   id: true,

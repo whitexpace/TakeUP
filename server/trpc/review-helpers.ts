@@ -1,5 +1,5 @@
 import type { Prisma, ReviewType as PrismaReviewType } from "@prisma/client"
-import type { ReviewType } from "../../shared/schemas/review"
+import type { ReviewType } from "#shared/schemas/review"
 
 export const transactionReviewUserSelect = {
   id: true,

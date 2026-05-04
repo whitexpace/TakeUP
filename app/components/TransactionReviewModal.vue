@@ -5,7 +5,7 @@ import {
   MAX_REVIEW_IMAGES,
   MAX_REVIEW_IMAGE_BYTES,
   type ReviewType,
-} from "../../shared/schemas/review"
+} from "#shared/schemas/review"
 import { normalizeReviewImageUrl } from "../utils/review-image"
 
 type ReviewContext = {
@@ -322,8 +322,10 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
     return []
   }
 
-  const response = await $fetch<{ user: { id: string } }>("/api/auth/me")
-  const userId = response.user.id
+  const { fetch: fetchAuthUser } = useAuthUser()
+  const authUser = await fetchAuthUser()
+  if (!authUser) throw new Error("Not authenticated")
+  const userId = authUser.id
 
   const {
     data: { session },

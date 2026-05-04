@@ -1,5 +1,5 @@
 import { createError, readBody } from "h3"
-import { transactionReviewDraftKeySchema } from "../../shared/schemas/review"
+import { transactionReviewDraftKeySchema } from "#shared/schemas/review"
 import { createContext } from "../trpc/context"
 import { appRouter } from "../trpc/routers"
 

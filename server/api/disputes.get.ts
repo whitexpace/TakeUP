@@ -1,5 +1,5 @@
 import { createError, getQuery } from "h3"
-import { listDisputesSchema } from "../../shared/schemas/dispute"
+import { listDisputesSchema } from "#shared/schemas/dispute"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
 import { handleDisputeApiError } from "./disputes/handle-dispute-api-error"

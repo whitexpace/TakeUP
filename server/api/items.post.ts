@@ -1,5 +1,5 @@
 import { createError, readBody } from "h3"
-import { createItemSchema } from "../../shared/schemas/item"
+import { createItemSchema } from "#shared/schemas/item"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
 import { handleItemApiError } from "./items/handle-item-api-error"

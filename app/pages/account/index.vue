@@ -1,28 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, reactive } from "vue"
+import type { AuthMeUser } from "~/composables/use-auth-user"
 
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
-
-type AuthMeResponse = {
-  user: {
-    id: string
-    email: string
-    name: string
-    username: string
-    firstName: string
-    middleName: string | null
-    lastName: string
-    accountType: string | null
-    createdAt: string | null
-    location: string | null
-    avatarUrl: string | null
-    bio: string | null
-    pronouns: string | null
-  }
-}
 
 type UsernameAvailabilityResponse = {
   username: string
@@ -71,19 +54,18 @@ const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
 const avatarBucket = runtimeConfig.public.userAvatarBucket
 
-const { data: authData, refresh: refreshAuthData } = useAsyncData(
-  "account:auth-me",
-  () => $fetch<AuthMeResponse>("/api/auth/me"),
-  {
-    server: false,
-    watch: [user],
-  },
-)
+const { authUser: cachedAuthUser, fetch: fetchAuthUser, refresh: refreshAuthUser } = useAuthUser()
 
+// Provide a compatible shape for existing template refs (authData.value?.user.X → authData.value?.user.X)
+const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
+const refreshAuthData = refreshAuthUser
+const isAuthDataPending = ref(true)
 const isHydrated = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   isHydrated.value = true
+  await fetchAuthUser()
+  isAuthDataPending.value = false
 })
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -139,16 +121,16 @@ const getAvatarFromSource = (source: Record<string, unknown> | null) => {
   )
 }
 
-const buildDbFullName = (u: AuthMeResponse["user"] | undefined) => {
-  if (!u) return null
-  const first = (u.firstName || "").trim()
-  const last = (u.lastName || "").trim()
+const buildDbFullName = (payload: AuthMeUser | undefined) => {
+  if (!payload) return null
+  const first = (payload.firstName || "").trim()
+  const last = (payload.lastName || "").trim()
 
   if (last.toLowerCase() === "user" || !last) {
     return first.charAt(0).toUpperCase() + first.slice(1)
   }
 
-  const parts = [first, u.middleName, last].filter(Boolean)
+  const parts = [first, payload.middleName, last].filter(Boolean)
   return parts.length > 0 ? parts.join(" ") : null
 }
 

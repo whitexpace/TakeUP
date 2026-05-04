@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server"
 import { createError, readBody } from "h3"
-import { addToCartSchema } from "../../shared/schemas/cart"
+import { addToCartSchema } from "#shared/schemas/cart"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
 

@@ -1,5 +1,5 @@
 import { createError, getRouterParam, readBody } from "h3"
-import { appealDisputeSchema } from "../../../../shared/schemas/dispute"
+import { appealDisputeSchema } from "#shared/schemas/dispute"
 import { appRouter } from "../../../trpc/routers"
 import { createContext } from "../../../trpc/context"
 import { handleDisputeApiError } from "../../disputes/handle-dispute-api-error"

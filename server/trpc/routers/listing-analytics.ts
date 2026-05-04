@@ -8,7 +8,7 @@ import {
 } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure } from "../procedures"
-import { listingAnalyticsQuerySchema } from "../../../shared/schemas/listing-analytics"
+import { listingAnalyticsQuerySchema } from "#shared/schemas/listing-analytics"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const RANKING_LIMIT = 5

@@ -510,8 +510,9 @@ const getSafeFileName = (fileName: string) => {
 const fetchCurrentUserId = async () => {
   if (currentUserId.value) return currentUserId.value
 
-  const response = await $fetch<{ user: { id: string } }>("/api/auth/me")
-  currentUserId.value = response.user.id
+  const { fetch: fetchAuthUser } = useAuthUser()
+  const authUser = await fetchAuthUser()
+  if (authUser) currentUserId.value = authUser.id
   return currentUserId.value
 }
 
@@ -592,6 +593,10 @@ const removeReferenceImage = async () => {
 
 const uploadReferenceImage = async (file: File) => {
   const userId = await fetchCurrentUserId()
+  if (!userId) {
+    throw new Error("Please sign in again before uploading an image.")
+  }
+
   const storagePath = createStoragePath(file, userId)
 
   const {

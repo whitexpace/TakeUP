@@ -5,7 +5,7 @@ import {
   type ConversationDetail,
   type ConversationSummary,
 } from "../use-chat"
-import { CHAT_DISPUTE_NOTICE, CHAT_ENDED_NOTICE } from "../../../shared/chat-rules"
+import { CHAT_DISPUTE_NOTICE, CHAT_ENDED_NOTICE } from "#shared/chat-rules"
 
 const CONV_ID_1 = "conv-1"
 const CONV_ID_2 = "conv-2"

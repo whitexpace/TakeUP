@@ -1,5 +1,5 @@
 import { createError, getQuery } from "h3"
-import { listBookingsSchema } from "../../shared/schemas/booking"
+import { listBookingsSchema } from "#shared/schemas/booking"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
 import { handleBookingApiError } from "./bookings/handle-booking-api-error"

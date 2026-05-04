@@ -1,5 +1,5 @@
 import { createError, getRouterParam } from "h3"
-import { itemIdSchema } from "../../../shared/schemas/item"
+import { itemIdSchema } from "#shared/schemas/item"
 import { createContext } from "../../trpc/context"
 import { appRouter } from "../../trpc/routers"
 

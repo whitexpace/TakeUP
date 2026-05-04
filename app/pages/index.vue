@@ -160,10 +160,8 @@ async function restoreSession() {
     loginStatus.value = "success"
 
     if (accessToken) {
-      await $fetch("/api/auth/supabase-session", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }).catch(() => undefined)
+      const { ensureBridged } = useSessionBridge()
+      await ensureBridged(accessToken)
     }
 
     await navigateTo("/dashboard")

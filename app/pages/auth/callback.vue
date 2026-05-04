@@ -1,9 +1,28 @@
 <script setup lang="ts">
 const errorMessage = ref("")
 const supabase = useSupabaseClient()
+const route = useRoute()
 
 onMounted(async () => {
   try {
+    const oauthError =
+      (typeof route.query.error_description === "string" && route.query.error_description) ||
+      (typeof route.query.error === "string" && route.query.error) ||
+      ""
+
+    if (oauthError) {
+      await navigateTo(`/?error=${encodeURIComponent(oauthError)}`)
+      return
+    }
+
+    const code = typeof route.query.code === "string" ? route.query.code : ""
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      if (error) {
+        throw error
+      }
+    }
+
     const {
       data: { session },
     } = await supabase.auth.getSession()
@@ -23,10 +42,8 @@ onMounted(async () => {
     }
 
     // Bridge Supabase session → custom JWT so account/listing APIs work
-    await $fetch("/api/auth/supabase-session", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    }).catch(() => undefined)
+    const { ensureBridged } = useSessionBridge()
+    await ensureBridged(session.access_token)
 
     await navigateTo("/dashboard")
   } catch (error) {

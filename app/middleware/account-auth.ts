@@ -18,26 +18,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo("/")
   }
 
-  // Avoid repeating the bridge request on every in-account navigation.
-  // Re-run only when Supabase access token changes.
-  const bridgedAccessToken = useState<string | null>("account-bridged-access-token", () => null)
-  if (bridgedAccessToken.value === session.access_token) return
-
-  // Try to bridge Supabase session → custom JWT (idempotent — server sets httpOnly cookie)
-  try {
-    await $fetch("/api/auth/supabase-session", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-    bridgedAccessToken.value = session.access_token
-  } catch (error) {
-    // If already have a valid session cookie the endpoint may 4xx — that's OK.
-    // Mark this token as bridged to prevent repeated delayed navigation attempts.
-    // Only redirect if it's a real auth error, not a 4xx from already-authenticated state
-    if (error instanceof Error && error.message && !error.message.includes("4")) {
-      bridgedAccessToken.value = session.access_token
-    } else {
-      bridgedAccessToken.value = session.access_token
-    }
-  }
+  const { ensureBridged } = useSessionBridge()
+  await ensureBridged(session.access_token)
 })

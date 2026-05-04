@@ -600,12 +600,9 @@ const refreshFeed = async () => {
     const headers = await getAuthHeaders()
 
     if (headers) {
-      try {
-        const authResponse = await $fetch<{ user: { id: string } }>("/api/auth/me", { headers })
-        currentDbUserId.value = authResponse.user.id
-      } catch {
-        currentDbUserId.value = ""
-      }
+      const { fetch: fetchAuthUser } = useAuthUser()
+      const authUser = await fetchAuthUser()
+      currentDbUserId.value = authUser?.id ?? ""
     } else {
       currentDbUserId.value = ""
     }

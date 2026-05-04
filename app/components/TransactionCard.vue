@@ -2,8 +2,8 @@
 import { computed } from "vue"
 import type { AdminTransactionListItem } from "../composables/use-admin-transactions"
 import type { TransactionListItem } from "../composables/use-transactions"
-import type { ReviewType } from "../../shared/schemas/review"
-import { isChatAvailableForTransactionStatus } from "../../shared/chat-rules"
+import type { ReviewType } from "#shared/schemas/review"
+import { isChatAvailableForTransactionStatus } from "#shared/chat-rules"
 
 const props = defineProps<{
   transaction: TransactionListItem | AdminTransactionListItem

@@ -496,8 +496,10 @@ const getSafeFileName = (fileName: string) => {
 }
 
 const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
-  const response = await $fetch<{ user: { id: string } }>("/api/auth/me")
-  const userId = response.user.id
+  const { fetch: fetchAuthUser } = useAuthUser()
+  const authUser = await fetchAuthUser()
+  if (!authUser) throw new Error("Not authenticated")
+  const userId = authUser.id
   const datePrefix = new Date().toISOString().slice(0, 10)
   const uniqueId = crypto.randomUUID()
   const storagePath = `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`

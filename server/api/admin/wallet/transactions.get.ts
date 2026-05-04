@@ -1,6 +1,6 @@
 import { createError, getQuery } from "h3"
 import { getSystemWalletTransactions, runSystemWalletSelfHealing } from "../../../utils/wallet"
-import { listTransactionsSchema } from "../../../../shared/schemas/wallet"
+import { listTransactionsSchema } from "#shared/schemas/wallet"
 import { prisma } from "../../../utils/prisma"
 
 async function requireAdminWalletAccess(userId: string) {

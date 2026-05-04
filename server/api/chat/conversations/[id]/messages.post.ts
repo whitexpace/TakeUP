@@ -1,5 +1,5 @@
 import { createError, getRouterParam, readBody } from "h3"
-import { sendMessageSchema } from "../../../../../shared/schemas/chat"
+import { sendMessageSchema } from "#shared/schemas/chat"
 import { appRouter } from "../../../../trpc/routers"
 import { createContext } from "../../../../trpc/context"
 import { handleChatApiError } from "../../../chat/handle-chat-api-error"

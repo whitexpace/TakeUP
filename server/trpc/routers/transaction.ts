@@ -10,12 +10,12 @@ import {
   listAdminTransactionsSchema,
   listTransactionsSchema,
   type TransactionStatus as UiTransactionStatus,
-} from "../../../shared/schemas/transaction"
+} from "#shared/schemas/transaction"
 import {
   createTransactionReviewSchema,
   transactionReviewDraftKeySchema,
   upsertTransactionReviewDraftSchema,
-} from "../../../shared/schemas/review"
+} from "#shared/schemas/review"
 import {
   buildTransactionReviewState,
   isReviewTypeAllowedForTransaction,

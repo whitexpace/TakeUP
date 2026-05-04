@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server"
 import { createError, getQuery } from "h3"
 import { createContext } from "../../trpc/context"
 import { appRouter } from "../../trpc/routers"
-import { listingAnalyticsQuerySchema } from "../../../shared/schemas/listing-analytics"
+import { listingAnalyticsQuerySchema } from "#shared/schemas/listing-analytics"
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)

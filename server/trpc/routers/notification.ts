@@ -5,7 +5,7 @@ import {
   listNotificationsSchema,
   notificationIdSchema,
   type AppNotificationType,
-} from "../../../shared/schemas/notification"
+} from "#shared/schemas/notification"
 import { DISPUTE_ADMIN_REVIEW_BYPASS_ENABLED } from "../../utils/dispute-status"
 
 const formatActorName = (

@@ -1,7 +1,7 @@
 import { createError, getRouterParam, readBody } from "h3"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
-import { updateItemRequestSchema } from "../../../shared/schemas/item-request"
+import { updateItemRequestSchema } from "#shared/schemas/item-request"
 import { handleItemRequestApiError } from "../item-requests/handle-item-request-api-error"
 
 export default defineEventHandler(async (event) => {

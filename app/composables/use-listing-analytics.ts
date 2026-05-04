@@ -1,7 +1,7 @@
 import { computed, ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
-import type { ListingAnalyticsRange } from "../../shared/schemas/listing-analytics"
+import type { ListingAnalyticsRange } from "#shared/schemas/listing-analytics"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type ListingAnalyticsResponse = RouterOutputs["listingAnalytics"]["list"]

@@ -1,5 +1,5 @@
 import { getQuery } from "h3"
-import { fetchMessagesSchema } from "../../../shared/schemas/chat"
+import { fetchMessagesSchema } from "#shared/schemas/chat"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 import { handleChatApiError } from "./handle-chat-api-error"

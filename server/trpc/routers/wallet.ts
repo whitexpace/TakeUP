@@ -10,7 +10,7 @@ import {
   topUpSchema,
   payWithWalletSchema,
   listTransactionsSchema,
-} from "../../../shared/schemas/wallet"
+} from "#shared/schemas/wallet"
 
 export const walletRouter = router({
   getWallet: protectedProcedure.query(async ({ ctx }) => {
