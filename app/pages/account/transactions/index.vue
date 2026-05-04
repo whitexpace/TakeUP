@@ -448,11 +448,11 @@ onBeforeUnmount(() => {
 
       <!-- Loading skeletons -->
       <template v-if="isInitialLoading">
-        <div
-          v-for="i in 3"
-          :key="i"
-          class="animate-pulse bg-cinnamon-ice/20 rounded-2xl h-32 mb-4"
-        />
+        <div class="flex flex-col gap-4">
+          <TransactionCardSkeleton />
+          <BorrowerRequestCardSkeleton />
+          <TransactionCardSkeleton />
+        </div>
       </template>
 
       <!-- Error state -->
@@ -515,7 +515,7 @@ onBeforeUnmount(() => {
               <TransactionCard
                 v-else
                 :transaction="entry.transaction"
-                :active-role="activeRole"
+                :active-role="activeRole === 'LENDER' ? 'LENDER' : 'BORROWER'"
                 @write-review="openReviewModal"
               />
             </template>

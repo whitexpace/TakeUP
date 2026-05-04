@@ -8,6 +8,8 @@ export interface PublicProfile {
     avatarUrl: string | null
     createdAt: string | Date
     bio: string | null
+    pronouns: string | null
+    location: string | null
     rating: number
     borrowerRating: number
     itemsSold: number

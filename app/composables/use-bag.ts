@@ -116,7 +116,7 @@ export const useBag = () => {
 
         if (statusCode === 403) {
           bagItems.value = []
-          errorMessage.value = "Only borrower accounts can use the bag."
+          errorMessage.value = "You are not authorized to use the bag."
           return
         }
 

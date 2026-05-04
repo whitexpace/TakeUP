@@ -14,7 +14,7 @@ const searchQuery = ref("")
 const actingBookingId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 
-const { filteredBookings, isLoading, error, hasMore, loadMore, refresh, fetchPage } = useBookings({
+const { filteredBookings, isLoading, hasMore, loadMore, refresh, fetchPage } = useBookings({
   role: lenderRole,
   status: activeStatus,
   searchQuery,
@@ -45,11 +45,15 @@ const formatPesoAmount = (value: number) =>
   `PHP ${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
 
 const statusBadgeClass = (status: BookingStatus) => {
-  if (status === "PENDING") return "bg-amber-100 text-amber-700"
-  if (status === "CONFIRMED") return "bg-emerald-100 text-emerald-700"
-  if (status === "CANCELLED") return "bg-rose-100 text-rose-700"
-  if (status === "COMPLETED") return "bg-sky-100 text-sky-700"
-  return "bg-orange-100 text-orange-700"
+  if (status === "PENDING")
+    return "bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
+  if (status === "CONFIRMED")
+    return "bg-success-green/[0.08] text-success-green border-success-green/20"
+  if (status === "CANCELLED")
+    return "bg-cinnabar-red/[0.08] text-cinnabar-red border-cinnabar-red/20"
+  if (status === "COMPLETED")
+    return "bg-success-green/[0.08] text-success-green border-success-green/20"
+  return "bg-gray-100 text-gray-500 border-gray-200"
 }
 
 const pageTitle = computed(() => {
@@ -111,171 +115,264 @@ const handleBookingDecision = async (
 </script>
 
 <template>
-  <div class="font-geist space-y-6">
+  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
+    <!-- Header with Back Button -->
     <NuxtLink
       to="/account/listings"
-      class="inline-flex items-center gap-2 bg-transparent py-2 text-sm transition-colors hover:text-burning-orange"
-    >
-      <span>← Back to My Listings</span>
-    </NuxtLink>
-
-    <div>
-      <h1 class="text-neutral-800 text-xl sm:text-2xl font-bold">{{ pageTitle }}</h1>
-      <p class="text-neutral-800 text-base sm:text-lg font-normal tracking-wide mt-1">
-        {{ pageSubtitle }}
-      </p>
-    </div>
-
-    <div
-      class="flex items-center gap-3 bg-white rounded-[20px] border-[0.5px] border-cinnamon-ice h-12 sm:h-16 px-4 sm:px-5"
+      class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
     >
       <svg
-        class="w-4 h-4 sm:w-5 sm:h-5 text-stone-400 shrink-0"
+        xmlns="http://www.w3.org/2000/svg"
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        viewBox="0 0 24 24"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="transition-transform group-hover:-translate-x-1"
       >
-        <circle cx="11" cy="11" r="8" stroke-width="2" />
-        <path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" />
+        <path d="m15 18-6-6 6-6" />
       </svg>
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="Search by item, borrower, or request ID"
-        class="flex-1 bg-transparent outline-none text-stone-500 text-sm sm:text-lg placeholder:text-stone-400"
-      />
+      <span class="text-[15px] font-bold">Back to My Listings</span>
+    </NuxtLink>
+
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
+      <section class="space-y-3">
+        <div class="space-y-2">
+          <h1 class="text-[28px] font-semibold text-noble-black">{{ pageTitle }}</h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
+        </div>
+        <p class="text-[16px] font-medium text-noble-black/50">
+          {{ pageSubtitle }}
+        </p>
+      </section>
     </div>
 
-    <div class="bg-cream rounded-[20px] border border-cinnamon-ice p-4 sm:p-6 space-y-5">
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="chip in statusChips"
-          :key="chip.value"
-          class="px-4 py-2 rounded-xl text-sm sm:text-base transition-colors"
-          :class="
-            activeStatus === chip.value
-              ? 'bg-burning-orange text-white'
-              : 'bg-white border border-orange-500 text-neutral-800'
-          "
-          @click="activeStatus = chip.value"
-        >
-          {{ chip.label }}
-        </button>
+    <!-- Content Panel -->
+    <div
+      class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+    >
+      <div class="border-l-[3px] border-burning-orange pl-4 mb-6">
+        <h2 class="text-[20px] font-bold text-noble-black">Requests</h2>
+        <p class="text-[13px] font-medium text-noble-black/50">
+          Manage your incoming booking requests
+        </p>
       </div>
 
-      <p v-if="actionError" class="text-sm text-cinnabar-red">
-        {{ actionError }}
-      </p>
+      <!-- Action & Filter Row -->
+      <div class="flex items-center mb-8">
+        <!-- Status filter chips -->
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <button
+            v-for="status in statusChips"
+            :key="status.value"
+            class="px-[14px] py-1.5 rounded-full text-[13px] font-bold transition-all duration-200 shrink-0 border-[1.5px]"
+            :class="
+              activeStatus === status.value
+                ? 'bg-burning-orange/[0.12] border-burning-orange/30 text-burning-orange'
+                : 'bg-white border-gray-200 text-noble-black/40 hover:border-gray-300 hover:text-noble-black/60'
+            "
+            @click="activeStatus = status.value"
+          >
+            {{ status.label }}
+          </button>
+        </div>
+      </div>
 
+      <!-- Loading skeletons -->
       <template v-if="isLoading && filteredBookings.length === 0">
-        <div v-for="i in 3" :key="i" class="animate-pulse h-44 rounded-2xl bg-cinnamon-ice/40" />
+        <div
+          v-for="i in 3"
+          :key="i"
+          class="animate-pulse bg-cinnamon-ice/20 rounded-2xl h-32 mb-4"
+        />
       </template>
 
-      <div
-        v-else-if="error && filteredBookings.length === 0"
-        class="bg-white rounded-2xl border border-red-200 p-6 text-center space-y-3"
-      >
-        <p class="text-red-600">{{ error }}</p>
-        <button
-          class="px-5 py-2 rounded-xl bg-burning-orange text-white hover:bg-cinnabar-red transition-colors"
-          @click="refresh"
-        >
-          Retry
-        </button>
-      </div>
-
+      <!-- Empty state -->
       <div
         v-else-if="!isLoading && filteredBookings.length === 0"
-        class="bg-white rounded-2xl border border-red-200 p-10 text-center"
+        class="flex flex-col items-center justify-center py-16 sm:py-20 text-center"
       >
-        <p class="text-neutral-800 font-semibold">No requests found</p>
-        <p class="text-neutral-800/60 text-sm mt-1">
+        <div
+          class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
+        >
+          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
+            <path d="M3 9h18" stroke-width="1.5" />
+            <path d="M9 21V9" stroke-width="1.5" />
+          </svg>
+        </div>
+        <p class="text-noble-black text-[18px] font-bold mb-1">No booking requests found</p>
+        <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">
           Requests for your listings will appear here when borrowers submit them.
         </p>
       </div>
 
-      <div v-else class="space-y-4">
+      <!-- Transaction list (Grouped & Internal Scroll) -->
+      <div v-else class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-4">
         <article
           v-for="booking in filteredBookings"
           :key="booking.id"
-          class="bg-white rounded-2xl border border-red-200 p-4 sm:p-5"
+          class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200"
         >
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div class="flex gap-4 min-w-0">
+          <!-- Top Zone: Slim Header -->
+          <div
+            class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
+          >
+            <div class="flex items-center gap-3">
+              <span class="text-noble-black text-[14px] font-semibold">
+                {{ formatUserName(booking.borrower.user) }}
+              </span>
+            </div>
+
+            <!-- Status Badge -->
+            <span
+              class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border"
+              :class="statusBadgeClass(booking.status)"
+            >
+              {{ booking.status }}
+            </span>
+          </div>
+
+          <!-- Bottom Zone: Item Row -->
+          <div class="p-5 flex items-center gap-4 relative">
+            <!-- Thumbnail -->
+            <div class="relative shrink-0">
               <img
-                :src="booking.item.thumbnailImage || '/images/landing-pic.jpg'"
-                :alt="booking.item.name"
-                class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover bg-orange-100 shrink-0"
+                v-if="booking.item.thumbnailImage"
+                :src="booking.item.thumbnailImage"
+                class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
               />
-
-              <div class="min-w-0 space-y-2">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h2 class="text-base sm:text-lg font-semibold text-neutral-800">
-                    {{ booking.item.name }}
-                  </h2>
-                  <span
-                    class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-                    :class="statusBadgeClass(booking.status)"
-                  >
-                    {{ booking.status }}
-                  </span>
-                </div>
-
-                <p class="text-sm text-neutral-800/70">
-                  Borrower: {{ formatUserName(booking.borrower.user) }}
-                </p>
-                <p class="text-sm text-neutral-800/70">
-                  Requested on {{ formatDateTime(booking.requestedAt) }}
-                </p>
-                <p class="text-sm text-neutral-800/70">
-                  Rental window: {{ formatDateTime(booking.startDate) }} to
-                  {{ formatDateTime(booking.endDate) }}
-                </p>
-                <p class="text-sm text-neutral-800/70">
-                  Total amount:
-                  {{
-                    booking.item.freeToBorrow
-                      ? "Free to borrow"
-                      : formatPesoAmount(booking.totalFee)
-                  }}
-                </p>
-                <p class="text-xs text-neutral-800/50">Request ID: {{ booking.id }}</p>
+              <div
+                v-else
+                class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
+              >
+                <svg
+                  class="w-6 h-6 text-cinnamon-ice/40"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
               </div>
             </div>
 
-            <div
-              v-if="booking.status === 'PENDING'"
-              class="flex flex-col sm:flex-row gap-2 lg:w-auto w-full"
-            >
-              <button
-                :disabled="actingBookingId === booking.id"
-                class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
-                @click="handleBookingDecision(booking.id, 'CONFIRMED')"
+            <!-- Item Details -->
+            <div class="flex-1 min-w-0">
+              <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+                {{ booking.item.name }}
+              </h4>
+              <div
+                class="flex items-center gap-1.5 text-[10px] text-gray-400 font-medium leading-none"
               >
-                {{ actingBookingId === booking.id ? "Updating..." : "Accept Request" }}
-              </button>
-              <button
-                :disabled="actingBookingId === booking.id"
-                class="px-4 py-2 rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-60"
-                @click="handleBookingDecision(booking.id, 'CANCELLED')"
+                <span class="font-mono tracking-wider">{{
+                  booking.id.slice(0, 12).toUpperCase()
+                }}</span>
+                <span class="opacity-50 select-none">·</span>
+                <span
+                  >{{ formatDateTime(booking.startDate) }} to
+                  {{ formatDateTime(booking.endDate) }}</span
+                >
+              </div>
+
+              <!-- Inline Review Actions / Accept/Decline -->
+              <div
+                v-if="booking.status === 'PENDING'"
+                class="mt-3 flex flex-wrap gap-2 relative z-10"
               >
-                {{ actingBookingId === booking.id ? "Updating..." : "Decline Request" }}
-              </button>
+                <button
+                  class="px-4 py-1.5 rounded-[8px] bg-white border border-burning-orange text-[12px] font-bold text-burning-orange hover:bg-burning-orange/5 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="actingBookingId === booking.id"
+                  @click.stop="handleBookingDecision(booking.id, 'CANCELLED')"
+                >
+                  {{ actingBookingId === booking.id ? "Processing..." : "Decline" }}
+                </button>
+                <button
+                  class="px-4 py-1.5 rounded-[8px] bg-burning-orange text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-burning-orange/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="actingBookingId === booking.id"
+                  @click.stop="handleBookingDecision(booking.id, 'CONFIRMED')"
+                >
+                  {{ actingBookingId === booking.id ? "Processing..." : "Accept Request" }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Pricing Info -->
+            <div class="shrink-0 z-10 text-right self-start">
+              <div class="flex flex-col items-end">
+                <div class="flex items-baseline gap-1.5">
+                  <span class="text-[11px] text-gray-400 font-bold uppercase tracking-wider"
+                    >Total:</span
+                  >
+                  <span class="text-[16px] font-bold text-burning-orange leading-none">{{
+                    formatPesoAmount(booking.totalFee)
+                  }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </article>
       </div>
 
-      <div v-if="hasMore || (isLoading && filteredBookings.length > 0)" class="flex justify-center">
+      <!-- Load More -->
+      <div
+        v-if="hasMore || (isLoading && filteredBookings.length > 0)"
+        class="flex justify-center mt-8 sm:mt-10"
+      >
         <button
           :disabled="isLoading"
-          class="bg-burning-orange text-white rounded-xl px-5 py-2 text-sm sm:text-base disabled:opacity-60 hover:bg-cinnabar-red transition-colors"
+          class="bg-white border-[1.5px] border-burning-orange text-burning-orange rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:bg-burning-orange/5 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           @click="loadMore"
         >
-          <span v-if="isLoading">Loading...</span>
+          <span v-if="isLoading" class="flex items-center gap-2">
+            <svg
+              class="animate-spin"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Loading…
+          </span>
           <span v-else>Load More</span>
         </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+</style>

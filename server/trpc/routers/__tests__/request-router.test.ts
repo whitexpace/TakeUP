@@ -71,6 +71,7 @@ describe("requestRouter", () => {
       id: "user-1",
       username: "borrower1",
       accountType: "BORROWER",
+      status: "ACTIVE",
     })
     const create = vi.fn().mockResolvedValue({
       id: "44444444-4444-4444-4444-444444444444",
@@ -103,7 +104,7 @@ describe("requestRouter", () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      select: { id: true, username: true, accountType: true },
+      select: { id: true, username: true, accountType: true, status: true },
     })
     expect(create).toHaveBeenCalledTimes(1)
     expect(result.requester.username).toBe("borrower1")
@@ -118,6 +119,7 @@ describe("requestRouter", () => {
             id: "user-2",
             username: "lender1",
             accountType: "LENDER",
+            status: "ACTIVE",
           }),
         },
         requestPost: { create: vi.fn() },

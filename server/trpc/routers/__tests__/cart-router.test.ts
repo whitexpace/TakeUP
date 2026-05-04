@@ -88,7 +88,7 @@ const makeContext = ({
   removableEntry = { borrowerId: USER_ID },
   overlappingBooking = null,
 }: MakeContextOptions = {}) => {
-  const userFindUnique = vi.fn().mockResolvedValue({ accountType })
+  const userFindUnique = vi.fn().mockResolvedValue({ accountType, status: "ACTIVE" })
   const itemFindUnique = vi.fn().mockResolvedValue(item)
   const cartCreate = vi.fn().mockResolvedValue(createdCartEntry)
   const cartFindMany = vi.fn().mockResolvedValue(listedCartEntries)

@@ -79,6 +79,7 @@ export const requestRouter = router({
         id: true,
         username: true,
         accountType: true,
+        status: true,
       },
     })
 
@@ -87,6 +88,13 @@ export const requestRouter = router({
         code: "BAD_REQUEST",
         message:
           "Your account is missing from the database. Sign out and sign in again before posting a request.",
+      })
+    }
+
+    if (existingUser.status !== "ACTIVE") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Your account must be active to post requests.",
       })
     }
 

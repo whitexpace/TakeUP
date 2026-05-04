@@ -3,6 +3,39 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } 
 import type { MyListingItem } from "../composables/use-my-listings"
 import { mergeParsedTags } from "../utils/tag-input"
 
+const STEPS = [
+  { id: "photos", label: "Photos" },
+  { id: "basic-info", label: "Basic Info" },
+  { id: "details", label: "Details" },
+  { id: "pricing", label: "Pricing & Availability" },
+  { id: "tags", label: "Tags" },
+]
+
+const currentActiveStep = ref("photos")
+
+const scrollToSection = (stepId: string) => {
+  const el = document.getElementById(`section-${stepId}`)
+  if (el) {
+    const offset = 120
+    const top = el.getBoundingClientRect().top + window.pageYOffset - offset
+    window.scrollTo({ top, behavior: "smooth" })
+    currentActiveStep.value = stepId
+  }
+}
+
+const handleScroll = () => {
+  const sections = STEPS.map((s) => document.getElementById(`section-${s.id}`))
+  const scrollPosition = window.pageYOffset + 150
+
+  for (let i = sections.length - 1; i >= 0; i--) {
+    const section = sections[i]
+    if (section && section.offsetTop <= scrollPosition) {
+      currentActiveStep.value = STEPS[i]!.id
+      break
+    }
+  }
+}
+
 type ItemCategory =
   | "ELECTRONICS"
   | "BOOKS"
@@ -79,8 +112,8 @@ const CATEGORIES: { value: ItemCategory; label: string }[] = [
 ]
 
 const CONDITIONS: { value: ItemCondition; label: string }[] = [
-  { value: "NEW", label: "Brand new" },
-  { value: "LIKE_NEW", label: "Like new" },
+  { value: "NEW", label: "Brand New" },
+  { value: "LIKE_NEW", label: "Like New" },
   { value: "GOOD", label: "Good" },
   { value: "FAIR", label: "Fair" },
   { value: "POOR", label: "Poor" },
@@ -116,7 +149,6 @@ const offersInput = ref("")
 const whatsIncluded = ref<string[]>([])
 const includedInput = ref("")
 const tagInput = ref("")
-const coverInput = ref<HTMLInputElement | null>(null)
 const galleryInput = ref<HTMLInputElement | null>(null)
 const images = ref<ListingImage[]>([])
 const pendingUploads = ref<PendingUploadImage[]>([])
@@ -125,10 +157,56 @@ const imageUploadError = ref<string | null>(null)
 const isUploadingImages = ref(false)
 const lightboxImage = ref<ListingImage | null>(null)
 const showErrors = ref(false)
+const isDragging = ref(false)
+const showCancelModal = ref(false)
+
+const pendingUploadRequests = new Map<string, XMLHttpRequest>()
+const sessionUploadedImageUrls = new Set<string>()
+
+const isAvailabilityEndInvalid = (row: AvailabilityRow) => {
+  if (!row.startDate || !row.startTime || !row.endDate || !row.endTime) return false
+  const startStr = `${row.startDate}T${row.startTime}`
+  const endStr = `${row.endDate}T${row.endTime}`
+  const start = new Date(startStr)
+  const end = new Date(endStr)
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return false
+  return end < start
+}
+
+const initialFormState = ref("")
+const getFormStateString = () =>
+  JSON.stringify({
+    form,
+    whatThisItemOffers: whatThisItemOffers.value,
+    whatsIncluded: whatsIncluded.value,
+    images: images.value.map((i) => i.id),
+    primaryImageId: primaryImageId.value,
+    availabilityRows: availabilityRows.value.map((r) => ({ ...r, id: "" })),
+  })
+
+const isDirty = computed(() => {
+  if (!initialFormState.value) return false
+  return initialFormState.value !== getFormStateString()
+})
+
+defineExpose({
+  isDirty,
+  triggerCancel: () => {
+    showCancelModal.value = true
+  },
+})
+
+const handleDrop = (event: DragEvent) => {
+  isDragging.value = false
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    void uploadFiles(Array.from(files))
+  }
+}
+
 const isCategoryDropdownOpen = ref(false)
 const isRateUnitDropdownOpen = ref(false)
-const focusedField = ref<"name" | "rentalFee" | "replacementCost" | null>(null)
-const showCancelModal = ref(false)
+const focusedField = ref<"name" | "rentalFee" | "replacementCost" | "knownIssues" | null>(null)
 
 const createAvailabilityRow = (overrides: Partial<AvailabilityRow> = {}): AvailabilityRow => ({
   id:
@@ -142,6 +220,16 @@ const createAvailabilityRow = (overrides: Partial<AvailabilityRow> = {}): Availa
 
 const availabilityRows = ref<AvailabilityRow[]>([createAvailabilityRow()])
 
+const todayStr = computed(() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`
+})
+
+const currentTimeStr = computed(() => {
+  const d = new Date()
+  return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`
+})
+
 const categoryDropdownRef = ref<HTMLElement | null>(null)
 const rateUnitDropdownRef = ref<HTMLElement | null>(null)
 
@@ -154,7 +242,6 @@ const syncFromItem = (item?: MyListingItem | null) => {
   whatsIncluded.value = item?.whatIsIncluded?.split("\n").filter(Boolean) ?? []
   const primaryExistingImage = item?.images.find((entry) => entry.isPrimary)
 
-  // Images
   const initialImages = (
     item?.images.length
       ? item.images.map((image) => ({
@@ -204,12 +291,10 @@ const formatTimeToHhMm = (date: Date) => {
 
 const addHourToTime = (time: string) => {
   if (!time) return undefined
-
   const [hours = "0", minutes = "0"] = time.split(":")
   const nextMinutes = Number(hours) * 60 + Number(minutes) + 60
   const nextHours = Math.floor(nextMinutes / 60)
   const remainderMinutes = nextMinutes % 60
-
   return `${nextHours.toString().padStart(2, "0")}:${remainderMinutes.toString().padStart(2, "0")}`
 }
 
@@ -217,7 +302,6 @@ const getEndMinTime = (row: AvailabilityRow) => {
   if (!row.startDate || !row.startTime || !row.endDate || row.startDate !== row.endDate) {
     return undefined
   }
-
   return addHourToTime(row.startTime)
 }
 
@@ -226,11 +310,9 @@ const normalizeAvailabilityRow = (row: AvailabilityRow) => {
     row.endTime = ""
     return
   }
-
   if (row.startDate && row.endDate < row.startDate) {
     row.endDate = row.startDate
   }
-
   const endMinTime = getEndMinTime(row)
   if (endMinTime && row.endTime && row.endTime < endMinTime) {
     row.endTime = ""
@@ -244,7 +326,6 @@ const updateAvailabilityField = (
 ) => {
   const row = availabilityRows.value[index]
   if (!row) return
-
   row[field] = value
   normalizeAvailabilityRow(row)
 }
@@ -261,6 +342,11 @@ const removeAvailabilityRow = (index: number) => {
 onMounted(() => {
   syncFromItem(props.item)
   document.addEventListener("click", handleClickOutside)
+  window.addEventListener("scroll", handleScroll)
+
+  nextTick(() => {
+    initialFormState.value = getFormStateString()
+  })
 })
 
 watch(
@@ -272,6 +358,7 @@ watch(
 
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleClickOutside)
+  window.removeEventListener("scroll", handleScroll)
   cleanupSessionUploadsOnExit()
 })
 
@@ -292,7 +379,6 @@ const galleryImages = computed(() =>
   images.value.filter((image) => image.id !== primaryImageId.value),
 )
 
-// Pill Logic Helpers
 const addOffer = () => {
   const items = offersInput.value
     .split(",")
@@ -304,12 +390,6 @@ const addOffer = () => {
     }
   })
   offersInput.value = ""
-}
-
-const handleOfferInput = () => {
-  if (offersInput.value.includes(",")) {
-    addOffer()
-  }
 }
 
 const removeOffer = (index: number) => {
@@ -329,17 +409,10 @@ const addIncluded = () => {
   includedInput.value = ""
 }
 
-const handleIncludedInput = () => {
-  if (includedInput.value.includes(",")) {
-    addIncluded()
-  }
-}
-
 const removeIncluded = (index: number) => {
   whatsIncluded.value.splice(index, 1)
 }
 
-// Dropdown Logic
 const toggleCategoryDropdown = () => {
   isCategoryDropdownOpen.value = !isCategoryDropdownOpen.value
   isRateUnitDropdownOpen.value = false
@@ -363,9 +436,54 @@ const selectRateUnit = (unit: "PER_DAY" | "PER_HOUR") => {
   isRateUnitDropdownOpen.value = false
 }
 
-// Image Logic
-const sessionUploadedImageUrls = new Set<string>()
-const pendingUploadRequests = new Map<string, XMLHttpRequest>()
+const formatRateValue = (value: string) => {
+  const digitsOnly = value.replace(/[^0-9]/g, "")
+  if (!digitsOnly) return ""
+  return Number(digitsOnly).toLocaleString("en-US")
+}
+
+const parseRateValue = (value: string) => {
+  const digitsOnly = value.replace(/[^0-9]/g, "")
+  return digitsOnly ? Number(digitsOnly) : 0
+}
+
+const handleRateInput = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  form.rentalFee = target.value.replace(/[^0-9,]/g, "")
+}
+
+const focusRate = () => {
+  focusedField.value = "rentalFee"
+  if (form.rentalFee) {
+    form.rentalFee = form.rentalFee.replace(/,/g, "")
+  }
+}
+
+const blurRate = () => {
+  focusedField.value = null
+  if (form.rentalFee) {
+    form.rentalFee = formatRateValue(form.rentalFee)
+  }
+}
+
+const handleReplacementCostInput = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  form.replacementCost = target.value.replace(/[^0-9,]/g, "")
+}
+
+const focusReplacementCost = () => {
+  focusedField.value = "replacementCost"
+  if (form.replacementCost) {
+    form.replacementCost = form.replacementCost.replace(/,/g, "")
+  }
+}
+
+const blurReplacementCost = () => {
+  focusedField.value = null
+  if (form.replacementCost) {
+    form.replacementCost = formatRateValue(form.replacementCost)
+  }
+}
 
 const getSafeFileName = (fileName: string) => {
   return (
@@ -380,19 +498,15 @@ const getSafeFileName = (fileName: string) => {
 const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   const response = await $fetch<{ user: { id: string } }>("/api/auth/me")
   const userId = response.user.id
-
   const datePrefix = new Date().toISOString().slice(0, 10)
   const uniqueId = crypto.randomUUID()
   const storagePath = `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
-
   const uploadId = storagePath
   pendingUploads.value.push({ id: uploadId, name: file.name, progress: 0 })
-
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const accessToken = session?.access_token
-
   return new Promise<ListingImage>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     pendingUploadRequests.set(uploadId, xhr)
@@ -403,7 +517,6 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
     xhr.setRequestHeader("apikey", supabaseKey)
     if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
     xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
-
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
       const progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
@@ -411,13 +524,11 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
         u.id === uploadId ? { ...u, progress } : u,
       )
     }
-
     xhr.onerror = () => {
       pendingUploadRequests.delete(uploadId)
       pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
       reject(new Error("Network error"))
     }
-
     xhr.onload = () => {
       pendingUploadRequests.delete(uploadId)
       pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
@@ -435,40 +546,27 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   })
 }
 
-const uploadFiles = async (files: File[], options: { asCover?: boolean } = {}) => {
+const uploadFiles = async (files: File[]) => {
   imageUploadError.value = null
   if (files.length === 0) return
   isUploadingImages.value = true
   try {
     const uploaded = await Promise.all(files.map((f) => uploadFileWithProgress(f)))
-    if (options.asCover) {
-      const nextCover = uploaded[0]!
-      images.value = [nextCover, ...images.value]
-      primaryImageId.value = nextCover.id
-    } else {
-      images.value = [...images.value, ...uploaded]
-      if (!primaryImageId.value) primaryImageId.value = uploaded[0]!.id
-    }
+    images.value = [...images.value, ...uploaded]
+    if (!primaryImageId.value) primaryImageId.value = uploaded[0]!.id
   } catch {
     imageUploadError.value = "Failed to upload images."
   } finally {
     isUploadingImages.value = false
+    if (galleryInput.value) {
+      galleryInput.value.value = ""
+    }
   }
-}
-
-const handleCoverSelect = (event: Event) => {
-  const files = (event.target as HTMLInputElement).files
-  if (files) uploadFiles([files[0]!], { asCover: true })
 }
 
 const handleGallerySelect = (event: Event) => {
   const files = (event.target as HTMLInputElement).files
-  if (files) uploadFiles(Array.from(files))
-}
-
-const removeCover = () => {
-  images.value = images.value.filter((img) => img.id !== primaryImageId.value)
-  primaryImageId.value = images.value[0]?.id ?? null
+  if (files) void uploadFiles(Array.from(files))
 }
 
 const removeGalleryImage = (id: string) => {
@@ -476,25 +574,7 @@ const removeGalleryImage = (id: string) => {
   if (primaryImageId.value === id) primaryImageId.value = images.value[0]?.id ?? null
 }
 
-const triggerCoverUpload = () => coverInput.value?.click()
 const triggerGalleryUpload = () => galleryInput.value?.click()
-
-// Drag and Drop
-const draggedIndex = ref<number | null>(null)
-const onDragStart = (index: number) => {
-  draggedIndex.value = index
-}
-const onDragOver = (event: DragEvent) => {
-  event.preventDefault()
-}
-const onDrop = (targetIndex: number) => {
-  if (draggedIndex.value === null) return
-  const gImages = [...galleryImages.value]
-  const itemToMove = gImages.splice(draggedIndex.value, 1)[0]!
-  gImages.splice(targetIndex, 0, itemToMove)
-  images.value = [coverImage.value!, ...gImages].filter(Boolean) as ListingImage[]
-  draggedIndex.value = null
-}
 
 const openLightbox = (img: ListingImage) => {
   lightboxImage.value = img
@@ -503,27 +583,20 @@ const closeLightbox = () => {
   lightboxImage.value = null
 }
 
-// Tags
 const addTag = () => {
   form.tags = mergeParsedTags(form.tags, tagInput.value)
   tagInput.value = ""
 }
 
-const handleTagInput = () => {
-  if (tagInput.value.includes(",")) addTag()
-}
 const removeTag = (tag: string) => {
   form.tags = form.tags.filter((t) => t !== tag)
 }
+
 const addSuggestedTag = (tag: string) => {
   const t = tag.toLowerCase()
   if (!form.tags.includes(t)) form.tags.push(t)
 }
 
-// Cancellation
-const handleCancel = () => {
-  showCancelModal.value = true
-}
 const confirmCancel = () => {
   showCancelModal.value = false
   emit("cancel")
@@ -533,62 +606,10 @@ const cleanupSessionUploadsOnExit = () => {
   for (const xhr of pendingUploadRequests.values()) xhr.abort()
 }
 
-const isAvailabilityEndInvalid = (row: AvailabilityRow) => {
-  if (!row.startDate || !row.startTime || !row.endDate) return false
-
-  const start = new Date(`${row.startDate}T${row.startTime}`)
-  const end = new Date(`${row.endDate}T${row.endTime || "23:59"}`)
-
-  if (row.startDate === row.endDate) {
-    const minimumEnd = new Date(start.getTime() + 60 * 60 * 1000)
-    return end < minimumEnd
-  }
-
-  return end < start
-}
-
-const availabilityRowErrors = computed(() =>
-  availabilityRows.value.map((row) => {
-    const errors: Record<string, string> = {}
-
-    if (!row.startDate) errors.startDate = "Start date is required"
-    if (!row.startTime) errors.startTime = "Start time is required"
-    if (isAvailabilityEndInvalid(row)) {
-      errors.endTime =
-        row.startDate === row.endDate
-          ? "End time must be at least 1 hour later"
-          : "End time cannot be earlier than start time"
-    }
-
-    return errors
-  }),
-)
-
-// Validation & Submission
-const formErrors = computed(() => {
-  const errors: Record<string, string> = {}
-  if (!coverImage.value) errors.coverImage = "Please upload a cover image"
-  if (!form.name.trim()) errors.name = "Item name is required"
-  if (form.categories.length === 0) errors.categories = "Please select at least one category"
-  if (!form.description.trim()) errors.description = "Description is required"
-  if (whatThisItemOffers.value.length === 0)
-    errors.whatThisItemOffers = "Please add at least one feature"
-  if (whatsIncluded.value.length === 0)
-    errors.whatsIncluded = "Please add at least one included item"
-  if (form.freeToBorrow === null) errors.listingType = "Please select a listing type"
-  if (form.freeToBorrow === false && parseRateValue(form.rentalFee) <= 0)
-    errors.rentalFee = "Rate is required for rent"
-  if (availabilityRowErrors.value.some((row) => Object.keys(row).length > 0)) {
-    errors.availability = "Please complete the availability details"
-  }
-  return errors
-})
-
 const buildPayload = () => {
   const orderedImages = [...(coverImage.value ? [coverImage.value] : []), ...galleryImages.value]
   const photos = orderedImages.map((image) => image.url)
   const thumbnailImage = coverImage.value?.url ?? photos[0] ?? undefined
-
   const availability = availabilityRows.value.map((row) => ({
     startDate: new Date(`${row.startDate}T${row.startTime || "00:00"}`),
     endDate: row.endDate
@@ -596,7 +617,6 @@ const buildPayload = () => {
       : new Date("2099-12-31T23:59:59"),
     status: "AVAILABLE" as const,
   }))
-
   return {
     ...(props.item?.id ? { id: props.item.id } : {}),
     name: form.name,
@@ -619,79 +639,30 @@ const buildPayload = () => {
   }
 }
 
-const formatRateValue = (value: string) => {
-  const digitsOnly = value.replace(/[^0-9]/g, "")
-  if (!digitsOnly) return ""
-  return Number(digitsOnly).toLocaleString("en-US")
-}
-
-const parseRateValue = (value: string) => {
-  const digitsOnly = value.replace(/[^0-9]/g, "")
-  return digitsOnly ? Number(digitsOnly) : 0
-}
-
-const blockInvalidRateInput = (event: InputEvent) => {
-  if (event.data && /[^0-9,]/.test(event.data)) {
-    event.preventDefault()
-  }
-}
-
-const handleRateInput = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  form.freeToBorrow = false
-  form.rentalFee = input.value.replace(/[^0-9,]/g, "")
-}
-
-const focusRate = () => {
-  focusedField.value = "rentalFee"
-  form.rentalFee = form.rentalFee.replace(/,/g, "")
-}
-
-const handleRateEnter = (event: KeyboardEvent) => {
-  event.preventDefault()
-  ;(event.target as HTMLInputElement).blur()
-}
-
-const blurRate = () => {
-  focusedField.value = null
-  form.rentalFee = formatRateValue(form.rentalFee)
-}
-
-const handleReplacementCostInput = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  form.replacementCost = input.value.replace(/[^0-9,]/g, "")
-}
-
-const focusReplacementCost = () => {
-  focusedField.value = "replacementCost"
-  form.replacementCost = form.replacementCost.replace(/,/g, "")
-}
-
-const blurReplacementCost = () => {
-  focusedField.value = null
-  form.replacementCost = formatRateValue(form.replacementCost)
-}
-
 const showPreview = ref(false)
 const previewData = computed(() => {
   const payload = buildPayload()
   return {
     ...payload,
-    categories: form.categories, // buildPayload returns the raw values
+    images: payload.photos.map((p, i) => ({ path: p, isPrimary: i === 0 })),
+    categories: form.categories,
     condition: form.condition || "GOOD",
-    ownerName: props.item?.ownerName,
-    rating: props.item?.rating,
-    bookingCount: props.item?.bookingCount,
+    lender: {
+      user: {
+        firstName: props.item?.ownerName?.split(" ")[0] ?? "You",
+        lastName: props.item?.ownerName?.split(" ").slice(1).join(" ") ?? "",
+        avatarUrl: null,
+      },
+      lenderRating: props.item?.rating ?? 5.0,
+    },
+    ownerName: props.item?.ownerName ?? "You",
+    rating: props.item?.rating ?? 5.0,
   }
 })
 
 const handleSubmit = () => {
-  if (tagInput.value.trim()) {
-    addTag()
-  }
-
+  if (tagInput.value.trim()) addTag()
   imageUploadError.value = null
-
   if (Object.keys(formErrors.value).length > 0) {
     showErrors.value = true
     nextTick(() => {
@@ -700,152 +671,267 @@ const handleSubmit = () => {
     })
     return
   }
-
   if (isUploadingImages.value) {
     imageUploadError.value = "Please wait for image uploads to finish."
     return
   }
-
   emit("submit", buildPayload() as Record<string, unknown>)
 }
+
+const isStepCompleted = (stepId: string) => {
+  switch (stepId) {
+    case "photos":
+      return images.value.length > 0
+    case "basic-info":
+      return form.name.trim() !== "" && form.categories.length > 0 && form.description.trim() !== ""
+    case "details":
+      return whatThisItemOffers.value.length > 0 || whatsIncluded.value.length > 0
+    case "pricing":
+      return form.freeToBorrow !== null
+    case "tags":
+      return form.tags.length > 0
+    default:
+      return false
+  }
+}
+
+const formErrors = computed(() => {
+  const errors: Record<string, string> = {}
+  if (!coverImage.value) errors.coverImage = "Please upload a cover image"
+  if (!form.name.trim()) errors.name = "Item name is required"
+  if (form.categories.length === 0) errors.categories = "Please select at least one category"
+  if (!form.description.trim()) errors.description = "Description is required"
+  if (whatThisItemOffers.value.length === 0)
+    errors.whatThisItemOffers = "Please add at least one feature"
+  if (whatsIncluded.value.length === 0)
+    errors.whatsIncluded = "Please add at least one included item"
+  if (form.freeToBorrow === null) errors.listingType = "Please select a listing type"
+  if (form.freeToBorrow === false && parseRateValue(form.rentalFee) <= 0)
+    errors.rentalFee = "Rate is required for rent"
+  if (availabilityRowErrors.value.some((row) => Object.keys(row).length > 0))
+    errors.availability = "Please complete the availability details"
+  return errors
+})
+
+const availabilityRowErrors = computed(() =>
+  availabilityRows.value.map((row) => {
+    const errors: Record<string, string> = {}
+    if (!row.startDate) errors.startDate = "Start date is required"
+    if (!row.startTime) errors.startTime = "Start time is required"
+    if (isAvailabilityEndInvalid(row)) {
+      errors.endTime =
+        row.startDate === row.endDate
+          ? "End time must be at least 1 hour later"
+          : "End time cannot be earlier than start time"
+    }
+    return errors
+  }),
+)
 </script>
 
 <template>
-  <form class="mx-auto w-full max-w-4xl font-geist" @submit.prevent="handleSubmit">
-    <!-- Header -->
-    <div v-if="!embedded">
+  <div class="mx-auto w-full max-w-[1100px] font-geist pb-20 lg:px-16 xl:px-24">
+    <div v-if="!embedded" class="mb-10">
       <NuxtLink
         to="/account/listings"
-        class="inline-flex items-center gap-2 bg-transparent py-2 text-sm transition-colors hover:text-burning-orange"
+        class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
       >
-        <span>← Back to My Listings</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="transition-transform group-hover:-translate-x-1"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        <span class="text-[15px] font-bold">Back to My Listings</span>
       </NuxtLink>
-      <div class="mt-10">
-        <h1 class="text-[28px] font-bold tracking-tight text-noble-black sm:text-[32px]">
-          {{ props.mode === "new" ? "Add New Item" : "Edit Item" }}
-        </h1>
-        <p class="mt-2 text-[15px] leading-relaxed text-noble-black/55 sm:text-[16px]">
+      <section class="space-y-3">
+        <div class="space-y-2">
+          <h1 class="text-[28px] font-semibold text-noble-black">
+            {{ props.mode === "new" ? "Add New Item" : "Edit Listing" }}
+          </h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
+        </div>
+        <p class="text-[16px] font-medium text-noble-black/50">
           {{
-            props.mode === "new" ? "List an item for borrow or rent" : "Update your listing details"
+            props.mode === "new"
+              ? "Share your items with the community and earn rewards."
+              : "Update your item details and availability."
           }}
         </p>
+      </section>
+    </div>
+
+    <div
+      class="sticky top-0 z-50 -mx-6 sm:-mx-12 lg:-mx-16 xl:-mx-24 bg-white border-b border-cinnamon-ice/15 shadow-sm pb-6 pt-4 mb-10"
+    >
+      <div class="mx-auto max-w-[1100px] lg:px-16 xl:px-24 w-full relative">
+        <div class="flex items-center justify-between relative z-10">
+          <div
+            v-for="(step, index) in STEPS"
+            :key="step.id"
+            class="flex flex-col items-center gap-2.5 relative group cursor-pointer"
+            @click="scrollToSection(step.id)"
+          >
+            <div
+              class="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 border-2"
+              :class="[
+                isStepCompleted(step.id)
+                  ? 'bg-burning-orange border-burning-orange text-white shadow-lg shadow-burning-orange/20'
+                  : currentActiveStep === step.id
+                    ? 'bg-white border-burning-orange text-burning-orange shadow-md'
+                    : 'bg-white border-cinnamon-ice/20 text-noble-black/40',
+              ]"
+            >
+              <svg
+                v-if="isStepCompleted(step.id)"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span v-else class="text-[13px] font-bold">{{ index + 1 }}</span>
+            </div>
+            <span
+              class="text-[10px] font-bold uppercase tracking-wider transition-colors duration-300"
+              :class="[
+                currentActiveStep === step.id
+                  ? 'text-burning-orange'
+                  : 'text-noble-black/30 group-hover:text-noble-black/50',
+              ]"
+              >{{ step.label }}</span
+            >
+          </div>
+        </div>
+        <div class="absolute top-[18px] left-8 right-8 h-[2px] bg-noble-black/10 -z-0">
+          <div
+            class="h-full bg-burning-orange transition-all duration-500"
+            :style="{
+              width: `${(STEPS.findIndex((s) => s.id === currentActiveStep) / (STEPS.length - 1)) * 100}%`,
+            }"
+          ></div>
+        </div>
       </div>
     </div>
 
-    <!-- Form Sections -->
-    <div class="mt-12 flex flex-col gap-8">
-      <!-- Section 1: Images -->
+    <form class="flex flex-col gap-10 mt-12" @submit.prevent="handleSubmit">
       <section
-        class="border-dashed-section-lg rounded-[24px] bg-cream p-8 transition-all duration-300"
+        id="section-photos"
+        class="form-section transition-all duration-300"
         :class="{
           'ring-2 ring-cinnabar-red/20 border-cinnabar-red/30': showErrors && formErrors.coverImage,
         }"
       >
-        <h2 class="text-[20px] font-bold text-noble-black">Images</h2>
-        <p class="mt-1 text-[14px] text-noble-black/50">
-          Upload at least one real photo of your item. This is required for verification and helps
-          other users trust the listing.
-        </p>
+        <div class="flex items-center justify-between mb-6">
+          <div class="section-header">
+            <h2 class="section-title">Images</h2>
+            <p class="section-subtitle">
+              Upload at least one real photo of your item. This is required for verification.
+            </p>
+          </div>
+          <div v-if="images.length > 0" class="text-[12px] font-bold text-noble-black/30">
+            {{ images.length }} / {{ MAX_GALLERY_IMAGE_COUNT }}
+          </div>
+        </div>
         <p
           v-if="showErrors && formErrors.coverImage"
-          class="mt-2 text-[13px] font-medium text-cinnabar-red"
+          class="mb-4 text-[13px] font-medium text-cinnabar-red"
         >
           {{ formErrors.coverImage }}
         </p>
-        <p v-if="imageUploadError" class="mt-2 text-[13px] font-medium text-cinnabar-red">
-          {{ imageUploadError }}
-        </p>
-
-        <div class="mt-8 flex flex-wrap gap-4">
-          <input
-            ref="coverInput"
-            type="file"
-            accept="image/*"
-            class="hidden"
-            @change="handleCoverSelect"
-          />
-          <input
-            ref="galleryInput"
-            type="file"
-            accept="image/*"
-            multiple
-            class="hidden"
-            @change="handleGallerySelect"
-          />
-
-          <!-- Cover Image Slot -->
-          <div class="relative group">
-            <div
-              v-if="coverImage"
-              class="relative aspect-square w-32 overflow-hidden rounded-[18px] border border-cinnamon-ice/30 cursor-pointer"
-              @click="openLightbox(coverImage)"
-            >
-              <img :src="coverImage.url" class="h-full w-full object-cover" />
-              <button
-                type="button"
-                class="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-noble-black/60 text-white backdrop-blur-sm transition-all hover:bg-cinnabar-red opacity-0 group-hover:opacity-100"
-                @click.stop="removeCover"
+        <div class="space-y-6">
+          <div
+            class="upload-dropzone group"
+            :class="{ 'is-dragging': isDragging }"
+            @click="triggerGalleryUpload"
+            @dragover.prevent="isDragging = true"
+            @dragleave.prevent="isDragging = false"
+            @drop.prevent="handleDrop"
+          >
+            <input
+              ref="galleryInput"
+              type="file"
+              accept="image/*"
+              multiple
+              class="hidden"
+              @change="handleGallerySelect"
+              @click.stop
+            />
+            <div class="flex flex-col items-center text-center">
+              <div
+                class="w-12 h-12 rounded-full bg-noble-black/5 flex items-center justify-center mb-4 group-hover:bg-burning-orange/10 transition-colors"
               >
                 <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-              <div
-                class="absolute bottom-0 left-0 right-0 bg-noble-black/40 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-[2px]"
-              >
-                Cover
-              </div>
-            </div>
-            <div
-              v-else
-              class="border-dashed-long-md flex aspect-square w-32 cursor-pointer flex-col items-center justify-center rounded-[18px] bg-white transition-colors hover:bg-white/80"
-              @click="triggerCoverUpload"
-            >
-              <div
-                class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
-              >
-                <svg
-                  width="20"
-                  height="20"
+                  width="24"
+                  height="24"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="text-noble-black/40 group-hover:text-burning-orange transition-colors"
                 >
-                  <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                  <path d="M16 5h4M18 3v4" stroke-width="2.5" />
                 </svg>
               </div>
-              <span class="mt-2 text-center text-[12px] font-medium text-noble-black/40"
-                >Select Cover</span
+              <p
+                class="text-[15px] font-bold text-noble-black/60 group-hover:text-noble-black transition-colors"
               >
+                Drag photos here or click to browse
+              </p>
+              <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                + Cover photo · PNG, JPG or WebP
+              </p>
             </div>
           </div>
-
-          <!-- Gallery Images -->
           <div
-            v-for="(img, index) in galleryImages"
-            :key="img.id"
-            class="relative group"
-            draggable="true"
-            @dragstart="onDragStart(index)"
-            @dragover="onDragOver"
-            @drop="onDrop(index)"
+            v-if="images.length > 0 || pendingUploads.length > 0"
+            class="flex items-center gap-4 overflow-x-auto pt-5 pb-3 px-2 scrollbar-hide"
           >
-            <div
-              class="aspect-square w-32 overflow-hidden rounded-[18px] border border-cinnamon-ice/30 bg-white cursor-grab active:cursor-grabbing"
-              @click="openLightbox(img)"
-            >
-              <img :src="img.url" class="h-full w-full object-cover pointer-events-none" />
+            <div v-for="img in images" :key="img.id" class="relative shrink-0 group/thumb">
+              <div
+                class="w-20 h-20 rounded-[12px] border overflow-hidden bg-noble-black/5 cursor-pointer relative transition-all duration-300"
+                :class="
+                  img.id === primaryImageId
+                    ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                    : 'border-cinnamon-ice/20'
+                "
+                @click="openLightbox(img)"
+              >
+                <img
+                  :src="img.url"
+                  class="w-full h-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
+                />
+                <div
+                  v-if="img.id === primaryImageId"
+                  class="absolute inset-0 bg-noble-black/40 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity duration-200 pointer-events-none"
+                >
+                  <span
+                    class="text-white text-[10px] font-black uppercase tracking-[0.1em] drop-shadow-sm"
+                    >Cover</span
+                  >
+                </div>
+              </div>
               <button
                 type="button"
-                class="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-noble-black/60 text-white backdrop-blur-sm transition-all hover:bg-cinnabar-red opacity-0 group-hover:opacity-100"
+                class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-noble-black/60 text-white flex items-center justify-center shadow-lg backdrop-blur-sm opacity-0 group-hover/thumb:opacity-100 transition-all hover:bg-cinnabar-red active:scale-90"
                 @click.stop="removeGalleryImage(img.id)"
               >
                 <svg
@@ -855,117 +941,50 @@ const handleSubmit = () => {
                   fill="none"
                   stroke="currentColor"
                   stroke-width="3"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Pending Uploads -->
-          <div
-            v-for="upload in pendingUploads"
-            :key="upload.id"
-            class="flex aspect-square w-32 flex-col justify-between rounded-[18px] border border-cinnamon-ice/30 bg-white p-3"
-          >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </div>
-            <div>
-              <p class="truncate text-[12px] font-medium text-noble-black/50">{{ upload.name }}</p>
-              <p class="mt-1 text-[12px] font-semibold text-blue-estate">{{ upload.progress }}%</p>
-              <div class="mt-2 h-2 overflow-hidden rounded-full bg-cinnamon-ice/20">
-                <div
-                  class="h-full bg-blue-estate transition-[width] duration-150"
-                  :style="{ width: `${upload.progress}%` }"
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- Add Button -->
-          <div
-            v-if="galleryImages.length < MAX_GALLERY_IMAGE_COUNT"
-            class="border-dashed-long-md flex aspect-square w-32 cursor-pointer flex-col items-center justify-center rounded-[18px] bg-white transition-colors hover:bg-white/80"
-            @click="triggerGalleryUpload"
-          >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-estate text-white"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </div>
-            <span class="mt-2 text-center text-[12px] font-medium text-noble-black/40"
-              >Add Images</span
-            >
-          </div>
-        </div>
-        <p class="mt-4 text-[12px] text-noble-black/30">Drag to reorder gallery</p>
-      </section>
-
-      <!-- Section 2: Basic Information -->
-      <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
-        <h2 class="text-[20px] font-bold text-noble-black">Basic Information</h2>
-        <p class="mt-1 text-[14px] text-noble-black/50">
-          Enter the essential details about your item.
-        </p>
-
-        <div class="mt-8 flex flex-col gap-6">
-          <!-- Item Name -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black"
-              >Item Name <span class="text-cinnabar-red">*</span></label
-            >
-            <div class="relative">
-              <input
-                v-model="form.name"
-                type="text"
-                placeholder="e.g., Sony Alpha a7 IV Mirrorless Camera"
-                class="h-12 w-full rounded-[14px] border bg-white px-4 pr-10 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-                :class="
-                  showErrors && formErrors.name
-                    ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
-                    : 'border-cinnamon-ice/30'
-                "
-                @focus="focusedField = 'name'"
-                @blur="focusedField = null"
-              />
-              <button
-                v-if="form.name && focusedField === 'name'"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-noble-black/30 hover:text-noble-black transition-colors"
-                @click="form.name = ''"
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
             </div>
+            <div
+              v-for="upload in pendingUploads"
+              :key="upload.id"
+              class="w-20 h-20 rounded-[12px] border-2 border-dashed border-cinnamon-ice/20 flex flex-col items-center justify-center p-2 shrink-0 bg-noble-black/5"
+            >
+              <div class="relative w-full h-1 bg-noble-black/10 rounded-full overflow-hidden">
+                <div
+                  class="absolute inset-y-0 left-0 bg-blue-estate transition-all duration-300"
+                  :style="{ width: `${upload.progress}%` }"
+                ></div>
+              </div>
+              <span class="mt-2 text-[10px] font-bold text-blue-estate"
+                >{{ upload.progress }}%</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-basic-info" class="form-section">
+        <div class="section-header">
+          <h2 class="section-title">Basic Information</h2>
+          <p class="section-subtitle">Enter the essential details about your item.</p>
+        </div>
+        <div class="mt-8 flex flex-col gap-6">
+          <div class="flex flex-col gap-2">
+            <label class="form-label">Item Name <span class="text-cinnabar-red">*</span></label>
+            <input
+              v-model="form.name"
+              type="text"
+              placeholder="e.g., Sony Alpha a7 IV Mirrorless Camera"
+              class="form-input"
+              :class="{
+                'border-cinnabar-red/50 focus:border-cinnabar-red/50':
+                  showErrors && formErrors.name,
+              }"
+            />
             <p
               v-if="showErrors && formErrors.name"
               class="text-[12px] font-medium text-cinnabar-red"
@@ -973,161 +992,126 @@ const handleSubmit = () => {
               {{ formErrors.name }}
             </p>
           </div>
-
-          <!-- Category -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black"
-              >Category <span class="text-cinnabar-red">*</span></label
-            >
-            <div ref="categoryDropdownRef" class="relative">
-              <div
-                class="flex min-h-[48px] w-full cursor-pointer flex-wrap gap-2 rounded-[14px] border bg-white p-2.5 transition-all hover:border-burning-orange/40"
-                :class="[
-                  isCategoryDropdownOpen
-                    ? 'border-burning-orange/50 ring-1 ring-burning-orange/20'
-                    : '',
-                  showErrors && formErrors.categories
-                    ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
-                    : 'border-cinnamon-ice/30',
-                ]"
-                @click="toggleCategoryDropdown"
-              >
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="flex flex-col gap-2">
+              <label class="form-label">Category <span class="text-cinnabar-red">*</span></label>
+              <div ref="categoryDropdownRef" class="relative">
                 <div
-                  v-for="cat in form.categories"
-                  :key="cat"
-                  class="flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black"
+                  class="flex min-h-[44px] w-full cursor-pointer flex-wrap gap-2 rounded-[10px] border-[1.5px] border-cinnamon-ice/20 bg-white p-2 transition-all hover:border-burning-orange/40"
+                  :class="{ 'border-cinnabar-red/50': showErrors && formErrors.categories }"
+                  @click="toggleCategoryDropdown"
                 >
-                  <span>{{ CATEGORIES.find((c) => c.value === cat)?.label }}</span>
-                  <button type="button" @click.stop="selectCategory(cat)">
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                    >
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                <span
-                  v-if="form.categories.length === 0"
-                  class="px-1.5 text-[14px] text-noble-black/40"
-                  >Select categories</span
-                >
-              </div>
-              <transition
-                enter-active-class="transition duration-200"
-                enter-from-class="opacity-0 -translate-y-2"
-                enter-to-class="opacity-100 translate-y-0"
-              >
-                <div
-                  v-if="isCategoryDropdownOpen"
-                  class="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-[18px] border border-cinnamon-ice/30 bg-white shadow-xl p-2"
-                >
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                    <button
-                      v-for="cat in CATEGORIES"
-                      :key="cat.value"
-                      type="button"
-                      class="px-4 py-2 text-left text-[14px] rounded-xl transition-colors"
-                      :class="
-                        form.categories.includes(cat.value)
-                          ? 'bg-burning-orange text-white font-bold'
-                          : 'hover:bg-cream text-noble-black/80'
-                      "
-                      @click="selectCategory(cat.value)"
-                    >
-                      {{ cat.label }}
+                  <div
+                    v-for="cat in form.categories"
+                    :key="cat"
+                    class="flex items-center gap-1.5 rounded-full bg-noble-black/10 px-2.5 py-0.5 text-[12px] font-medium text-noble-black"
+                  >
+                    <span>{{ CATEGORIES.find((c) => c.value === cat)?.label }}</span
+                    ><button type="button" @click.stop="selectCategory(cat)">
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                      >
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
+                  <span
+                    v-if="form.categories.length === 0"
+                    class="px-1.5 py-1 text-[14px] text-noble-black/30"
+                    >Select categories</span
+                  >
                 </div>
-              </transition>
+                <transition
+                  enter-active-class="transition duration-200"
+                  enter-from-class="opacity-0 -translate-y-2"
+                  enter-to-class="opacity-100 translate-y-0"
+                  ><div
+                    v-if="isCategoryDropdownOpen"
+                    class="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-[14px] border border-cinnamon-ice/30 bg-white shadow-xl p-2"
+                  >
+                    <div class="grid grid-cols-1 gap-1">
+                      <button
+                        v-for="cat in CATEGORIES"
+                        :key="cat.value"
+                        type="button"
+                        class="px-3 py-1.5 text-left text-[13px] rounded-lg transition-colors"
+                        :class="
+                          form.categories.includes(cat.value)
+                            ? 'bg-burning-orange text-white font-bold'
+                            : 'hover:bg-noble-black/5 text-noble-black/70'
+                        "
+                        @click="selectCategory(cat.value)"
+                      >
+                        {{ cat.label }}
+                      </button>
+                    </div>
+                  </div></transition
+                >
+              </div>
             </div>
-            <p
-              v-if="showErrors && formErrors.categories"
-              class="text-[12px] font-medium text-cinnabar-red"
-            >
-              {{ formErrors.categories }}
-            </p>
+            <div class="flex flex-col gap-2">
+              <label class="form-label">Condition <span class="text-cinnabar-red">*</span></label>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="c in CONDITIONS"
+                  :key="c.value"
+                  type="button"
+                  class="px-4 py-1.5 rounded-full border-[1.5px] text-[13px] font-semibold transition-all duration-300"
+                  :class="
+                    form.condition === c.value
+                      ? 'bg-blue-estate text-white border-blue-estate shadow-sm'
+                      : 'bg-white text-noble-black/50 border-cinnamon-ice/20 hover:border-burning-orange/30'
+                  "
+                  @click="form.condition = c.value"
+                >
+                  {{ c.label }}
+                </button>
+              </div>
+            </div>
           </div>
-
-          <!-- Description -->
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black"
-              >Description <span class="text-cinnabar-red">*</span></label
-            >
+            <label class="form-label">Description <span class="text-cinnabar-red">*</span></label>
             <textarea
               v-model="form.description"
               placeholder="Describe your item in detail."
-              class="min-h-[120px] w-full rounded-[14px] border bg-white p-4 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-              :class="
-                showErrors && formErrors.description
-                  ? 'border-cinnabar-red/50 ring-1 ring-cinnabar-red/10'
-                  : 'border-cinnamon-ice/30'
-              "
+              class="form-textarea min-h-[140px]"
+              :class="{
+                'border-cinnabar-red/50 focus:border-cinnabar-red/50':
+                  showErrors && formErrors.description,
+              }"
             ></textarea>
-            <p
-              v-if="showErrors && formErrors.description"
-              class="text-[12px] font-medium text-cinnabar-red"
-            >
-              {{ formErrors.description }}
+            <p class="helper-text">
+              Include key features, use cases, or anything specific renters should know.
             </p>
-          </div>
-
-          <!-- Condition -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black"
-              >Condition <span class="text-cinnabar-red">*</span></label
-            >
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="c in CONDITIONS"
-                :key="c.value"
-                type="button"
-                class="px-4 py-2 rounded-full border text-sm font-medium transition-all"
-                :class="
-                  form.condition === c.value
-                    ? 'bg-blue-estate text-white border-blue-estate shadow-md'
-                    : 'bg-white text-noble-black/60 border-cinnamon-ice/30 hover:border-blue-estate/40'
-                "
-                @click="form.condition = c.value"
-              >
-                {{ c.label }}
-              </button>
-            </div>
           </div>
         </div>
       </section>
 
-      <!-- Section 3: Additional Details -->
-      <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
-        <h2 class="text-[20px] font-bold text-noble-black">Additional Details</h2>
-        <p class="mt-1 text-[14px] text-noble-black/50">
-          Help renters understand what they're getting.
-        </p>
-        <div class="mt-8 flex flex-col gap-6">
-          <!-- Offers -->
+      <section id="section-details" class="form-section">
+        <div class="section-header">
+          <h2 class="section-title">Additional Details</h2>
+          <p class="section-subtitle">Help renters understand what they're getting.</p>
+        </div>
+        <div class="mt-8 flex flex-col gap-8">
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black"
+            <label class="form-label"
               >What This Item Offers <span class="text-cinnabar-red">*</span></label
             >
             <div
-              class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[14px] border bg-white p-2.5 transition-all focus-within:border-burning-orange/50"
-              :class="
-                showErrors && formErrors.whatThisItemOffers
-                  ? 'border-cinnabar-red/50'
-                  : 'border-cinnamon-ice/30'
-              "
+              class="flex min-h-[48px] w-full flex-wrap gap-2 rounded-[10px] border-[1.5px] border-cinnamon-ice/20 bg-white p-2 transition-all focus-within:border-burning-orange/50"
             >
               <div
                 v-for="(offer, idx) in whatThisItemOffers"
                 :key="idx"
-                class="flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black"
+                class="flex items-center gap-1.5 rounded-full bg-noble-black/10 px-2.5 py-0.5 text-[12px] font-medium text-noble-black"
               >
-                <span>{{ offer }}</span>
-                <button type="button" @click="removeOffer(idx)">
+                <span>{{ offer }}</span
+                ><button type="button" @click="removeOffer(idx)">
                   <svg
                     width="10"
                     height="10"
@@ -1143,45 +1127,29 @@ const handleSubmit = () => {
               <input
                 v-model="offersInput"
                 type="text"
-                :placeholder="
-                  whatThisItemOffers.length > 0
-                    ? ''
-                    : 'e.g., 4K 60p Video Recording, 33MP Full-Frame Sensor'
-                "
-                class="flex-1 bg-transparent px-1.5 text-[14px] outline-none placeholder:text-noble-black/40"
-                @input="handleOfferInput"
-                @blur="addOffer"
+                placeholder="Type and press enter..."
+                class="flex-1 bg-transparent px-1.5 text-[14px] outline-none"
                 @keydown.enter.prevent="addOffer"
+                @keydown.,.prevent="addOffer"
+                @blur="addOffer"
               />
             </div>
-            <p
-              v-if="showErrors && formErrors.whatThisItemOffers"
-              class="text-[12px] font-medium text-cinnabar-red"
-            >
-              {{ formErrors.whatThisItemOffers }}
-            </p>
-            <p v-else class="text-[12px] text-noble-black/30">Separate features with commas</p>
+            <p class="helper-text">List top 3-5 features. Press enter or comma to add.</p>
           </div>
-          <!-- Included -->
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black"
+            <label class="form-label"
               >What's Included <span class="text-cinnabar-red">*</span></label
             >
             <div
-              class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[14px] border bg-white p-2.5 transition-all focus-within:border-burning-orange/50"
-              :class="
-                showErrors && formErrors.whatsIncluded
-                  ? 'border-cinnabar-red/50'
-                  : 'border-cinnamon-ice/30'
-              "
+              class="flex min-h-[48px] w-full flex-wrap gap-2 rounded-[10px] border-[1.5px] border-cinnamon-ice/20 bg-white p-2 transition-all focus-within:border-burning-orange/50"
             >
               <div
                 v-for="(includedItem, idx) in whatsIncluded"
                 :key="idx"
-                class="flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black"
+                class="flex items-center gap-1.5 rounded-full bg-noble-black/10 px-2.5 py-0.5 text-[12px] font-medium text-noble-black"
               >
-                <span>{{ includedItem }}</span>
-                <button type="button" @click="removeIncluded(idx)">
+                <span>{{ includedItem }}</span
+                ><button type="button" @click="removeIncluded(idx)">
                   <svg
                     width="10"
                     height="10"
@@ -1197,332 +1165,267 @@ const handleSubmit = () => {
               <input
                 v-model="includedInput"
                 type="text"
-                :placeholder="
-                  whatsIncluded.length > 0 ? '' : 'e.g., Battery Charger, Camera Strap, Lens Cap'
-                "
-                class="flex-1 bg-transparent px-1.5 text-[14px] outline-none placeholder:text-noble-black/40"
-                @input="handleIncludedInput"
-                @blur="addIncluded"
+                placeholder="Type and press enter..."
+                class="flex-1 bg-transparent px-1.5 text-[14px] outline-none"
                 @keydown.enter.prevent="addIncluded"
+                @keydown.,.prevent="addIncluded"
+                @blur="addIncluded"
               />
             </div>
-            <p
-              v-if="showErrors && formErrors.whatsIncluded"
-              class="text-[12px] font-medium text-cinnabar-red"
-            >
-              {{ formErrors.whatsIncluded }}
+            <p class="helper-text">
+              List all accessories, chargers, or manuals. Press enter or comma to add.
             </p>
-            <p v-else class="text-[12px] text-noble-black/30">Separate items with commas</p>
           </div>
-          <!-- Known Issues -->
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black">Known Issues</label>
+            <label class="form-label">Known Issues</label>
             <textarea
               v-model="form.knownIssues"
-              placeholder="e.g., Minor scratch on body, battery drains faster than normal..."
-              class="min-h-[100px] w-full rounded-[14px] border border-cinnamon-ice/30 bg-white p-4 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
+              placeholder="Be transparent about any scratches, dents, or defects."
+              class="form-textarea min-h-[100px] transition-all duration-300"
+              :class="
+                focusedField === 'knownIssues'
+                  ? 'border-amber-400 bg-amber-50/50 ring-4 ring-amber-100/50'
+                  : 'border-cinnamon-ice/20'
+              "
+              @focus="focusedField = 'knownIssues'"
+              @blur="focusedField = null"
             ></textarea>
-            <p class="text-[12px] text-noble-black/30">
-              Being transparent about issues builds trust and prevents disputes.
-            </p>
-          </div>
-          <!-- Usage Limitations -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black">Usage Limitations</label>
-            <textarea
-              v-model="form.usageLimitations"
-              placeholder="e.g., No indoor use, for professional use only, handle with care..."
-              class="min-h-[100px] w-full rounded-[14px] border border-cinnamon-ice/30 bg-white p-4 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-            ></textarea>
-            <p class="text-[12px] text-noble-black/30">
-              Mention any restrictions on how the item should be used.
-            </p>
+            <p class="helper-text">Being transparent builds trust and prevents disputes.</p>
           </div>
         </div>
       </section>
 
-      <!-- Section 4: Pricing -->
-      <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
-        <h2 class="text-[20px] font-bold text-noble-black">Pricing</h2>
-        <p class="mt-1 text-[14px] text-noble-black/50">Set your rental rate or sale price.</p>
-        <div class="mt-8 flex flex-col gap-8">
-          <!-- Type -->
-          <div class="flex flex-col gap-4">
-            <label class="text-[14px] font-semibold text-noble-black"
-              >Listing Type <span class="text-cinnabar-red">*</span></label
-            >
-            <div class="flex items-center gap-8">
-              <label class="flex cursor-pointer items-center gap-2">
-                <div class="relative flex items-center justify-center">
-                  <input
+      <div id="section-pricing" class="space-y-10">
+        <section class="form-section">
+          <div class="section-header">
+            <h2 class="section-title">Pricing</h2>
+            <p class="section-subtitle">
+              Choose how you want to list your item and set your rates.
+            </p>
+          </div>
+          <div class="mt-8 flex flex-col gap-8">
+            <div class="flex flex-col gap-4">
+              <label class="form-label"
+                >Listing Type <span class="text-cinnabar-red">*</span></label
+              >
+              <div class="flex items-center gap-8">
+                <label class="flex cursor-pointer items-center gap-2"
+                  ><input
                     v-model="form.freeToBorrow"
                     type="radio"
                     :value="true"
-                    class="peer h-5 w-5 appearance-none rounded-full border-[1.5px] border-cinnamon-ice bg-white transition-all duration-300 checked:border-burning-orange"
-                  />
-                  <div
-                    class="pointer-events-none absolute h-3.5 w-3.5 rounded-full bg-burning-orange scale-0 transition-transform duration-300 peer-checked:scale-100"
-                  ></div>
-                </div>
-                <span class="text-[14px] font-medium text-noble-black/70">For Borrow</span>
-              </label>
-              <label class="flex cursor-pointer items-center gap-2">
-                <div class="relative flex items-center justify-center">
-                  <input
+                    class="h-5 w-5 border-cinnamon-ice/40 text-burning-orange focus:ring-burning-orange"
+                  /><span class="text-[14px] font-medium text-noble-black/70"
+                    >For Borrow</span
+                  ></label
+                >
+                <label class="flex cursor-pointer items-center gap-2"
+                  ><input
                     v-model="form.freeToBorrow"
                     type="radio"
                     :value="false"
-                    class="peer h-5 w-5 appearance-none rounded-full border-[1.5px] border-cinnamon-ice bg-white transition-all duration-300 checked:border-burning-orange"
-                  />
-                  <div
-                    class="pointer-events-none absolute h-3.5 w-3.5 rounded-full bg-burning-orange scale-0 transition-transform duration-300 peer-checked:scale-100"
-                  ></div>
-                </div>
-                <span class="text-[14px] font-medium text-noble-black/70">For Rent</span>
-              </label>
-            </div>
-            <p
-              v-if="showErrors && formErrors.listingType"
-              class="text-[12px] font-medium text-cinnabar-red"
-            >
-              {{ formErrors.listingType }}
-            </p>
-          </div>
-          <div v-if="form.freeToBorrow !== true" class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black"
-              >Rate <span class="text-cinnabar-red">*</span></label
-            >
-            <div class="flex items-center gap-3">
-              <div class="relative flex-1">
-                <span
-                  class="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-medium text-noble-black/60"
-                  >₱</span
+                    class="h-5 w-5 border-cinnamon-ice/40 text-burning-orange focus:ring-burning-orange"
+                  /><span class="text-[14px] font-medium text-noble-black/70">For Rent</span></label
                 >
+              </div>
+            </div>
+            <div v-if="form.freeToBorrow === false" class="flex flex-col gap-2">
+              <label class="form-label">Rate <span class="text-cinnabar-red">*</span></label>
+              <div
+                class="flex items-center rounded-[10px] border-[1.5px] border-cinnamon-ice/20 bg-white transition-all focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/10"
+              >
+                <div
+                  class="flex items-center justify-center w-12 h-11 bg-noble-black/5 border-r border-cinnamon-ice/10 text-noble-black/40 font-medium"
+                >
+                  ₱
+                </div>
                 <input
                   :value="form.rentalFee"
                   type="text"
                   inputmode="numeric"
                   placeholder="0"
-                  class="h-12 w-full rounded-[14px] border bg-white pl-8 pr-10 text-[14px] outline-none transition-all"
-                  :class="
-                    showErrors && formErrors.rentalFee
-                      ? 'border-cinnabar-red/50'
-                      : 'border-cinnamon-ice/30'
-                  "
-                  @beforeinput="blockInvalidRateInput"
+                  class="flex-1 h-11 px-4 text-[14px] font-medium text-noble-black outline-none bg-transparent"
                   @input="handleRateInput"
-                  @focus="focusRate"
-                  @keydown.enter="handleRateEnter"
                   @blur="blurRate"
+                  @focus="focusRate"
                 />
-              </div>
-              <div ref="rateUnitDropdownRef" class="relative w-40">
-                <div
-                  class="flex h-12 w-full cursor-pointer items-center justify-between rounded-[14px] border border-cinnamon-ice/30 bg-white px-4 transition-all"
-                  @click="toggleRateUnitDropdown"
-                >
-                  <span class="text-[14px] text-noble-black">{{
-                    form.rateOption === "PER_DAY" ? "Per Day" : "Per Hour"
-                  }}</span>
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    :class="{ 'rotate-180': isRateUnitDropdownOpen }"
+                <div ref="rateUnitDropdownRef" class="relative">
+                  <button
+                    type="button"
+                    class="h-11 flex items-center gap-2 px-4 bg-noble-black/5 border-l border-cinnamon-ice/10 text-[13px] font-bold text-noble-black/70 hover:bg-noble-black/10 transition-colors"
+                    @click="toggleRateUnitDropdown"
                   >
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
-                </div>
-                <transition
-                  enter-active-class="transition duration-200"
-                  enter-from-class="opacity-0 -translate-y-2"
-                  enter-to-class="opacity-100 translate-y-0"
-                >
+                    {{ form.rateOption === "PER_DAY" ? "Per Day" : "Per Hour"
+                    }}<svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
                   <div
                     v-if="isRateUnitDropdownOpen"
-                    class="absolute z-50 mt-2 w-full overflow-hidden rounded-[18px] border border-cinnamon-ice/30 bg-white shadow-xl py-2"
+                    class="absolute right-0 z-50 mt-1 w-32 bg-white border border-cinnamon-ice/20 rounded-[10px] shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
                   >
                     <button
                       type="button"
-                      class="w-full px-4 py-2.5 text-left text-[14px] hover:bg-cream"
-                      @click="selectRateUnit('PER_DAY')"
+                      class="w-full px-4 py-2.5 text-left text-[13px] font-medium hover:bg-noble-black/5"
+                      @mousedown.prevent="selectRateUnit('PER_DAY')"
                     >
-                      Per Day
-                    </button>
-                    <button
+                      Per Day</button
+                    ><button
                       type="button"
-                      class="w-full px-4 py-2.5 text-left text-[14px] hover:bg-cream"
-                      @click="selectRateUnit('PER_HOUR')"
+                      class="w-full px-4 py-2.5 text-left text-[13px] font-medium hover:bg-noble-black/5"
+                      @mousedown.prevent="selectRateUnit('PER_HOUR')"
                     >
                       Per Hour
                     </button>
                   </div>
-                </transition>
+                </div>
               </div>
             </div>
-            <p
-              v-if="showErrors && formErrors.rentalFee"
-              class="text-[12px] font-medium text-cinnabar-red"
-            >
-              {{ formErrors.rentalFee }}
-            </p>
-          </div>
-
-          <!-- Replacement Cost -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-semibold text-noble-black">Replacement Cost</label>
-            <div class="relative">
-              <span
-                class="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-medium text-noble-black/60"
-                >₱</span
-              >
-              <input
-                :value="form.replacementCost"
-                type="text"
-                inputmode="numeric"
-                placeholder="0"
-                class="h-12 w-full rounded-[14px] border border-cinnamon-ice/30 bg-white pl-8 pr-10 text-[14px] outline-none transition-all placeholder:text-noble-black/40 focus:border-burning-orange/50 focus:ring-1 focus:ring-burning-orange/20"
-                @beforeinput="blockInvalidRateInput"
-                @input="handleReplacementCostInput"
-                @focus="focusReplacementCost"
-                @keydown.enter="handleRateEnter"
-                @blur="blurReplacementCost"
-              />
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2">
+                <label class="form-label !mb-0">Replacement Cost</label>
+              </div>
+              <div class="relative">
+                <span
+                  class="absolute left-4 top-1/2 -translate-y-1/2 text-[14px] font-medium text-noble-black/60"
+                  >₱</span
+                ><input
+                  :value="form.replacementCost"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="0"
+                  class="form-input !pl-8"
+                  @input="handleReplacementCostInput"
+                  @blur="blurReplacementCost"
+                  @focus="focusReplacementCost"
+                />
+              </div>
+              <p class="helper-text">
+                The amount to be paid if the item is lost or damaged beyond repair. This helps
+                protect your listing.
+              </p>
             </div>
-            <p class="text-[12px] text-noble-black/30">
-              The amount to be paid if the item is lost or damaged beyond repair.
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-header">
+            <h2 class="section-title">Availability</h2>
+            <p class="section-subtitle">
+              Select the dates and times your item will be available for others to book.
             </p>
           </div>
-        </div>
-      </section>
+          <div class="mt-8 space-y-8">
+            <div
+              v-for="(availability, index) in availabilityRows"
+              :key="availability.id"
+              class="relative space-y-6"
+            >
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="form-label opacity-50 uppercase tracking-widest !text-[10px]"
+                    >Available From <span class="text-cinnabar-red">*</span></label
+                  >
+                  <div class="flex gap-3">
+                    <CustomCalendar
+                      :model-value="availability.startDate"
+                      class="flex-1"
+                      :min-date="todayStr"
+                      @update:model-value="updateAvailabilityField(index, 'startDate', $event)"
+                    /><CustomTimePicker
+                      :model-value="availability.startTime"
+                      class="w-32"
+                      :min-time="availability.startDate === todayStr ? currentTimeStr : ''"
+                      @update:model-value="updateAvailabilityField(index, 'startTime', $event)"
+                    />
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <label class="form-label opacity-50 uppercase tracking-widest !text-[10px]"
+                    >Available Until <span class="text-cinnabar-red">*</span></label
+                  >
+                  <div class="flex gap-3">
+                    <CustomCalendar
+                      :model-value="availability.endDate"
+                      class="flex-1"
+                      :min-date="availability.startDate || todayStr"
+                      @update:model-value="updateAvailabilityField(index, 'endDate', $event)"
+                    /><CustomTimePicker
+                      :model-value="availability.endTime"
+                      class="w-32"
+                      :min-time="
+                        availability.startDate === availability.endDate
+                          ? availability.startTime
+                          : availability.endDate === todayStr
+                            ? currentTimeStr
+                            : ''
+                      "
+                      @update:model-value="updateAvailabilityField(index, 'endTime', $event)"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div v-if="availabilityRows.length > 1" class="flex justify-end">
+                <button
+                  type="button"
+                  class="text-[12px] font-bold text-cinnabar-red/60 hover:text-cinnabar-red hover:underline transition-colors"
+                  @click="removeAvailabilityRow(index)"
+                >
+                  Remove date range
+                </button>
+              </div>
+              <div
+                v-if="index !== availabilityRows.length - 1"
+                class="h-[1px] bg-cinnamon-ice/10 w-full"
+              ></div>
+            </div>
+            <button
+              type="button"
+              class="w-full flex items-center justify-center gap-2 p-3 rounded-[10px] border-[1.5px] border-dashed border-cinnamon-ice/20 bg-white text-[13px] font-bold text-noble-black/50 hover:border-burning-orange hover:text-burning-orange hover:bg-burning-orange/[0.02] transition-all"
+              @click="addAvailabilityRow"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14M5 12h14" /></svg
+              >Add another availability date
+            </button>
+          </div>
+        </section>
+      </div>
 
-      <!-- Section 5: Availability -->
-      <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
-        <h2 class="text-[20px] font-bold text-noble-black">Availability</h2>
-        <p class="mt-1 text-[14px] text-noble-black/50">Set when your item is available.</p>
+      <section id="section-tags" class="form-section">
+        <div class="section-header">
+          <h2 class="section-title">Tags</h2>
+          <p class="section-subtitle">
+            Add relevant tags to help others find your item more easily.
+          </p>
+        </div>
         <div class="mt-8 flex flex-col gap-6">
           <div
-            v-for="(availability, index) in availabilityRows"
-            :key="availability.id"
-            class="flex flex-col gap-4"
-          >
-            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[14px] font-semibold text-noble-black"
-                  >Available From <span class="text-cinnabar-red">*</span></label
-                >
-                <div class="flex flex-wrap gap-3">
-                  <CustomCalendar
-                    :model-value="availability.startDate"
-                    placeholder="Select date"
-                    disable-past
-                    class="flex-1 min-w-[180px]"
-                    :class="{
-                      'ring-1 ring-cinnabar-red/50 rounded-[10px]':
-                        showErrors && availabilityRowErrors[index]?.startDate,
-                    }"
-                    @update:model-value="updateAvailabilityField(index, 'startDate', $event)"
-                  />
-                  <CustomTimePicker
-                    :model-value="availability.startTime"
-                    placeholder="Select time"
-                    class="w-48"
-                    :class="{
-                      'ring-1 ring-cinnabar-red/50 rounded-[10px]':
-                        showErrors && availabilityRowErrors[index]?.startTime,
-                    }"
-                    @update:model-value="updateAvailabilityField(index, 'startTime', $event)"
-                  />
-                </div>
-                <p
-                  v-if="showErrors && availabilityRowErrors[index]?.startDate"
-                  class="text-[12px] font-medium text-cinnabar-red"
-                >
-                  {{ availabilityRowErrors[index]?.startDate }}
-                </p>
-                <p
-                  v-if="showErrors && availabilityRowErrors[index]?.startTime"
-                  class="text-[12px] font-medium text-cinnabar-red"
-                >
-                  {{ availabilityRowErrors[index]?.startTime }}
-                </p>
-              </div>
-              <div class="flex flex-col gap-2">
-                <div class="flex items-center justify-between gap-3">
-                  <label class="text-[14px] font-semibold text-noble-black">Available Until</label>
-                  <button
-                    v-if="availabilityRows.length > 1"
-                    type="button"
-                    class="text-[12px] font-medium text-cinnabar-red transition-colors hover:text-noble-black"
-                    @click="removeAvailabilityRow(index)"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                  <CustomCalendar
-                    :model-value="availability.endDate"
-                    placeholder="Select date"
-                    disable-past
-                    :min-date="availability.startDate"
-                    class="flex-1 min-w-[180px]"
-                    :class="{
-                      'ring-1 ring-cinnabar-red/50 rounded-[10px]':
-                        showErrors && availabilityRowErrors[index]?.endTime,
-                    }"
-                    @update:model-value="updateAvailabilityField(index, 'endDate', $event)"
-                  />
-                  <CustomTimePicker
-                    :model-value="availability.endTime"
-                    placeholder="Select time"
-                    class="w-48"
-                    :min-time="getEndMinTime(availability)"
-                    :strict-min="false"
-                    :class="{
-                      'ring-1 ring-cinnabar-red/50 rounded-[10px]':
-                        showErrors && availabilityRowErrors[index]?.endTime,
-                    }"
-                    @update:model-value="updateAvailabilityField(index, 'endTime', $event)"
-                  />
-                </div>
-                <p
-                  v-if="showErrors && availabilityRowErrors[index]?.endTime"
-                  class="text-[12px] font-medium text-cinnabar-red"
-                >
-                  {{ availabilityRowErrors[index]?.endTime }}
-                </p>
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            class="flex items-center gap-2 text-[14px] font-medium text-burning-orange transition-colors hover:text-orange-600"
-            @click="addAvailabilityRow"
-          >
-            <span class="text-lg leading-none">+</span>
-            <span>Add another availability date</span>
-          </button>
-        </div>
-      </section>
-
-      <!-- Section 6: Tags -->
-      <section class="rounded-[24px] border border-cinnamon-ice bg-cream p-8">
-        <h2 class="text-[20px] font-bold text-noble-black">Tags</h2>
-        <p class="mt-1 text-[14px] text-noble-black/50">Add tags to help others find your item.</p>
-        <div class="mt-8 flex flex-col gap-4">
-          <div
-            class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[14px] border border-cinnamon-ice/30 bg-white p-2.5 focus-within:border-burning-orange/50"
+            class="flex min-h-[56px] w-full flex-wrap gap-2 rounded-[10px] border-[1.5px] border-cinnamon-ice/20 bg-white p-2.5 focus-within:border-burning-orange/50 transition-all"
           >
             <div
               v-for="tag in form.tags"
               :key="tag"
-              class="flex items-center gap-1.5 rounded-full bg-cream px-3 py-1 text-[13px] font-medium text-noble-black"
+              class="flex items-center gap-1.5 rounded-full bg-burning-orange/[0.08] border border-burning-orange/20 px-2.5 py-0.5 text-[12px] font-bold text-burning-orange"
             >
-              <span>{{ tag }}</span>
-              <button type="button" @click="removeTag(tag)">
+              <span>{{ tag }}</span
+              ><button type="button" @click="removeTag(tag)">
                 <svg
                   width="10"
                   height="10"
@@ -1538,52 +1441,53 @@ const handleSubmit = () => {
             <input
               v-model="tagInput"
               type="text"
-              placeholder="Add tags with commas or spaces"
-              class="flex-1 bg-transparent px-1.5 text-[14px] outline-none"
-              @input="handleTagInput"
-              @blur="addTag"
+              placeholder="Add tags..."
+              class="flex-1 bg-transparent px-1.5 text-[14px] font-medium outline-none"
               @keydown.enter.prevent="addTag"
+              @keydown.,.prevent="addTag"
+              @blur="addTag"
             />
           </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="tag in SUGGESTED_TAGS"
-              :key="tag"
-              type="button"
-              class="rounded-full bg-blue-estate px-4 py-1.5 text-[12px] font-medium text-white shadow-md transition-all hover:bg-blue-estate/90 hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-              :disabled="form.tags.includes(tag.toLowerCase())"
-              @click="addSuggestedTag(tag)"
-            >
-              {{ tag }}
-            </button>
+          <div class="space-y-3">
+            <p class="text-[11px] font-black uppercase tracking-widest text-noble-black/30">
+              Suggested Tags
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="tag in SUGGESTED_TAGS"
+                :key="tag"
+                type="button"
+                class="px-4 py-1.5 rounded-full border-[1.5px] text-[13px] font-semibold transition-all duration-300"
+                :class="
+                  form.tags.includes(tag.toLowerCase())
+                    ? 'border-burning-orange bg-burning-orange/[0.04] text-burning-orange'
+                    : 'border-cinnamon-ice/20 bg-white text-noble-black/50 hover:border-burning-orange/30'
+                "
+                @click="addSuggestedTag(tag)"
+              >
+                {{ tag }}
+              </button>
+            </div>
           </div>
         </div>
       </section>
-    </div>
 
-    <!-- Action Buttons -->
-    <div class="mt-12 flex items-center justify-end gap-6 pb-20">
-      <button
-        type="button"
-        class="text-[15px] font-semibold text-noble-black transition-colors hover:text-cinnabar-red"
-        @click="handleCancel"
+      <slot name="danger-zone"></slot>
+
+      <div
+        class="mt-8 pt-8 border-t border-cinnamon-ice/10 flex items-center justify-end gap-4 pb-20"
       >
-        Cancel
-      </button>
-
-      <div class="flex items-center gap-3">
         <button
           type="button"
-          class="rounded-full border border-cinnamon-ice bg-white px-8 py-3.5 text-[15px] font-bold text-noble-black transition-all hover:bg-cream active:scale-95"
+          class="h-12 inline-flex items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange text-burning-orange bg-white px-8 text-[15px] font-bold transition-all hover:bg-burning-orange/5 active:scale-95"
           @click="showPreview = true"
         >
           Preview
         </button>
-
         <button
           type="submit"
           :disabled="isSubmitting || isUploadingImages"
-          class="rounded-full bg-burning-orange px-10 py-3.5 text-[15px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all duration-300 hover:scale-[1.02] hover:bg-blue-estate disabled:opacity-50"
+          class="h-12 inline-flex items-center justify-center rounded-[10px] bg-burning-orange px-10 text-[15px] font-bold text-white shadow-[0_4px_14px_rgba(232,101,10,0.3)] transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-95 disabled:opacity-50"
         >
           {{
             isUploadingImages
@@ -1593,17 +1497,15 @@ const handleSubmit = () => {
                   ? "Publishing..."
                   : "Saving..."
                 : props.mode === "new"
-                  ? "Publish Item"
+                  ? "Publish Listing"
                   : "Save Changes"
           }}
         </button>
       </div>
-    </div>
-
-    <!-- Lightbox & Modals -->
-    <ItemPreviewModal :show="showPreview" :data="previewData" @close="showPreview = false" />
+    </form>
 
     <Teleport to="body">
+      <ItemPreviewModal :show="showPreview" :data="previewData" @close="showPreview = false" />
       <div
         v-if="lightboxImage"
         class="fixed inset-0 z-[3000] flex items-center justify-center bg-noble-black/90 backdrop-blur-md p-4"
@@ -1662,7 +1564,7 @@ const handleSubmit = () => {
           </p>
           <div class="flex gap-3 justify-center">
             <button
-              class="h-10 rounded-xl border border-cinnamon-ice/30 px-6 text-[14px] font-semibold text-noble-black/60 hover:bg-pale-cashmere"
+              class="h-10 rounded-xl border border-cinnamon-ice/10 px-6 text-[14px] font-semibold text-noble-black/60 hover:bg-noble-black/5"
               @click="showCancelModal = false"
             >
               Stay</button
@@ -1676,17 +1578,122 @@ const handleSubmit = () => {
         </div>
       </div>
     </Teleport>
-  </form>
+  </div>
 </template>
 
 <style scoped>
-.border-dashed-section-lg {
-  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='24' ry='24' stroke='%23dbbba7' stroke-width='2' stroke-dasharray='18%2c 10' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
+.form-section {
+  border-radius: 24px;
+  border: 1px solid theme("colors.cinnamon-ice / 20%");
+  background-color: theme("colors.cream");
+  padding: 32px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
 }
-
-.border-dashed-long-md {
-  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='18' ry='18' stroke='%237D6D5466' stroke-width='1.5' stroke-dasharray='12%2c 8' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+.form-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+.section-header {
+  border-left: 3px solid theme("colors.burning-orange");
+  padding-left: 16px;
+}
+.section-title {
+  font-family: theme("fontFamily.geist");
+  font-size: 17px;
+  font-weight: 600;
+  color: theme("colors.noble-black");
+}
+.section-subtitle {
+  font-family: theme("fontFamily.geist");
+  font-size: 13px;
+  color: theme("colors.noble-black / 50%");
+  margin-top: 2px;
+}
+.form-label {
+  display: block;
+  font-family: theme("fontFamily.geist");
+  font-size: 13px;
+  font-weight: 600;
+  color: theme("colors.noble-black / 70%");
+  margin-bottom: 4px;
+}
+.form-input {
+  height: 44px;
+  width: 100%;
+  background-color: theme("colors.white");
+  border: 1.5px solid theme("colors.cinnamon-ice / 20%");
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 14px;
+  color: theme("colors.noble-black");
+  outline: none;
+  transition: all 0.2s ease;
+}
+.form-input::placeholder {
+  color: theme("colors.noble-black / 30%");
+}
+.form-input:focus {
+  border-color: theme("colors.burning-orange");
+  box-shadow: 0 0 0 3px theme("colors.burning-orange / 10%");
+}
+.form-textarea {
+  width: 100%;
+  background-color: theme("colors.white");
+  border: 1.5px solid theme("colors.cinnamon-ice / 20%");
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: theme("colors.noble-black");
+  outline: none;
+  transition: all 0.2s ease;
+  resize: vertical;
+}
+.form-textarea::placeholder {
+  color: theme("colors.noble-black / 30%");
+}
+input::placeholder,
+textarea::placeholder {
+  color: theme("colors.noble-black / 30%");
+}
+.form-textarea:focus {
+  border-color: theme("colors.burning-orange");
+  box-shadow: 0 0 0 3px theme("colors.burning-orange / 10%");
+}
+.helper-text {
+  font-size: 12px;
+  color: theme("colors.noble-black / 50%");
+  margin-top: 4px;
+}
+.upload-dropzone {
+  width: 100%;
+  padding: 40px;
+  border: 2px dashed theme("colors.cinnamon-ice / 20%");
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: theme("colors.white");
+}
+.upload-dropzone:hover,
+.upload-dropzone.is-dragging {
+  border-color: theme("colors.burning-orange");
+  background-color: theme("colors.burning-orange / 4%");
+}
+.custom-modal-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice / 40%");
+  border-radius: 20px;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>
