@@ -17,6 +17,17 @@ const submitError = ref<string | null>(null)
 const isDeleting = ref(false)
 const deleteError = ref<string | null>(null)
 const deleteSuccessMessage = ref<string | null>(null)
+const formRef = ref<{ isDirty: boolean; triggerCancel: () => void } | null>(null)
+
+onBeforeRouteLeave((to, from, next) => {
+  if (isSubmitting.value || isDeleting.value || !formRef.value?.isDirty) {
+    next()
+    return
+  }
+
+  formRef.value.triggerCancel()
+  next(false)
+})
 
 onMounted(async () => {
   try {
@@ -121,50 +132,79 @@ const handleDeactivateInstead = async () => {
     <!-- Edit form -->
     <ListingForm
       v-else
+      ref="formRef"
       mode="edit"
       :item="item"
       :is-submitting="isSubmitting"
       :submit-error="submitError"
       @submit="handleSubmit"
       @cancel="navigateTo('/account/listings')"
-    />
-
-    <div
-      v-if="!isFetching && !notFound && item"
-      class="mt-6 rounded-[20px] border border-cinnabar-red/15 bg-white p-5"
     >
-      <h2 class="font-geist text-lg font-semibold text-neutral-800">Danger Zone</h2>
-      <p class="mt-2 font-geist text-sm text-neutral-800/65">
-        Delete this listing only when it has no active or upcoming transactions. If deletion is
-        blocked, deactivate it instead to keep system records consistent.
-      </p>
-
-      <p v-if="deleteError" class="mt-4 font-geist text-sm text-cinnabar-red">
-        {{ deleteError }}
-      </p>
-      <p v-else-if="deleteSuccessMessage" class="mt-4 font-geist text-sm text-burning-orange">
-        {{ deleteSuccessMessage }}
-      </p>
-
-      <div class="mt-4 flex flex-wrap gap-3">
-        <button
-          type="button"
-          class="rounded-[14px] bg-cinnabar-red px-5 py-2.5 font-geist text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="isDeleting"
-          @click="handleDelete"
+      <template #danger-zone>
+        <section
+          v-if="!isFetching && !notFound && item"
+          class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-5 py-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6 font-geist"
         >
-          {{ isDeleting ? "Processing..." : "Delete Listing" }}
-        </button>
+          <div class="border-l-[3px] border-burning-orange pl-4">
+            <h2 class="text-[20px] font-bold text-noble-black">Danger Zone</h2>
+            <p class="text-[13px] font-medium text-noble-black/50">
+              Irreversible actions related to your listing.
+            </p>
+          </div>
 
-        <button
-          type="button"
-          class="rounded-[14px] border border-cinnamon-ice px-5 py-2.5 font-geist text-sm font-medium text-neutral-800 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="isDeleting || item.status === 'DEACTIVATED'"
-          @click="handleDeactivateInstead"
-        >
-          {{ item.status === "DEACTIVATED" ? "Already Deactivated" : "Deactivate Instead" }}
-        </button>
-      </div>
-    </div>
+          <div class="mt-8 space-y-4 border-t border-cinnamon-ice/10 pt-6">
+            <p v-if="deleteError" class="font-geist text-[13px] font-medium text-cinnabar-red mb-4">
+              {{ deleteError }}
+            </p>
+            <p
+              v-else-if="deleteSuccessMessage"
+              class="font-geist text-[13px] font-medium text-burning-orange mb-4"
+            >
+              {{ deleteSuccessMessage }}
+            </p>
+
+            <!-- Deactivate Listing -->
+            <div
+              class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
+            >
+              <div class="max-w-md space-y-1">
+                <h3 class="text-[16px] font-bold text-noble-black">Deactivate Listing</h3>
+                <p class="text-[13px] font-medium text-noble-black/50">
+                  Hide this listing temporarily to keep system records consistent.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="inline-flex h-10 items-center justify-center rounded-[12px] border-[1.5px] border-cinnabar-red/30 bg-white px-5 text-[13px] font-semibold text-cinnabar-red transition hover:border-cinnabar-red hover:bg-cinnabar-red/5 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isDeleting || item.status === 'DEACTIVATED'"
+                @click="handleDeactivateInstead"
+              >
+                {{ item.status === "DEACTIVATED" ? "Already Deactivated" : "Deactivate Instead" }}
+              </button>
+            </div>
+
+            <!-- Delete Listing -->
+            <div
+              class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
+            >
+              <div class="max-w-md space-y-1">
+                <h3 class="text-[16px] font-bold text-noble-black">Delete Listing</h3>
+                <p class="text-[13px] font-medium text-noble-black/50">
+                  Delete this listing only when it has no active or upcoming transactions.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="inline-flex h-10 items-center justify-center rounded-[12px] bg-cinnabar-red px-5 text-[13px] font-semibold text-white transition hover:bg-noble-black shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isDeleting"
+                @click="handleDelete"
+              >
+                {{ isDeleting ? "Processing..." : "Delete Listing" }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </template>
+    </ListingForm>
   </div>
 </template>

@@ -133,7 +133,7 @@ const performBanUser = async () => {
   <div v-else-if="!user" class="p-8 text-center">
     <p class="text-red-600">User not found</p>
   </div>
-  <div v-else class="p-6 space-y-6">
+  <div v-else class="space-y-6">
     <button class="text-burning-orange" @click="router.back()">← Back</button>
 
     <div

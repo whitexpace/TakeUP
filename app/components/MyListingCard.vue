@@ -44,8 +44,6 @@ function formatCategory(category: string) {
     .join(" ")
 }
 
-const isInUse = computed(() => props.item.displayStatus === "IN_USE")
-const isDeactivated = computed(() => props.item.status === "DEACTIVATED")
 const boostExpiresAt = computed(() => {
   if (!props.item.boostExpiresAt) {
     return null
@@ -67,10 +65,6 @@ const hasActiveBoost = computed(() => {
 })
 const isBoostEligible = computed(
   () => props.item.displayStatus === "ACTIVE" && !hasActiveBoost.value,
-)
-const toggleLabel = computed(() => (isDeactivated.value ? "Activate" : "Deactivate"))
-const toggleTarget = computed<"AVAILABLE" | "DEACTIVATED">(() =>
-  isDeactivated.value ? "AVAILABLE" : "DEACTIVATED",
 )
 const boostLabel = computed(() => {
   if (hasActiveBoost.value) {
@@ -108,32 +102,6 @@ const boostLabel = computed(() => {
         >
           {{ boostLabel }}
         </button>
-
-        <div class="relative w-full group/tooltip">
-          <button
-            :disabled="isInUse || isToggling"
-            class="w-full h-10 flex items-center justify-center rounded-[10px] text-[13px] font-bold transition-all duration-300 active:scale-95 disabled:cursor-not-allowed"
-            :class="[
-              isInUse
-                ? 'bg-white/10 text-white/30 border border-white/10'
-                : 'bg-white/10 text-white border border-white/20 hover:bg-white hover:text-noble-black',
-              isDeactivated ? 'bg-burning-orange text-white border-none' : '',
-            ]"
-            @click.stop="emit('toggleStatus', item.id, toggleTarget)"
-          >
-            {{ isToggling ? "..." : toggleLabel }}
-          </button>
-
-          <div
-            v-if="isInUse"
-            class="pointer-events-none absolute -top-10 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-noble-black px-3 py-1.5 text-[11px] font-medium text-white opacity-0 shadow-xl transition-opacity duration-200 group-hover/tooltip:opacity-100"
-          >
-            Item is currently In Use
-            <div
-              class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-white/10 bg-noble-black"
-            />
-          </div>
-        </div>
       </div>
 
       <div

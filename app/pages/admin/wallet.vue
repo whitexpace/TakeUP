@@ -26,10 +26,12 @@ const { transactions, isBalanceVisible, toggleBalanceVisibility, formattedBalanc
     :allow-withdraw="false"
     activity-title="Commission Activity"
     activity-subtitle="Track accumulated commission revenue"
-    protection-title="This wallet is admin-only."
+    protection-title="Admin-only wallet"
     protection-message="This centralized wallet collects platform commission from completed wallet transactions and is shared across all admin users."
     member-since-label="Platform Revenue Wallet"
     read-only-badge-label="Read Only"
+    gradient="linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1a2340 100%)"
+    :is-system-wallet="true"
     :on-toggle-balance="toggleBalanceVisibility"
   />
 </template>

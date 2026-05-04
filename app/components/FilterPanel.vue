@@ -212,7 +212,7 @@
       <transition name="section">
         <div v-if="!collapsedSections.priceRange" class="pb-6 pt-2 px-1">
           <!-- Dual-handle range slider implementation -->
-          <div class="relative h-1 w-full bg-gray-100 rounded-full mb-8">
+          <div class="relative h-1 w-full bg-noble-black/10 rounded-full mb-8">
             <div
               class="absolute h-full bg-burning-orange rounded-full"
               :style="{ left: sliderLeft + '%', right: 100 - sliderRight + '%' }"
@@ -715,7 +715,7 @@ const clearAll = () => {
 .filter-option-label {
   font-family: theme("fontFamily.geist");
   font-size: 13px;
-  color: #374151;
+  color: theme("colors.gray.700");
   font-weight: 500;
   transition: color 0.2s ease;
 }

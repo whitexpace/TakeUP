@@ -16,22 +16,10 @@ const selectedStatus = ref<
 const currentPage = ref(0)
 const pageSize = 20
 
-const statusOptions = [
-  { value: "ACTIVE", label: "Active", color: "bg-green-100 text-green-700" },
-  { value: "SUSPENDED", label: "Suspended", color: "bg-yellow-100 text-yellow-700" },
-  { value: "BANNED", label: "Banned", color: "bg-red-100 text-red-700" },
-  { value: "PENDING", label: "Pending", color: "bg-blue-100 text-blue-700" },
-  { value: "DEACTIVATED", label: "Deactivated", color: "bg-gray-100 text-gray-700" },
-]
-
 definePageMeta({
   layout: "admin",
   middleware: "admin-auth",
 })
-
-const getStatusColor = (status: string) => {
-  return statusOptions.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-700"
-}
 
 const { data, pending, error } = await useAsyncData<UsersListResponse>(
   () =>
@@ -78,6 +66,8 @@ const handleStatusFilter = (status: string | undefined) => {
   currentPage.value = 0
 }
 
+const user = useSupabaseUser()
+
 const viewUserProfile = (userId: string) => {
   void router.push(`/admin/users/${userId}`)
 }
@@ -91,142 +81,109 @@ const clearFilters = () => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-8 p-6">
+  <div class="flex flex-col gap-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-noble-black">User Management</h1>
-        <p class="mt-1 text-sm text-gray-600">
+        <h1 class="text-[28px] font-bold text-gray-900">User Management</h1>
+        <p class="mt-1 text-[15px] text-gray-500">
           Manage user accounts, roles, and permissions across the platform
         </p>
       </div>
     </div>
 
     <!-- Search and Filters -->
-    <div class="bg-white rounded-lg border border-cinnamon-ice p-6 space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <!-- Search Input -->
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-noble-black mb-2">Search Users</label>
-          <div class="relative">
-            <input
-              type="text"
-              :value="searchQuery"
-              class="w-full px-4 py-2 border border-cinnamon-ice rounded-lg focus:outline-none focus:ring-2 focus:ring-burning-orange"
-              placeholder="Name, email, or username..."
-              @input="handleSearch(($event.target as HTMLInputElement).value)"
-            />
-            <svg
-              class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
-        </div>
-
-        <!-- Role Filter -->
-        <div>
-          <label class="block text-sm font-medium text-noble-black mb-2">Role</label>
-          <select
-            :value="selectedRole"
-            class="w-full px-4 py-2 border border-cinnamon-ice rounded-lg focus:outline-none focus:ring-2 focus:ring-burning-orange bg-white"
-            @change="handleRoleFilter(($event.target as HTMLSelectElement).value || undefined)"
-          >
-            <option value="">All Roles</option>
-            <option value="ADMIN">Admin</option>
-            <option value="LENDER">Lender</option>
-            <option value="BORROWER">Borrower</option>
-          </select>
-        </div>
-
-        <!-- Status Filter -->
-        <div>
-          <label class="block text-sm font-medium text-noble-black mb-2">Status</label>
-          <select
-            :value="selectedStatus"
-            class="w-full px-4 py-2 border border-cinnamon-ice rounded-lg focus:outline-none focus:ring-2 focus:ring-burning-orange bg-white"
-            @change="handleStatusFilter(($event.target as HTMLSelectElement).value || undefined)"
-          >
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="BANNED">Banned</option>
-            <option value="SUSPENDED">Suspended</option>
-            <option value="PENDING">Pending</option>
-            <option value="DEACTIVATED">Deactivated</option>
-          </select>
-        </div>
+    <div class="flex items-center gap-3">
+      <!-- Search Input -->
+      <div class="relative flex-1">
+        <input
+          type="text"
+          :value="searchQuery"
+          class="h-[38px] w-full rounded-[10px] border-[1.5px] border-gray-200 bg-white px-10 text-[14px] outline-none transition-all focus:border-burning-orange/50 focus:ring-4 focus:ring-burning-orange/5"
+          placeholder="Search by name, email, or username..."
+          @input="handleSearch(($event.target as HTMLInputElement).value)"
+        />
+        <svg
+          class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
       </div>
+
+      <!-- Role Filter -->
+      <select
+        :value="selectedRole"
+        class="h-[38px] min-w-[140px] rounded-[10px] border-[1.5px] border-gray-200 bg-white px-3 text-[14px] outline-none transition-all focus:border-burning-orange/50"
+        @change="handleRoleFilter(($event.target as HTMLSelectElement).value || undefined)"
+      >
+        <option value="">All Roles</option>
+        <option value="ADMIN">Admin</option>
+        <option value="LENDER">Lender</option>
+        <option value="BORROWER">Borrower</option>
+      </select>
+
+      <!-- Status Filter -->
+      <select
+        :value="selectedStatus"
+        class="h-[38px] min-w-[140px] rounded-[10px] border-[1.5px] border-gray-200 bg-white px-3 text-[14px] outline-none transition-all focus:border-burning-orange/50"
+        @change="handleStatusFilter(($event.target as HTMLSelectElement).value || undefined)"
+      >
+        <option value="">All Statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="BANNED">Banned</option>
+        <option value="SUSPENDED">Suspended</option>
+        <option value="PENDING">Pending</option>
+        <option value="DEACTIVATED">Deactivated</option>
+      </select>
 
       <!-- Clear Filters Button -->
-      <div class="flex justify-end">
-        <button
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-          @click="clearFilters"
-        >
-          Clear Filters
-        </button>
-      </div>
+      <button
+        class="ml-2 text-[13px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
+        @click="clearFilters"
+      >
+        Clear Filters
+      </button>
     </div>
 
     <!-- Users Table -->
     <ClientOnly>
-      <template #fallback>
-        <div class="bg-white rounded-lg border border-cinnamon-ice overflow-hidden">
-          <div class="p-8 text-center">
-            <div class="inline-block animate-spin">
-              <svg
-                class="w-6 h-6 text-burning-orange"
-                fill="none"
+      <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div v-if="pending" class="p-12 text-center">
+          <div class="inline-block animate-spin text-burning-orange">
+            <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24">
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
                 stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <div class="bg-white rounded-lg border border-cinnamon-ice overflow-hidden">
-        <div v-if="pending" class="p-8 text-center">
-          <div class="inline-block animate-spin">
-            <svg
-              class="w-6 h-6 text-burning-orange"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+                stroke-width="4"
+              ></circle>
               <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
             </svg>
           </div>
         </div>
 
-        <div v-else-if="error" class="p-8 text-center text-red-600">
+        <div v-else-if="error" class="p-12 text-center text-red-600">
           <p class="font-medium">Unable to load users.</p>
-          <p class="text-sm text-gray-500">{{ error.message }}</p>
+          <p class="mt-1 text-sm text-gray-500">{{ error.message }}</p>
         </div>
 
-        <div v-else-if="users.length === 0" class="p-8 text-center text-gray-500">
+        <div v-else-if="users.length === 0" class="p-12 text-center text-gray-500">
           <svg
-            class="mx-auto w-12 h-12 text-gray-300 mb-4"
+            class="mx-auto h-12 w-12 text-gray-200 mb-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -234,115 +191,168 @@ const clearFilters = () => {
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 4.354a4 4 0 110 5.292M15 21H3.914a.5.5 0 01-.5-.5V5.5a.5.5 0 01.5-.5h16.172a.5.5 0 01.5.5v10"
+              stroke-width="1.5"
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
             />
           </svg>
-          <p>No users found. Try adjusting your filters.</p>
+          <p class="text-[16px] font-semibold text-gray-400">No users found</p>
+          <p class="mt-1 text-sm">Try adjusting your search or filters.</p>
         </div>
 
         <table v-else class="w-full">
-          <thead class="bg-gray-50 border-b border-cinnamon-ice">
-            <tr>
+          <thead>
+            <tr class="bg-gray-50 border-b-2 border-gray-100">
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-[11px] font-medium text-gray-400 uppercase tracking-[1px]"
               >
                 User
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-[11px] font-medium text-gray-400 uppercase tracking-[1px]"
               >
                 Email
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-[11px] font-medium text-gray-400 uppercase tracking-[1px]"
               >
                 Role
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-[11px] font-medium text-gray-400 uppercase tracking-[1px]"
               >
                 Status
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
+                class="px-6 py-3 text-left text-[11px] font-medium text-gray-400 uppercase tracking-[1px]"
               >
-                Rating
+                Ratings
               </th>
               <th
-                class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
+                class="px-6 py-3 text-right text-[11px] font-medium text-gray-400 uppercase tracking-[1px]"
               >
-                Joined
+                Actions
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-cinnamon-ice">
+          <tbody class="divide-y divide-gray-100">
             <tr
-              v-for="user in users"
-              :key="user.id"
-              class="user-row group cursor-pointer transition-all duration-200 hover:bg-orange-50 hover:shadow-md hover:border-burning-orange/30"
-              @click="viewUserProfile(user.id)"
+              v-for="u in users"
+              :key="u.id"
+              class="group h-[56px] transition-colors cursor-pointer"
+              :class="[
+                u.id === user?.id
+                  ? 'bg-orange-50/50 border-l-[3px] border-orange-600'
+                  : 'hover:bg-gray-50/50',
+                users.indexOf(u) % 2 === 1 && u.id !== user?.id ? 'bg-gray-50/30' : 'bg-white',
+              ]"
+              @click="viewUserProfile(u.id)"
             >
-              <td class="px-6 py-4 whitespace-nowrap">
+              <td class="px-6 py-2">
                 <div class="flex items-center gap-3">
                   <div
-                    class="w-10 h-10 rounded-full bg-gradient-to-br from-burning-orange to-cinnabar-red flex items-center justify-center text-white text-sm font-semibold group-hover:scale-110 transition-transform duration-200"
+                    class="h-[36px] w-[36px] shrink-0 flex items-center justify-center rounded-full bg-slate-100 text-[13px] font-bold text-slate-600 border border-slate-200"
                   >
-                    {{ user.firstName.charAt(0) }}{{ user.lastName.charAt(0) }}
+                    {{ u.firstName.charAt(0) }}{{ u.lastName.charAt(0) }}
                   </div>
-                  <div>
-                    <p
-                      class="text-sm font-medium text-noble-black group-hover:text-burning-orange transition-colors duration-200"
-                    >
-                      {{ user.firstName }} {{ user.lastName }}
-                    </p>
-                    <p class="text-xs text-gray-500">@{{ user.username }}</p>
+                  <div class="flex flex-col">
+                    <div class="flex items-center gap-2">
+                      <span class="text-[14px] font-semibold text-gray-900 leading-tight">
+                        {{ u.firstName }} {{ u.lastName }}
+                      </span>
+                      <span
+                        v-if="u.id === user?.id"
+                        class="px-1.5 py-0.5 rounded-[4px] bg-orange-50 text-orange-600 text-[10px] font-bold border border-orange-100 uppercase"
+                      >
+                        You
+                      </span>
+                    </div>
+                    <span class="text-[12px] text-gray-400 leading-tight">@{{ u.username }}</span>
                   </div>
                 </div>
               </td>
-              <td
-                class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200"
-              >
-                {{ user.email }}
+              <td class="px-6 py-2">
+                <span class="font-mono text-[13px] text-gray-500">{{ u.email }}</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">
+              <td class="px-6 py-2">
                 <span
-                  :class="[
-                    'px-3 py-1 rounded-full text-xs font-medium',
-                    user.accountType === 'ADMIN'
-                      ? 'bg-purple-100 text-purple-700'
-                      : user.accountType === 'LENDER'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-green-100 text-green-700',
-                  ]"
+                  v-if="u.accountType === 'ADMIN'"
+                  class="rounded-full rounded-tr-[11px] bg-violet-100 px-[10px] py-[2px] text-[12px] font-bold text-violet-600"
                 >
-                  {{ user.accountType }}
+                  ADMIN
+                </span>
+                <span
+                  v-else-if="u.accountType === 'BORROWER'"
+                  class="rounded-full rounded-tr-[11px] bg-blue-100 px-[10px] py-[2px] text-[12px] font-bold text-blue-700"
+                >
+                  BORROWER
+                </span>
+                <span
+                  v-else
+                  class="rounded-full rounded-tr-[11px] bg-gray-100 px-[10px] py-[2px] text-[12px] font-bold text-gray-600"
+                >
+                  {{ u.accountType }}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">
+              <td class="px-6 py-2">
                 <span
-                  :class="[
-                    'px-3 py-1 rounded-full text-xs font-medium',
-                    getStatusColor(user.status),
-                  ]"
+                  v-if="u.status === 'ACTIVE'"
+                  class="rounded-full bg-emerald-100 px-[10px] py-[2px] text-[12px] font-bold text-emerald-600"
                 >
-                  {{ user.status }}
+                  ACTIVE
+                </span>
+                <span
+                  v-else-if="u.status === 'SUSPENDED'"
+                  class="rounded-full bg-amber-100 px-[10px] py-[2px] text-[12px] font-bold text-amber-600"
+                >
+                  SUSPENDED
+                </span>
+                <span
+                  v-else
+                  class="rounded-full bg-gray-100 px-[10px] py-[2px] text-[12px] font-bold text-gray-500"
+                >
+                  {{ u.status }}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <div class="flex gap-2 text-xs">
-                  <span v-if="user.lenderRating > 0" class="text-blue-600 font-medium">
-                    📦 {{ user.lenderRating.toFixed(1) }}
-                  </span>
-                  <span v-if="user.borrowerRating > 0" class="text-green-600 font-medium">
-                    👤 {{ user.borrowerRating.toFixed(1) }}
-                  </span>
+              <td class="px-6 py-2">
+                <div class="flex items-center gap-3">
+                  <div
+                    v-if="u.lenderRating > 0"
+                    class="flex items-center gap-1 text-[12px] font-medium text-slate-500"
+                  >
+                    <span class="text-burning-orange">★</span>
+                    {{ u.lenderRating.toFixed(1) }}
+                  </div>
+                  <div
+                    v-if="u.borrowerRating > 0"
+                    class="flex items-center gap-1 text-[12px] font-medium text-slate-500"
+                  >
+                    <span class="text-blue-600">★</span>
+                    {{ u.borrowerRating.toFixed(1) }}
+                  </div>
+                  <span
+                    v-if="u.lenderRating === 0 && u.borrowerRating === 0"
+                    class="text-[12px] text-gray-400"
+                    >—</span
+                  >
                 </div>
               </td>
-              <td
-                class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 group-hover:text-noble-black transition-colors duration-200"
-              >
-                {{ new Date(user.createdAt).toLocaleDateString() }}
+              <td class="px-6 py-2 text-right">
+                <button
+                  class="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-gray-900 transition-all"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="1" />
+                    <circle cx="19" cy="12" r="1" />
+                    <circle cx="5" cy="12" r="1" />
+                  </svg>
+                </button>
               </td>
             </tr>
           </tbody>
@@ -351,43 +361,56 @@ const clearFilters = () => {
     </ClientOnly>
 
     <!-- Pagination -->
-    <div class="flex items-center justify-between">
-      <p class="text-sm text-gray-600">
+    <div class="flex items-center justify-between mt-2">
+      <p class="text-[13px] text-gray-400">
         Showing {{ startIndex }} to {{ endIndex }} of {{ totalCount }} users
       </p>
 
-      <div class="flex gap-2">
-        <button
-          :disabled="currentPage === 0"
-          class="px-4 py-2 text-sm font-medium border border-cinnamon-ice rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          @click="currentPage = Math.max(0, currentPage - 1)"
-        >
-          Previous
-        </button>
-
-        <div class="flex items-center gap-1">
-          <button
-            v-for="page in Math.min(5, totalPages)"
-            :key="page"
-            :class="[
-              'px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
-              currentPage === page - 1
-                ? 'bg-burning-orange text-white border-burning-orange'
-                : 'border-cinnamon-ice hover:bg-gray-50',
-            ]"
-            @click="currentPage = page - 1"
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2">
+          <span class="text-[13px] text-gray-400">Rows per page:</span>
+          <select
+            class="h-8 rounded-lg border-[1.5px] border-gray-200 bg-white px-2 text-[13px] font-medium outline-none transition-all focus:border-burning-orange/50"
           >
-            {{ page }}
-          </button>
+            <option>10</option>
+            <option selected>20</option>
+            <option>50</option>
+          </select>
         </div>
 
-        <button
-          :disabled="!pageInfo?.hasMore"
-          class="px-4 py-2 text-sm font-medium border border-cinnamon-ice rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          @click="currentPage = Math.min(totalPages - 1, currentPage + 1)"
-        >
-          Next
-        </button>
+        <div class="flex gap-2">
+          <button
+            :disabled="currentPage === 0"
+            class="flex h-9 items-center gap-2 px-4 text-[13px] font-semibold text-gray-700 border-[1.5px] border-gray-200 rounded-[8px] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            @click="currentPage = Math.max(0, currentPage - 1)"
+          >
+            Previous
+          </button>
+
+          <div class="flex items-center gap-1">
+            <button
+              v-for="page in Math.min(5, totalPages)"
+              :key="page"
+              :class="[
+                'h-9 w-9 flex items-center justify-center text-[13px] font-bold rounded-full transition-all',
+                currentPage === page - 1
+                  ? 'bg-orange-600 text-white'
+                  : 'text-gray-500 hover:bg-gray-100',
+              ]"
+              @click="currentPage = page - 1"
+            >
+              {{ page }}
+            </button>
+          </div>
+
+          <button
+            :disabled="!pageInfo?.hasMore"
+            class="flex h-9 items-center gap-2 px-4 text-[13px] font-semibold text-gray-700 border-[1.5px] border-gray-200 rounded-[8px] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            @click="currentPage = Math.min(totalPages - 1, currentPage + 1)"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   </div>

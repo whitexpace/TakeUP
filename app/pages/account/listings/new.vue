@@ -4,6 +4,19 @@ definePageMeta({ layout: "account", middleware: "account-auth" })
 const { createListing } = useMyListings()
 const isSubmitting = ref(false)
 const submitError = ref<string | null>(null)
+const formRef = ref<{ isDirty: boolean; triggerCancel: () => void } | null>(null)
+
+onBeforeRouteLeave((to, from, next) => {
+  if (isSubmitting.value || !formRef.value?.isDirty) {
+    next()
+    return
+  }
+
+  formRef.value.triggerCancel()
+  // The modal inside ListingForm will handle the actual navigation upon confirmation
+  // so we stay here for now.
+  next(false)
+})
 
 const handleSubmit = async (data: Record<string, unknown>) => {
   isSubmitting.value = true
@@ -32,6 +45,7 @@ const handleSubmit = async (data: Record<string, unknown>) => {
 
 <template>
   <ListingForm
+    ref="formRef"
     mode="new"
     :is-submitting="isSubmitting"
     :submit-error="submitError"
