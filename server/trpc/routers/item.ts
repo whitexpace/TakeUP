@@ -143,6 +143,8 @@ type ItemWithUserLike = ItemWithTaxonomy & {
   likes?: Array<{ id: string }>
 }
 
+type RouterItemStatus = (typeof itemStatusSchema.enum)[keyof typeof itemStatusSchema.enum]
+
 const itemSearchSelect = {
   id: true,
   createdAt: true,
@@ -517,8 +519,8 @@ type ListWhereFilters = {
   search?: string
   likedOnly?: boolean
   ownedOnly?: boolean
-  status?: ItemStatus
-  statuses?: ItemStatus[]
+  status?: RouterItemStatus
+  statuses?: RouterItemStatus[]
   // May contain real DB categories or the UI-only "OTHERS" sentinel
   categories?: Array<ItemCategory | typeof UI_OTHERS_SENTINEL>
   tags?: string[]
@@ -555,10 +557,10 @@ const buildListWhere = (
   const shouldApplyPublicVisibility = !ownedOnly
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
-    ? status
+    ? (status as ItemStatus)
     : statuses?.length
-      ? { in: statuses }
-      : { not: "DELETED" }
+      ? { in: statuses as ItemStatus[] }
+      : { not: "DELETED" as ItemStatus }
 
   // Split out the OTHERS sentinel from real DB category values
   const wantsOthers = rawCategories?.includes(UI_OTHERS_SENTINEL) ?? false
@@ -1187,7 +1189,7 @@ export const itemRouter = router({
           name: input.name,
           description: input.description ?? null,
           condition: input.condition,
-          status: input.status,
+          status: input.status as ItemStatus,
           rateOption: input.rateOption,
           rentalFee: input.rentalFee,
           replacementCost: input.replacementCost ?? null,
@@ -1225,7 +1227,7 @@ export const itemRouter = router({
         },
         include: itemWithTaxonomy,
       })
-      .then(mapItemTaxonomy)
+      .then((item) => mapItemTaxonomy(item as ItemWithUserLike))
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
@@ -1322,7 +1324,7 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
     }
 
-    const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
+    const { id, availability, categories, tags, thumbnailImage, photos, status, ...data } = input
     const imageWrites = buildUpdateImageWrites(thumbnailImage, photos)
     const nextImageUrls = new Set(buildOrderedImagePaths(thumbnailImage, photos) ?? [])
     const removedImageUrls = existing.images
@@ -1334,6 +1336,7 @@ export const itemRouter = router({
         where: { id },
         data: {
           ...data,
+          ...(status ? { status: status as ItemStatus } : {}),
           ...(availability
             ? {
                 availability: {
@@ -1373,7 +1376,7 @@ export const itemRouter = router({
         },
         include: itemWithTaxonomy,
       })
-      .then(mapItemTaxonomy)
+      .then((item) => mapItemTaxonomy(item as ItemWithUserLike))
 
     void removeItemImagesFromStorage(removedImageUrls, {
       bucket: useRuntimeConfig(ctx.event).public.itemImageBucket,
