@@ -333,7 +333,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <section class="space-y-3">
         <div class="space-y-2">
           <h1 class="text-[28px] font-semibold text-noble-black">My Transactions</h1>
@@ -343,6 +343,13 @@ onBeforeUnmount(() => {
           Review your borrowing and lending history
         </p>
       </section>
+
+      <NuxtLink
+        to="/account/requests"
+        class="inline-flex h-11 shrink-0 items-center gap-2 rounded-[12px] border-[1.5px] border-burning-orange px-6 text-[13px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
+      >
+        View Requests
+      </NuxtLink>
     </div>
 
     <!-- Search bar -->
