@@ -408,6 +408,21 @@ type BookingTimeRange = {
 const doTimeRangesOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
   left.startDate < right.endDate && left.endDate > right.startDate
 
+const expandRangeToUtcDays = <T extends BookingTimeRange>(range: T): T => {
+  const start = new Date(range.startDate)
+  start.setUTCHours(0, 0, 0, 0)
+  const end = new Date(range.endDate)
+  if (
+    end.getUTCHours() !== 0 ||
+    end.getUTCMinutes() !== 0 ||
+    end.getUTCSeconds() !== 0 ||
+    end.getUTCMilliseconds() !== 0
+  ) {
+    end.setUTCHours(24, 0, 0, 0)
+  }
+  return { ...range, startDate: start, endDate: end }
+}
+
 const isBookingWindowFullyCoveredByAvailability = (
   bookingWindow: BookingTimeRange,
   availabilityRanges: AvailabilityRangeRecord[],
@@ -463,20 +478,21 @@ const ensureBookingWindowMatchesAvailability = async (
     return
   }
 
-  const hasAvailableRanges = availabilityRanges.some((range) => range.status === "AVAILABLE")
+  const dayAlignedRanges = availabilityRanges.map(expandRangeToUtcDays)
+  const hasAvailableRanges = dayAlignedRanges.some((range) => range.status === "AVAILABLE")
 
   const requestedWindow = {
     startDate: input.startDate,
     endDate: input.endDate,
   }
-  const hasBlockedWindow = availabilityRanges.some(
+  const hasBlockedWindow = dayAlignedRanges.some(
     (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
   )
 
   if (
     hasBlockedWindow ||
     (hasAvailableRanges &&
-      !isBookingWindowFullyCoveredByAvailability(requestedWindow, availabilityRanges))
+      !isBookingWindowFullyCoveredByAvailability(requestedWindow, dayAlignedRanges))
   ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
