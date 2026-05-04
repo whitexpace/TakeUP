@@ -1,11 +1,6 @@
 import { TRPCError } from "@trpc/server"
-import type {
-  ItemCategory,
-  ItemCondition,
-  ItemStatus,
-  Prisma,
-  TransactionStatus,
-} from "@prisma/client"
+import type { ItemCategory, ItemCondition, ItemStatus } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -38,6 +33,7 @@ import { expireActiveBoosts } from "../../utils/rewards"
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
 import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
+import { NON_TERMINAL_TRANSACTION_STATUSES } from "../../utils/admin-listings"
 
 const SEARCH_SCAN_LIMIT = 2000
 const FEED_RANKING_SCAN_LIMIT = 2000
@@ -103,13 +99,6 @@ const itemVisibilityBookings = {
     status: true,
   },
 } satisfies Prisma.BookingFindManyArgs
-
-const TERMINAL_TRANSACTION_STATUSES = [
-  "COMPLETED",
-  "CANCELLED",
-  "REFUNDED",
-  "FAILED",
-] as const satisfies ReadonlyArray<TransactionStatus>
 
 const myListingsWithDisputes = {
   ...itemWithTaxonomy,
@@ -454,6 +443,29 @@ const mapMyListing = (item: ItemWithListingDisputes) => ({
   hasActiveDispute: itemHasActiveDispute(item),
   displayStatus: getMyListingDisplayStatus(item),
 })
+
+const getAdminModerationLockMessage = (state: "DEACTIVATED" | "REMOVED") =>
+  state === "REMOVED"
+    ? "This listing was removed by an administrator and can no longer be changed by the owner."
+    : "This listing was deactivated by an administrator and cannot be changed by the owner."
+
+const getItemAdminModerationState = async (
+  prisma: { $queryRaw: <T = unknown>(query: Prisma.Sql) => Promise<T> },
+  itemId: string,
+) => {
+  const rows = await prisma.$queryRaw<
+    Array<{ adminModerationState: "DEACTIVATED" | "REMOVED" | null }>
+  >(
+    Prisma.sql`
+      SELECT "adminModerationState"
+      FROM "Item"
+      WHERE "id" = ${itemId}
+      LIMIT 1
+    `,
+  )
+
+  return rows[0]?.adminModerationState ?? null
+}
 
 const buildOrderedImagePaths = (thumbnailImage?: string | null, photos?: string[]) => {
   if (thumbnailImage === undefined && photos === undefined) {
@@ -1269,6 +1281,8 @@ export const itemRouter = router({
     if (!item) return null
 
     const isOwner = ctx.user?.id === item.lenderId
+    const adminModerationState = await getItemAdminModerationState(ctx.prisma, item.id)
+    if (!isAdmin && adminModerationState === "REMOVED") return null
     if (!isOwner && !isAdmin && !isPublicVisibleItem(item, now)) return null
 
     // Increment view count without delaying the item detail response.
@@ -1322,6 +1336,14 @@ export const itemRouter = router({
 
     if (existing.lenderId !== ctx.user.id) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
+    }
+
+    const adminModerationState = await getItemAdminModerationState(ctx.prisma, input.id)
+    if (adminModerationState) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: getAdminModerationLockMessage(adminModerationState),
+      })
     }
 
     const { id, availability, categories, tags, thumbnailImage, photos, status, ...data } = input
@@ -1395,7 +1417,7 @@ export const itemRouter = router({
         transactions: {
           where: {
             status: {
-              notIn: [...TERMINAL_TRANSACTION_STATUSES],
+              in: [...NON_TERMINAL_TRANSACTION_STATUSES],
             },
           },
           select: { id: true },
@@ -1410,6 +1432,14 @@ export const itemRouter = router({
 
     if (existing.lenderId !== ctx.user.id) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to delete this item." })
+    }
+
+    const adminModerationState = await getItemAdminModerationState(ctx.prisma, input.id)
+    if (adminModerationState) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: getAdminModerationLockMessage(adminModerationState),
+      })
     }
 
     if (existing.transactions.length > 0) {

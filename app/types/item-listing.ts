@@ -27,10 +27,14 @@ export interface ListedItemImage {
 
 export interface ListedItem {
   id: string
+  numericId?: number
   name: string
   description: string | null
   condition: string
   status: string
+  adminModerationState?: "DEACTIVATED" | "REMOVED" | null
+  adminModeratedAt?: string | Date | null
+  adminModeratedById?: string | null
   rateOption: string
   createdAt: string | Date
   rentalFee: number

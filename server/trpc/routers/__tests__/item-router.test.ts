@@ -427,6 +427,7 @@ describe("itemRouter", () => {
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
+        $queryRaw: vi.fn().mockResolvedValue([{ adminModerationState: null }]),
         item: { findUnique: findById, findFirst: findById, update: incrementViewCount },
       } as never,
       user: null,
@@ -453,7 +454,7 @@ describe("itemRouter", () => {
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique, update } } as never,
+      prisma: { $queryRaw: vi.fn(), item: { findUnique, update } } as never,
       user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
     })
 
@@ -468,7 +469,7 @@ describe("itemRouter", () => {
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique, update: vi.fn() } } as never,
+      prisma: { $queryRaw: vi.fn(), item: { findUnique, update: vi.fn() } } as never,
       user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
     })
 
@@ -505,7 +506,10 @@ describe("itemRouter", () => {
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique, update } } as never,
+      prisma: {
+        $queryRaw: vi.fn().mockResolvedValue([{ adminModerationState: null }]),
+        item: { findUnique, update },
+      } as never,
       user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
     })
 
@@ -534,7 +538,10 @@ describe("itemRouter", () => {
 
     const caller = itemRouter.createCaller({
       event: { context: {} } as never,
-      prisma: { item: { findUnique, update } } as never,
+      prisma: {
+        $queryRaw: vi.fn().mockResolvedValue([{ adminModerationState: null }]),
+        item: { findUnique, update },
+      } as never,
       user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
     })
 
@@ -544,6 +551,54 @@ describe("itemRouter", () => {
         "This item cannot be deleted because it has active or upcoming transactions. Deactivate the listing instead to preserve system records.",
     })
 
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it("update blocks owner changes when a listing is admin moderated", async () => {
+    const findUnique = vi.fn().mockResolvedValue({
+      lenderId: "owner-1",
+      images: [],
+    })
+    const update = vi.fn()
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        $queryRaw: vi.fn().mockResolvedValue([{ adminModerationState: "DEACTIVATED" }]),
+        item: { findUnique, update },
+      } as never,
+      user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
+    })
+
+    await expect(caller.update({ id: VALID_UUID, name: "Updated name" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message:
+        "This listing was deactivated by an administrator and cannot be changed by the owner.",
+    })
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it("delete blocks owner changes when a listing is admin moderated", async () => {
+    const findUnique = vi.fn().mockResolvedValue({
+      lenderId: "owner-1",
+      transactions: [],
+    })
+    const update = vi.fn()
+
+    const caller = itemRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: {
+        $queryRaw: vi.fn().mockResolvedValue([{ adminModerationState: "REMOVED" }]),
+        item: { findUnique, update },
+      } as never,
+      user: { id: "owner-1", email: "owner@up.edu.ph", name: "Owner" },
+    })
+
+    await expect(caller.delete({ id: VALID_UUID })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message:
+        "This listing was removed by an administrator and can no longer be changed by the owner.",
+    })
     expect(update).not.toHaveBeenCalled()
   })
 
