@@ -1250,10 +1250,25 @@ export const bookingRouter = router({
 
   byId: protectedProcedure.input(bookingIdSchema).query(async ({ ctx, input }) => {
     const bookingPrisma = getBookingPrisma(ctx)
-    const booking = (await bookingPrisma.booking.findUnique({
+    let booking = (await bookingPrisma.booking.findUnique({
       where: { id: input.id },
       include: bookingInclude,
     })) as BookingRecord | null
+
+    // Fallback: Check if input.id is a transaction ID
+    if (!booking) {
+      const transaction = await ctx.prisma.rentalTransaction.findUnique({
+        where: { id: input.id },
+        select: { bookingId: true },
+      })
+
+      if (transaction?.bookingId) {
+        booking = (await bookingPrisma.booking.findUnique({
+          where: { id: transaction.bookingId },
+          include: bookingInclude,
+        })) as BookingRecord | null
+      }
+    }
 
     if (!booking) {
       return null

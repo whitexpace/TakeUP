@@ -17,7 +17,7 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const isAdminVariant = computed(() => props.variant === "admin")
-const userRole = computed(() => props.activeRole ?? "BORROWER")
+const userRole = computed(() => (props.activeRole === "LENDER" ? "LENDER" : "BORROWER"))
 const userTransaction = computed(() =>
   isAdminVariant.value ? null : (props.transaction as TransactionListItem),
 )
@@ -25,7 +25,11 @@ const userTransaction = computed(() =>
 const formatPeso = (value: number) =>
   `₱${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
 
-const formatParticipantName = (user: { firstName: string; lastName: string }, fallback: string) => {
+const formatParticipantName = (
+  user: { firstName: string; lastName: string } | null | undefined,
+  fallback: string,
+) => {
+  if (!user) return fallback
   let first = (user.firstName || "").trim()
   const last = (user.lastName || "").trim()
 
@@ -120,16 +124,12 @@ const createdAtLabel = computed(() =>
 
 const shortTransactionId = computed(() => props.transaction.id.slice(0, 12).toUpperCase())
 
-const detailPath = computed(() =>
-  isAdminVariant.value
-    ? null
-    : props.transaction.bookingId
-      ? `/account/transactions/${props.transaction.bookingId}`
-      : `/account/transactions/${props.transaction.id}`,
-)
+const detailPath = computed(() => {
+  if (isAdminVariant.value) return null
+  const id = props.transaction.bookingId || props.transaction.id
+  return id ? `/account/transactions/${id}` : null
+})
 
-const rootComponent = computed(() => (detailPath.value ? "NuxtLink" : "div"))
-const rootBindings = computed(() => (detailPath.value ? { to: detailPath.value } : {}))
 const rootClass = computed(() => [
   "block overflow-hidden rounded-[16px] border border-cinnamon-ice/20 bg-white font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200",
   detailPath.value ? "cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] group/card" : "",
@@ -159,14 +159,10 @@ const handleOpenChat = async () => {
 </script>
 
 <template>
-  <component :is="rootComponent" v-bind="rootBindings" :class="rootClass">
+  <div v-if="isAdminVariant" :class="rootClass">
     <!-- Top Zone: Header -->
     <div class="border-b border-cinnamon-ice/15 bg-white/50 px-5 py-3">
-      <!-- Admin Header -->
-      <div
-        v-if="isAdminVariant"
-        class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
-      >
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
           <div class="flex min-w-0 items-center gap-2">
             <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
@@ -203,9 +199,76 @@ const handleOpenChat = async () => {
 
         <TransactionStatusBadge :status="transaction.status" :role="activeRole" context="admin" />
       </div>
+    </div>
 
-      <!-- User Header -->
-      <div v-else class="flex items-center justify-between">
+    <!-- Bottom Zone: Content -->
+    <div class="p-5 flex items-center gap-4 relative">
+      <div class="relative shrink-0">
+        <img
+          v-if="transaction.item.thumbnailImage"
+          :src="transaction.item.thumbnailImage"
+          :alt="transaction.item.name"
+          class="w-16 h-16 object-cover rounded-[10px] border border-noble-black/5"
+        />
+        <div
+          v-else
+          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-noble-black/5 flex items-center justify-center"
+        >
+          <svg
+            class="w-6 h-6 text-cinnamon-ice/40"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+        </div>
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+          {{ transaction.item.name }}
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-1.5 text-[10px] text-noble-black/40 font-medium leading-none"
+        >
+          <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>Logged {{ createdAtLabel }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>{{ duration }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>Commission {{ commissionLabel }}</span>
+        </div>
+      </div>
+
+      <div class="shrink-0 text-right">
+        <div class="flex flex-col items-end">
+          <p class="text-[13px] text-noble-black/40 font-medium leading-none mb-1.5">
+            {{ rateLabel }}
+          </p>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-[11px] text-noble-black/40 font-bold uppercase tracking-wider">
+              Total:
+            </span>
+            <span class="text-[16px] font-bold text-burning-orange leading-none">
+              {{ totalLabel }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <NuxtLink v-else :to="detailPath || '#'" :class="rootClass">
+    <!-- Top Zone: Header -->
+    <div class="border-b border-cinnamon-ice/15 bg-white/50 px-5 py-3">
+      <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <span class="text-noble-black text-[14px] font-semibold">
             {{ counterpartName }}
@@ -276,14 +339,9 @@ const handleOpenChat = async () => {
         >
           <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
           <span class="opacity-50 select-none">·</span>
-          <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
-          <span v-else>{{ dateRange }}</span>
+          <span>{{ dateRange }}</span>
           <span class="opacity-50 select-none">·</span>
           <span>{{ duration }}</span>
-          <template v-if="isAdminVariant">
-            <span class="opacity-50 select-none">·</span>
-            <span>Commission {{ commissionLabel }}</span>
-          </template>
         </div>
 
         <div v-if="reviewActions.length" class="mt-2.5 flex flex-wrap gap-3 relative z-10">
@@ -298,7 +356,7 @@ const handleOpenChat = async () => {
         </div>
       </div>
 
-      <div class="shrink-0 z-10 text-right">
+      <div class="shrink-0 text-right">
         <div class="flex flex-col items-end">
           <p class="text-[13px] text-noble-black/40 font-medium leading-none mb-1.5">
             {{ rateLabel }}
@@ -314,5 +372,5 @@ const handleOpenChat = async () => {
         </div>
       </div>
     </div>
-  </component>
+  </NuxtLink>
 </template>

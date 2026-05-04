@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-white rounded-[14px] overflow-hidden border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[220px] max-w-[260px] mx-auto relative group"
+    class="bg-white rounded-[14px] overflow-hidden border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[210px] max-w-[280px] mx-auto relative group"
     :class="canNavigate ? 'cursor-pointer' : ''"
     @click="navigateToDetails"
   >

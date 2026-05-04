@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-white rounded-[14px] overflow-hidden border border-cinnamon-ice/20 flex flex-col h-full w-full min-w-[220px] max-w-[260px] mx-auto animate-pulse"
+    class="bg-white rounded-[14px] overflow-hidden border border-cinnamon-ice/20 flex flex-col h-full w-full min-w-[210px] max-w-[280px] mx-auto animate-pulse"
   >
     <!-- Image Section (Compact: 180px) -->
     <div class="relative h-[180px] w-full bg-noble-black/10 rounded-t-[12px]">

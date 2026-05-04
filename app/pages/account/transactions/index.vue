@@ -515,7 +515,7 @@ onBeforeUnmount(() => {
               <TransactionCard
                 v-else
                 :transaction="entry.transaction"
-                :active-role="activeRole"
+                :active-role="activeRole === 'LENDER' ? 'LENDER' : 'BORROWER'"
                 @write-review="openReviewModal"
               />
             </template>
