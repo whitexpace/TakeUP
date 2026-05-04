@@ -25,6 +25,7 @@ import {
 } from "../review-helpers"
 import { processTransactionRewards } from "../../utils/rewards"
 import { syncRoleRatingForUser } from "../../utils/review-ratings"
+import { toUiTransactionStatus, transactionStatusGroups } from "../../utils/transaction-status"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -64,47 +65,6 @@ const getTransactionThumbnailImage = (item: {
   images?: Array<{ path: string; isPrimary?: boolean }>
 }): string | null =>
   item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
-
-const prismaTransactionStatuses = PrismaTransactionStatus as Record<string, PrismaTransactionStatus>
-const getOptionalTransactionStatus = (name: string) => prismaTransactionStatuses[name]
-const getTransactionStatusGroup = (
-  names: string[],
-  fallback: PrismaTransactionStatus[],
-): PrismaTransactionStatus[] => {
-  const resolved = names
-    .map((name) => getOptionalTransactionStatus(name))
-    .filter((status): status is PrismaTransactionStatus => Boolean(status))
-
-  return resolved.length > 0 ? resolved : fallback
-}
-
-const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
-  PENDING: getTransactionStatusGroup(
-    ["PENDING", "AWAITING_LENDER_APPROVAL"],
-    [PrismaTransactionStatus.PENDING],
-  ),
-  ACTIVE: getTransactionStatusGroup(
-    ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "IN_DISPUTE", "APPEALED"],
-    [PrismaTransactionStatus.PENDING],
-  ),
-  RETURNED: getTransactionStatusGroup(["RETURNED"], [PrismaTransactionStatus.RETURNED]),
-  COMPLETED: [PrismaTransactionStatus.COMPLETED],
-  CANCELLED: getTransactionStatusGroup(
-    ["CANCELLED", "REFUNDED", "FAILED"],
-    [PrismaTransactionStatus.CANCELLED],
-  ),
-  IN_DISPUTE: [PrismaTransactionStatus.IN_DISPUTE, PrismaTransactionStatus.APPEALED],
-}
-
-const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
-  if (statusGroups.PENDING.includes(status)) return "PENDING"
-  if (statusGroups.ACTIVE.includes(status)) return "ACTIVE"
-  if (statusGroups.RETURNED.includes(status)) return "RETURNED"
-  if (statusGroups.COMPLETED.includes(status)) return "COMPLETED"
-  if (statusGroups.CANCELLED.includes(status)) return "CANCELLED"
-  if (statusGroups.IN_DISPUTE.includes(status)) return "IN_DISPUTE"
-  return "PENDING"
-}
 
 type TransactionRecord = {
   id: string
@@ -642,7 +602,7 @@ export const transactionRouter = router({
           : { OR: [{ lenderId: userId }, { borrowerId: userId }] }
 
     const statusWhere: Prisma.RentalTransactionWhereInput = status
-      ? { status: { in: statusGroups[status] } }
+      ? { status: { in: transactionStatusGroups[status] } }
       : {}
 
     const dateWhere: Prisma.RentalTransactionWhereInput =
@@ -681,7 +641,7 @@ export const transactionRouter = router({
     const { status, createdAtFrom, createdAtTo, search, limit, cursor } = input
 
     const statusWhere: Prisma.RentalTransactionWhereInput = status
-      ? { status: { in: statusGroups[status] } }
+      ? { status: { in: transactionStatusGroups[status] } }
       : {}
 
     const createdAtWhere: Prisma.RentalTransactionWhereInput =

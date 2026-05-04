@@ -34,9 +34,9 @@ const adminLinks: AdminLink[] = [
     description: "Review submitted rental disputes and appeals.",
   },
   {
-    label: "System Wallet",
+    label: "Commissions",
     to: "/admin/wallet",
-    description: "Monitor the shared commission wallet for the platform.",
+    description: "Track platform commission revenue and source records.",
   },
 ]
 
