@@ -1,5 +1,5 @@
 <template>
-  <div class="container mx-auto px-4 py-8 pt-16 max-w-7xl">
+  <div class="mx-auto px-4 sm:px-8 lg:px-10 xl:px-12 py-8 pt-16 max-w-[1600px]">
     <!-- Header Section -->
     <div class="mb-10">
       <h1 class="font-rewon text-[40px] text-noble-black leading-tight mb-2">
@@ -9,48 +9,47 @@
         Discover items to rent or borrow near you.
       </p>
 
-      <!-- Search Bar Section -->
-      <div class="mt-6 sm:mt-8 flex items-center gap-2 sm:gap-4 w-full">
-        <!-- Input Container -->
-        <div class="relative flex-1">
-          <!-- Clear Button (X) or Search Icon -->
-          <button
-            v-if="searchInput"
-            class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 focus:outline-none"
-            title="Clear search"
-            @click="clearSearch"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="sm:w-6 sm:h-6 stroke-noble-black/70"
-              stroke-width="1"
+      <!-- Search Bar Section (Modernized) -->
+      <div class="mt-6 sm:mt-8 flex items-center w-full max-w-3xl">
+        <!-- Unified Search Container -->
+        <div
+          class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
+        >
+          <!-- Search Icon / Clear Button -->
+          <div class="flex items-center justify-center w-10 shrink-0">
+            <button
+              v-if="searchInput"
+              class="text-noble-black/30 hover:text-noble-black/60 transition-colors"
+              title="Clear search"
+              @click="clearSearch"
             >
-              <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </button>
-          <div
-            v-else
-            class="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 pointer-events-none"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="sm:w-6 sm:h-6 stroke-noble-black/70"
-              stroke-width="1"
-            >
-              <path
-                d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-              />
-              <path d="M21 21L16.65 16.65" stroke-linecap="round" stroke-linejoin="round" />
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <svg
+              v-else
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-noble-black/30"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
             </svg>
           </div>
 
@@ -58,8 +57,8 @@
           <input
             v-model="searchInput"
             type="text"
-            placeholder="Search for items to rent or buy"
-            class="w-full h-[48px] sm:h-[60px] bg-cream rounded-[12px] sm:rounded-[15px] pl-11 sm:pl-14 pr-4 sm:pr-6 font-geist font-normal text-base sm:text-[20px] text-noble-black placeholder:text-noble-black/70 focus:outline-none border border-transparent focus:border-cinnamon-ice transition-colors"
+            placeholder="Search for items to rent or borrow"
+            class="flex-1 bg-transparent px-2 font-geist font-medium text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
             @focus="onSearchFocus"
             @blur="onSearchBlur"
             @keydown.down.prevent="moveSuggestionHighlight(1)"
@@ -67,33 +66,51 @@
             @keydown.enter.prevent="applySuggestionOrSearch"
           />
 
+          <!-- Integrated Search Button -->
+          <button
+            class="h-9 px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
+            @click="applySearch"
+          >
+            Search
+          </button>
+
+          <!-- Suggestions Dropdown -->
           <div
             v-if="showSuggestions"
-            class="absolute top-full left-0 right-0 mt-2 z-30 rounded-[12px] border border-cinnamon-ice/50 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.12)] overflow-hidden"
+            class="absolute top-full left-0 right-0 mt-2 z-30 rounded-[14px] border border-cinnamon-ice/30 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
           >
             <button
               v-for="(suggestion, index) in searchSuggestions"
               :key="`${suggestion.type}-${suggestion.value}-${index}`"
               type="button"
-              class="w-full px-4 py-3 text-left font-geist text-[14px] text-noble-black hover:bg-cream/80 transition-colors flex items-center justify-between"
+              class="w-full px-5 py-3 text-left font-geist text-[14px] text-noble-black hover:bg-cream/50 transition-colors flex items-center justify-between group"
               :class="index === highlightedSuggestionIndex ? 'bg-cream' : ''"
               @mousedown.prevent="selectSuggestion(suggestion.value)"
             >
-              <span class="truncate">{{ suggestion.label }}</span>
-              <span class="ml-3 text-[11px] uppercase tracking-wide text-noble-black/45">{{
-                suggestion.type
-              }}</span>
+              <div class="flex items-center gap-3">
+                <svg
+                  class="text-noble-black/20 group-hover:text-burning-orange transition-colors"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                <span class="font-medium">{{ suggestion.label }}</span>
+              </div>
+              <span
+                class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-noble-black/5 px-2 py-0.5 rounded"
+                >{{ suggestion.type }}</span
+              >
             </button>
           </div>
         </div>
-
-        <!-- Search Button -->
-        <button
-          class="h-[48px] sm:h-[60px] px-6 sm:px-10 bg-burning-orange text-white rounded-[12px] sm:rounded-[15px] font-geist font-medium text-base sm:text-[20px] hover:bg-blue-estate transition-colors shrink-0 flex items-center justify-center"
-          @click="applySearch"
-        >
-          Search
-        </button>
       </div>
 
       <!-- Results Count -->
@@ -105,10 +122,39 @@
       </p>
     </div>
 
-    <!-- Items Grid -->
+    <!-- User Search Results (Shopee style) -->
+    <div
+      v-if="
+        serverSearchQuery && (isSearchingUsers || (topMatchingUsers && topMatchingUsers.length > 0))
+      "
+      class="mb-10 animate-fade-in"
+    >
+      <div class="flex items-center gap-2 mb-4">
+        <h3
+          class="font-geist font-bold text-noble-black uppercase tracking-wider text-xs opacity-50"
+        >
+          Top Matches
+        </h3>
+        <div class="h-[1px] flex-1 bg-cinnamon-ice/20"></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template v-if="isSearchingUsers">
+          <UserSearchCardSkeleton v-for="i in 3" :key="`user-skeleton-${i}`" />
+        </template>
+        <template v-else>
+          <UserSearchCard
+            v-for="matchingUser in topMatchingUsers"
+            :key="matchingUser.id"
+            v-bind="matchingUser"
+          />
+        </template>
+      </div>
+    </div>
+
+    <!-- Items Grid (Modernized: Fluid & Responsive) -->
     <div
       v-if="cardItems.length > 0 || isLoading"
-      class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6"
+      class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
     >
       <ItemCard
         v-for="item in cardItems"
@@ -125,6 +171,7 @@
         :price="item.price"
         :price-unit="item.priceUnit"
         :owner="item.owner"
+        :owner-username="item.ownerUsername"
         :is-liked="item.isLiked"
       />
 
@@ -208,6 +255,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref, watch } from "vue"
 import type { ItemCardViewModel } from "../../types/item-listing"
+import type { UserSearchResult } from "~/types/user"
 import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
 import { filterListedItemsBySearch } from "../../utils/item-search"
@@ -246,6 +294,18 @@ const serverSearchQuery = ref("")
 const searchTerm = computed(() => searchInput.value.trim())
 const INITIAL_DASHBOARD_PAGE_SIZE = 8
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
+
+// User Search Logic
+const { data: topMatchingUsers, pending: isSearchingUsers } = await useAsyncData(
+  () => `user-search-${serverSearchQuery.value}`,
+  async () => {
+    if (!serverSearchQuery.value) return [] as UserSearchResult[]
+    return await $fetch<UserSearchResult[]>("/api/users/search", {
+      query: { q: serverSearchQuery.value },
+    })
+  },
+  { watch: [serverSearchQuery] },
+)
 
 const clearSearch = () => {
   searchInput.value = ""
@@ -520,3 +580,20 @@ watch(
   { deep: true },
 )
 </script>
+
+<style scoped>
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>

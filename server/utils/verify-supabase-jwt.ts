@@ -18,10 +18,7 @@ export type SupabaseJwtPayload = {
  * Only supports HS256 — returns null for tokens using other algorithms,
  * allowing the caller to fall back to remote verification.
  */
-export function verifySupabaseJwt(
-  token: string,
-  jwtSecret: string,
-): SupabaseJwtPayload | null {
+export function verifySupabaseJwt(token: string, jwtSecret: string): SupabaseJwtPayload | null {
   const parts = token.split(".")
   if (parts.length !== 3) return null
 

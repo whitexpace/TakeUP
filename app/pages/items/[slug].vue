@@ -43,7 +43,19 @@ const fromPage = computed(() => {
   return typeof from === "string" ? from : null
 })
 
+const adminUserId = computed(() => {
+  const id = route.query.adminUserId
+  return typeof id === "string" ? id : null
+})
+
 const backNavigationPath = computed(() => {
+  if (fromPage.value === "admin-user-listings" && adminUserId.value) {
+    return {
+      path: `/admin/users/${adminUserId.value}`,
+      query: { tab: "listings" },
+    }
+  }
+
   if (fromPage.value === "likes") {
     return "/likes"
   }
@@ -52,6 +64,10 @@ const backNavigationPath = computed(() => {
 })
 
 const backNavigationLabel = computed(() => {
+  if (fromPage.value === "admin-user-listings") {
+    return "Back to admin user listings"
+  }
+
   if (fromPage.value === "likes") {
     return "Back to liked items"
   }
@@ -1080,7 +1096,7 @@ onUnmounted(() => {
 
       <div
         v-else-if="error"
-        class="rounded-[28px] border border-cinnamon-ice/50 bg-cream px-6 py-16 text-center"
+        class="rounded-[28px] border border-cinnamon-ice/15 bg-cream px-6 py-16 text-center"
       >
         <h2 class="text-2xl font-bold text-noble-black">Unable to load item</h2>
         <p class="mx-auto mt-3 max-w-md text-sm text-noble-black/60">
@@ -1102,7 +1118,7 @@ onUnmounted(() => {
               <span
                 v-for="category in formattedCategories"
                 :key="category"
-                class="rounded-full border border-cinnamon-ice bg-cream px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-burning-orange"
+                class="rounded-full border border-cinnamon-ice/15 bg-cream px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-burning-orange"
               >
                 {{ category }}
               </span>
@@ -1350,7 +1366,7 @@ onUnmounted(() => {
               <div class="hidden md:grid grid-cols-2 gap-8">
                 <div class="space-y-6">
                   <div
-                    class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm overflow-hidden"
+                    class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm overflow-hidden"
                     @mouseleave="handleCalendarMouseLeave"
                   >
                     <div
@@ -1505,7 +1521,7 @@ onUnmounted(() => {
                         class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                         >Start Time</span
                       ><button
-                        class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                         :disabled="isItemUnavailableForBooking"
                         @click="toggleStartTime"
                       >
@@ -1527,7 +1543,7 @@ onUnmounted(() => {
                       </button>
                       <div
                         v-if="isStartTimeOpen"
-                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                       >
                         <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                           <div
@@ -1549,7 +1565,7 @@ onUnmounted(() => {
                         class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                         >End Time</span
                       ><button
-                        class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                         :disabled="isItemUnavailableForBooking"
                         @click="toggleEndTime"
                       >
@@ -1571,7 +1587,7 @@ onUnmounted(() => {
                       </button>
                       <div
                         v-if="isEndTimeOpen"
-                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                       >
                         <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                           <div
@@ -1595,7 +1611,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div
-                  class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm flex flex-col h-full justify-between"
+                  class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm flex flex-col h-full justify-between"
                 >
                   <div>
                     <div class="flex items-baseline gap-1 mb-4">
@@ -1605,7 +1621,7 @@ onUnmounted(() => {
                       }}</span>
                     </div>
                     <div class="grid grid-cols-2 mb-6 relative">
-                      <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/30" />
+                      <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
                       <div class="flex flex-col gap-1 pr-4">
                         <span
                           class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
@@ -1634,12 +1650,21 @@ onUnmounted(() => {
                   </div>
                   <div>
                     <button
-                      class="w-full py-3 text-white rounded-2xl font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-3 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      :class="
-                        isInBag
-                          ? 'bg-noble-black hover:bg-noble-black/90'
-                          : 'bg-burning-orange hover:bg-blue-estate'
-                      "
+                      class="w-full py-3 rounded-2xl bg-burning-orange text-white font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:brightness-110 shadow-md shadow-burning-orange/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
+                      :disabled="!canSubmitBooking"
+                      @click="submitBookingRequest"
+                    >
+                      {{ requestBookingButtonLabel }}
+                    </button>
+                    <p
+                      class="text-center text-[11px] font-normal mb-3"
+                      :class="bookingFeedbackClass"
+                    >
+                      {{ bookingFeedbackMessage }}
+                    </p>
+
+                    <button
+                      class="w-full py-3 rounded-2xl border border-burning-orange text-burning-orange font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-3"
                       :disabled="!canAddToBag"
                       @click="handleAddToBag"
                     >
@@ -1660,30 +1685,17 @@ onUnmounted(() => {
                       {{ addToBagButtonLabel }}
                     </button>
                     <p
+                      v-if="bagFeedbackMessage"
                       class="text-center text-[11px] font-normal"
                       :class="
-                        bagFeedbackMessage
-                          ? bagFeedbackTone === 'success'
-                            ? 'text-blue-estate'
-                            : 'text-cinnabar-red'
-                          : 'text-noble-black/40'
+                        bagFeedbackTone === 'success' ? 'text-blue-estate' : 'text-cinnabar-red'
                       "
                     >
-                      {{ bagFeedbackMessage || "You won't be charged yet." }}
-                    </p>
-                    <button
-                      class="w-full py-3 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-3"
-                      :disabled="!canSubmitBooking"
-                      @click="submitBookingRequest"
-                    >
-                      {{ requestBookingButtonLabel }}
-                    </button>
-                    <p class="text-center text-[11px] font-normal" :class="bookingFeedbackClass">
-                      {{ bookingFeedbackMessage }}
+                      {{ bagFeedbackMessage }}
                     </p>
                   </div>
                   <div>
-                    <div class="h-px bg-cinnamon-ice/30 mb-4" />
+                    <div class="h-px bg-cinnamon-ice/15 mb-4" />
                     <div class="space-y-3 mb-4">
                       <div class="flex justify-between items-center text-sm text-noble-black/70">
                         <span>
@@ -1697,14 +1709,14 @@ onUnmounted(() => {
                         </span>
                       </div>
                     </div>
-                    <div class="h-px bg-cinnamon-ice/30 mb-4" />
+                    <div class="h-px bg-cinnamon-ice/15 mb-4" />
                     <div class="flex justify-between items-center mb-4">
                       <span class="text-base font-semibold text-noble-black">Total</span
                       ><span class="text-lg font-bold text-noble-black">
                         {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
                       </span>
                     </div>
-                    <div class="h-px bg-cinnamon-ice/30 mb-4" />
+                    <div class="h-px bg-cinnamon-ice/15 mb-4" />
                     <div class="flex items-center gap-2 text-noble-black/40 justify-center">
                       <svg
                         width="14"
@@ -1725,7 +1737,7 @@ onUnmounted(() => {
 
               <!-- 2b. Small Layout (sm to md): Stacked, Collapsible Calendar & Time -->
               <div class="hidden sm:block md:hidden space-y-6">
-                <div class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm">
+                <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
                   <button
                     class="w-full flex items-center justify-between group"
                     @click="isCalendarExpanded = !isCalendarExpanded"
@@ -1749,7 +1761,7 @@ onUnmounted(() => {
                       </p>
                     </div>
                     <div
-                      class="w-10 h-10 rounded-full bg-white/50 border border-cinnamon-ice/30 flex items-center justify-center transition-all group-hover:bg-white group-hover:border-burning-orange/30"
+                      class="w-10 h-10 rounded-full bg-white/50 border border-cinnamon-ice/15 flex items-center justify-center transition-all group-hover:bg-white group-hover:border-burning-orange/30"
                       :class="{
                         'rotate-180 bg-burning-orange/5 !border-burning-orange/20':
                           isCalendarExpanded,
@@ -1781,7 +1793,7 @@ onUnmounted(() => {
                   >
                     <div
                       v-if="isCalendarExpanded"
-                      class="mt-8 pt-6 border-t border-cinnamon-ice/20 space-y-8"
+                      class="mt-8 pt-6 border-t border-cinnamon-ice/15 space-y-8"
                     >
                       <div
                         v-if="isItemUnavailableForBooking"
@@ -1934,7 +1946,7 @@ onUnmounted(() => {
                             class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                             >Start Time</span
                           ><button
-                            class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                             :disabled="isItemUnavailableForBooking"
                             @click="toggleStartTime"
                           >
@@ -1956,7 +1968,7 @@ onUnmounted(() => {
                           </button>
                           <div
                             v-if="isStartTimeOpen"
-                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                           >
                             <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                               <div
@@ -1978,7 +1990,7 @@ onUnmounted(() => {
                             class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                             >End Time</span
                           ><button
-                            class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                             :disabled="isItemUnavailableForBooking"
                             @click="toggleEndTime"
                           >
@@ -2000,7 +2012,7 @@ onUnmounted(() => {
                           </button>
                           <div
                             v-if="isEndTimeOpen"
-                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                           >
                             <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                               <div
@@ -2021,7 +2033,7 @@ onUnmounted(() => {
                     </div>
                   </Transition>
                 </div>
-                <div class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm">
+                <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
                   <div class="flex items-baseline gap-1 mb-4">
                     <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
                     ><span class="text-sm text-noble-black/60 font-medium">{{
@@ -2029,7 +2041,7 @@ onUnmounted(() => {
                     }}</span>
                   </div>
                   <div class="grid grid-cols-2 mb-6 relative">
-                    <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/30" />
+                    <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
                     <div class="flex flex-col gap-1 pr-4">
                       <span
                         class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
@@ -2055,13 +2067,20 @@ onUnmounted(() => {
                       </div>
                     </div>
                   </div>
+
                   <button
-                    class="w-full py-2 text-white rounded-2xl font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    :class="
-                      isInBag
-                        ? 'bg-noble-black hover:bg-noble-black/90'
-                        : 'bg-burning-orange hover:bg-blue-estate'
-                    "
+                    class="w-full py-2 rounded-2xl bg-burning-orange text-white font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:brightness-110 shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    :disabled="!canSubmitBooking"
+                    @click="submitBookingRequest"
+                  >
+                    {{ requestBookingButtonLabel }}
+                  </button>
+                  <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
+                    {{ bookingFeedbackMessage }}
+                  </p>
+
+                  <button
+                    class="w-full py-2 rounded-2xl border border-burning-orange text-burning-orange font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-2.5"
                     :disabled="!canAddToBag"
                     @click="handleAddToBag"
                   >
@@ -2082,28 +2101,16 @@ onUnmounted(() => {
                     {{ addToBagButtonLabel }}
                   </button>
                   <p
+                    v-if="bagFeedbackMessage"
                     class="text-center text-[11px] mb-4 font-normal"
                     :class="
-                      bagFeedbackMessage
-                        ? bagFeedbackTone === 'success'
-                          ? 'text-blue-estate'
-                          : 'text-cinnabar-red'
-                        : 'text-noble-black/40'
+                      bagFeedbackTone === 'success' ? 'text-blue-estate' : 'text-cinnabar-red'
                     "
                   >
-                    {{ bagFeedbackMessage || "You won't be charged yet." }}
+                    {{ bagFeedbackMessage }}
                   </p>
-                  <button
-                    class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
-                    :disabled="!canSubmitBooking"
-                    @click="submitBookingRequest"
-                  >
-                    {{ requestBookingButtonLabel }}
-                  </button>
-                  <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
-                    {{ bookingFeedbackMessage }}
-                  </p>
-                  <div class="h-px bg-cinnamon-ice/30 mb-4" />
+
+                  <div class="h-px bg-cinnamon-ice/15 mb-4" />
                   <div class="space-y-2 mb-4">
                     <div class="flex justify-between items-center text-sm text-noble-black/70">
                       <span>
@@ -2115,14 +2122,14 @@ onUnmounted(() => {
                       </span>
                     </div>
                   </div>
-                  <div class="h-px bg-cinnamon-ice/30 mb-4" />
+                  <div class="h-px bg-cinnamon-ice/15 mb-4" />
                   <div class="flex justify-between items-center mb-4">
                     <span class="text-base font-semibold text-noble-black">Total</span
                     ><span class="text-lg font-bold text-noble-black">
                       {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
                     </span>
                   </div>
-                  <div class="h-px bg-cinnamon-ice/30 mb-4" />
+                  <div class="h-px bg-cinnamon-ice/15 mb-4" />
                   <div class="flex items-center gap-2 text-noble-black/40 justify-center">
                     <svg
                       width="14"
@@ -2143,12 +2150,12 @@ onUnmounted(() => {
 
             <!-- Unified Metadata Container -->
             <div
-              class="mb-10 rounded-2xl border-[0.5px] border-cinnamon-ice bg-white p-7 md:p-8 shadow-sm"
+              class="mb-10 rounded-2xl border-[0.5px] border-cinnamon-ice/15 bg-white p-7 md:p-8 shadow-sm"
             >
               <!-- Top Metadata Row -->
               <div class="grid grid-cols-2 md:grid-cols-4 gap-y-8 md:gap-y-0 items-start">
                 <!-- Status -->
-                <div class="flex flex-col gap-3 pr-4 md:border-r-[0.5px] border-cinnamon-ice/60">
+                <div class="flex flex-col gap-3 pr-4 md:border-r-[0.5px] border-cinnamon-ice/20">
                   <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
                     >Status</span
                   >
@@ -2173,7 +2180,7 @@ onUnmounted(() => {
                 </div>
                 <!-- Condition -->
                 <div
-                  class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/60"
+                  class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
                 >
                   <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
                     >Condition</span
@@ -2186,7 +2193,7 @@ onUnmounted(() => {
                 </div>
                 <!-- Replacement Cost -->
                 <div
-                  class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/60"
+                  class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
                 >
                   <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
                     >Replacement</span
@@ -2204,7 +2211,7 @@ onUnmounted(() => {
                     <span
                       v-for="tag in item.tags"
                       :key="tag"
-                      class="rounded-full border border-cinnamon-ice/60 bg-cinnamon-ice/10 px-2.5 py-0.5 text-[11px] font-medium text-noble-black/60 hover:border-burning-orange/40 hover:bg-burning-orange/5 transition-colors cursor-default"
+                      class="rounded-full border border-cinnamon-ice/20 bg-cinnamon-ice/10 px-2.5 py-0.5 text-[11px] font-medium text-noble-black/60 hover:border-burning-orange/40 hover:bg-burning-orange/5 transition-colors cursor-default"
                     >
                       #{{ tag }}
                     </span>
@@ -2214,7 +2221,7 @@ onUnmounted(() => {
               </div>
 
               <!-- Horizontal Divider -->
-              <div class="my-8 h-[0.5px] bg-cinnamon-ice/60" />
+              <div class="my-8 h-[0.5px] bg-cinnamon-ice/15" />
 
               <!-- Bottom Metadata Row -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -2262,18 +2269,18 @@ onUnmounted(() => {
             </div>
 
             <!-- Description Section -->
-            <div class="border-b border-cinnamon-ice py-8">
+            <div class="border-b border-cinnamon-ice/15 py-8">
               <h2 class="text-lg font-semibold mb-3">Description</h2>
               <p class="text-noble-black/80 text-sm leading-relaxed">{{ item.description }}</p>
             </div>
             <!-- Offers Section -->
-            <div class="border-b border-cinnamon-ice py-8">
+            <div class="border-b border-cinnamon-ice/15 py-8">
               <h2 class="text-lg font-semibold mb-3">What This Item Offers</h2>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div
                   v-for="(offer, idx) in offerHighlights"
                   :key="idx"
-                  class="flex items-center gap-2.5 px-3 py-2 bg-cream rounded-xl border border-cinnamon-ice/20"
+                  class="flex items-center gap-2.5 px-3 py-2 bg-cream rounded-xl border border-cinnamon-ice/15"
                 >
                   <div class="text-burning-orange scale-90 shrink-0">
                     <svg
@@ -2294,7 +2301,7 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div v-if="includedItems.length" class="border-b border-cinnamon-ice py-8 mb-12">
+            <div v-if="includedItems.length" class="border-b border-cinnamon-ice/15 py-8 mb-12">
               <h2 class="text-lg font-semibold mb-3">What's Included</h2>
               <ul class="space-y-2">
                 <li
@@ -2322,8 +2329,60 @@ onUnmounted(() => {
             </div>
 
             <!-- Seller Card -->
+            <NuxtLink
+              v-if="item.lenderUsername"
+              :to="`/profile/${item.lenderUsername}`"
+              class="bg-cream rounded-3xl p-5 border border-cinnamon-ice/15 flex items-center gap-4 mt-16 sm:p-6 sm:gap-6 hover:bg-cinnamon-ice/10 transition-colors group/seller"
+            >
+              <div class="flex items-center gap-4 sm:gap-5">
+                <div
+                  class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-cinnamon-ice flex items-center justify-center text-white text-lg sm:text-xl font-bold shrink-0 group-hover/seller:scale-105 transition-transform"
+                >
+                  {{ ownerInitials || "TU" }}
+                </div>
+                <div class="flex flex-col">
+                  <h3
+                    class="text-base sm:text-lg font-semibold text-noble-black group-hover/seller:text-burning-orange transition-colors"
+                  >
+                    {{ ownerName }}
+                  </h3>
+                  <div class="flex items-center gap-1.5 text-sm">
+                    <div class="flex items-center gap-1 text-burning-orange">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon
+                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                        />
+                      </svg>
+                      <span class="font-bold">{{ ratingLabel }}</span>
+                    </div>
+                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                  </div>
+                  <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
+                    Item owner on TakeUP • View Profile
+                  </p>
+                </div>
+              </div>
+              <div
+                class="ml-auto text-noble-black/20 group-hover/seller:text-burning-orange transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+            </NuxtLink>
             <div
-              class="bg-cream rounded-3xl p-5 border border-cinnamon-ice/30 flex items-center gap-4 mt-16 sm:p-6 sm:gap-6"
+              v-else
+              class="bg-cream rounded-3xl p-5 border border-cinnamon-ice/15 flex items-center gap-4 mt-16 sm:p-6 sm:gap-6"
             >
               <div class="flex items-center gap-4 sm:gap-5">
                 <div
@@ -2357,7 +2416,7 @@ onUnmounted(() => {
           <!-- Sidebar Layout (lg+) -->
           <div class="hidden lg:block space-y-6">
             <div
-              class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm overflow-hidden"
+              class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm overflow-hidden"
               @mouseleave="handleCalendarMouseLeave"
             >
               <div
@@ -2508,7 +2567,7 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >Start Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
@@ -2530,7 +2589,7 @@ onUnmounted(() => {
                 </button>
                 <div
                   v-if="isStartTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
@@ -2550,7 +2609,7 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >End Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
@@ -2572,7 +2631,7 @@ onUnmounted(() => {
                 </button>
                 <div
                   v-if="isEndTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
@@ -2594,13 +2653,13 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm">
+            <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
               <div class="flex items-baseline gap-1 mb-4">
                 <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
                 ><span class="text-sm text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
               </div>
               <div class="grid grid-cols-2 mb-6 relative">
-                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/30" />
+                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
                 <div class="flex flex-col gap-1 pr-4">
                   <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
                     >Start</span
@@ -2625,12 +2684,18 @@ onUnmounted(() => {
                 </div>
               </div>
               <button
-                class="w-full py-2 text-white rounded-2xl font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                :class="
-                  isInBag
-                    ? 'bg-noble-black hover:bg-noble-black/90'
-                    : 'bg-burning-orange hover:bg-blue-estate'
-                "
+                class="w-full py-2 rounded-2xl bg-burning-orange text-white font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:brightness-110 shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                :disabled="!canSubmitBooking"
+                @click="submitBookingRequest"
+              >
+                {{ requestBookingButtonLabel }}
+              </button>
+              <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
+                {{ bookingFeedbackMessage }}
+              </p>
+
+              <button
+                class="w-full py-2 rounded-2xl border border-burning-orange text-burning-orange font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-2.5"
                 :disabled="!canAddToBag"
                 @click="handleAddToBag"
               >
@@ -2651,28 +2716,13 @@ onUnmounted(() => {
                 {{ addToBagButtonLabel }}
               </button>
               <p
+                v-if="bagFeedbackMessage"
                 class="text-center text-[11px] mb-4 font-normal"
-                :class="
-                  bagFeedbackMessage
-                    ? bagFeedbackTone === 'success'
-                      ? 'text-blue-estate'
-                      : 'text-cinnabar-red'
-                    : 'text-noble-black/40'
-                "
+                :class="bagFeedbackTone === 'success' ? 'text-blue-estate' : 'text-cinnabar-red'"
               >
-                {{ bagFeedbackMessage || "You won't be charged yet." }}
+                {{ bagFeedbackMessage }}
               </p>
-              <button
-                class="w-full py-2 rounded-2xl border border-noble-black/10 bg-white text-noble-black font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-cream disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-2.5"
-                :disabled="!canSubmitBooking"
-                @click="submitBookingRequest"
-              >
-                {{ requestBookingButtonLabel }}
-              </button>
-              <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
-                {{ bookingFeedbackMessage }}
-              </p>
-              <div class="h-px bg-cinnamon-ice/30 mb-4" />
+              <div class="h-px bg-cinnamon-ice/15 mb-4" />
               <div class="space-y-2 mb-4">
                 <div class="flex justify-between items-center text-sm text-noble-black/70">
                   <span>
@@ -2684,14 +2734,14 @@ onUnmounted(() => {
                   </span>
                 </div>
               </div>
-              <div class="h-px bg-cinnamon-ice/30 mb-4" />
+              <div class="h-px bg-cinnamon-ice/15 mb-4" />
               <div class="flex justify-between items-center mb-4">
                 <span class="text-base font-semibold text-noble-black">Total</span
                 ><span class="text-lg font-bold text-noble-black">
                   {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
                 </span>
               </div>
-              <div class="h-px bg-cinnamon-ice/30 mb-4" />
+              <div class="h-px bg-cinnamon-ice/15 mb-4" />
               <div class="flex items-center gap-2 text-noble-black/40 justify-center">
                 <svg
                   width="14"
@@ -2807,7 +2857,7 @@ onUnmounted(() => {
     <!-- Sticky Bottom Bar (Mobile < sm) -->
     <div
       v-if="item"
-      class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+      class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice/15 p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
     >
       <div class="flex items-center justify-between gap-4">
         <div class="flex flex-col">
@@ -2896,7 +2946,7 @@ onUnmounted(() => {
           class="fixed inset-0 z-[200] bg-white overflow-y-auto flex flex-col"
         >
           <div
-            class="sticky top-0 bg-white border-b border-cinnamon-ice p-4 flex items-center justify-between z-10"
+            class="sticky top-0 bg-white border-b border-cinnamon-ice/15 p-4 flex items-center justify-between z-10"
           >
             <button class="p-2 -ml-2" @click="closeBookingModal">
               <svg
@@ -2916,7 +2966,7 @@ onUnmounted(() => {
             <div class="w-10" />
           </div>
           <div class="p-6 space-y-8 pb-32">
-            <div class="bg-cream border border-cinnamon-ice rounded-3xl p-6">
+            <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6">
               <h3 class="font-bold text-noble-black mb-3">
                 {{ isItemUnavailableForBooking ? bookingAvailabilityTitle : "Select Dates" }}
               </h3>
@@ -3067,7 +3117,7 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >Start Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
@@ -3089,7 +3139,7 @@ onUnmounted(() => {
                 </button>
                 <div
                   v-if="isStartTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
@@ -3109,7 +3159,7 @@ onUnmounted(() => {
                   class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
                   >End Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
@@ -3131,7 +3181,7 @@ onUnmounted(() => {
                 </button>
                 <div
                   v-if="isEndTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
@@ -3153,13 +3203,13 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div class="bg-cream border border-cinnamon-ice rounded-3xl p-6 shadow-sm">
+            <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
               <div class="flex items-baseline gap-1 mb-4">
                 <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
                 ><span class="text-sm text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
               </div>
               <div class="grid grid-cols-2 mb-6 relative">
-                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/30" />
+                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
                 <div class="flex flex-col gap-1 pr-4">
                   <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
                     >Start</span
@@ -3183,7 +3233,7 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-              <div class="h-px bg-cinnamon-ice/30 mb-4" />
+              <div class="h-px bg-cinnamon-ice/15 mb-4" />
               <div class="space-y-2 mb-4">
                 <div class="flex justify-between items-center text-sm text-noble-black/70">
                   <span>
@@ -3195,7 +3245,7 @@ onUnmounted(() => {
                   </span>
                 </div>
               </div>
-              <div class="h-px bg-cinnamon-ice/30 mb-4" />
+              <div class="h-px bg-cinnamon-ice/15 mb-4" />
               <div class="flex justify-between items-center mb-4">
                 <span class="text-base font-semibold text-noble-black">Total</span
                 ><span class="text-lg font-bold text-noble-black">
@@ -3207,7 +3257,7 @@ onUnmounted(() => {
           <!-- Modal Footer (Confirm) -->
           <div
             v-if="hasBookingSelection"
-            class="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-cinnamon-ice flex justify-center"
+            class="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-cinnamon-ice/15 flex justify-center"
           >
             <button
               class="w-full py-4 bg-burning-orange text-white rounded-2xl font-bold text-lg"

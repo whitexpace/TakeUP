@@ -3,14 +3,27 @@
     <!-- Main Reply Block -->
     <div class="flex items-start gap-3">
       <!-- User Avatar -->
-      <UserAvatar :avatar-url="reply.user.avatar" :user-name="reply.user.name" size="sm" />
+      <NuxtLink :to="`/profile/${reply.user.username}`" class="group/avatar" @click.stop>
+        <UserAvatar
+          :avatar-url="reply.user.avatar"
+          :user-name="reply.user.name"
+          size="sm"
+          class="group-hover/avatar:scale-105 transition-transform"
+        />
+      </NuxtLink>
 
       <div class="flex flex-col flex-1">
         <!-- Reply Bubble -->
         <div
           class="bg-white rounded-[20px] p-4 border border-cinnamon-ice/5 shadow-sm group-hover/reply:border-cinnamon-ice/20 transition-all duration-300"
         >
-          <span class="text-[13px] font-bold text-noble-black">{{ reply.user.name }}</span>
+          <NuxtLink
+            :to="`/profile/${reply.user.username}`"
+            class="text-[13px] font-bold text-noble-black hover:text-burning-orange transition-colors"
+            @click.stop
+          >
+            {{ reply.user.name }}
+          </NuxtLink>
           <p class="text-[14px] text-noble-black/70 mt-1 leading-relaxed">{{ reply.text }}</p>
         </div>
 

@@ -49,7 +49,13 @@ export const KNOWN_SIDEBAR_DB_CATEGORIES = [
 export const uiCategoryFilterSchema = z.union([itemCategorySchema, z.literal(UI_OTHERS_SENTINEL)])
 
 export const itemAvailabilityStatusSchema = z.enum(["AVAILABLE", "RENTED"])
-export const itemStatusSchema = z.enum(["AVAILABLE", "RENTED", "DEACTIVATED", "DELETED"])
+export const itemStatusSchema = z.enum([
+  "AVAILABLE",
+  "UNAVAILABLE",
+  "RENTED",
+  "DEACTIVATED",
+  "DELETED",
+])
 export const rateOptionSchema = z.enum(["PER_HOUR", "PER_DAY"])
 
 const dedupe = <T>(items: T[]) => Array.from(new Set(items))

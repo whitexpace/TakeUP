@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  hasAuthorizationHeader,
-  hasSessionCookie,
-  mergeVaryHeader,
-} from "../request-security-core"
+import { hasAuthorizationHeader, hasSessionCookie, mergeVaryHeader } from "../request-security-core"
 
 describe("request-security helpers", () => {
   it("detects bearer authorization headers", () => {

@@ -1,7 +1,11 @@
 import type { H3Event } from "h3"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
-import { hasViewerCredentials, setPrivateNoStoreApiHeaders, setPublicSWRApiHeaders } from "../utils/request-security"
+import {
+  hasViewerCredentials,
+  setPrivateNoStoreApiHeaders,
+  setPublicSWRApiHeaders,
+} from "../utils/request-security"
 
 async function fetchRequests(event: H3Event) {
   const caller = appRouter.createCaller(await createContext(event))

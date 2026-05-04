@@ -1,11 +1,6 @@
 import { TRPCError } from "@trpc/server"
-import type {
-  ItemCategory,
-  ItemCondition,
-  ItemStatus,
-  Prisma,
-  TransactionStatus,
-} from "@prisma/client"
+import type { ItemCategory, ItemCondition, ItemStatus } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -38,6 +33,7 @@ import { expireActiveBoosts } from "../../utils/rewards"
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
 import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
+import { NON_TERMINAL_TRANSACTION_STATUSES } from "../../utils/admin-listings"
 
 const SEARCH_SCAN_LIMIT = 2000
 const FEED_RANKING_SCAN_LIMIT = 2000
@@ -104,13 +100,6 @@ const itemVisibilityBookings = {
   },
 } satisfies Prisma.BookingFindManyArgs
 
-const TERMINAL_TRANSACTION_STATUSES = [
-  "COMPLETED",
-  "CANCELLED",
-  "REFUNDED",
-  "FAILED",
-] as const satisfies ReadonlyArray<TransactionStatus>
-
 const myListingsWithDisputes = {
   ...itemWithTaxonomy,
   transactions: {
@@ -142,6 +131,8 @@ type ItemWithListingDisputes = Prisma.ItemGetPayload<{
 type ItemWithUserLike = ItemWithTaxonomy & {
   likes?: Array<{ id: string }>
 }
+
+type RouterItemStatus = (typeof itemStatusSchema.enum)[keyof typeof itemStatusSchema.enum]
 
 const itemSearchSelect = {
   id: true,
@@ -382,12 +373,12 @@ const mapItemTaxonomy = (
     transactionReviews: _transactionReviews,
     ...rest
   } = item
-  const lenderUser = lender.user
-  const lenderFullName =
-    [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
-    null
-  const lenderUsername = lenderUser.username || null
-  const ownerName = lenderUsername || lenderFullName || lenderUser.email || item.lenderId
+  const lenderUser = lender?.user
+  const lenderFullName = lenderUser
+    ? [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ")
+    : null
+  const lenderUsername = lenderUser?.username || null
+  const ownerName = lenderUsername || lenderFullName || lenderUser?.email || item.lenderId
   const orderedPhotos =
     images?.map((entry) => entry.path) ??
     item.photos ??
@@ -453,6 +444,29 @@ const mapMyListing = (item: ItemWithListingDisputes) => ({
   displayStatus: getMyListingDisplayStatus(item),
 })
 
+const getAdminModerationLockMessage = (state: "DEACTIVATED" | "REMOVED") =>
+  state === "REMOVED"
+    ? "This listing was removed by an administrator and can no longer be changed by the owner."
+    : "This listing was deactivated by an administrator and cannot be changed by the owner."
+
+const getItemAdminModerationState = async (
+  prisma: { $queryRaw: <T = unknown>(query: Prisma.Sql) => Promise<T> },
+  itemId: string,
+) => {
+  const rows = await prisma.$queryRaw<
+    Array<{ adminModerationState: "DEACTIVATED" | "REMOVED" | null }>
+  >(
+    Prisma.sql`
+      SELECT "adminModerationState"
+      FROM "Item"
+      WHERE "id" = ${itemId}
+      LIMIT 1
+    `,
+  )
+
+  return rows[0]?.adminModerationState ?? null
+}
+
 const buildOrderedImagePaths = (thumbnailImage?: string | null, photos?: string[]) => {
   if (thumbnailImage === undefined && photos === undefined) {
     return undefined
@@ -517,8 +531,8 @@ type ListWhereFilters = {
   search?: string
   likedOnly?: boolean
   ownedOnly?: boolean
-  status?: ItemStatus
-  statuses?: ItemStatus[]
+  status?: RouterItemStatus
+  statuses?: RouterItemStatus[]
   // May contain real DB categories or the UI-only "OTHERS" sentinel
   categories?: Array<ItemCategory | typeof UI_OTHERS_SENTINEL>
   tags?: string[]
@@ -555,10 +569,10 @@ const buildListWhere = (
   const shouldApplyPublicVisibility = !ownedOnly
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
-    ? status
+    ? (status as ItemStatus)
     : statuses?.length
-      ? { in: statuses }
-      : { not: "DELETED" }
+      ? { in: statuses as ItemStatus[] }
+      : { not: "DELETED" as ItemStatus }
 
   // Split out the OTHERS sentinel from real DB category values
   const wantsOthers = rawCategories?.includes(UI_OTHERS_SENTINEL) ?? false
@@ -1187,7 +1201,7 @@ export const itemRouter = router({
           name: input.name,
           description: input.description ?? null,
           condition: input.condition,
-          status: input.status,
+          status: input.status as ItemStatus,
           rateOption: input.rateOption,
           rentalFee: input.rentalFee,
           replacementCost: input.replacementCost ?? null,
@@ -1225,12 +1239,19 @@ export const itemRouter = router({
         },
         include: itemWithTaxonomy,
       })
-      .then(mapItemTaxonomy)
+      .then((item) => mapItemTaxonomy(item as ItemWithUserLike))
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
     await expireActiveBoosts(ctx.prisma)
     const now = new Date()
+    const viewer = ctx.user
+      ? await ctx.prisma.user.findUnique({
+          where: { id: ctx.user.id },
+          select: { accountType: true },
+        })
+      : null
+    const isAdmin = viewer?.accountType === "ADMIN"
     const itemInclude = {
       ...buildPublicItemInclude(ctx.user?.id ?? null),
       transactionReviews: {
@@ -1245,20 +1266,24 @@ export const itemRouter = router({
     } satisfies Prisma.ItemInclude
 
     const item = await ctx.prisma.item.findFirst({
-      where: {
-        id: input.id,
-        OR: [
-          { lender: { user: { status: "ACTIVE" } } },
-          ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
-        ],
-      },
+      where: isAdmin
+        ? { id: input.id }
+        : {
+            id: input.id,
+            OR: [
+              { lender: { user: { status: "ACTIVE" } } },
+              ...(ctx.user ? [{ lenderId: ctx.user.id }] : []),
+            ],
+          },
       include: itemInclude,
     })
 
     if (!item) return null
 
     const isOwner = ctx.user?.id === item.lenderId
-    if (!isOwner && !isPublicVisibleItem(item, now)) return null
+    const adminModerationState = await getItemAdminModerationState(ctx.prisma, item.id)
+    if (!isAdmin && adminModerationState === "REMOVED") return null
+    if (!isOwner && !isAdmin && !isPublicVisibleItem(item, now)) return null
 
     // Increment view count without delaying the item detail response.
     const updateItem = (
@@ -1313,7 +1338,15 @@ export const itemRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to update this item." })
     }
 
-    const { id, availability, categories, tags, thumbnailImage, photos, ...data } = input
+    const adminModerationState = await getItemAdminModerationState(ctx.prisma, input.id)
+    if (adminModerationState) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: getAdminModerationLockMessage(adminModerationState),
+      })
+    }
+
+    const { id, availability, categories, tags, thumbnailImage, photos, status, ...data } = input
     const imageWrites = buildUpdateImageWrites(thumbnailImage, photos)
     const nextImageUrls = new Set(buildOrderedImagePaths(thumbnailImage, photos) ?? [])
     const removedImageUrls = existing.images
@@ -1325,6 +1358,7 @@ export const itemRouter = router({
         where: { id },
         data: {
           ...data,
+          ...(status ? { status: status as ItemStatus } : {}),
           ...(availability
             ? {
                 availability: {
@@ -1364,7 +1398,7 @@ export const itemRouter = router({
         },
         include: itemWithTaxonomy,
       })
-      .then(mapItemTaxonomy)
+      .then((item) => mapItemTaxonomy(item as ItemWithUserLike))
 
     void removeItemImagesFromStorage(removedImageUrls, {
       bucket: useRuntimeConfig(ctx.event).public.itemImageBucket,
@@ -1383,7 +1417,7 @@ export const itemRouter = router({
         transactions: {
           where: {
             status: {
-              notIn: [...TERMINAL_TRANSACTION_STATUSES],
+              in: [...NON_TERMINAL_TRANSACTION_STATUSES],
             },
           },
           select: { id: true },
@@ -1398,6 +1432,14 @@ export const itemRouter = router({
 
     if (existing.lenderId !== ctx.user.id) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed to delete this item." })
+    }
+
+    const adminModerationState = await getItemAdminModerationState(ctx.prisma, input.id)
+    if (adminModerationState) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: getAdminModerationLockMessage(adminModerationState),
+      })
     }
 
     if (existing.transactions.length > 0) {

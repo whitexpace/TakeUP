@@ -38,13 +38,13 @@
     >
       <div
         v-if="isOpen"
-        class="absolute z-[100] mt-2 w-[290px] bg-white border border-cinnamon-ice/30 rounded-[20px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] p-5 font-geist"
+        class="absolute z-[100] mt-2 w-[260px] right-0 sm:left-0 bg-white border border-cinnamon-ice/30 rounded-[20px] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.12)] p-4 font-geist"
       >
         <!-- Calendar Header -->
-        <div class="flex items-center justify-between mb-5 px-1">
+        <div class="flex items-center justify-between mb-4 px-1">
           <button
             type="button"
-            class="p-2 hover:bg-cream rounded-xl text-noble-black/40 hover:text-burning-orange transition-all duration-300"
+            class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="prevMonth"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -57,13 +57,13 @@
             </svg>
           </button>
 
-          <h4 class="font-bold text-[15px] text-noble-black tracking-tight">
+          <h4 class="font-bold text-[14px] text-noble-black tracking-tight">
             {{ monthNames[currentMonth] }} {{ currentYear }}
           </h4>
 
           <button
             type="button"
-            class="p-2 hover:bg-cream rounded-xl text-noble-black/40 hover:text-burning-orange transition-all duration-300"
+            class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="nextMonth"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,7 +78,7 @@
         </div>
 
         <!-- Days Header -->
-        <div class="grid grid-cols-7 mb-3">
+        <div class="grid grid-cols-7 mb-2">
           <div
             v-for="day in ['S', 'M', 'T', 'W', 'T', 'F', 'S']"
             :key="day"
@@ -93,12 +93,12 @@
           <div
             v-for="(day, index) in calendarDays"
             :key="index"
-            class="flex items-center justify-center h-9"
+            class="flex items-center justify-center h-8"
           >
             <button
               v-if="day"
               type="button"
-              class="w-9 h-9 flex items-center justify-center rounded-xl text-[13px] transition-all duration-300 relative group"
+              class="w-8 h-8 flex items-center justify-center rounded-lg text-[12px] transition-all duration-300 relative group"
               :class="[
                 isDateDisabled(day)
                   ? 'text-noble-black/20 cursor-not-allowed'
@@ -113,7 +113,7 @@
               <!-- Today Indicator Dot -->
               <div
                 v-if="isToday(day)"
-                class="absolute bottom-1.5 w-1 h-1 rounded-full"
+                class="absolute bottom-1 w-1 h-1 rounded-full"
                 :class="isSelected(day) ? 'bg-white/60' : 'bg-burning-orange/40'"
               />
             </button>

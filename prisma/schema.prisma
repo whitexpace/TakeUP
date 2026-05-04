@@ -40,6 +40,7 @@ enum ItemAvailabilityStatus {
 
 enum ItemStatus {
   AVAILABLE
+  UNAVAILABLE
   RENTED
   DEACTIVATED
   DELETED
@@ -274,33 +275,43 @@ enum ItemBoostStatus {
   CANCELLED
 }
 
+enum AdminItemModerationState {
+  DEACTIVATED
+  REMOVED
+}
+
 model Item {
-  id               String        @id @default(uuid())
-  numericId        Int           @unique @default(autoincrement())
-  name             String
-  description      String?
-  condition        ItemCondition
-  status           ItemStatus    @default(AVAILABLE)
-  rateOption       RateOption    @default(PER_DAY)
-  createdAt        DateTime      @default(now())
-  rentalFee        Int
-  replacementCost  Int?
-  freeToBorrow     Boolean
-  whatItemOffers   String?
-  whatIsIncluded   String?
-  knownIssues      String?
-  usageLimitations String?
-  isTrending       Boolean       @default(false)
-  viewCount        Int           @default(0)
-  bookingCount     Int           @default(0)
-  likeCount        Int           @default(0)
-  rating           Float         @default(0)
-  boostScore       Int           @default(0)
-  boostExpiresAt   DateTime?
-  lenderId         String
-  borrowerId       String?
+  id                   String                    @id @default(uuid())
+  numericId            Int                       @unique @default(autoincrement())
+  name                 String
+  description          String?
+  condition            ItemCondition
+  status               ItemStatus                @default(AVAILABLE)
+  rateOption           RateOption                @default(PER_DAY)
+  createdAt            DateTime                  @default(now())
+  rentalFee            Int
+  replacementCost      Int?
+  freeToBorrow         Boolean
+  whatItemOffers       String?
+  whatIsIncluded       String?
+  knownIssues          String?
+  usageLimitations     String?
+  isTrending           Boolean                   @default(false)
+  viewCount            Int                       @default(0)
+  bookingCount         Int                       @default(0)
+  likeCount            Int                       @default(0)
+  rating               Float                     @default(0)
+  boostScore           Int                       @default(0)
+  boostExpiresAt       DateTime?
+  lenderId             String
+  borrowerId           String?
+  adminModerationState AdminItemModerationState?
+  adminModeratedById   String?
+  adminModeratedAt     DateTime?                 @db.Timestamptz(6)
 
   borrower           Borrower?            @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
+  adminModeratedBy   User?                @relation("admin_moderated_items", fields: [adminModeratedById], references: [id], onDelete: SetNull)
+  adminActionLogs    AdminActionLog[]     @relation("admin_action_logs_target_item_idToItem")
   lender             Lender               @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
   availability       ItemAvailability[]
   bookings           Booking[]
@@ -317,6 +328,8 @@ model Item {
   @@index([lenderId])
   @@index([borrowerId])
   @@index([numericId])
+  @@index([adminModerationState, createdAt(sort: Desc)])
+  @@index([adminModeratedById])
 }
 
 model Booking {
@@ -500,6 +513,8 @@ model User {
   status                            UserStatus
   points                            Int                        @default(0)
   admin                             Admin?
+  adminActionLogs                   AdminActionLog[]           @relation("admin_action_logs_admin_user_idToUser")
+  adminModeratedItems               Item[]                     @relation("admin_moderated_items")
   appNotificationsReceived          AppNotification[]          @relation("app_notifications_recipient_user_idToUser")
   appNotificationsSent              AppNotification[]          @relation("app_notifications_actor_user_idToUser")
   borrower                          Borrower?
@@ -527,6 +542,28 @@ model User {
   sentMessages                      Message[]
   wallet                            Wallet?
   walletTransactions                WalletTransaction[]
+}
+
+model AdminActionLog {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  adminUserId String   @map("admin_user_id")
+  actionType  String   @map("action_type")
+  targetType  String   @map("target_type")
+  targetId    String   @map("target_id")
+  targetLabel String?  @map("target_label")
+  description String?
+  metadata    Json     @default("{}")
+  itemId      String?  @map("item_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  adminUser User  @relation("admin_action_logs_admin_user_idToUser", fields: [adminUserId], references: [id], onDelete: Cascade)
+  item      Item? @relation("admin_action_logs_target_item_idToItem", fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId, createdAt(sort: Desc)])
+  @@index([targetType, createdAt(sort: Desc)])
+  @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@index([itemId, createdAt(sort: Desc)])
+  @@map("admin_action_logs")
 }
 
 model Wallet {

@@ -24,9 +24,10 @@
           </aside>
 
           <div class="flex-1 min-w-0 flex flex-col gap-8">
-            <div class="flex flex-col gap-1">
-              <h1 class="font-rewon text-[42px] text-noble-black leading-tight">Community Feed</h1>
-              <p class="font-geist font-normal text-[18px] text-noble-black/60">
+            <div class="flex flex-col">
+              <h1 class="text-[28px] font-bold text-gray-900 leading-tight">Community Feed</h1>
+              <div class="h-[2px] w-10 bg-burning-orange rounded-full mt-2"></div>
+              <p class="mt-2 text-[14px] text-gray-400">
                 Post what you need and receive offers directly from the UPC community
               </p>
             </div>
@@ -55,16 +56,16 @@
               </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2">
               <button
                 v-for="filter in availableFilters"
                 :key="filter.value"
                 type="button"
-                class="rounded-full px-6 py-2 text-[14px] font-bold transition-all"
+                class="px-4 py-1.5 rounded-full text-[13px] font-medium transition-all border-[1.5px]"
                 :class="
                   activeFilter === filter.value
-                    ? 'border border-blue-estate/10 bg-blue-estate/5 text-blue-estate'
-                    : 'border border-cinnamon-ice/30 bg-cream text-noble-black/60 hover:border-cinnamon-ice/45 hover:text-noble-black/80'
+                    ? 'bg-burning-orange/10 border-burning-orange/30 text-burning-orange'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 "
                 @click="activeFilter = filter.value"
               >
@@ -72,11 +73,8 @@
               </button>
             </div>
 
-            <div
-              v-if="isLoadingFeed"
-              class="rounded-[32px] border border-cinnamon-ice/20 bg-cream px-8 py-16 text-center text-[15px] text-noble-black/50"
-            >
-              Loading live community requests...
+            <div v-if="isLoadingFeed" class="flex flex-col gap-6">
+              <CommunityPostCardSkeleton v-for="i in 3" :key="`feed-skeleton-${i}`" />
             </div>
 
             <div v-else-if="sortedRequests.length > 0" class="flex flex-col gap-6">
@@ -229,6 +227,7 @@ definePageMeta({ layout: false })
 type ApiCommunityMember = {
   profileId: number
   userId: string
+  username: string
   name: string
   avatar: string
 }
@@ -471,6 +470,7 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
 const normalizeMember = (member: ApiCommunityMember): CommunityMember => ({
   profileId: Number(member.profileId),
   userId: member.userId,
+  username: member.username,
   name: member.name,
   avatar: member.avatar || "",
 })
@@ -555,13 +555,32 @@ const getAuthHeaders = async () => {
   }
 }
 
-const enumerateRequestedDates = (startDate: string, endDate: string) => {
+const enumerateRequestedDates = (
+  startDate: string,
+  startTime: string,
+  endDate: string,
+  endTime: string,
+) => {
+  const start = new Date(`${startDate}T${startTime}`)
+  const end = new Date(`${endDate}T${endTime}`)
+
+  if (startDate === endDate) {
+    return [start.toISOString(), end.toISOString()]
+  }
+
   const dates: string[] = []
   const cursor = new Date(`${startDate}T00:00:00`)
-  const end = new Date(`${endDate}T00:00:00`)
+  const endDay = new Date(`${endDate}T00:00:00`)
 
-  while (cursor.getTime() <= end.getTime()) {
-    dates.push(new Date(cursor).toISOString())
+  while (cursor.getTime() <= endDay.getTime()) {
+    const currentDayTime = cursor.getTime()
+    if (currentDayTime === new Date(`${startDate}T00:00:00`).getTime()) {
+      dates.push(start.toISOString())
+    } else if (currentDayTime === endDay.getTime()) {
+      dates.push(end.toISOString())
+    } else {
+      dates.push(new Date(cursor).toISOString())
+    }
     cursor.setDate(cursor.getDate() + 1)
   }
 
@@ -721,7 +740,12 @@ const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
       body: {
         itemNeeded: payload.itemNeeded,
         referenceImageUrl: payload.referenceImageUrl ?? null,
-        requestedDates: enumerateRequestedDates(payload.startDate, payload.endDate),
+        requestedDates: enumerateRequestedDates(
+          payload.startDate,
+          payload.startTime,
+          payload.endDate,
+          payload.endTime,
+        ),
         priceRange: [payload.minimumPrice, payload.maximumPrice],
         description: payload.description,
         status: "OPEN",

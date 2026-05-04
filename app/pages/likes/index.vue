@@ -326,57 +326,63 @@ watch(
 <template>
   <main class="custom-main-scrollbar min-h-screen overflow-y-auto bg-white">
     <div class="container mx-auto max-w-7xl px-4 py-8 pt-20 sm:pt-24">
-      <div class="mb-7">
+      <div class="mb-8">
         <h1 class="font-geist text-[36px] font-bold leading-tight text-noble-black">Liked Items</h1>
         <p class="mt-1 font-geist text-[20px] text-noble-black/70">
           Review and manage items you like
         </p>
       </div>
 
-      <div class="flex w-full items-center gap-2 sm:gap-4">
-        <div class="relative flex-1">
-          <button
-            v-if="searchInput"
-            class="absolute left-4 top-1/2 -translate-y-1/2 focus:outline-none"
-            title="Clear search"
-            @click="clearSearch"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="stroke-noble-black/70 sm:h-6 sm:w-6"
-              stroke-width="1"
+      <!-- Search Bar Section (Modernized to match Dashboard) -->
+      <div class="mb-8 flex items-center w-full max-w-3xl">
+        <!-- Unified Search Container -->
+        <div
+          class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
+        >
+          <!-- Search Icon / Clear Button -->
+          <div class="flex items-center justify-center w-10 shrink-0">
+            <button
+              v-if="searchInput"
+              class="text-noble-black/30 hover:text-noble-black/60 transition-colors"
+              title="Clear search"
+              @click="clearSearch"
             >
-              <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </button>
-          <div v-else class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="stroke-noble-black/70 sm:h-6 sm:w-6"
-              stroke-width="1"
-            >
-              <path
-                d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-              />
-              <path d="M21 21L16.65 16.65" stroke-linecap="round" stroke-linejoin="round" />
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <svg
+              v-else
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-noble-black/30"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
             </svg>
           </div>
 
+          <!-- Search Input -->
           <input
             v-model="searchInput"
             type="text"
-            placeholder="Search for your liked item..."
-            class="h-[48px] w-full rounded-[12px] border border-transparent bg-cream pl-11 pr-4 font-geist text-base text-noble-black placeholder:text-noble-black/70 transition-colors focus:border-cinnamon-ice focus:outline-none sm:h-[60px] sm:rounded-[15px] sm:pl-14 sm:pr-6 sm:text-[20px]"
+            placeholder="Search for your liked items..."
+            class="flex-1 bg-transparent px-2 font-geist font-medium text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
             @focus="onSearchFocus"
             @blur="onSearchBlur"
             @keydown.down.prevent="moveSuggestionHighlight(1)"
@@ -384,66 +390,119 @@ watch(
             @keydown.enter.prevent="applySuggestionOrSearch"
           />
 
+          <!-- Integrated Search Button -->
+          <button
+            class="h-9 px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
+            @click="applySearch"
+          >
+            Search
+          </button>
+
+          <!-- Suggestions Dropdown -->
           <div
             v-if="showSuggestions"
-            class="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-[12px] border border-cinnamon-ice/50 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.12)]"
+            class="absolute top-full left-0 right-0 mt-2 z-30 rounded-[14px] border border-cinnamon-ice/30 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] overflow-hidden"
           >
             <button
               v-for="(suggestion, index) in searchSuggestions"
               :key="`${suggestion.type}-${suggestion.value}-${index}`"
               type="button"
-              class="flex w-full items-center justify-between px-4 py-3 text-left font-geist text-[14px] text-noble-black transition-colors hover:bg-cream/80"
+              class="w-full px-5 py-3 text-left font-geist text-[14px] text-noble-black hover:bg-cream/50 transition-colors flex items-center justify-between group"
               :class="index === highlightedSuggestionIndex ? 'bg-cream' : ''"
               @mousedown.prevent="selectSuggestion(suggestion.value)"
             >
-              <span class="truncate">{{ suggestion.label }}</span>
-              <span class="ml-3 text-[11px] uppercase tracking-wide text-noble-black/45">{{
-                suggestion.type
-              }}</span>
+              <div class="flex items-center gap-3">
+                <svg
+                  class="text-noble-black/20 group-hover:text-burning-orange transition-colors"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                <span class="font-medium">{{ suggestion.label }}</span>
+              </div>
+              <span
+                class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-noble-black/5 px-2 py-0.5 rounded"
+                >{{ suggestion.type }}</span
+              >
             </button>
           </div>
         </div>
-
-        <button
-          class="flex h-[48px] shrink-0 items-center justify-center rounded-[12px] bg-burning-orange px-6 font-geist text-base font-medium text-white transition-colors hover:bg-blue-estate sm:h-[60px] sm:rounded-[15px] sm:px-10 sm:text-[20px]"
-          @click="applySearch"
-        >
-          Search
-        </button>
       </div>
 
-      <div class="mt-4 flex flex-wrap items-center gap-3">
+      <!-- Sophisticated Filter Pills (Two-pill layout) -->
+      <div class="flex items-center gap-3 mb-4">
+        <!-- All Pill -->
         <button
-          class="rounded-full px-5 py-2 font-geist text-[14px] transition-colors"
+          class="px-5 py-2.5 rounded-full font-geist text-[13px] font-bold transition-all border-[1.5px] whitespace-nowrap"
           :class="
             selectedCategory === 'ALL'
-              ? 'bg-burning-orange text-white'
-              : 'border border-cinnamon-ice bg-white text-noble-black/75 hover:bg-cream'
+              ? 'bg-burning-orange border-burning-orange text-white shadow-sm'
+              : 'bg-white border-noble-black/10 text-noble-black/60 hover:border-burning-orange/30 hover:bg-burning-orange/5'
           "
           @click="clearFilters"
         >
-          All
+          All Items
         </button>
 
-        <select
-          v-model="selectedCategory"
-          class="rounded-full border border-cinnamon-ice bg-white px-4 py-2 font-geist text-[14px] text-noble-black/75 focus:outline-none"
-        >
-          <option value="ALL">Category</option>
-          <option v-for="category in categoryOptions" :key="category.value" :value="category.value">
-            {{ category.label }}
-          </option>
-        </select>
+        <!-- Categories Dropdown Pill -->
+        <div class="relative">
+          <select
+            v-model="selectedCategory"
+            class="appearance-none px-5 pr-10 py-2.5 rounded-full font-geist text-[13px] font-bold transition-all border-[1.5px] bg-white cursor-pointer focus:outline-none min-w-[140px]"
+            :class="
+              selectedCategory !== 'ALL'
+                ? 'bg-burning-orange border-burning-orange text-white shadow-sm'
+                : 'border-noble-black/10 text-noble-black/60 hover:border-burning-orange/30 hover:bg-burning-orange/5'
+            "
+          >
+            <option value="ALL">All Categories</option>
+            <option
+              v-for="category in categoryOptions"
+              :key="category.value"
+              :value="category.value"
+              class="text-noble-black bg-white"
+            >
+              {{ category.label }}
+            </option>
+          </select>
+          <!-- Custom Chevron Icon -->
+          <div
+            class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+            :class="selectedCategory !== 'ALL' ? 'text-white' : 'text-noble-black/40'"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
+        </div>
       </div>
 
-      <p class="mt-3 font-geist text-[14px] text-noble-black/50">
+      <!-- Results Count -->
+      <p class="font-geist text-[14px] text-noble-black/50 mb-6">
         {{ likedItemsCount }} {{ likedItemsCount === 1 ? "liked item" : "liked items" }}
       </p>
 
-      <div class="mt-6">
+      <div class="">
         <div
           v-if="cardItems.length > 0 || isLoading"
-          class="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-6 md:grid-cols-2 lg:grid-cols-4"
+          class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
         >
           <ItemCard
             v-for="item in cardItems"
@@ -461,6 +520,7 @@ watch(
             :price="item.price"
             :price-unit="item.priceUnit"
             :owner="item.owner"
+            :owner-username="item.ownerUsername"
             :is-liked="item.isLiked"
             @like-changed="handleLikeChanged"
           />

@@ -225,7 +225,7 @@ watch(
               </p>
             </div>
             <button
-              class="flex h-10 w-10 items-center justify-center rounded-full bg-noble-black text-white shadow-lg transition-all hover:scale-110 active:scale-95"
+              class="p-2 text-noble-black/50 hover:text-noble-black transition-all hover:scale-110 active:scale-95"
               @click="emit('close')"
             >
               <svg
@@ -235,6 +235,8 @@ watch(
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>

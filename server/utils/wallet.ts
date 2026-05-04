@@ -7,6 +7,13 @@ import {
   type WalletRecord,
   type WalletTransactionRecord,
 } from "./prisma"
+import type { ListCommissionRecordsInput } from "../../shared/schemas/wallet"
+import type { TransactionStatus as UiTransactionStatus } from "../../shared/schemas/transaction"
+import {
+  toNullableUiTransactionStatus,
+  transactionStatusDbValues,
+  transactionStatusGroups,
+} from "./transaction-status"
 
 export const SYSTEM_WALLET_KEY = "PLATFORM_REVENUE"
 export const SYSTEM_WALLET_ENTITY_TYPE = "SYSTEM_WALLET"
@@ -167,33 +174,87 @@ async function ensureWalletRecord(
 ) {
   const prisma = asWalletPrisma(tx || globalPrisma)
 
-  if (owner.scope === WalletScope.USER) {
-    await prisma.$executeRaw(Prisma.sql`
-      INSERT INTO wallets (scope, user_id, currency, balance, status)
-      VALUES (
-        CAST(${WalletScope.USER} AS "WalletScope"),
-        ${owner.userId},
-        'PHP',
-        0,
-        CAST(${WalletStatus.ACTIVE} AS "WalletStatus")
+  console.warn("[wallet:ensureWalletRecord] called with owner:", owner)
+
+  try {
+    if (owner.scope === WalletScope.USER) {
+      console.warn(
+        "[wallet:ensureWalletRecord] attempting INSERT for USER scope, userId=",
+        owner.userId,
       )
-      ON CONFLICT ("user_id") DO NOTHING
-    `)
-  } else {
-    await prisma.$executeRaw(Prisma.sql`
-      INSERT INTO wallets (scope, system_key, currency, balance, status)
-      VALUES (
-        CAST(${WalletScope.SYSTEM} AS "WalletScope"),
-        ${owner.systemKey},
-        'PHP',
-        0,
-        CAST(${WalletStatus.ACTIVE} AS "WalletStatus")
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO wallets (id, scope, user_id, currency, balance, status, updated_at)
+        VALUES (
+          gen_random_uuid(),
+          CAST(${WalletScope.USER} AS "WalletScope"),
+          ${owner.userId},
+          'PHP',
+          0,
+          CAST(${WalletStatus.ACTIVE} AS "WalletStatus"),
+          NOW()
+        )
+        ON CONFLICT ("user_id") DO NOTHING
+      `)
+      console.warn(
+        "[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for userId=",
+        owner.userId,
       )
-      ON CONFLICT ("system_key") DO NOTHING
-    `)
+    } else {
+      console.warn(
+        "[wallet:ensureWalletRecord] attempting INSERT for SYSTEM scope, systemKey=",
+        owner.systemKey,
+      )
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO wallets (id, scope, system_key, currency, balance, status, updated_at)
+        VALUES (
+          gen_random_uuid(),
+          CAST(${WalletScope.SYSTEM} AS "WalletScope"),
+          ${owner.systemKey},
+          'PHP',
+          0,
+          CAST(${WalletStatus.ACTIVE} AS "WalletStatus"),
+          NOW()
+        )
+        ON CONFLICT ("system_key") DO NOTHING
+      `)
+      console.warn(
+        "[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for systemKey=",
+        owner.systemKey,
+      )
+    }
+  } catch (err: unknown) {
+    const error = err as { code?: string; name?: string; meta?: { code?: string } }
+    console.error("[wallet:ensureWalletRecord] INSERT FAILED for owner:", owner)
+    console.error(
+      "[wallet:ensureWalletRecord] prisma error code:",
+      error?.code,
+      "name:",
+      error?.name,
+    )
+    console.error("[wallet:ensureWalletRecord] prisma meta:", error?.meta)
+    if (error?.meta?.code === "23502") {
+      console.error(
+        "[wallet:ensureWalletRecord] >>> NOT NULL violation. The INSERT only supplies (scope, user_id|system_key, currency, balance, status).",
+      )
+      console.error(
+        "[wallet:ensureWalletRecord] >>> Likely culprit: the `id` column lacks a DB-level default (e.g. gen_random_uuid()) and/or `updated_at` is NOT NULL without a default. Prisma's @default(uuid()) and @updatedAt are CLIENT-SIDE — raw SQL bypasses them.",
+      )
+    }
+    throw err
   }
 
-  return await fetchWalletRecord(owner, prisma)
+  console.warn(
+    "[wallet:ensureWalletRecord] now fetching wallet record back from DB for owner:",
+    owner,
+  )
+  const wallet = await fetchWalletRecord(owner, prisma)
+  console.warn(
+    "[wallet:ensureWalletRecord] fetched wallet id=",
+    wallet.id,
+    "balance=",
+    wallet.balance?.toString?.() ?? wallet.balance,
+  )
+  return wallet
 }
 
 async function lockWallet(
@@ -274,6 +335,7 @@ async function insertWalletTransaction(
   const metadataJson = JSON.stringify(params.metadata ?? {})
   const rows = await client.$queryRaw<WalletTransactionRecord[]>(Prisma.sql`
     INSERT INTO wallet_transactions (
+      id,
       wallet_id,
       user_id,
       type,
@@ -286,9 +348,11 @@ async function insertWalletTransaction(
       related_entity_type,
       related_entity_id,
       status,
-      metadata
+      metadata,
+      updated_at
     )
     VALUES (
+      gen_random_uuid(),
       ${params.walletId},
       ${params.userId},
       CAST(${params.type} AS "WalletTransactionType"),
@@ -301,7 +365,8 @@ async function insertWalletTransaction(
       ${params.relatedEntityType},
       ${params.relatedEntityId},
       CAST(${params.status} AS "WalletTransactionStatus"),
-      CAST(${metadataJson} AS jsonb)
+      CAST(${metadataJson} AS jsonb),
+      NOW()
     )
     RETURNING
       id,
@@ -578,6 +643,248 @@ export async function getSystemWalletTransactions(
   `)
 }
 
+type CommissionRecordCursor = NonNullable<ListCommissionRecordsInput["cursor"]>
+
+export type SystemCommissionRecordRow = {
+  id: string
+  walletId: string
+  referenceCode: string
+  bookingId: string | null
+  sourceTransactionId: string | null
+  sourceStatus: string | null
+  itemName: string | null
+  grossAmount: Prisma.Decimal | number | string | null
+  commissionAmount: Prisma.Decimal | number | string
+  netReleasedToLender: Prisma.Decimal | number | string | null
+  walletStatus: string
+  collectedAt: Date
+}
+
+type SystemCommissionSummaryRow = {
+  totalCommissionCollected: Prisma.Decimal | number | string | null
+  commissionTransactionCount: bigint | number | string
+}
+
+export type SystemCommissionRecord = {
+  id: string
+  walletId: string
+  referenceCode: string
+  bookingId: string | null
+  sourceTransactionId: string | null
+  transactionStatus: UiTransactionStatus | null
+  itemName: string | null
+  grossAmount: number
+  commissionAmount: number
+  netReleasedToLender: number
+  walletStatus: string
+  collectedAt: Date
+}
+
+export type SystemCommissionSummary = {
+  totalCommissionCollected: number
+  currentCommissionBalance: number
+  commissionTransactionCount: number
+  currency: string
+}
+
+export type SystemCommissionAuditResult = {
+  summary: SystemCommissionSummary
+  records: SystemCommissionRecord[]
+  nextCursor: CommissionRecordCursor | null
+}
+
+const decimalToNumber = (value: Prisma.Decimal | number | string | null | undefined): number => {
+  if (value === null || value === undefined) return 0
+  return Number(value.toString())
+}
+
+export const mapSystemCommissionRecordRow = (
+  row: SystemCommissionRecordRow,
+): SystemCommissionRecord => ({
+  id: row.id,
+  walletId: row.walletId,
+  referenceCode: row.referenceCode,
+  bookingId: row.bookingId,
+  sourceTransactionId: row.sourceTransactionId,
+  transactionStatus: toNullableUiTransactionStatus(row.sourceStatus),
+  itemName: row.itemName,
+  grossAmount: decimalToNumber(row.grossAmount),
+  commissionAmount: decimalToNumber(row.commissionAmount),
+  netReleasedToLender: decimalToNumber(row.netReleasedToLender),
+  walletStatus: row.walletStatus,
+  collectedAt: row.collectedAt,
+})
+
+const buildStartOfDay = (value: Date) => {
+  const date = new Date(value)
+  date.setUTCHours(0, 0, 0, 0)
+  return date
+}
+
+const buildEndOfDay = (value: Date) => {
+  const date = new Date(value)
+  date.setUTCHours(23, 59, 59, 999)
+  return date
+}
+
+const buildCommissionRecordWhere = (
+  systemKey: string,
+  input: ListCommissionRecordsInput,
+  cursor: CommissionRecordCursor | undefined,
+) => {
+  const clauses: Prisma.Sql[] = [
+    Prisma.sql`wallet_transactions.type = CAST(${WalletTransactionType.COMMISSION} AS "WalletTransactionType")`,
+    Prisma.sql`wallet_transactions.status = CAST(${WalletTransactionStatus.SUCCESS} AS "WalletTransactionStatus")`,
+    Prisma.sql`wallets.system_key = ${systemKey}`,
+  ]
+
+  if (input.collectedAtFrom) {
+    clauses.push(
+      Prisma.sql`wallet_transactions.created_at >= ${buildStartOfDay(input.collectedAtFrom)}`,
+    )
+  }
+
+  if (input.collectedAtTo) {
+    clauses.push(
+      Prisma.sql`wallet_transactions.created_at <= ${buildEndOfDay(input.collectedAtTo)}`,
+    )
+  }
+
+  if (input.status) {
+    clauses.push(Prisma.sql`(
+      transactions_by_booking.current_status::text IN (${Prisma.join(transactionStatusDbValues[input.status])})
+      OR transactions_by_metadata.current_status::text IN (${Prisma.join(transactionStatusDbValues[input.status])})
+      OR "Booking".status::text IN (${Prisma.join(transactionStatusGroups[input.status])})
+    )`)
+  }
+
+  if (input.search) {
+    const likeSearch = `%${input.search.trim()}%`
+    clauses.push(Prisma.sql`(
+      wallet_transactions.id ILIKE ${likeSearch}
+      OR wallet_transactions.reference_code ILIKE ${likeSearch}
+      OR wallet_transactions.related_entity_id ILIKE ${likeSearch}
+      OR transactions_by_booking.id ILIKE ${likeSearch}
+      OR transactions_by_metadata.id ILIKE ${likeSearch}
+      OR transactions_by_booking.booking_id ILIKE ${likeSearch}
+      OR transactions_by_metadata.booking_id ILIKE ${likeSearch}
+    )`)
+  }
+
+  if (cursor) {
+    clauses.push(Prisma.sql`(
+      wallet_transactions.created_at < ${cursor.createdAt}
+      OR (
+        wallet_transactions.created_at = ${cursor.createdAt}
+        AND wallet_transactions.id < ${cursor.id}
+      )
+    )`)
+  }
+
+  return Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}`
+}
+
+const commissionRecordJoins = Prisma.sql`
+  INNER JOIN wallets ON wallets.id = wallet_transactions.wallet_id
+  LEFT JOIN "Booking"
+    ON "Booking".id = wallet_transactions.related_entity_id
+    AND wallet_transactions.related_entity_type = ${BOOKING_ENTITY_TYPE}
+  LEFT JOIN transactions AS transactions_by_booking
+    ON transactions_by_booking.booking_id = "Booking".id
+  LEFT JOIN transactions AS transactions_by_metadata
+    ON transactions_by_metadata.id = wallet_transactions.metadata->>'sourceTransactionId'
+  LEFT JOIN "Item"
+    ON "Item".id = COALESCE("Booking"."itemId", transactions_by_booking.item_id, transactions_by_metadata.item_id)
+`
+
+export async function getSystemCommissionAudit(
+  systemKey = SYSTEM_WALLET_KEY,
+  input: ListCommissionRecordsInput,
+): Promise<SystemCommissionAuditResult> {
+  const limit = input.limit
+  const wallet = await getOrCreateSystemWallet(systemKey)
+
+  const summaryRows = await asWalletPrisma(globalPrisma).$queryRaw<SystemCommissionSummaryRow[]>(
+    Prisma.sql`
+      SELECT
+        COALESCE(SUM(wallet_transactions.amount), 0) AS "totalCommissionCollected",
+        COUNT(DISTINCT COALESCE(wallet_transactions.related_entity_id, wallet_transactions.id)) AS "commissionTransactionCount"
+      FROM wallet_transactions
+      INNER JOIN wallets ON wallets.id = wallet_transactions.wallet_id
+      WHERE wallet_transactions.type = CAST(${WalletTransactionType.COMMISSION} AS "WalletTransactionType")
+        AND wallet_transactions.status = CAST(${WalletTransactionStatus.SUCCESS} AS "WalletTransactionStatus")
+        AND wallets.system_key = ${systemKey}
+    `,
+  )
+
+  const where = buildCommissionRecordWhere(systemKey, input, input.cursor)
+  const rows = await asWalletPrisma(globalPrisma).$queryRaw<SystemCommissionRecordRow[]>(
+    Prisma.sql`
+      SELECT
+        wallet_transactions.id,
+        wallet_transactions.wallet_id AS "walletId",
+        wallet_transactions.reference_code AS "referenceCode",
+        COALESCE("Booking".id, wallet_transactions.related_entity_id) AS "bookingId",
+        COALESCE(
+          transactions_by_booking.id,
+          transactions_by_metadata.id,
+          wallet_transactions.metadata->>'sourceTransactionId'
+        ) AS "sourceTransactionId",
+        COALESCE(
+          transactions_by_booking.current_status::text,
+          transactions_by_metadata.current_status::text,
+          "Booking".status::text
+        ) AS "sourceStatus",
+        "Item".name AS "itemName",
+        COALESCE(
+          "Booking"."totalFee"::numeric,
+          NULLIF(wallet_transactions.metadata->>'grossAmount', '')::numeric,
+          transactions_by_booking.total_amount_v2,
+          transactions_by_metadata.total_amount_v2,
+          0
+        ) AS "grossAmount",
+        wallet_transactions.amount AS "commissionAmount",
+        GREATEST(
+          0,
+          COALESCE(
+            ("Booking"."totalFee" - "Booking"."platformCommission" - "Booking"."refundAmount")::numeric,
+            COALESCE(NULLIF(wallet_transactions.metadata->>'grossAmount', '')::numeric, 0) - wallet_transactions.amount,
+            0
+          )
+        ) AS "netReleasedToLender",
+        wallet_transactions.status::text AS "walletStatus",
+        wallet_transactions.created_at AS "collectedAt"
+      FROM wallet_transactions
+      ${commissionRecordJoins}
+      ${where}
+      ORDER BY wallet_transactions.created_at DESC, wallet_transactions.id DESC
+      LIMIT ${limit + 1}
+    `,
+  )
+
+  const hasMore = rows.length > limit
+  const pageRows = hasMore ? rows.slice(0, limit) : rows
+  const lastRow = pageRows.at(-1)
+  const summary = summaryRows[0]
+
+  return {
+    summary: {
+      totalCommissionCollected: decimalToNumber(summary?.totalCommissionCollected),
+      currentCommissionBalance: decimalToNumber(wallet.balance),
+      commissionTransactionCount: Number(summary?.commissionTransactionCount ?? 0),
+      currency: wallet.currency,
+    },
+    records: pageRows.map(mapSystemCommissionRecordRow),
+    nextCursor:
+      hasMore && lastRow
+        ? {
+            id: lastRow.id,
+            createdAt: lastRow.collectedAt,
+          }
+        : null,
+  }
+}
+
 export async function findSystemCommissionTransaction(
   relatedEntityId: string,
   systemKey = SYSTEM_WALLET_KEY,
@@ -598,7 +905,6 @@ export async function findSystemCommissionTransaction(
 }
 
 export async function runWalletSelfHealing(userId: string) {
-  const walletPrisma = asWalletPrisma(globalPrisma)
   const relevantBookings = await globalPrisma.booking.findMany({
     where: {
       OR: [{ borrowerId: userId }, { lenderId: userId }],
@@ -613,13 +919,13 @@ export async function runWalletSelfHealing(userId: string) {
 
   for (const booking of relevantBookings) {
     if (booking.borrowerId === userId && booking.refundAmount > 0) {
-      const hasRefund = await walletPrisma.walletTransaction.findFirst({
-        where: { userId, relatedEntityId: booking.id, type: WalletTransactionType.REFUND },
+      const hasRefund = await globalPrisma.walletTransaction.findFirst({
+        where: { userId, relatedEntityId: booking.id, type: "REFUND" },
       })
 
       if (!hasRefund) {
         await creditToWallet(userId, booking.refundAmount, {
-          type: WalletTransactionType.REFUND,
+          type: "REFUND",
           relatedEntityType: BOOKING_ENTITY_TYPE,
           relatedEntityId: booking.id,
         })
@@ -627,8 +933,8 @@ export async function runWalletSelfHealing(userId: string) {
     }
 
     if (booking.lenderId === userId) {
-      const hasEarning = await walletPrisma.walletTransaction.findFirst({
-        where: { userId, relatedEntityId: booking.id, type: WalletTransactionType.EARNING },
+      const hasEarning = await globalPrisma.walletTransaction.findFirst({
+        where: { userId, relatedEntityId: booking.id, type: "EARNING" },
       })
 
       if (!hasEarning) {
@@ -636,7 +942,7 @@ export async function runWalletSelfHealing(userId: string) {
           booking.totalFee - booking.platformCommission - (booking.refundAmount || 0)
         if (netEarnings > 0) {
           await creditToWallet(userId, netEarnings, {
-            type: WalletTransactionType.EARNING,
+            type: "EARNING",
             relatedEntityType: BOOKING_ENTITY_TYPE,
             relatedEntityId: booking.id,
           })

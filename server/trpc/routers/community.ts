@@ -56,6 +56,7 @@ type RequestRow = {
   borrowerMiddleName: string | null
   borrowerLastName: string
   borrowerEmail: string
+  borrowerAvatarUrl: string | null
   offersCount: number | bigint
 }
 
@@ -81,6 +82,7 @@ type OfferRow = {
   lenderMiddleName: string | null
   lenderLastName: string
   lenderEmail: string
+  lenderAvatarUrl: string | null
   requestBorrowerID: number
   requestBorrowerUserId: string
   requestItemNeeded: string
@@ -147,6 +149,7 @@ const mapOffer = (offer: OfferRow) => ({
   lender: {
     profileId: offer.lenderProfileId,
     userId: offer.lenderUserId,
+    username: offer.lenderUsername,
     name: formatUserName({
       username: offer.lenderUsername,
       firstName: offer.lenderFirstName,
@@ -154,7 +157,7 @@ const mapOffer = (offer: OfferRow) => ({
       lastName: offer.lenderLastName,
       email: offer.lenderEmail,
     }),
-    avatar: "",
+    avatar: offer.lenderAvatarUrl || "",
   },
 })
 
@@ -173,6 +176,7 @@ const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
   borrower: {
     profileId: request.borrowerProfileId,
     userId: request.borrowerUserId,
+    username: request.borrowerUsername,
     name: formatUserName({
       username: request.borrowerUsername,
       firstName: request.borrowerFirstName,
@@ -180,7 +184,7 @@ const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
       lastName: request.borrowerLastName,
       email: request.borrowerEmail,
     }),
-    avatar: "",
+    avatar: request.borrowerAvatarUrl || "",
   },
   offers: offers.map(mapOffer),
 })
@@ -252,6 +256,7 @@ const fetchRequestRows = async (
       u."middleName" AS "borrowerMiddleName",
       u."lastName" AS "borrowerLastName",
       u."email" AS "borrowerEmail",
+      u."avatarUrl" AS "borrowerAvatarUrl",
       COALESCE(oc."offersCount", 0) AS "offersCount"
     FROM "ItemRequest" r
     INNER JOIN "Borrower" b ON b."id" = r."borrowerID"
@@ -348,6 +353,7 @@ const fetchOfferRows = async (
       lu."middleName" AS "lenderMiddleName",
       lu."lastName" AS "lenderLastName",
       lu."email" AS "lenderEmail",
+      lu."avatarUrl" AS "lenderAvatarUrl",
       r."borrowerID" AS "requestBorrowerID",
       rb."userId" AS "requestBorrowerUserId",
       r."itemNeeded" AS "requestItemNeeded"

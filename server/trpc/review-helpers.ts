@@ -73,8 +73,17 @@ const reviewActionByType: Record<
   },
 }
 
-const buildPersonName = (user: Pick<ReviewParticipant, "firstName" | "lastName">) =>
-  `${user.firstName} ${user.lastName[0]}.`
+const buildPersonName = (user: Pick<ReviewParticipant, "firstName" | "lastName">) => {
+  const first = (user.firstName || "").trim()
+  const last = (user.lastName || "").trim()
+
+  if (last.toLowerCase() === "user" || !last) {
+    return first.charAt(0).toUpperCase() + first.slice(1)
+  }
+
+  const lastInitial = last.charAt(0).toUpperCase()
+  return `${first} ${lastInitial}.`
+}
 
 const mapReviewPerson = (user: ReviewParticipant | null | undefined, isAnonymous: boolean) => {
   if (isAnonymous || !user) {

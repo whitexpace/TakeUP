@@ -3,6 +3,12 @@
  * On the server, verifies admin status from the JWT session cookie for instant SSR.
  * On the client, caches verification so subsequent navigations are instant.
  */
+type AdminAuthCache = {
+  accessToken: string | null
+  accountType: string | null
+  checked: boolean
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (!to.path.startsWith("/admin")) return
 
@@ -25,7 +31,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
     data: { session },
   } = await supabase.auth.getSession()
 
+  const authCache = useState<AdminAuthCache>("admin-auth-cache", () => ({
+    accessToken: null,
+    accountType: null,
+    checked: false,
+  }))
+
   if (!session) {
+    authCache.value = { accessToken: null, accountType: null, checked: false }
     return navigateTo("/")
   }
 
@@ -39,9 +52,23 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo("/")
   }
 
+  if (authCache.value.checked && authCache.value.accessToken === session.access_token) {
+    if (authCache.value.accountType !== "ADMIN") {
+      return navigateTo("/account")
+    }
+
+    return
+  }
+
   try {
     const { fetch: fetchAuthUser } = useAuthUser()
     const authUser = await fetchAuthUser()
+
+    authCache.value = {
+      accessToken: session.access_token,
+      accountType: authUser?.accountType ?? null,
+      checked: true,
+    }
 
     if (authUser?.accountType !== "ADMIN") {
       return navigateTo("/account")
@@ -49,6 +76,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     verifiedAccessToken.value = session.access_token
   } catch {
+    authCache.value = { accessToken: null, accountType: null, checked: false }
     return navigateTo("/account")
   }
 })

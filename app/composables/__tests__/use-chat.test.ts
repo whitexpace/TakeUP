@@ -189,6 +189,32 @@ describe("useChat", () => {
     })
   })
 
+  it("sends an image-only message", async () => {
+    const sentMessage = makeMessage("msg-image", {
+      conversationId: CONV_ID_1,
+      body: "",
+      imageUrl: "https://example.com/chat.jpg",
+      createdAt: "2026-04-20T12:00:00.000Z",
+    })
+    fetchMock.mockResolvedValue(sentMessage)
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+
+    const result = await chat.sendMessage("", "https://example.com/chat.jpg")
+
+    expect(result?.id).toBe("msg-image")
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-image"])
+    expect(fetchMock).toHaveBeenCalledWith(`/api/chat/conversations/${CONV_ID_1}/messages`, {
+      method: "POST",
+      body: {
+        body: "",
+        imageUrl: "https://example.com/chat.jpg",
+      },
+    })
+  })
+
   it("merges polling receipt updates into the active conversation", async () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))

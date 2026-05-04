@@ -3,15 +3,26 @@ import { z } from "zod"
 export const MAX_MESSAGE_LENGTH = 2000
 export const MAX_CHAT_REPORT_DESCRIPTION_LENGTH = 1000
 
-export const sendMessageSchema = z.object({
-  conversationId: z.string().uuid(),
-  body: z
-    .string()
-    .min(1, "Message cannot be empty")
-    .max(MAX_MESSAGE_LENGTH, `Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`)
-    .refine((val) => val.trim().length > 0, "Message cannot be whitespace only"),
-  imageUrl: z.string().url().nullable().optional(),
-})
+export const sendMessageSchema = z
+  .object({
+    conversationId: z.string().uuid(),
+    body: z
+      .string()
+      .max(MAX_MESSAGE_LENGTH, `Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`)
+      .default(""),
+    imageUrl: z.string().url().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.body.trim().length > 0 || value.imageUrl) {
+      return
+    }
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["body"],
+      message: "Message cannot be empty",
+    })
+  })
 
 export const conversationIdSchema = z.object({
   conversationId: z.string().uuid(),

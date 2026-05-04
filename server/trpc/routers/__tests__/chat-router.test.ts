@@ -4,11 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { chatRouter } from "../chat"
 import type { Context } from "../../context"
 import type { SessionUser } from "../../../utils/auth-session"
-import {
-  CHAT_DISPUTE_NOTICE,
-  CHAT_ENDED_NOTICE,
-  CHAT_IN_DISPUTE_PREVIEW,
-} from "#shared/chat-rules"
+import { CHAT_DISPUTE_NOTICE, CHAT_ENDED_NOTICE, CHAT_IN_DISPUTE_PREVIEW } from "#shared/chat-rules"
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const OTHER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"

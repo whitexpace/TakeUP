@@ -30,11 +30,7 @@ export default defineEventHandler((event) => {
   setResponseHeader(event, "Content-Security-Policy-Report-Only", cspReportOnly)
 
   if (process.env.NODE_ENV === "production") {
-    setResponseHeader(
-      event,
-      "Strict-Transport-Security",
-      "max-age=31536000; includeSubDomains",
-    )
+    setResponseHeader(event, "Strict-Transport-Security", "max-age=31536000; includeSubDomains")
   }
 
   if (!event.path.startsWith("/api/") && (event.method === "GET" || event.method === "HEAD")) {

@@ -5,8 +5,9 @@ import {
 } from "@prisma/client"
 import { TRPCError } from "@trpc/server"
 import { router } from "../init"
-import { protectedProcedure } from "../procedures"
+import { adminProcedure, protectedProcedure } from "../procedures"
 import {
+  listAdminTransactionsSchema,
   listTransactionsSchema,
   type TransactionStatus as UiTransactionStatus,
 } from "#shared/schemas/transaction"
@@ -24,6 +25,7 @@ import {
 } from "../review-helpers"
 import { processTransactionRewards } from "../../utils/rewards"
 import { syncRoleRatingForUser } from "../../utils/review-ratings"
+import { toUiTransactionStatus, transactionStatusGroups } from "../../utils/transaction-status"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -64,47 +66,6 @@ const getTransactionThumbnailImage = (item: {
 }): string | null =>
   item.images?.find((image) => image.isPrimary)?.path ?? item.images?.[0]?.path ?? null
 
-const prismaTransactionStatuses = PrismaTransactionStatus as Record<string, PrismaTransactionStatus>
-const getOptionalTransactionStatus = (name: string) => prismaTransactionStatuses[name]
-const getTransactionStatusGroup = (
-  names: string[],
-  fallback: PrismaTransactionStatus[],
-): PrismaTransactionStatus[] => {
-  const resolved = names
-    .map((name) => getOptionalTransactionStatus(name))
-    .filter((status): status is PrismaTransactionStatus => Boolean(status))
-
-  return resolved.length > 0 ? resolved : fallback
-}
-
-const statusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
-  PENDING: getTransactionStatusGroup(
-    ["PENDING", "AWAITING_LENDER_APPROVAL"],
-    [PrismaTransactionStatus.PENDING],
-  ),
-  ACTIVE: getTransactionStatusGroup(
-    ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "IN_DISPUTE", "APPEALED"],
-    [PrismaTransactionStatus.PENDING],
-  ),
-  RETURNED: getTransactionStatusGroup(["RETURNED"], [PrismaTransactionStatus.RETURNED]),
-  COMPLETED: [PrismaTransactionStatus.COMPLETED],
-  CANCELLED: getTransactionStatusGroup(
-    ["CANCELLED", "REFUNDED", "FAILED"],
-    [PrismaTransactionStatus.CANCELLED],
-  ),
-  IN_DISPUTE: [PrismaTransactionStatus.IN_DISPUTE, PrismaTransactionStatus.APPEALED],
-}
-
-const toUiTransactionStatus = (status: PrismaTransactionStatus): UiTransactionStatus => {
-  if (statusGroups.PENDING.includes(status)) return "PENDING"
-  if (statusGroups.ACTIVE.includes(status)) return "ACTIVE"
-  if (statusGroups.RETURNED.includes(status)) return "RETURNED"
-  if (statusGroups.COMPLETED.includes(status)) return "COMPLETED"
-  if (statusGroups.CANCELLED.includes(status)) return "CANCELLED"
-  if (statusGroups.IN_DISPUTE.includes(status)) return "IN_DISPUTE"
-  return "PENDING"
-}
-
 type TransactionRecord = {
   id: string
   bookingId: string | null
@@ -114,6 +75,7 @@ type TransactionRecord = {
   startDate: Date | null
   endDate: Date | null
   totalAmount?: number | Prisma.Decimal | null
+  platformFee?: number | Prisma.Decimal | null
   status: PrismaTransactionStatus
   createdAt: Date
   updatedAt: Date
@@ -166,6 +128,7 @@ type TransactionListItem = {
       middleName: string | null
       lastName: string
     }
+    borrowerRating: number | null
   }
   lender: {
     user: {
@@ -174,7 +137,9 @@ type TransactionListItem = {
       middleName: string | null
       lastName: string
     }
+    lenderRating: number | null
   }
+  commissionAmount: number
   reviewState: {
     isParticipant: boolean
     isCompleted: boolean
@@ -397,6 +362,7 @@ const normalizeTransaction = (
     startDate: record.startDate,
     endDate: record.endDate,
     totalAmount: Number(totalAmountValue),
+    commissionAmount: Number(record.platformFee ?? 0),
     status: toUiTransactionStatus(record.status),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -411,6 +377,7 @@ const normalizeTransaction = (
         middleName: null,
         lastName: "",
       },
+      borrowerRating: null,
     },
     lender: {
       user: {
@@ -419,6 +386,7 @@ const normalizeTransaction = (
         middleName: null,
         lastName: "",
       },
+      lenderRating: null,
     },
     reviewState: buildTransactionReviewState({
       status: toUiTransactionStatus(record.status),
@@ -520,6 +488,107 @@ const getTransactionReviewAccess = async (
   return transaction
 }
 
+const buildCreatedAtStartOfDay = (value: Date) => {
+  const date = new Date(value)
+  date.setUTCHours(0, 0, 0, 0)
+  return date
+}
+
+const buildCreatedAtEndOfDay = (value: Date) => {
+  const date = new Date(value)
+  date.setUTCHours(23, 59, 59, 999)
+  return date
+}
+
+const enrichTransactionsWithParticipants = async (
+  prisma: PrismaClient,
+  records: TransactionListItem[],
+) => {
+  const participantIds = [
+    ...new Set(records.flatMap((record) => [record.borrowerId, record.lenderId]).filter(Boolean)),
+  ]
+
+  const users = participantIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: participantIds } },
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          borrower: {
+            select: {
+              borrowerRating: true,
+            },
+          },
+          lender: {
+            select: {
+              lenderRating: true,
+            },
+          },
+        },
+      })
+    : []
+
+  const userMap = new Map(users.map((user) => [user.id, user]))
+
+  return records.map((record) => {
+    const borrowerUser = userMap.get(record.borrowerId)
+    const lenderUser = userMap.get(record.lenderId)
+
+    return {
+      ...record,
+      borrower: {
+        user: borrowerUser
+          ? {
+              username: borrowerUser.username,
+              firstName: borrowerUser.firstName,
+              middleName: borrowerUser.middleName,
+              lastName: borrowerUser.lastName,
+            }
+          : record.borrower.user,
+        borrowerRating: borrowerUser?.borrower?.borrowerRating ?? null,
+      },
+      lender: {
+        user: lenderUser
+          ? {
+              username: lenderUser.username,
+              firstName: lenderUser.firstName,
+              middleName: lenderUser.middleName,
+              lastName: lenderUser.lastName,
+            }
+          : record.lender.user,
+        lenderRating: lenderUser?.lender?.lenderRating ?? null,
+      },
+    }
+  })
+}
+
+const mapTransactionPage = async (
+  prisma: PrismaClient,
+  records: TransactionRecord[],
+  currentUserId: string,
+  limit: number,
+) => {
+  const hasMore = records.length > limit
+  const pageRecords = hasMore ? records.slice(0, limit) : records
+  const normalizedRecords = pageRecords
+    .filter(Boolean)
+    .map((record) => normalizeTransaction(record, currentUserId))
+    .filter((record): record is TransactionListItem => record !== null)
+
+  const transactions = await enrichTransactionsWithParticipants(prisma, normalizedRecords)
+  const lastRecord = pageRecords.at(-1)
+  const nextCursor =
+    hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
+
+  return {
+    transactions,
+    nextCursor,
+  }
+}
+
 export const transactionRouter = router({
   list: protectedProcedure.input(listTransactionsSchema).query(async ({ ctx, input }) => {
     const { role, status, startDateFrom, startDateTo, limit, cursor } = input
@@ -533,7 +602,7 @@ export const transactionRouter = router({
           : { OR: [{ lenderId: userId }, { borrowerId: userId }] }
 
     const statusWhere: Prisma.RentalTransactionWhereInput = status
-      ? { status: { in: statusGroups[status] } }
+      ? { status: { in: transactionStatusGroups[status] } }
       : {}
 
     const dateWhere: Prisma.RentalTransactionWhereInput =
@@ -566,46 +635,63 @@ export const transactionRouter = router({
       take: limit + 1,
     })) as unknown as TransactionRecord[]
 
-    const hasMore = records.length > limit
-    const pageRecords = hasMore ? records.slice(0, limit) : records
-    const normalizedRecords = pageRecords
-      .filter(Boolean)
-      .map((record) => normalizeTransaction(record, userId))
-      .filter((record): record is TransactionListItem => record !== null)
+    return mapTransactionPage(ctx.prisma, records, userId, limit)
+  }),
+  adminList: adminProcedure.input(listAdminTransactionsSchema).query(async ({ ctx, input }) => {
+    const { status, createdAtFrom, createdAtTo, search, limit, cursor } = input
 
-    const participantIds = [
-      ...new Set(
-        normalizedRecords.flatMap((record) => [record.borrowerId, record.lenderId]).filter(Boolean),
-      ),
-    ]
+    const statusWhere: Prisma.RentalTransactionWhereInput = status
+      ? { status: { in: transactionStatusGroups[status] } }
+      : {}
 
-    const users = participantIds.length
-      ? await ctx.prisma.user.findMany({
-          where: { id: { in: participantIds } },
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-          },
-        })
-      : []
+    const createdAtWhere: Prisma.RentalTransactionWhereInput =
+      createdAtFrom || createdAtTo
+        ? {
+            createdAt: {
+              ...(createdAtFrom ? { gte: buildCreatedAtStartOfDay(createdAtFrom) } : {}),
+              ...(createdAtTo ? { lte: buildCreatedAtEndOfDay(createdAtTo) } : {}),
+            },
+          }
+        : {}
 
-    const userMap = new Map(users.map((user) => [user.id, user]))
-    const transactions = normalizedRecords.map((record) => ({
-      ...record,
-      borrower: { user: userMap.get(record.borrowerId) ?? record.borrower.user },
-      lender: { user: userMap.get(record.lenderId) ?? record.lender.user },
-    }))
-    const lastRecord = pageRecords.at(-1)
-    const nextCursor =
-      hasMore && lastRecord ? { id: lastRecord.id, createdAt: lastRecord.createdAt } : null
+    const trimmedSearch = search?.trim()
+    const searchWhere: Prisma.RentalTransactionWhereInput = trimmedSearch
+      ? {
+          OR: [
+            { id: { contains: trimmedSearch } },
+            {
+              item: {
+                is: {
+                  name: {
+                    contains: trimmedSearch,
+                    mode: "insensitive",
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {}
 
-    return {
-      transactions,
-      nextCursor,
-    }
+    const cursorWhere: Prisma.RentalTransactionWhereInput = cursor
+      ? {
+          OR: [
+            { createdAt: { lt: cursor.createdAt } },
+            { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+          ],
+        }
+      : {}
+
+    const records = (await ctx.prisma.rentalTransaction.findMany({
+      where: {
+        AND: [statusWhere, createdAtWhere, searchWhere, cursorWhere],
+      },
+      include: buildTransactionInclude(ctx.user.id),
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+    })) as unknown as TransactionRecord[]
+
+    return mapTransactionPage(ctx.prisma, records, ctx.user.id, limit)
   }),
   createReview: protectedProcedure
     .input(createTransactionReviewSchema)

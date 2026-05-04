@@ -63,6 +63,7 @@ const bookingInclude = {
       id: true,
       name: true,
       description: true,
+      condition: true,
       lenderId: true,
       rateOption: true,
       rentalFee: true,
@@ -350,8 +351,12 @@ type BookingTimelineEvent = {
 
 const overlappingPendingBookingSelect = {
   id: true,
+  borrowerId: true,
   startDate: true,
   endDate: true,
+  totalFee: true,
+  paymentMethod: true,
+  paymentStatus: true,
   cancellationReason: true,
   cancelledAt: true,
 } satisfies Prisma.BookingSelect
@@ -402,6 +407,21 @@ type BookingTimeRange = {
 
 const doTimeRangesOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
   left.startDate < right.endDate && left.endDate > right.startDate
+
+const expandRangeToUtcDays = <T extends BookingTimeRange>(range: T): T => {
+  const start = new Date(range.startDate)
+  start.setUTCHours(0, 0, 0, 0)
+  const end = new Date(range.endDate)
+  if (
+    end.getUTCHours() !== 0 ||
+    end.getUTCMinutes() !== 0 ||
+    end.getUTCSeconds() !== 0 ||
+    end.getUTCMilliseconds() !== 0
+  ) {
+    end.setUTCHours(24, 0, 0, 0)
+  }
+  return { ...range, startDate: start, endDate: end }
+}
 
 const isBookingWindowFullyCoveredByAvailability = (
   bookingWindow: BookingTimeRange,
@@ -458,20 +478,21 @@ const ensureBookingWindowMatchesAvailability = async (
     return
   }
 
-  const hasAvailableRanges = availabilityRanges.some((range) => range.status === "AVAILABLE")
+  const dayAlignedRanges = availabilityRanges.map(expandRangeToUtcDays)
+  const hasAvailableRanges = dayAlignedRanges.some((range) => range.status === "AVAILABLE")
 
   const requestedWindow = {
     startDate: input.startDate,
     endDate: input.endDate,
   }
-  const hasBlockedWindow = availabilityRanges.some(
+  const hasBlockedWindow = dayAlignedRanges.some(
     (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
   )
 
   if (
     hasBlockedWindow ||
     (hasAvailableRanges &&
-      !isBookingWindowFullyCoveredByAvailability(requestedWindow, availabilityRanges))
+      !isBookingWindowFullyCoveredByAvailability(requestedWindow, dayAlignedRanges))
   ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -1245,10 +1266,25 @@ export const bookingRouter = router({
 
   byId: protectedProcedure.input(bookingIdSchema).query(async ({ ctx, input }) => {
     const bookingPrisma = getBookingPrisma(ctx)
-    const booking = (await bookingPrisma.booking.findUnique({
+    let booking = (await bookingPrisma.booking.findUnique({
       where: { id: input.id },
       include: bookingInclude,
     })) as BookingRecord | null
+
+    // Fallback: Check if input.id is a transaction ID
+    if (!booking) {
+      const transaction = await ctx.prisma.rentalTransaction.findUnique({
+        where: { id: input.id },
+        select: { bookingId: true },
+      })
+
+      if (transaction?.bookingId) {
+        booking = (await bookingPrisma.booking.findUnique({
+          where: { id: transaction.bookingId },
+          include: bookingInclude,
+        })) as BookingRecord | null
+      }
+    }
 
     if (!booking) {
       return null
@@ -1623,6 +1659,40 @@ export const bookingRouter = router({
               remarks: OVERLAPPING_REQUEST_CANCELLATION_REASON,
             },
           )
+
+          if (
+            overlappingBooking.paymentMethod === PrismaPaymentMethod.WALLET &&
+            overlappingBooking.paymentStatus === bookingPaymentStatusSchema.enum.PAID &&
+            overlappingBooking.totalFee > 0
+          ) {
+            const walletTx = asWalletPrisma(tx as Prisma.TransactionClient)
+            const existingRefund = await walletTx.walletTransaction.findFirst({
+              where: {
+                userId: overlappingBooking.borrowerId,
+                type: "REFUND",
+                relatedEntityType: BOOKING_ENTITY_TYPE,
+                relatedEntityId: overlappingBooking.id,
+              },
+            })
+
+            if (!existingRefund) {
+              await creditToWallet(
+                overlappingBooking.borrowerId,
+                overlappingBooking.totalFee,
+                {
+                  type: "REFUND",
+                  relatedEntityType: BOOKING_ENTITY_TYPE,
+                  relatedEntityId: overlappingBooking.id,
+                  metadata: { bookingId: overlappingBooking.id, refundReason: "CANCELLATION" },
+                },
+                tx as Context["prisma"],
+              )
+              await (tx as Context["prisma"]).booking.update({
+                where: { id: overlappingBooking.id },
+                data: { paymentStatus: bookingPaymentStatusSchema.enum.REFUNDED },
+              })
+            }
+          }
         }
       }
 
@@ -1653,6 +1723,43 @@ export const bookingRouter = router({
         }
 
         await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
+      }
+
+      // Wallet Refund on cancellation of a paid PENDING booking
+      if (
+        updatedBooking.status === bookingStatusSchema.enum.CANCELLED &&
+        existing.status !== bookingStatusSchema.enum.CANCELLED &&
+        existing.paymentMethod === PrismaPaymentMethod.WALLET &&
+        existing.paymentStatus === bookingPaymentStatusSchema.enum.PAID &&
+        existing.totalFee > 0
+      ) {
+        const walletTx = asWalletPrisma(tx as Prisma.TransactionClient)
+        const existingRefund = await walletTx.walletTransaction.findFirst({
+          where: {
+            userId: existing.borrowerId,
+            type: "REFUND",
+            relatedEntityType: BOOKING_ENTITY_TYPE,
+            relatedEntityId: updatedBooking.id,
+          },
+        })
+
+        if (!existingRefund) {
+          await creditToWallet(
+            existing.borrowerId,
+            existing.totalFee,
+            {
+              type: "REFUND",
+              relatedEntityType: BOOKING_ENTITY_TYPE,
+              relatedEntityId: updatedBooking.id,
+              metadata: { bookingId: updatedBooking.id, refundReason: "CANCELLATION" },
+            },
+            tx as Context["prisma"],
+          )
+          await (tx as Context["prisma"]).booking.update({
+            where: { id: updatedBooking.id },
+            data: { paymentStatus: bookingPaymentStatusSchema.enum.REFUNDED },
+          })
+        }
       }
 
       // Wallet Payout & Refund Logic on completion

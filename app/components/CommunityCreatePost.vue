@@ -1,61 +1,175 @@
 <template>
-  <form
+  <div
     ref="containerRef"
-    class="bg-cream rounded-[24px] border border-cinnamon-ice/30 p-6 flex flex-col gap-4 transition-all duration-500"
+    class="bg-cream rounded-[24px] border border-cinnamon-ice/40 transition-all duration-300"
     :class="{
-      'ring-4 ring-burning-orange/10 border-burning-orange/40 scale-[1.01] shadow-lg':
-        isHighlighted,
+      'ring-4 ring-burning-orange/5 border-burning-orange/30 shadow-lg':
+        isExpanded || isHighlighted,
     }"
-    @submit.prevent="handlePost"
   >
-    <div class="flex gap-4">
-      <UserAvatar :avatar-url="props.userAvatar" :user-name="props.userName" size="lg" />
+    <!-- Collapsed State -->
+    <div
+      v-if="!isExpanded"
+      class="p-[14px] px-4 flex items-center gap-4 cursor-pointer group"
+      @click="expandForm"
+    >
+      <UserAvatar :avatar-url="props.userAvatar" :user-name="props.userName" size="md" />
+      <div
+        class="flex-1 border border-cinnamon-ice/30 rounded-[14px] px-4 py-3 text-noble-black/30 text-[15px] group-hover:border-cinnamon-ice/50 transition-colors bg-white/50"
+      >
+        What are you looking for?
+      </div>
+    </div>
 
-      <div class="flex-1 flex flex-col gap-3">
-        <input
-          ref="itemNeededInputRef"
-          v-model="itemNeeded"
-          type="text"
-          placeholder="What are you looking for?"
-          class="w-full rounded-[14px] bg-white/50 px-4 py-3 text-[18px] font-semibold text-noble-black placeholder:text-noble-black/30 outline-none transition-all duration-300"
-          :class="
-            showItemNeededError
-              ? 'border border-burning-orange/50 bg-white ring-4 ring-burning-orange/10'
-              : 'border border-transparent focus:border-cinnamon-ice focus:bg-white focus:ring-4 focus:ring-cinnamon-ice/5'
-          "
-          @blur="markTouched('itemNeeded')"
-        />
-        <p v-if="showItemNeededError" class="text-[12px] font-medium text-burning-orange">
-          {{ itemNeededError }}
-        </p>
+    <!-- Expanded State -->
+    <transition name="expand">
+      <form v-if="isExpanded" class="flex flex-col relative z-50" @submit.prevent="handlePost">
+        <div class="p-6 pb-4 flex gap-4">
+          <UserAvatar :avatar-url="props.userAvatar" :user-name="props.userName" size="md" />
 
-        <textarea
-          v-model="description"
-          placeholder="Describe the item, how you plan to use it, and any important requirements."
-          class="min-h-[110px] w-full resize-none rounded-[14px] bg-white/50 px-4 py-3 text-[15px] text-noble-black placeholder:text-noble-black/30 outline-none transition-all duration-300"
-          :class="
-            showDescriptionError
-              ? 'border border-burning-orange/50 bg-white ring-4 ring-burning-orange/10'
-              : 'border border-transparent focus:border-cinnamon-ice focus:bg-white focus:ring-4 focus:ring-cinnamon-ice/5'
-          "
-          @blur="markTouched('description')"
-        ></textarea>
-        <p v-if="showDescriptionError" class="text-[12px] font-medium text-burning-orange">
-          {{ descriptionError }}
-        </p>
-
-        <div class="rounded-[18px] border border-cinnamon-ice/25 bg-white/70 p-4">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-                Reference image
-              </p>
-              <p class="mt-1 text-[13px] leading-relaxed text-noble-black/50">
-                Optional. Add one image so lenders can quickly recognize the item you need.
+          <div class="flex-1 flex flex-col min-w-0 gap-3">
+            <!-- Title Input -->
+            <div class="flex flex-col gap-1.5">
+              <input
+                ref="itemNeededInputRef"
+                v-model="itemNeeded"
+                type="text"
+                placeholder="What are you looking for?"
+                class="w-full h-11 px-4 rounded-[10px] border border-cinnamon-ice/30 bg-white text-[16px] font-semibold text-gray-900 placeholder:text-gray-300 outline-none transition-all focus:border-burning-orange/40 focus:ring-4 focus:ring-burning-orange/5"
+                :class="{ 'border-burning-orange/50': showItemNeededError }"
+                @blur="markTouched('itemNeeded')"
+              />
+              <p v-if="showItemNeededError" class="text-[11px] font-medium text-burning-orange">
+                {{ itemNeededError }}
               </p>
             </div>
 
-            <div class="flex gap-2">
+            <!-- Description Textarea -->
+            <div class="flex flex-col gap-1.5">
+              <textarea
+                v-model="description"
+                placeholder="Describe the item and requirements..."
+                class="min-h-[100px] w-full resize-none rounded-[10px] border border-cinnamon-ice/30 bg-white px-4 py-3 text-[14px] text-gray-500 placeholder:text-gray-400 outline-none transition-all focus:border-burning-orange/40 focus:ring-4 focus:ring-burning-orange/5"
+                @blur="markTouched('description')"
+              ></textarea>
+              <p v-if="showDescriptionError" class="text-[11px] font-medium text-burning-orange">
+                {{ descriptionError }}
+              </p>
+            </div>
+
+            <!-- Inline Metadata Row (Compact ONE row on desktop) -->
+            <div class="flex flex-col lg:flex-row gap-3 mt-2">
+              <!-- Unified Date Range Input -->
+              <div
+                class="flex-1 flex items-center border-[1.5px] border-cinnamon-ice/30 rounded-[10px] p-1 bg-white"
+                :class="{ 'border-burning-orange/50': showDateRangeError }"
+              >
+                <!-- Start Date/Time Stacked -->
+                <div class="flex-1 flex flex-col px-3 py-1">
+                  <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wider"
+                    >Start</span
+                  >
+                  <div class="flex flex-col gap-1">
+                    <CustomCalendar
+                      v-model="startDate"
+                      placeholder="Select date"
+                      disable-past
+                      class="date-input-compact"
+                    />
+                    <CustomTimePicker
+                      v-model="startTime"
+                      placeholder="Select time"
+                      class="time-input-compact"
+                      :min-time="getStartMinTime"
+                    />
+                  </div>
+                </div>
+
+                <div class="px-1 text-gray-300">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M5 12h14M13 5l7 7-7 7" />
+                  </svg>
+                </div>
+
+                <!-- End Date/Time Stacked -->
+                <div class="flex-1 flex flex-col px-3 py-1">
+                  <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wider"
+                    >End</span
+                  >
+                  <div class="flex flex-col gap-1">
+                    <CustomCalendar
+                      v-model="endDate"
+                      placeholder="Select date"
+                      disable-past
+                      :min-date="startDate"
+                      class="date-input-compact"
+                    />
+                    <CustomTimePicker
+                      v-model="endTime"
+                      placeholder="Select time"
+                      class="time-input-compact"
+                      :min-time="getEndMinTime"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Budget Range Input -->
+              <div class="flex items-center gap-2">
+                <div
+                  class="flex items-center h-[52px] border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-3 bg-white w-28"
+                  :class="{ 'border-burning-orange/50': showMinimumPriceError }"
+                >
+                  <span class="text-[13px] font-semibold text-gray-400 mr-1">₱</span>
+                  <input
+                    v-model="minimumPrice"
+                    type="number"
+                    placeholder="Min"
+                    class="w-full bg-transparent text-[13px] text-gray-900 outline-none"
+                    @blur="markTouched('minimumPrice')"
+                  />
+                </div>
+                <span class="text-gray-300">–</span>
+                <div
+                  class="flex items-center h-[52px] border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-3 bg-white w-28"
+                  :class="{
+                    'border-burning-orange/50': showMaximumPriceError || showPriceRangeError,
+                  }"
+                >
+                  <span class="text-[13px] font-semibold text-gray-400 mr-1">₱</span>
+                  <input
+                    v-model="maximumPrice"
+                    type="number"
+                    placeholder="Max"
+                    class="w-full bg-transparent text-[13px] text-gray-900 outline-none"
+                    @blur="markTouched('maximumPrice')"
+                  />
+                </div>
+              </div>
+            </div>
+            <p
+              v-if="showDateRangeError || showPriceRangeError"
+              class="text-[11px] font-medium text-burning-orange mt-2"
+            >
+              {{ dateRangeError || priceRangeError }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Form Footer -->
+        <div
+          class="px-6 py-4 bg-gray-50/50 border-t border-cinnamon-ice/20 flex flex-wrap items-center justify-between gap-4"
+        >
+          <div class="flex items-center gap-4">
+            <!-- Image Upload Interaction -->
+            <div class="flex items-center gap-3">
               <input
                 ref="referenceImageInputRef"
                 type="file"
@@ -64,185 +178,82 @@
                 @change="handleReferenceImageSelect"
               />
               <button
+                v-if="!referenceImage"
                 type="button"
-                class="rounded-full border border-cinnamon-ice/30 bg-white px-4 py-2 text-[13px] font-bold text-noble-black/70 transition-all hover:border-cinnamon-ice/45 hover:text-noble-black"
+                class="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"
                 :disabled="isUploadingReferenceImage || props.isSubmitting"
                 @click="triggerReferenceImageUpload"
               >
-                {{ referenceImage ? "Replace image" : "Upload image" }}
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                  <path d="M16 5h4M18 3v4" />
+                </svg>
+                <span class="text-[13px] font-medium">+ Add photo</span>
               </button>
-              <button
-                v-if="referenceImage"
-                type="button"
-                class="rounded-full border border-burning-orange/20 px-4 py-2 text-[13px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
-                :disabled="isUploadingReferenceImage || props.isSubmitting"
-                @click="removeReferenceImage"
-              >
-                Remove
-              </button>
+
+              <!-- Image Preview Thumbnail (48x48px border-radius: 8px) -->
+              <div v-else class="relative group">
+                <img
+                  :src="referenceImage.url"
+                  class="h-12 w-12 rounded-[8px] object-cover border border-cinnamon-ice/20"
+                />
+                <button
+                  type="button"
+                  class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  @click="removeReferenceImage"
+                >
+                  <svg
+                    width="8"
+                    height="8"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  >
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
+
+            <span class="text-[12px] text-gray-400">Visible to all community members.</span>
           </div>
 
-          <div
-            v-if="referenceImage"
-            class="mt-4 overflow-hidden rounded-[18px] border border-cinnamon-ice/20 bg-cream/60"
-          >
-            <img
-              :src="referenceImage.url"
-              :alt="referenceImage.name"
-              class="h-48 w-full object-cover"
-            />
-            <div
-              class="flex items-center justify-between gap-3 px-4 py-3 text-[13px] text-noble-black/60"
+          <div class="flex items-center gap-3">
+            <button
+              type="button"
+              class="h-9 px-4 border border-burning-orange text-burning-orange rounded-[10px] text-[13px] font-bold transition-all hover:bg-burning-orange/5"
+              @click="collapseForm"
             >
-              <span class="truncate">{{ referenceImage.name }}</span>
-              <span class="shrink-0 font-semibold text-blue-estate">Reference</span>
-            </div>
-          </div>
-
-          <div
-            v-if="isUploadingReferenceImage || referenceImageUploadError"
-            class="mt-4 rounded-[14px] px-4 py-3 text-[13px]"
-            :class="
-              referenceImageUploadError
-                ? 'border border-burning-orange/20 bg-burning-orange/5 text-burning-orange'
-                : 'border border-blue-estate/10 bg-blue-estate/5 text-blue-estate'
-            "
-          >
-            <span v-if="referenceImageUploadError">{{ referenceImageUploadError }}</span>
-            <span v-else>Uploading reference image… {{ pendingUploadProgress }}%</span>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="h-9 px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[14px] transition-all shadow-md active:scale-95 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
+              :disabled="!isTitleValid || props.isSubmitting || isUploadingReferenceImage"
+            >
+              {{ props.isSubmitting ? "Posting..." : "Post Request" }}
+            </button>
           </div>
         </div>
-
-        <div class="grid gap-3 md:grid-cols-2">
-          <label class="flex flex-col gap-2">
-            <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-              Start date
-            </span>
-            <input
-              v-model="startDate"
-              type="date"
-              class="w-full rounded-[14px] bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition-all duration-300"
-              :class="
-                showStartDateError || showDateRangeError
-                  ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                  : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
-              "
-              @blur="markTouched('startDate')"
-            />
-            <p v-if="showStartDateError" class="text-[12px] font-medium text-burning-orange">
-              {{ startDateError }}
-            </p>
-          </label>
-
-          <label class="flex flex-col gap-2">
-            <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-              End date
-            </span>
-            <input
-              v-model="endDate"
-              type="date"
-              class="w-full rounded-[14px] bg-white px-4 py-3 text-[14px] text-noble-black outline-none transition-all duration-300"
-              :class="
-                showEndDateError || showDateRangeError
-                  ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                  : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
-              "
-              @blur="markTouched('endDate')"
-            />
-            <p
-              v-if="showEndDateError || showDateRangeError"
-              class="text-[12px] font-medium text-burning-orange"
-            >
-              {{ endDateError || dateRangeError }}
-            </p>
-          </label>
-
-          <label class="flex flex-col gap-2">
-            <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-              Min budget
-            </span>
-            <div
-              class="flex items-center rounded-[14px] bg-white px-4"
-              :class="
-                showMinimumPriceError || showPriceRangeError
-                  ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                  : 'border border-cinnamon-ice/30 focus-within:border-blue-estate/30 focus-within:ring-4 focus-within:ring-blue-estate/5'
-              "
-            >
-              <span class="text-[14px] font-semibold text-noble-black/45">PHP</span>
-              <input
-                v-model="minimumPrice"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="0"
-                class="w-full border-none bg-transparent px-3 py-3 text-[14px] text-noble-black outline-none"
-                @blur="markTouched('minimumPrice')"
-              />
-            </div>
-            <p v-if="showMinimumPriceError" class="text-[12px] font-medium text-burning-orange">
-              {{ minimumPriceError }}
-            </p>
-          </label>
-
-          <label class="flex flex-col gap-2">
-            <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-              Max budget
-            </span>
-            <div
-              class="flex items-center rounded-[14px] bg-white px-4"
-              :class="
-                showMaximumPriceError || showPriceRangeError
-                  ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                  : 'border border-cinnamon-ice/30 focus-within:border-blue-estate/30 focus-within:ring-4 focus-within:ring-blue-estate/5'
-              "
-            >
-              <span class="text-[14px] font-semibold text-noble-black/45">PHP</span>
-              <input
-                v-model="maximumPrice"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="0"
-                class="w-full border-none bg-transparent px-3 py-3 text-[14px] text-noble-black outline-none"
-                @blur="markTouched('maximumPrice')"
-              />
-            </div>
-            <p
-              v-if="showMaximumPriceError || showPriceRangeError"
-              class="text-[12px] font-medium text-burning-orange"
-            >
-              {{ maximumPriceError || priceRangeError }}
-            </p>
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <div class="h-[1px] w-full bg-cinnamon-ice/20"></div>
-
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <p
-        class="text-[13px]"
-        :class="hasFeedbackError ? 'font-medium text-burning-orange' : 'text-noble-black/45'"
-      >
-        {{ feedbackMessage }}
-      </p>
-
-      <button
-        type="submit"
-        class="px-8 py-2.5 bg-burning-orange text-white rounded-full font-bold text-[15px] hover:bg-blue-estate transition-all shadow-md active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed"
-        :disabled="!isFormValid || props.isSubmitting || isUploadingReferenceImage"
-      >
-        {{ props.isSubmitting ? "Posting..." : "Post Request" }}
-      </button>
-    </div>
-  </form>
+      </form>
+    </transition>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue"
+import { computed, onBeforeUnmount, reactive, ref, watch, nextTick } from "vue"
 import type { CommunityRequestComposerInput } from "~/types/community-requests"
 
 type UploadedReferenceImage = {
@@ -275,10 +286,13 @@ const itemImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 
+const isExpanded = ref(false)
 const itemNeeded = ref("")
 const description = ref("")
 const startDate = ref("")
+const startTime = ref("")
 const endDate = ref("")
+const endTime = ref("")
 const minimumPrice = ref<string | number>("")
 const maximumPrice = ref<string | number>("")
 const referenceImage = ref<UploadedReferenceImage | null>(null)
@@ -299,10 +313,27 @@ const touchedFields = reactive({
   itemNeeded: false,
   description: false,
   startDate: false,
+  startTime: false,
   endDate: false,
+  endTime: false,
   minimumPrice: false,
   maximumPrice: false,
 })
+
+const expandForm = () => {
+  isExpanded.value = true
+  nextTick(() => {
+    itemNeededInputRef.value?.focus()
+  })
+}
+
+const collapseForm = () => {
+  if (hasStartedForm.value) {
+    if (!confirm("Are you sure you want to discard your changes?")) return
+  }
+  isExpanded.value = false
+  resetForm()
+}
 
 const hasInputValue = (value: string | number) => {
   if (typeof value === "number") return Number.isFinite(value)
@@ -313,7 +344,9 @@ const resetTouchedFields = () => {
   touchedFields.itemNeeded = false
   touchedFields.description = false
   touchedFields.startDate = false
+  touchedFields.startTime = false
   touchedFields.endDate = false
+  touchedFields.endTime = false
   touchedFields.minimumPrice = false
   touchedFields.maximumPrice = false
 }
@@ -329,25 +362,75 @@ const parsedMaximumPrice = computed(() =>
   typeof maximumPrice.value === "number" ? maximumPrice.value : Number(maximumPrice.value),
 )
 
+const isTitleValid = computed(() => itemNeeded.value.trim().length > 0)
 const itemNeededError = computed(() => (itemNeeded.value.trim() ? "" : "Item needed is required."))
 const descriptionError = computed(() =>
   description.value.trim() ? "" : "Description is required.",
 )
 const startDateError = computed(() => (startDate.value ? "" : "Start date is required."))
+const startTimeError = computed(() => (startTime.value ? "" : "Start time is required."))
 const endDateError = computed(() => (endDate.value ? "" : "End date is required."))
+const endTimeError = computed(() => (endTime.value ? "" : "End time is required."))
+
+const addHourToTime = (time: string) => {
+  if (!time) return ""
+  const [hours = "0", minutes = "0"] = time.split(":")
+  const nextMinutes = Number(hours) * 60 + Number(minutes) + 60
+  const nextHours = Math.floor(nextMinutes / 60)
+  const remainderMinutes = nextMinutes % 60
+  return `${nextHours.toString().padStart(2, "0")}:${remainderMinutes.toString().padStart(2, "0")}`
+}
+
+const getEndMinTime = computed(() => {
+  if (!startDate.value || !startTime.value || !endDate.value || startDate.value !== endDate.value) {
+    return undefined
+  }
+  return addHourToTime(startTime.value)
+})
+
+const getStartMinTime = computed(() => {
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`
+
+  if (startDate.value === todayStr) {
+    const hours = today.getHours().toString().padStart(2, "0")
+    const minutes = today.getMinutes().toString().padStart(2, "0")
+    return `${hours}:${minutes}`
+  }
+
+  return undefined
+})
+
+const isTimeFrameInvalid = computed(() => {
+  if (!startDate.value || !startTime.value || !endDate.value || !endTime.value) return false
+  const start = new Date(`${startDate.value}T${startTime.value}`)
+  const end = new Date(`${endDate.value}T${endTime.value}`)
+  if (startDate.value === endDate.value) {
+    const minimumEnd = new Date(start.getTime() + 60 * 60 * 1000)
+    return end < minimumEnd
+  }
+  return end < start
+})
+
 const dateRangeError = computed(() => {
   if (!startDate.value || !endDate.value) return ""
-  return endDate.value < startDate.value ? "End date must be on or after the start date." : ""
+  if (endDate.value < startDate.value) return "End date must be on or after the start date."
+  if (isTimeFrameInvalid.value) {
+    return startDate.value === endDate.value
+      ? "End time must be at least 1 hour later."
+      : "End time cannot be earlier than start time."
+  }
+  return ""
 })
 const minimumPriceError = computed(() => {
-  if (!hasInputValue(minimumPrice.value)) return "Minimum budget is required."
+  if (!hasInputValue(minimumPrice.value)) return ""
   if (!Number.isFinite(parsedMinimumPrice.value) || parsedMinimumPrice.value < 0) {
     return "Minimum budget must be 0 or higher."
   }
   return ""
 })
 const maximumPriceError = computed(() => {
-  if (!hasInputValue(maximumPrice.value)) return "Maximum budget is required."
+  if (!hasInputValue(maximumPrice.value)) return ""
   if (!Number.isFinite(parsedMaximumPrice.value) || parsedMaximumPrice.value < 0) {
     return "Maximum budget must be 0 or higher."
   }
@@ -355,35 +438,36 @@ const maximumPriceError = computed(() => {
 })
 const priceRangeError = computed(() => {
   if (minimumPriceError.value || maximumPriceError.value) return ""
+  if (!hasInputValue(minimumPrice.value) || !hasInputValue(maximumPrice.value)) return ""
   return parsedMinimumPrice.value > parsedMaximumPrice.value
     ? "Maximum budget must be greater than or equal to minimum budget."
     : ""
 })
 
-const validationMessage = computed(() => {
+const isFormValid = computed(() => {
   return (
-    itemNeededError.value ||
-    descriptionError.value ||
-    startDateError.value ||
-    endDateError.value ||
-    dateRangeError.value ||
-    minimumPriceError.value ||
-    maximumPriceError.value ||
-    priceRangeError.value
+    itemNeededError.value === "" &&
+    descriptionError.value === "" &&
+    startDateError.value === "" &&
+    startTimeError.value === "" &&
+    endDateError.value === "" &&
+    endTimeError.value === "" &&
+    dateRangeError.value === "" &&
+    priceRangeError.value === ""
   )
 })
 
-const isFormValid = computed(() => validationMessage.value.length === 0)
 const hasStartedForm = computed(() => {
   return (
     itemNeeded.value.trim().length > 0 ||
     description.value.trim().length > 0 ||
     Boolean(startDate.value) ||
+    Boolean(startTime.value) ||
     Boolean(endDate.value) ||
+    Boolean(endTime.value) ||
     hasInputValue(minimumPrice.value) ||
     hasInputValue(maximumPrice.value) ||
-    Boolean(referenceImage.value) ||
-    Object.values(touchedFields).some(Boolean)
+    Boolean(referenceImage.value)
   )
 })
 const showItemNeededError = computed(
@@ -392,16 +476,14 @@ const showItemNeededError = computed(
 const showDescriptionError = computed(
   () => Boolean(descriptionError.value) && (attemptedSubmit.value || touchedFields.description),
 )
-const showStartDateError = computed(
-  () => Boolean(startDateError.value) && (attemptedSubmit.value || touchedFields.startDate),
-)
-const showEndDateError = computed(
-  () => Boolean(endDateError.value) && (attemptedSubmit.value || touchedFields.endDate),
-)
 const showDateRangeError = computed(
   () =>
     Boolean(dateRangeError.value) &&
-    (attemptedSubmit.value || touchedFields.startDate || touchedFields.endDate),
+    (attemptedSubmit.value ||
+      touchedFields.startDate ||
+      touchedFields.startTime ||
+      touchedFields.endDate ||
+      touchedFields.endTime),
 )
 const showMinimumPriceError = computed(
   () => Boolean(minimumPriceError.value) && (attemptedSubmit.value || touchedFields.minimumPrice),
@@ -413,19 +495,6 @@ const showPriceRangeError = computed(
   () =>
     Boolean(priceRangeError.value) &&
     (attemptedSubmit.value || touchedFields.minimumPrice || touchedFields.maximumPrice),
-)
-const feedbackMessage = computed(
-  () =>
-    referenceImageUploadError.value ||
-    props.serverError ||
-    (hasStartedForm.value ? validationMessage.value : "") ||
-    "Your request will be posted directly to the live community feed.",
-)
-const hasFeedbackError = computed(
-  () =>
-    Boolean(referenceImageUploadError.value) ||
-    Boolean(props.serverError) ||
-    (hasStartedForm.value && Boolean(validationMessage.value)),
 )
 
 const getSafeFileName = (fileName: string) => {
@@ -493,7 +562,9 @@ const resetForm = () => {
   itemNeeded.value = ""
   description.value = ""
   startDate.value = ""
+  startTime.value = ""
   endDate.value = ""
+  endTime.value = ""
   minimumPrice.value = ""
   maximumPrice.value = ""
   referenceImage.value = null
@@ -631,6 +702,9 @@ const handleReferenceImageSelect = async (event: Event) => {
 const triggerHighlight = () => {
   isHighlighted.value = true
   containerRef.value?.scrollIntoView({ behavior: "smooth", block: "center" })
+  if (!isExpanded.value) {
+    isExpanded.value = true
+  }
   setTimeout(() => {
     itemNeededInputRef.value?.focus()
   }, 600)
@@ -653,7 +727,9 @@ const handlePost = () => {
     description: description.value.trim(),
     referenceImageUrl: referenceImage.value?.url ?? null,
     startDate: startDate.value,
+    startTime: startTime.value,
     endDate: endDate.value,
+    endTime: endTime.value,
     minimumPrice: parsedMinimumPrice.value,
     maximumPrice: parsedMaximumPrice.value,
   })
@@ -667,6 +743,7 @@ watch(
 
     markUploadedImageAsPersisted()
     resetForm()
+    isExpanded.value = false
   },
 )
 
@@ -679,3 +756,33 @@ onBeforeUnmount(() => {
   cleanupPendingWork()
 })
 </script>
+
+<style scoped>
+.date-input-compact :deep(input),
+.time-input-compact :deep(input) {
+  border: none !important;
+  padding: 0 !important;
+  height: auto !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.date-input-compact :deep(.calendar-icon),
+.time-input-compact :deep(.clock-icon) {
+  display: none !important;
+}
+
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.25s ease;
+  max-height: 500px;
+}
+
+.expand-enter-from,
+.expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+</style>

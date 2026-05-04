@@ -543,7 +543,7 @@ describe("bookingRouter", () => {
     expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
   })
 
-  it("rejects create when the requested time is outside a same-day availability window", async () => {
+  it("allows create for any time-of-day inside an available calendar day", async () => {
     const ctx = makeContext()
     ctx.prisma.itemAvailability.findMany.mockResolvedValueOnce([
       {
@@ -554,19 +554,21 @@ describe("bookingRouter", () => {
     ])
     const caller = bookingRouter.createCaller(ctx as never)
 
-    await expect(
-      caller.create({
-        itemId: ITEM_ID,
-        startDate: new Date("2026-04-01T18:00:00.000Z"),
-        endDate: new Date("2026-04-01T19:00:00.000Z"),
-        paymentMethod: "GCASH",
-      }),
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "The selected dates are not fully available for this listing.",
+    await caller.create({
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-01T18:00:00.000Z"),
+      endDate: new Date("2026-04-01T19:00:00.000Z"),
+      paymentMethod: "GCASH",
     })
 
-    expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
+    expect(ctx.prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          startDate: new Date("2026-04-01T18:00:00.000Z"),
+          endDate: new Date("2026-04-01T19:00:00.000Z"),
+        }),
+      }),
+    )
   })
 
   it("allows create when the requested time is contained by a same-day availability window", async () => {
@@ -662,7 +664,7 @@ describe("bookingRouter", () => {
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
   })
 
-  it("rejects update when the resulting time moves outside listing availability", async () => {
+  it("rejects update when the resulting day moves outside listing availability", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce({
       ...makeBooking({
@@ -690,7 +692,7 @@ describe("bookingRouter", () => {
     await expect(
       caller.update({
         id: BOOKING_ID,
-        endDate: new Date("2026-04-01T19:00:00.000Z"),
+        endDate: new Date("2026-04-03T05:00:00.000Z"),
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",

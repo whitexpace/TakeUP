@@ -40,6 +40,7 @@ export const mapListedItemToCard = (
     price: item.freeToBorrow ? undefined : item.rentalFee,
     priceUnit: item.rateOption === "PER_HOUR" ? "hour" : "day",
     owner: item.ownerName,
+    ownerUsername: item.lenderUsername ?? undefined,
     isLiked: Boolean(item.isLiked),
   }
 }
