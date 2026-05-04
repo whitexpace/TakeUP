@@ -159,17 +159,13 @@ const isAppHeaderNotification = (
   notification: CommunityOfferNotification | AppHeaderNotification,
 ): notification is AppHeaderNotification => "title" in notification
 
-const notificationPanelDescription = computed(() => {
-  const firstNotification = props.notifications[0]
+const isDisputeRebuttal = (notification: CommunityOfferNotification | AppHeaderNotification) => {
+  return isAppHeaderNotification(notification) && notification.type.includes("DISPUTE_REBUTTAL")
+}
 
-  if (!firstNotification) {
-    return "Latest updates on your account activity"
-  }
-
-  return isAppHeaderNotification(firstNotification)
-    ? "Updates on your bookings, returns, and disputes"
-    : "Offer updates for your request posts"
-})
+const isDispute = (notification: CommunityOfferNotification | AppHeaderNotification) => {
+  return isAppHeaderNotification(notification) && notification.type.includes("DISPUTE")
+}
 
 const notificationEmptyState = computed(() =>
   isAccountSectionActive.value ? "No account notifications yet." : "No offer notifications yet.",
@@ -373,66 +369,164 @@ onBeforeUnmount(() => {
           <transition name="notifications-menu">
             <div
               v-if="showNotifications"
-              class="absolute right-0 top-11 z-[1100] w-[360px] rounded-[22px] border border-cinnamon-ice/20 bg-white p-3 shadow-2xl"
+              class="absolute right-0 top-[calc(100%+12px)] z-[1100] w-[380px] rounded-[16px] border border-gray-100 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex flex-col max-h-[480px]"
             >
-              <div class="flex items-center justify-between gap-4 px-2 pb-3">
-                <div>
-                  <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                    Notifications
-                  </p>
-                  <p class="mt-1 text-[13px] text-noble-black/50">
-                    {{ notificationPanelDescription }}
-                  </p>
-                </div>
+              <!-- Triangle Pointer -->
+              <div
+                class="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-100 rotate-45"
+              ></div>
 
+              <!-- Header Row -->
+              <div
+                class="relative z-10 flex items-center justify-between px-4 py-4 border-b border-gray-100 shrink-0"
+              >
+                <span class="text-[13px] font-bold uppercase tracking-[1.5px] text-gray-400">
+                  Notifications
+                </span>
                 <button
                   v-if="unreadNotificationCount > 0"
-                  class="text-[12px] font-bold text-blue-estate transition-colors duration-300 hover:text-burning-orange"
+                  class="text-[13px] font-semibold text-burning-orange hover:opacity-80 transition-opacity"
                   @click="markAllNotificationsRead"
                 >
                   Mark all read
                 </button>
               </div>
 
+              <!-- Notifications List -->
               <div
                 v-if="notifications.length > 0"
-                class="flex max-h-[360px] flex-col gap-2 overflow-y-auto pr-1"
+                class="overflow-y-auto custom-scrollbar flex-1 relative z-10 rounded-b-[16px]"
               >
-                <button
-                  v-for="notification in notifications"
-                  :key="notification.id"
-                  class="rounded-[18px] border px-4 py-3 text-left transition-all duration-300"
-                  :class="
-                    notification.read
-                      ? 'border-cinnamon-ice/15 bg-cream/50'
-                      : 'border-blue-estate/10 bg-blue-estate/5'
-                  "
-                  @click="handleNotificationClick(notification)"
-                >
-                  <p class="text-[14px] font-semibold leading-snug text-noble-black">
-                    {{ getNotificationTitle(notification) }}
-                  </p>
-                  <p class="mt-1 text-[13px] leading-relaxed text-noble-black/55">
-                    <span class="line-clamp-3">
-                      {{ getNotificationBody(notification) }}
-                    </span>
-                  </p>
-                  <div class="mt-3 flex items-center justify-between gap-3">
-                    <span class="text-[12px] font-bold text-burning-orange">
-                      {{ getNotificationAccent(notification) ?? "Open" }}
-                    </span>
-                    <span class="text-[12px] text-noble-black/35">
-                      {{ formatRelativeTime(notification.createdAt) }}
-                    </span>
-                  </div>
-                </button>
+                <div class="flex flex-col">
+                  <button
+                    v-for="notification in notifications"
+                    :key="notification.id"
+                    class="relative flex gap-4 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
+                    :class="[
+                      !notification.read
+                        ? 'bg-burning-orange/[0.03] border-l-[3px] border-l-burning-orange'
+                        : 'bg-white',
+                    ]"
+                    @click="handleNotificationClick(notification)"
+                  >
+                    <!-- Unread Dot -->
+                    <div
+                      v-if="!notification.read"
+                      class="absolute top-4 right-4 w-2 h-2 rounded-full bg-burning-orange"
+                    ></div>
+
+                    <!-- Icon Circle -->
+                    <div class="shrink-0">
+                      <div
+                        v-if="isDisputeRebuttal(notification)"
+                        class="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-estate"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                      </div>
+                      <div
+                        v-else-if="isDispute(notification)"
+                        class="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center text-cinnabar-red"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                          />
+                          <line x1="12" y1="9" x2="12" y2="13" />
+                          <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                      </div>
+                      <div
+                        v-else
+                        class="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center text-success-green"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                          <line x1="16" y1="2" x2="16" y2="6" />
+                          <line x1="8" y1="2" x2="8" y2="6" />
+                          <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                      <h4 class="text-[14px] font-semibold text-noble-black truncate leading-tight">
+                        {{ getNotificationTitle(notification) }}
+                      </h4>
+                      <p class="mt-1 text-[13px] text-gray-500 line-clamp-2 leading-snug">
+                        {{ getNotificationBody(notification) }}
+                      </p>
+                      <div class="mt-2.5 flex items-center justify-between">
+                        <span
+                          class="text-[12px] font-semibold text-burning-orange group-hover:underline"
+                        >
+                          {{ getNotificationAccent(notification) ?? "View Details" }} →
+                        </span>
+                        <span class="text-[11px] text-gray-400">
+                          {{ formatRelativeTime(notification.createdAt) }}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
               </div>
 
-              <div
-                v-else
-                class="rounded-[18px] border border-dashed border-cinnamon-ice/25 bg-cream/50 px-4 py-6 text-center text-[13px] leading-relaxed text-noble-black/45"
-              >
-                {{ notificationEmptyState }}
+              <!-- Empty State -->
+              <div v-else class="p-10 text-center relative z-10 rounded-b-[16px]">
+                <div
+                  class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="text-gray-300"
+                  >
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                  </svg>
+                </div>
+                <p class="text-[13px] text-gray-400 leading-relaxed px-4">
+                  {{ notificationEmptyState }}
+                </p>
               </div>
             </div>
           </transition>

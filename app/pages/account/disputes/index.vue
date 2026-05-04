@@ -404,11 +404,11 @@ const prevStep = () => {
     <!-- Page Header -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-10">
       <section class="space-y-3">
-        <div class="space-y-1">
-          <h1 class="text-[28px] font-bold text-noble-black">Disputes</h1>
-          <div class="w-10 h-[2px] bg-burning-orange"></div>
+        <div class="space-y-2">
+          <h1 class="text-[28px] font-semibold text-noble-black">My Disputes</h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[14px] font-medium text-noble-black/40">
+        <p class="text-[16px] font-medium text-noble-black/50">
           Report transaction issues and track your ongoing disputes.
         </p>
       </section>

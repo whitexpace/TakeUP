@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto px-6 sm:px-12 lg:px-16 xl:px-24 py-8 pt-16 max-w-[1600px]">
+  <div class="mx-auto px-4 sm:px-8 lg:px-10 xl:px-12 py-8 pt-16 max-w-[1600px]">
     <!-- Header Section -->
     <div class="mb-10">
       <h1 class="font-rewon text-[40px] text-noble-black leading-tight mb-2">
@@ -13,7 +13,7 @@
       <div class="mt-6 sm:mt-8 flex items-center w-full max-w-3xl">
         <!-- Unified Search Container -->
         <div
-          class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-[#E5E7EB] px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
+          class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
         >
           <!-- Search Icon / Clear Button -->
           <div class="flex items-center justify-center w-10 shrink-0">
@@ -105,7 +105,7 @@
                 <span class="font-medium">{{ suggestion.label }}</span>
               </div>
               <span
-                class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-gray-50 px-2 py-0.5 rounded"
+                class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-noble-black/5 px-2 py-0.5 rounded"
                 >{{ suggestion.type }}</span
               >
             </button>
@@ -124,7 +124,9 @@
 
     <!-- User Search Results (Shopee style) -->
     <div
-      v-if="serverSearchQuery && topMatchingUsers && topMatchingUsers.length > 0"
+      v-if="
+        serverSearchQuery && (isSearchingUsers || (topMatchingUsers && topMatchingUsers.length > 0))
+      "
       class="mb-10 animate-fade-in"
     >
       <div class="flex items-center gap-2 mb-4">
@@ -136,18 +138,23 @@
         <div class="h-[1px] flex-1 bg-cinnamon-ice/20"></div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <UserSearchCard
-          v-for="matchingUser in topMatchingUsers"
-          :key="matchingUser.id"
-          v-bind="matchingUser"
-        />
+        <template v-if="isSearchingUsers">
+          <UserSearchCardSkeleton v-for="i in 3" :key="`user-skeleton-${i}`" />
+        </template>
+        <template v-else>
+          <UserSearchCard
+            v-for="matchingUser in topMatchingUsers"
+            :key="matchingUser.id"
+            v-bind="matchingUser"
+          />
+        </template>
       </div>
     </div>
 
-    <!-- Items Grid (Modernized: 5 Columns at 2xl) -->
+    <!-- Items Grid (Modernized: Fluid & Responsive) -->
     <div
       v-if="cardItems.length > 0 || isLoading"
-      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8"
+      class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
     >
       <ItemCard
         v-for="item in cardItems"
@@ -289,7 +296,7 @@ const INITIAL_DASHBOARD_PAGE_SIZE = 8
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
 // User Search Logic
-const { data: topMatchingUsers } = await useAsyncData(
+const { data: topMatchingUsers, pending: isSearchingUsers } = await useAsyncData(
   () => `user-search-${serverSearchQuery.value}`,
   async () => {
     if (!serverSearchQuery.value) return [] as UserSearchResult[]

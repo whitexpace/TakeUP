@@ -30,9 +30,14 @@ type AuthMeResponse = {
   }
 }
 
-const { data: authData } = await useAsyncData("account:auth-me", () =>
-  $fetch<AuthMeResponse>("/api/auth/me"),
-)
+const { data: authData } = await useAsyncData("account:auth-me", async () => {
+  try {
+    return await $fetch<AuthMeResponse>("/api/auth/me")
+  } catch (err) {
+    console.error("Failed to fetch auth data in layout:", err)
+    return null
+  }
+})
 
 onMounted(() => {
   isMobile.value = window.innerWidth < 1024
@@ -274,7 +279,8 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
                     cy="32"
                     r="31"
                     fill="none"
-                    stroke="#dbbba7"
+                    stroke="currentColor"
+                    class="text-cinnamon-ice"
                     stroke-width="2"
                     stroke-dasharray="64.9 129.8"
                     stroke-linecap="round"
@@ -285,7 +291,8 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
                     cy="32"
                     r="31"
                     fill="none"
-                    stroke="#ff7124"
+                    stroke="currentColor"
+                    class="text-burning-orange"
                     stroke-width="2"
                     stroke-dasharray="64.9 129.8"
                     stroke-dashoffset="-64.9"
@@ -297,7 +304,8 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
                     cy="32"
                     r="31"
                     fill="none"
-                    stroke="#3b4883"
+                    stroke="currentColor"
+                    class="text-blue-estate"
                     stroke-width="2"
                     stroke-dasharray="64.9 129.8"
                     stroke-dashoffset="-129.8"
@@ -552,7 +560,7 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
   background: transparent;
 }
 .custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: #dbbba7;
+  background: theme("colors.cinnamon-ice");
   border-radius: 10px;
 }
 
@@ -563,18 +571,18 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
   background: transparent;
 }
 .custom-account-main-scrollbar::-webkit-scrollbar-thumb {
-  background: #dbbba7;
+  background: theme("colors.cinnamon-ice");
   border-radius: 10px;
 }
 .custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #ff7124;
+  background: theme("colors.burning-orange");
 }
 
 .custom-tooltip {
   position: absolute;
-  top: 50%;
-  left: 100%;
-  transform: translateY(-50%) translateX(12px);
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
   background-color: theme("colors.cream");
   color: theme("colors.noble-black");
   padding: 6px 12px;
@@ -585,37 +593,42 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
+  visibility: hidden;
   transition:
     opacity 0.2s ease,
-    transform 0.2s ease;
-  z-index: 100;
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.custom-tooltip::before {
-  content: "";
+.tooltip-arrow {
   position: absolute;
-  top: 50%;
-  right: 100%;
-  transform: translateY(-50%);
-  border-width: 5px;
-  border-style: solid;
-  border-color: transparent theme("colors.cinnamon-ice / 30%") transparent transparent;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
 }
 
-.custom-tooltip::after {
+.tooltip-arrow::after {
   content: "";
   position: absolute;
-  top: 50%;
-  right: calc(100% - 1px);
-  transform: translateY(-50%);
-  border-width: 5px;
-  border-style: solid;
-  border-color: transparent theme("colors.cream") transparent transparent;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
 }
 
 .group\/tooltip:hover .custom-tooltip {
   opacity: 1;
-  transform: translateY(-50%) translateX(16px);
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
 }
 </style>

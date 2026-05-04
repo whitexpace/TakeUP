@@ -1,11 +1,11 @@
 <template>
   <div
-    class="bg-white rounded-[14px] overflow-hidden border border-[#F0EDE8] flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[220px] max-w-[260px] mx-auto relative group"
+    class="bg-white rounded-[14px] overflow-hidden border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[210px] max-w-[280px] mx-auto relative group"
     :class="canNavigate ? 'cursor-pointer' : ''"
     @click="navigateToDetails"
   >
     <!-- Image Section (Compact: 180px) -->
-    <div class="relative h-[180px] w-full bg-gray-50 overflow-hidden rounded-t-[12px]">
+    <div class="relative h-[180px] w-full bg-noble-black/5 overflow-hidden rounded-t-[12px]">
       <img
         v-if="image"
         :src="image"
@@ -118,9 +118,9 @@
 
         <!-- Refined Rating -->
         <div v-if="hasGoodRating" class="flex items-center gap-1 shrink-0">
-          <span class="text-[13px] text-[#E8650A]">★</span>
-          <span class="text-[13px] font-semibold text-[#111]">{{ rating }}</span>
-          <span class="text-[12px] font-normal text-[#9CA3AF]">({{ reviews }})</span>
+          <span class="text-[13px] text-burning-orange">★</span>
+          <span class="text-[13px] font-semibold text-noble-black">{{ rating }}</span>
+          <span class="text-[12px] font-normal text-noble-black/50">({{ reviews }})</span>
         </div>
       </div>
     </div>

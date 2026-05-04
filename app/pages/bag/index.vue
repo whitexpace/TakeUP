@@ -73,6 +73,13 @@ const handleDeleteItem = (itemId: string) => {
   selectedItemIds.value.delete(itemId)
 }
 
+const handleRemoveSelected = () => {
+  selectedItemIds.value.forEach((id) => {
+    removeFromBag(id)
+  })
+  selectedItemIds.value.clear()
+}
+
 // Duration and Price calculation utilities
 const createDateTime = (date: Date, timeValue: string) => {
   const value = new Date(date)
@@ -327,82 +334,99 @@ const handleRequestBooking = async () => {
         </NuxtLink>
       </div>
 
-      <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-12">
+      <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Side: Items -->
         <div
-          class="lg:col-span-2 bg-cream rounded-[32px] border border-cinnamon-ice h-fit py-8 overflow-hidden"
+          class="lg:col-span-2 bg-white rounded-[16px] border border-gray-100 h-fit shadow-sm overflow-hidden"
         >
           <div class="flex flex-col">
             <!-- Select All Bar -->
-            <div class="flex items-center gap-4 pb-6 px-8 border-b border-cinnamon-ice/60">
-              <button
-                class="w-5 h-5 rounded border flex items-center justify-center transition-colors"
-                :class="
-                  isAllSelected
-                    ? 'bg-burning-orange border-burning-orange'
-                    : 'border-cinnamon-ice bg-white'
-                "
-                @click="toggleSelectAll"
-              >
-                <svg
-                  v-if="isAllSelected"
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="white"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+            <div
+              class="flex items-center justify-between py-4 px-8 border-b border-gray-100 bg-white"
+            >
+              <div class="flex items-center gap-3">
+                <button
+                  class="w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all"
+                  :class="
+                    isAllSelected
+                      ? 'bg-burning-orange border-burning-orange shadow-sm'
+                      : 'border-gray-300 bg-white hover:border-burning-orange'
+                  "
+                  @click="toggleSelectAll"
                 >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                  <svg
+                    v-if="isAllSelected"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="white"
+                    stroke-width="4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </button>
+                <span class="text-[13px] font-medium text-gray-500 tracking-tight">Select All</span>
+              </div>
+              <button
+                v-if="selectedItemIds.size > 0"
+                class="text-[12px] font-semibold text-cinnabar-red hover:underline"
+                @click="handleRemoveSelected"
+              >
+                Remove Selected
               </button>
-              <span class="text-sm font-bold text-noble-black">Item</span>
             </div>
 
             <!-- Groups by Lender -->
-            <div class="px-8">
-              <div
-                v-for="(group, lenderId, index) in groupedItems"
-                :key="lenderId"
-                class="flex flex-col"
-              >
-                <!-- Divider between lenders -->
-                <div v-if="index > 0" class="h-px bg-cinnamon-ice/60 -mx-8 my-4"></div>
+            <div class="flex flex-col">
+              <div v-for="(group, lenderId) in groupedItems" :key="lenderId" class="flex flex-col">
                 <!-- Lender Header -->
-                <div class="flex items-center gap-4 py-4">
+                <div
+                  class="flex items-center gap-4 py-3 px-8 border-b border-gray-100 bg-gray-50/50"
+                >
                   <button
-                    class="w-5 h-5 rounded border flex items-center justify-center transition-colors"
+                    class="w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all"
                     :class="
                       isLenderSelected(lenderId)
                         ? 'bg-burning-orange border-burning-orange'
-                        : 'border-cinnamon-ice bg-white'
+                        : 'border-gray-300 bg-white hover:border-burning-orange'
                     "
                     @click="toggleLenderSelect(lenderId)"
                   >
                     <svg
                       v-if="isLenderSelected(lenderId)"
                       xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
+                      width="10"
+                      height="10"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="white"
-                      stroke-width="3"
+                      stroke-width="4"
                       stroke-linecap="round"
                       stroke-linejoin="round"
                     >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </button>
-                  <UserAvatar
-                    :avatar-url="group.lenderAvatarUrl"
-                    :user-name="group.lenderName"
-                    size="sm"
-                  />
-                  <span class="text-sm font-bold text-noble-black">{{ group.lenderName }}</span>
+                  <div class="flex items-center gap-3">
+                    <UserAvatar
+                      :avatar-url="group.lenderAvatarUrl"
+                      :user-name="group.lenderName"
+                      size="sm"
+                      class="!w-[28px] !h-[28px] border border-gray-100"
+                    />
+                    <div class="flex items-baseline gap-2">
+                      <span class="text-[13px] font-semibold text-noble-black leading-tight">{{
+                        group.lenderName
+                      }}</span>
+                      <span class="text-[12px] text-gray-400"
+                        >@{{ group.lenderName.toLowerCase().replace(/\s+/g, "") }}</span
+                      >
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Items -->
@@ -410,26 +434,26 @@ const handleRequestBooking = async () => {
                   <div
                     v-for="item in group.items"
                     :key="item.id"
-                    class="flex items-center gap-4 py-6 px-4 rounded-3xl border border-transparent hover:bg-white/40 transition-all group"
+                    class="flex items-center gap-6 py-6 px-8 border-b border-gray-50 last:border-b-0 hover:bg-gray-50/30 transition-all group"
                   >
                     <button
-                      class="w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0"
+                      class="w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all shrink-0"
                       :class="
                         selectedItemIds.has(item.id)
                           ? 'bg-burning-orange border-burning-orange'
-                          : 'border-cinnamon-ice bg-white'
+                          : 'border-gray-300 bg-white hover:border-burning-orange'
                       "
                       @click="toggleItemSelect(item.id)"
                     >
                       <svg
                         v-if="selectedItemIds.has(item.id)"
                         xmlns="http://www.w3.org/2000/svg"
-                        width="14"
-                        height="14"
+                        width="12"
+                        height="12"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="white"
-                        stroke-width="3"
+                        stroke-width="4"
                         stroke-linecap="round"
                         stroke-linejoin="round"
                       >
@@ -437,59 +461,68 @@ const handleRequestBooking = async () => {
                       </svg>
                     </button>
 
-                    <div class="w-20 h-20 rounded-xl overflow-hidden bg-cream shrink-0">
+                    <div
+                      class="w-[72px] h-[72px] rounded-[12px] overflow-hidden bg-gray-50 shrink-0 border border-gray-100"
+                    >
                       <img :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
                     </div>
 
                     <div class="flex-1 min-w-0">
-                      <div class="flex flex-col gap-1 mb-1">
-                        <span
-                          class="w-fit text-[10px] uppercase font-bold tracking-wider px-3 py-0.5 rounded-full"
-                          :class="
-                            item.listingType === 'Rent'
-                              ? 'bg-cinnamon-ice text-noble-black'
-                              : 'bg-blue-estate text-white'
-                          "
-                        >
-                          {{ item.listingType }}
-                        </span>
-                        <h3 class="text-base font-bold text-noble-black truncate">
+                      <div class="flex flex-col gap-1.5">
+                        <h3 class="text-[15px] font-semibold text-noble-black truncate">
                           {{ item.name }}
                         </h3>
+                        <div class="flex items-center gap-2">
+                          <span
+                            class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-[6px] uppercase"
+                            :class="
+                              item.listingType === 'Rent'
+                                ? 'bg-blue-estate text-white'
+                                : 'bg-gray-100 text-gray-600'
+                            "
+                          >
+                            {{ item.listingType }}
+                          </span>
+                          <span class="text-[13px] text-gray-400 font-medium">
+                            {{ calculateDuration(item) }} · {{ formatDateRange(item) }}
+                          </span>
+                        </div>
                       </div>
-                      <p class="text-sm text-noble-black/60">{{ calculateDuration(item) }}</p>
                     </div>
 
-                    <div class="flex flex-col items-end gap-2 shrink-0">
+                    <div class="flex items-center gap-6 shrink-0">
+                      <div class="flex flex-col items-end">
+                        <span class="text-[16px] font-bold text-burning-orange leading-none">{{
+                          formatPesoAmount(calculateItemTotal(item))
+                        }}</span>
+                        <span
+                          v-if="item.listingType === 'Rent'"
+                          class="text-[12px] text-gray-400 mt-1"
+                        >
+                          {{ formatPesoAmount(item.price) }}/{{ item.priceUnit }}
+                        </span>
+                      </div>
                       <button
-                        class="p-2 text-blue-estate hover:opacity-80 transition-all"
+                        class="p-2 text-gray-300 hover:text-cinnabar-red transition-all"
                         title="Remove from bag"
                         @click="handleDeleteItem(item.id)"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          width="20"
-                          height="20"
+                          width="18"
+                          height="18"
                           viewBox="0 0 24 24"
-                          fill="currentColor"
-                          stroke="none"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
                         >
-                          <path
-                            d="M19 6h-3.5l-1-1h-5l-1 1H5v2h14V6zM6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V8H6v11z"
-                          />
+                          <path d="M3 6h18" />
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
                         </svg>
                       </button>
-                      <div class="flex flex-col items-end">
-                        <span class="text-base font-bold text-noble-black leading-none">{{
-                          formatPesoAmount(calculateItemTotal(item))
-                        }}</span>
-                        <span
-                          v-if="item.listingType === 'Rent'"
-                          class="text-[11px] text-noble-black/40 mt-1"
-                        >
-                          ({{ formatPesoAmount(item.price) }} / {{ item.priceUnit }})
-                        </span>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -500,19 +533,32 @@ const handleRequestBooking = async () => {
 
         <!-- Right Side: Order Summary -->
         <div class="space-y-6">
-          <div class="bg-cream border border-cinnamon-ice rounded-3xl p-8 shadow-sm">
-            <h2 class="text-xl font-bold text-noble-black mb-6">Order Summary</h2>
+          <div class="bg-white border border-gray-100 rounded-[16px] p-6 shadow-sm">
+            <h2 class="text-[17px] font-semibold text-noble-black mb-6">Order Summary</h2>
 
-            <div class="space-y-4 mb-8">
-              <div class="flex justify-between items-center text-sm">
-                <span class="text-noble-black/60">{{ selectedItemIds.size }} items selected</span>
-                <span class="font-bold text-noble-black">{{ formatPesoAmount(totalAmount) }}</span>
+            <div class="space-y-4 mb-6">
+              <div class="flex justify-between items-center">
+                <span class="text-[13px] text-gray-500"
+                  >{{ selectedItemIds.size }} items selected</span
+                >
+                <span class="text-[14px] font-semibold text-noble-black">{{
+                  formatPesoAmount(totalAmount)
+                }}</span>
+              </div>
+            </div>
+
+            <div class="border-t border-dashed border-gray-200 pt-5 mb-6">
+              <div class="flex justify-between items-center">
+                <span class="text-[15px] font-bold text-noble-black">Total</span>
+                <span class="text-[18px] font-bold text-burning-orange">{{
+                  formatPesoAmount(totalAmount)
+                }}</span>
               </div>
             </div>
 
             <div class="space-y-3">
               <button
-                class="w-full py-3 bg-burning-orange text-white rounded-2xl font-bold text-base transition-all hover:bg-blue-estate disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-burning-orange/10"
+                class="w-full py-3.5 bg-burning-orange text-white rounded-[10px] font-bold text-[15px] transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(255,113,36,0.3)]"
                 :disabled="selectedItemIds.size === 0 || isSubmitting"
                 @click="handleRequestBooking"
               >
@@ -525,7 +571,7 @@ const handleRequestBooking = async () => {
 
               <NuxtLink
                 to="/dashboard"
-                class="w-full py-3 bg-white border border-noble-black/10 text-noble-black rounded-2xl font-bold text-base transition-all hover:bg-cream flex items-center justify-center"
+                class="w-full py-3.5 bg-white border-[1.5px] border-burning-orange text-burning-orange rounded-[10px] font-bold text-[15px] transition-all hover:bg-burning-orange/5 flex items-center justify-center"
               >
                 Continue Browsing
               </NuxtLink>
@@ -533,7 +579,7 @@ const handleRequestBooking = async () => {
 
             <p
               v-if="bookingStatusMessage"
-              class="mt-4 text-center text-xs font-bold"
+              class="mt-4 text-center text-[12px] font-semibold"
               :class="
                 bookingStatusMessage.includes('failed')
                   ? 'text-cinnabar-red'
@@ -545,40 +591,46 @@ const handleRequestBooking = async () => {
 
             <div
               v-if="failedBookingDetails.length > 0"
-              class="mt-4 rounded-2xl border border-cinnabar-red/20 bg-cinnabar-red/5 p-4"
+              class="mt-4 rounded-[12px] border border-cinnabar-red/10 bg-cinnabar-red/5 p-4"
             >
-              <div class="mb-3 text-xs font-bold uppercase tracking-wide text-cinnabar-red">
+              <div class="mb-2 text-[11px] font-bold uppercase tracking-wider text-cinnabar-red">
                 Booking Issues
               </div>
-              <div class="space-y-3">
+              <div class="space-y-2">
                 <div
                   v-for="failedItem in failedBookingDetails"
                   :key="`${failedItem.name}-${failedItem.reason}`"
                   class="text-left"
                 >
-                  <div class="text-sm font-bold text-noble-black">{{ failedItem.name }}</div>
-                  <div class="text-xs leading-relaxed text-noble-black/60">
+                  <div class="text-[13px] font-semibold text-noble-black">
+                    {{ failedItem.name }}
+                  </div>
+                  <div class="text-[12px] leading-tight text-gray-500">
                     {{ failedItem.reason }}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="mt-8 pt-6 border-t border-cinnamon-ice/30">
-              <div class="flex items-center gap-2 text-noble-black/40 justify-center">
+            <div class="mt-8">
+              <div
+                class="flex items-center gap-2 px-4 py-2 bg-blue-estate/5 border border-blue-estate/10 rounded-full justify-center"
+              >
                 <svg
                   width="14"
                   height="14"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
+                  stroke="#3b4883"
+                  stroke-width="2.5"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
-                <span class="text-[11px] font-medium">Protected by TakeUP Guarantee</span>
+                <span class="text-[12px] font-semibold text-blue-estate"
+                  >Protected by TakeUP Secure</span
+                >
               </div>
             </div>
           </div>

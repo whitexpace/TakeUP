@@ -21,6 +21,8 @@ const props = withDefaults(
     memberSinceLabel?: string
     readOnlyBadgeLabel?: string | null
     topUpNotice?: string
+    gradient?: string
+    isSystemWallet?: boolean
     onToggleBalance: () => void
     onTopUp?: (amount: number) => Promise<unknown>
   }>(),
@@ -37,6 +39,8 @@ const props = withDefaults(
     memberSinceLabel: "TakeUP Member since 2026",
     readOnlyBadgeLabel: null,
     topUpNotice: "This is a pseudo top-up for demo purposes. No real money will be charged.",
+    gradient: "linear-gradient(135deg, #1a2340 0%, #2d3f6b 50%, #1e3a5f 100%)",
+    isSystemWallet: false,
     onTopUp: undefined,
   },
 )
@@ -121,7 +125,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
       <!-- Premium Wallet Card -->
       <div
         class="rounded-[24px] p-8 text-white relative overflow-hidden shadow-2xl min-h-[180px] sm:min-h-[210px] w-full max-w-[540px] flex flex-col justify-between aspect-[1.586/1] max-h-[320px]"
-        style="background: linear-gradient(135deg, #1a2340 0%, #2d3f6b 50%, #1e3a5f 100%)"
+        :style="{ background: gradient }"
       >
         <!-- Top Right Glow -->
         <div
@@ -139,7 +143,13 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
 
         <div class="flex justify-end items-start relative z-10">
           <div class="text-right">
-            <h3 class="text-[10px] font-bold uppercase tracking-[4px] opacity-70">
+            <h3
+              v-if="isSystemWallet"
+              class="text-[10px] font-bold uppercase tracking-[3px] text-white/40"
+            >
+              TAKEUP READ ONLY
+            </h3>
+            <h3 v-else class="text-[10px] font-bold uppercase tracking-[4px] opacity-70">
               TakeUP {{ readOnlyBadgeLabel || "Digital Wallet" }}
             </h3>
           </div>
@@ -160,38 +170,53 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                 </h2>
               </Transition>
             </div>
-            <button
-              class="p-2 hover:bg-white/10 rounded-full transition-colors shrink-0"
-              title="Toggle Balance Visibility"
-              @click="onToggleBalance"
-            >
+            <div class="flex items-center gap-2">
+              <button
+                class="p-2 hover:bg-white/10 rounded-full transition-colors shrink-0"
+                title="Toggle Balance Visibility"
+                @click="onToggleBalance"
+              >
+                <svg
+                  v-if="isBalanceVisible"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <svg
+                  v-else
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                  />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              </button>
               <svg
-                v-if="isBalanceVisible"
-                width="24"
-                height="24"
+                v-if="isSystemWallet"
+                width="20"
+                height="20"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2"
+                class="text-white/40"
               >
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              <svg
-                v-else
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path
-                  d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
-                />
-                <line x1="1" y1="1" x2="23" y2="23" />
-              </svg>
-            </button>
+            </div>
           </div>
         </div>
 
@@ -228,7 +253,33 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
 
     <!-- Protection Notice -->
     <div class="flex justify-center px-2">
-      <div class="inline-flex items-start sm:items-center gap-3 max-w-full">
+      <div
+        v-if="isSystemWallet"
+        class="flex items-center gap-3 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-3 w-full max-w-[760px]"
+      >
+        <div class="text-blue-700 shrink-0">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        </div>
+        <p class="text-[13px] leading-relaxed">
+          <span class="font-bold text-blue-900">{{ protectionTitle }}</span>
+          <span class="mx-2 text-blue-300 select-none">·</span>
+          <span class="text-blue-500">{{ protectionMessage }}</span>
+        </p>
+      </div>
+
+      <div v-else class="inline-flex items-start sm:items-center gap-3 max-w-full">
         <div class="text-burning-orange shrink-0 mt-0.5 sm:mt-0">
           <svg
             width="18"
@@ -319,102 +370,164 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         </button>
       </div>
 
-      <!-- Recent Activity -->
+      <!-- Recent Activity / Commission Activity -->
       <div
-        class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-8 space-y-8 flex flex-col h-full shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+        class="rounded-[24px] p-8 space-y-8 flex flex-col h-full shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+        :class="
+          isSystemWallet
+            ? 'bg-white border border-gray-100 rounded-[16px]'
+            : 'bg-cream border border-cinnamon-ice/20'
+        "
       >
         <div class="border-l-[3px] border-burning-orange pl-4">
           <h3 class="text-[20px] font-bold text-noble-black font-geist">{{ activityTitle }}</h3>
           <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">{{ activitySubtitle }}</p>
         </div>
-        <div class="space-y-0 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-          <div
-            v-for="tx in transactions"
-            :key="tx.id"
-            class="flex items-center justify-between py-4 border-b border-neutral-100 last:border-0"
-          >
-            <div class="flex items-center gap-4">
-              <div
-                class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                :class="
-                  tx.direction === 'CREDIT'
-                    ? 'bg-success-green/10 text-success-green'
-                    : 'bg-cinnabar-red/10 text-cinnabar-red'
-                "
+
+        <div
+          v-if="transactions.length === 0"
+          class="flex-1 flex flex-col items-center justify-center py-12 text-center"
+        >
+          <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              class="text-gray-400"
+            >
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+          </div>
+          <p class="text-[15px] font-semibold text-gray-400">
+            {{ isSystemWallet ? "No commission activity yet" : "No transactions yet" }}
+          </p>
+          <p v-if="isSystemWallet" class="mt-1 text-[13px] text-gray-400 max-w-[280px]">
+            Commission is collected automatically from completed wallet transactions.
+          </p>
+        </div>
+
+        <div v-else class="flex-1 overflow-x-auto">
+          <table v-if="isSystemWallet" class="w-full text-left">
+            <thead>
+              <tr class="border-b border-gray-50 bg-gray-50/50">
+                <th
+                  class="px-4 py-3 text-[11px] font-medium uppercase tracking-[1px] text-gray-400"
+                >
+                  Date
+                </th>
+                <th
+                  class="px-4 py-3 text-[11px] font-medium uppercase tracking-[1px] text-gray-400"
+                >
+                  Transaction ID
+                </th>
+                <th
+                  class="px-4 py-3 text-[11px] font-medium uppercase tracking-[1px] text-gray-400"
+                >
+                  Source
+                </th>
+                <th
+                  class="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-[1px] text-gray-400"
+                >
+                  Amount
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <tr
+                v-for="tx in transactions"
+                :key="tx.id"
+                class="h-[56px] hover:bg-gray-50/50 transition-colors"
               >
-                <svg
-                  v-if="tx.direction === 'CREDIT'"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 19V5M5 12l7-7 7 7" />
-                </svg>
-                <svg
-                  v-else
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 5v14M5 12l7 7 7-7" />
-                </svg>
-              </div>
-              <div class="min-w-0">
-                <p class="font-semibold text-noble-black text-[15px] leading-tight">
+                <td class="px-4 py-2 text-[13px] text-gray-500">{{ formatDate(tx.createdAt) }}</td>
+                <td class="px-4 py-2 font-mono text-[12px] text-gray-400">
+                  {{ tx.referenceCode }}
+                </td>
+                <td class="px-4 py-2 text-[14px] font-medium text-gray-900">
                   {{ getTransactionLabel(tx) }}
-                </p>
-                <div class="mt-1 flex flex-col gap-0.5">
-                  <p class="text-[12px] text-noble-black/40 font-medium">
-                    {{ formatDate(tx.createdAt) }}
+                </td>
+                <td class="px-4 py-2 text-right text-[15px] font-bold text-success-green">
+                  +₱{{
+                    Number(tx.amount.toString()).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div v-else class="space-y-0 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            <div
+              v-for="tx in transactions"
+              :key="tx.id"
+              class="flex items-center justify-between py-4 border-b border-neutral-100 last:border-0"
+            >
+              <div class="flex items-center gap-4">
+                <div
+                  class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                  :class="
+                    tx.direction === 'CREDIT'
+                      ? 'bg-success-green/10 text-success-green'
+                      : 'bg-cinnabar-red/10 text-cinnabar-red'
+                  "
+                >
+                  <svg
+                    v-if="tx.direction === 'CREDIT'"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 19V5M5 12l7-7 7 7" />
+                  </svg>
+                  <svg
+                    v-else
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 5v14M5 12l7 7 7-7" />
+                  </svg>
+                </div>
+                <div class="min-w-0">
+                  <p class="font-semibold text-noble-black text-[15px] leading-tight">
+                    {{ getTransactionLabel(tx) }}
                   </p>
-                  <p class="text-[11px] text-noble-black/30 font-mono tracking-tight">
-                    {{ tx.referenceCode }}
-                  </p>
+                  <div class="mt-1 flex flex-col gap-0.5">
+                    <p class="text-[12px] text-noble-black/40 font-medium">
+                      {{ formatDate(tx.createdAt) }}
+                    </p>
+                    <p class="text-[11px] text-noble-black/30 font-mono tracking-tight">
+                      {{ tx.referenceCode }}
+                    </p>
+                  </div>
                 </div>
               </div>
+              <div class="text-right shrink-0">
+                <p
+                  class="font-bold text-[16px]"
+                  :class="tx.direction === 'CREDIT' ? 'text-success-green' : 'text-cinnabar-red'"
+                >
+                  {{ tx.direction === "CREDIT" ? "+" : "-" }}₱{{
+                    Number(tx.amount.toString()).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })
+                  }}
+                </p>
+              </div>
             </div>
-            <div class="text-right shrink-0">
-              <p
-                class="font-bold text-[16px]"
-                :class="tx.direction === 'CREDIT' ? 'text-success-green' : 'text-cinnabar-red'"
-              >
-                {{ tx.direction === "CREDIT" ? "+" : "-" }}₱{{
-                  Number(tx.amount.toString()).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                  })
-                }}
-              </p>
-            </div>
-          </div>
-          <div v-if="transactions.length === 0" class="text-center py-12">
-            <div
-              class="w-12 h-12 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-3"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                class="text-noble-black/20"
-              >
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            </div>
-            <p class="text-[14px] text-noble-black/40 font-medium tracking-wide">
-              No transactions yet.
-            </p>
           </div>
         </div>
       </div>

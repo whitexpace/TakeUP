@@ -204,13 +204,20 @@ const requireBorrowerAccount = async (
 ) => {
   const userRecord = await ctx.prisma.user.findUnique({
     where: { id: ctx.user.id },
-    select: { accountType: true },
+    select: { status: true, accountType: true },
   })
 
-  if (!userRecord || userRecord.accountType !== "BORROWER") {
+  if (!userRecord || userRecord.status !== "ACTIVE") {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Only borrower accounts can add items to the bag.",
+      message: "Your account must be active to use the bag.",
+    })
+  }
+
+  if (userRecord.accountType !== "BORROWER") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only borrower accounts can use the bag.",
     })
   }
 }
