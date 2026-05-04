@@ -8,6 +8,11 @@ const TX_ID_1 = "11111111-1111-1111-1111-111111111111"
 const TX_ID_2 = "22222222-2222-2222-2222-222222222222"
 
 const mockUser = { id: USER_ID, email: "user@up.edu.ph", name: "Test User" }
+const mockAdminUser = {
+  id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+  email: "admin@up.edu.ph",
+  name: "Admin User",
+}
 
 const makeTx = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
@@ -30,7 +35,11 @@ const makeTx = (id: string, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const makeContext = (user = mockUser, findMany = vi.fn().mockResolvedValue([])) => {
+const makeContext = (
+  user = mockUser,
+  findMany = vi.fn().mockResolvedValue([]),
+  findUnique = vi.fn().mockResolvedValue(null),
+) => {
   const prisma = {
     $transaction: vi.fn(),
     rentalTransaction: {
@@ -54,6 +63,7 @@ const makeContext = (user = mockUser, findMany = vi.fn().mockResolvedValue([])) 
       update: vi.fn().mockResolvedValue({ id: ITEM_ID }),
     },
     user: {
+      findUnique,
       findMany: vi.fn().mockResolvedValue([
         {
           id: USER_ID,
@@ -61,6 +71,8 @@ const makeContext = (user = mockUser, findMany = vi.fn().mockResolvedValue([])) 
           firstName: "Borrow",
           middleName: null,
           lastName: "Er",
+          borrower: { borrowerRating: 4.8 },
+          lender: null,
         },
         {
           id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
@@ -68,6 +80,8 @@ const makeContext = (user = mockUser, findMany = vi.fn().mockResolvedValue([])) 
           firstName: "Lend",
           middleName: null,
           lastName: "Er",
+          borrower: null,
+          lender: { lenderRating: 4.9 },
         },
       ]),
     },
@@ -106,6 +120,8 @@ describe("transactionRouter", () => {
       expect(result.transactions).toHaveLength(1)
       expect(result.nextCursor).toBeNull()
       expect(result.transactions[0]?.reviewState.canSubmitAny).toBe(false)
+      expect(result.transactions[0]?.borrower.borrowerRating).toBe(4.8)
+      expect(result.transactions[0]?.lender.lenderRating).toBe(4.9)
     })
 
     it("filters by role LENDER", async () => {
@@ -251,6 +267,96 @@ describe("transactionRouter", () => {
           expect.objectContaining({ reviewType: "LENDER_REVIEW", canSubmit: true }),
         ]),
       )
+    })
+  })
+
+  describe("adminList", () => {
+    it("returns all transactions for admin users without participant scoping", async () => {
+      const findMany = vi.fn().mockResolvedValue([makeTx(TX_ID_1, { platformFee: 25 })])
+      const findUnique = vi.fn().mockResolvedValue({ accountType: "ADMIN" })
+      const caller = transactionRouter.createCaller(
+        makeContext(mockAdminUser, findMany, findUnique) as never,
+      )
+
+      const result = await caller.adminList({})
+
+      expect(findUnique).toHaveBeenCalledWith({
+        where: { id: mockAdminUser.id },
+        select: { accountType: true },
+      })
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { AND: [{}, {}, {}, {}] },
+        }),
+      )
+      expect(result.transactions).toHaveLength(1)
+      expect(result.transactions[0]?.commissionAmount).toBe(25)
+      expect(result.transactions[0]?.reviewState.isParticipant).toBe(false)
+      expect(result.transactions[0]?.borrower.borrowerRating).toBe(4.8)
+      expect(result.transactions[0]?.lender.lenderRating).toBe(4.9)
+    })
+
+    it("filters admin transactions by status, createdAt range, and search", async () => {
+      const findMany = vi.fn().mockResolvedValue([])
+      const findUnique = vi.fn().mockResolvedValue({ accountType: "ADMIN" })
+      const caller = transactionRouter.createCaller(
+        makeContext(mockAdminUser, findMany, findUnique) as never,
+      )
+      const createdAtFrom = new Date("2026-03-01T00:00:00.000Z")
+      const createdAtTo = new Date("2026-03-15T00:00:00.000Z")
+
+      await caller.adminList({
+        status: "COMPLETED",
+        createdAtFrom,
+        createdAtTo,
+        search: "camera",
+      })
+
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              { status: { in: ["COMPLETED"] } },
+              {
+                createdAt: {
+                  gte: new Date("2026-03-01T00:00:00.000Z"),
+                  lte: new Date("2026-03-15T23:59:59.999Z"),
+                },
+              },
+              {
+                OR: [
+                  { id: { contains: "camera" } },
+                  {
+                    item: {
+                      is: {
+                        name: {
+                          contains: "camera",
+                          mode: "insensitive",
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+              {},
+            ],
+          },
+        }),
+      )
+    })
+
+    it("forbids non-admin users from listing all transactions", async () => {
+      const caller = transactionRouter.createCaller(
+        makeContext(
+          mockUser,
+          vi.fn().mockResolvedValue([]),
+          vi.fn().mockResolvedValue({ accountType: "BORROWER" }),
+        ) as never,
+      )
+
+      await expect(caller.adminList({})).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      })
     })
   })
 
