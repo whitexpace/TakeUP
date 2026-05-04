@@ -203,12 +203,23 @@ const timeline = computed(() => {
   const entries = booking.value.timeline ?? []
   return entries.map((entry, index) => {
     let description = entry.description
+    let proofUrl: string | null = null
+    let proofLabel: string | null = null
 
-    // Deduplicate and refine descriptions
     if (entry.label === "In use") {
       description = "Item picked up by borrower"
-    } else if (entry.label === "Returned" && booking.value.refundAmount > 0) {
-      description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
+      if (booking.value.lenderHandoffProofUrl) {
+        proofUrl = booking.value.lenderHandoffProofUrl
+        proofLabel = "View lending proof"
+      }
+    } else if (entry.label === "Returned") {
+      if (booking.value.refundAmount > 0) {
+        description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
+      }
+      if (booking.value.borrowerReturnProofUrl) {
+        proofUrl = booking.value.borrowerReturnProofUrl
+        proofLabel = "View return proof"
+      }
     }
 
     return {
@@ -216,6 +227,8 @@ const timeline = computed(() => {
       description,
       date: formatDateTime(entry.occurredAt),
       status: index === entries.length - 1 ? "current" : "completed",
+      proofUrl,
+      proofLabel,
     }
   })
 })
@@ -316,6 +329,7 @@ const setProofFile = (
 
 const setHandoffProofFile = (event: Event) => setProofFile(event, handoffProofFile)
 const setReturnProofFile = (event: Event) => setProofFile(event, returnProofFile)
+const setEarlyReturnProofFile = (event: Event) => setProofFile(event, earlyReturnProofFile)
 
 const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
   const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
@@ -352,8 +366,20 @@ const handleHandoffProof = () => {
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
   handoffProofFile.value = null
+  if (!isRentalPeriodStarted.value) {
+    isTooEarlyForHandoffOpen.value = true
+    return
+  }
   isHandoffProofModalOpen.value = true
 }
+
+const isRentalPeriodStarted = computed(() => {
+  const now = new Date()
+  const start = new Date(booking.value.startDate)
+  return now >= start
+})
+
+const isTooEarlyForHandoffOpen = ref(false)
 
 const isEarlyReturnEligible = computed(() => {
   if (isLender.value || booking.value.status !== "CONFIRMED") return false
@@ -412,6 +438,38 @@ const handleEarlyReturn = async () => {
       "Unable to fetch early return preview."
   } finally {
     isFetchingPreview.value = false
+  }
+}
+
+const confirmEarlyReturn = async () => {
+  if (!earlyReturnProofFile.value) {
+    proofUploadErrorMessage.value = "Upload proof of return before submitting."
+    return
+  }
+
+  isSubmittingReturn.value = true
+  actionErrorMessage.value = ""
+  actionSuccessMessage.value = ""
+  proofUploadErrorMessage.value = ""
+
+  try {
+    const proofImageUrl = await uploadProofImage(earlyReturnProofFile.value, "RETURN")
+    await $fetch(`/api/bookings/${booking.value.id}/early-return`, {
+      method: "POST",
+      body: { proofImageUrl },
+    })
+    isEarlyReturnModalOpen.value = false
+    isSuccessModalOpen.value = true
+    actionSuccessMessage.value =
+      "Early return submitted. The lender was notified to confirm receipt."
+    await refresh()
+  } catch (err: unknown) {
+    proofUploadErrorMessage.value =
+      err instanceof Error
+        ? err.message
+        : getFetchErrorMessage(err, "Unable to submit the early return right now.")
+  } finally {
+    isSubmittingReturn.value = false
   }
 }
 
@@ -1165,6 +1223,29 @@ const handleReviewSubmitted = async () => {
                     >
                       {{ step.description }}
                     </p>
+                    <a
+                      v-if="step.proofUrl"
+                      :href="step.proofUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                      {{ step.proofLabel }}
+                    </a>
                   </div>
                   <span
                     class="text-[11px] font-mono text-noble-black/30 whitespace-nowrap pt-1 uppercase tracking-tighter"
@@ -1816,6 +1897,70 @@ const handleReviewSubmitted = async () => {
       </Teleport>
     </Transition>
 
+    <!-- Too Early to Upload Handoff Proof Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <Teleport to="body">
+        <div
+          v-if="isTooEarlyForHandoffOpen"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="isTooEarlyForHandoffOpen = false"
+          ></div>
+
+          <div
+            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          >
+            <div class="text-center">
+              <div
+                class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
+              >
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#E8650A"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <h3 class="text-2xl font-bold text-noble-black mb-2">Not Yet Time to Lend</h3>
+              <p class="text-noble-black/60 mb-2 leading-relaxed">
+                You can only lend the item within the agreed rental period.
+              </p>
+              <p class="text-[13px] text-noble-black/40 font-medium mb-8">
+                Rental starts on
+                <span class="font-bold text-noble-black/60">{{
+                  formatDate(booking.startDate)
+                }}</span
+                >.
+              </p>
+              <button
+                class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all"
+                @click="isTooEarlyForHandoffOpen = false"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+    </Transition>
+
     <!-- Return Confirmation UI (Modal) -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
@@ -1910,6 +2055,182 @@ const handleReviewSubmitted = async () => {
                   Not yet
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+    </Transition>
+
+    <!-- Early Return Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <Teleport to="body">
+        <div
+          v-if="isEarlyReturnModalOpen"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="isEarlyReturnModalOpen = false"
+          ></div>
+
+          <div
+            class="relative bg-white rounded-[32px] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden"
+          >
+            <!-- Header -->
+            <div class="px-8 pt-8 pb-4 shrink-0">
+              <div
+                class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-5"
+              >
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#E8650A"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" />
+                  <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9" />
+                  <path d="M12 3v6" />
+                </svg>
+              </div>
+              <h3 class="text-[22px] font-bold text-noble-black text-center">
+                Confirm Early Return
+              </h3>
+              <p
+                class="mt-1.5 text-[13px] text-noble-black/50 font-medium text-center leading-relaxed"
+              >
+                Attach proof of return to complete the early return request.
+              </p>
+            </div>
+
+            <!-- Scrollable body -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-8 py-4 space-y-5">
+              <!-- Refund breakdown -->
+              <div
+                v-if="earlyReturnPreviewData"
+                class="rounded-[16px] border border-cinnamon-ice bg-cream p-5 space-y-3"
+              >
+                <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/40">
+                  Refund Breakdown
+                </p>
+
+                <div class="space-y-2">
+                  <div class="flex justify-between text-[13px]">
+                    <span class="text-noble-black/60 font-medium">Usage</span>
+                    <span class="font-bold text-noble-black">
+                      {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
+                    </span>
+                  </div>
+                  <div class="flex justify-between text-[13px]">
+                    <span class="text-noble-black/60 font-medium">Unused rental value</span>
+                    <span class="font-semibold text-noble-black">
+                      {{ formatPeso(earlyReturnPreviewData.refund.unusedRentalValue) }}
+                    </span>
+                  </div>
+                  <div class="flex justify-between text-[13px]">
+                    <span class="text-noble-black/60 font-medium">Early return penalty (30%)</span>
+                    <span class="font-semibold text-cinnabar-red">
+                      -{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="border-t border-cinnamon-ice/50 pt-3 flex justify-between items-center">
+                  <span class="text-[14px] font-bold text-noble-black">
+                    {{ earlyReturnPreviewData.refund.eligible ? "Refund Amount" : "No Refund" }}
+                  </span>
+                  <span
+                    class="text-[16px] font-bold"
+                    :class="
+                      earlyReturnPreviewData.refund.eligible
+                        ? 'text-success-green'
+                        : 'text-noble-black/40'
+                    "
+                  >
+                    {{
+                      earlyReturnPreviewData.refund.eligible
+                        ? formatPeso(earlyReturnPreviewData.refund.refundAmount)
+                        : "₱0"
+                    }}
+                  </span>
+                </div>
+
+                <p
+                  v-if="!earlyReturnPreviewData.refund.eligible"
+                  class="text-[12px] text-noble-black/40 font-medium leading-relaxed"
+                >
+                  {{
+                    earlyReturnPreviewData.refund.reason ?? "Usage exceeded the refund threshold."
+                  }}
+                </p>
+              </div>
+
+              <!-- Proof upload -->
+              <div>
+                <p class="text-[13px] font-bold text-noble-black mb-2">
+                  Proof of Return <span class="text-cinnabar-red">*</span>
+                </p>
+                <label
+                  class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 cursor-pointer hover:border-burning-orange transition-colors"
+                >
+                  <span class="block text-sm font-bold text-noble-black">Attach image</span>
+                  <span class="mt-1 block text-xs text-noble-black/50 truncate">
+                    {{ earlyReturnProofFile?.name || "Choose an image file" }}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    class="sr-only"
+                    @change="setEarlyReturnProofFile"
+                  />
+                </label>
+                <p
+                  v-if="proofUploadErrorMessage"
+                  class="mt-2 text-[13px] text-cinnabar-red font-medium"
+                >
+                  {{ proofUploadErrorMessage }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Footer actions -->
+            <div class="px-8 pb-8 pt-4 shrink-0 flex flex-col gap-3">
+              <button
+                :disabled="isSubmittingReturn || !earlyReturnProofFile"
+                class="w-full h-12 bg-burning-orange text-white rounded-[14px] font-bold text-[14px] hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="confirmEarlyReturn"
+              >
+                <svg
+                  v-if="isSubmittingReturn"
+                  class="animate-spin"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                {{ isSubmittingReturn ? "Submitting..." : "Confirm Early Return" }}
+              </button>
+              <button
+                :disabled="isSubmittingReturn"
+                class="w-full h-12 bg-cream text-noble-black rounded-[14px] font-bold text-[14px] hover:bg-pale-cashmere transition-all disabled:opacity-50"
+                @click="isEarlyReturnModalOpen = false"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

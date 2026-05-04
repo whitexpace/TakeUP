@@ -125,9 +125,13 @@ const createdAtLabel = computed(() =>
 const shortTransactionId = computed(() => props.transaction.id.slice(0, 12).toUpperCase())
 
 const detailPath = computed(() => {
-  if (isAdminVariant.value) return null
-  const id = props.transaction.bookingId || props.transaction.id
-  return id ? `/account/transactions/${id}` : null
+  if (isAdminVariant.value) {
+    const bookingId = props.transaction.bookingId
+    return bookingId ? `/account/transactions/${bookingId}` : null
+  }
+  return props.transaction.bookingId
+    ? `/account/transactions/${props.transaction.bookingId}`
+    : `/account/transactions/${props.transaction.id}`
 })
 
 const rootClass = computed(() => [
@@ -159,218 +163,308 @@ const handleOpenChat = async () => {
 </script>
 
 <template>
-  <div v-if="isAdminVariant" :class="rootClass">
-    <!-- Top Zone: Header -->
-    <div class="border-b border-cinnamon-ice/15 bg-white/50 px-5 py-3">
-      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div class="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
-          <div class="flex min-w-0 items-center gap-2">
-            <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
-              Borrower
-            </span>
-            <span class="truncate text-[14px] font-semibold text-noble-black">
-              {{ borrowerName }}
-            </span>
-            <span
-              v-if="formatRating(borrowerRating)"
-              class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
-            >
-              {{ formatRating(borrowerRating) }}
-            </span>
-          </div>
-
-          <div class="hidden h-4 w-px bg-cinnamon-ice/20 lg:block"></div>
-
-          <div class="flex min-w-0 items-center gap-2">
-            <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
-              Lender
-            </span>
-            <span class="truncate text-[14px] font-semibold text-noble-black">
-              {{ lenderName }}
-            </span>
-            <span
-              v-if="formatRating(lenderRating)"
-              class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
-            >
-              {{ formatRating(lenderRating) }}
-            </span>
-          </div>
-        </div>
-
-        <TransactionStatusBadge :status="transaction.status" :role="activeRole" context="admin" />
-      </div>
-    </div>
-
-    <!-- Bottom Zone: Content -->
-    <div class="p-5 flex items-center gap-4 relative">
-      <div class="relative shrink-0">
-        <img
-          v-if="transaction.item.thumbnailImage"
-          :src="transaction.item.thumbnailImage"
-          :alt="transaction.item.name"
-          class="w-16 h-16 object-cover rounded-[10px] border border-noble-black/5"
-        />
+  <template v-if="detailPath">
+    <NuxtLink :to="detailPath" :class="rootClass">
+      <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
         <div
-          v-else
-          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-noble-black/5 flex items-center justify-center"
+          v-if="isAdminVariant"
+          class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
         >
-          <svg
-            class="w-6 h-6 text-cinnamon-ice/40"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-        </div>
-      </div>
+          <div class="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
+                Borrower
+              </span>
+              <span class="truncate text-[14px] font-semibold text-noble-black">
+                {{ borrowerName }}
+              </span>
+              <span
+                v-if="formatRating(borrowerRating)"
+                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+              >
+                {{ formatRating(borrowerRating) }}
+              </span>
+            </div>
 
-      <div class="flex-1 min-w-0">
-        <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
-          {{ transaction.item.name }}
-        </h4>
-        <div
-          class="flex flex-wrap items-center gap-1.5 text-[10px] text-noble-black/40 font-medium leading-none"
-        >
-          <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>Logged {{ createdAtLabel }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>{{ duration }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>Commission {{ commissionLabel }}</span>
-        </div>
-      </div>
+            <div class="hidden h-4 w-px bg-cinnamon-ice/40 lg:block"></div>
 
-      <div class="shrink-0 text-right">
-        <div class="flex flex-col items-end">
-          <p class="text-[13px] text-noble-black/40 font-medium leading-none mb-1.5">
-            {{ rateLabel }}
-          </p>
-          <div class="flex items-baseline gap-1.5">
-            <span class="text-[11px] text-noble-black/40 font-bold uppercase tracking-wider">
-              Total:
-            </span>
-            <span class="text-[16px] font-bold text-burning-orange leading-none">
-              {{ totalLabel }}
-            </span>
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
+                Lender
+              </span>
+              <span class="truncate text-[14px] font-semibold text-noble-black">
+                {{ lenderName }}
+              </span>
+              <span
+                v-if="formatRating(lenderRating)"
+                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+              >
+                {{ formatRating(lenderRating) }}
+              </span>
+            </div>
           </div>
+
+          <TransactionStatusBadge :status="transaction.status" :role="activeRole" context="admin" />
+        </div>
+
+        <div v-else class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-noble-black text-[14px] font-semibold">
+              {{ counterpartName }}
+            </span>
+
+            <button
+              v-if="canOpenChat"
+              class="w-7 h-7 flex items-center justify-center rounded-full bg-burning-orange/[0.12] border border-burning-orange/30 text-burning-orange hover:bg-burning-orange/[0.2] transition-all group/chat"
+              title="Open Chat"
+              aria-label="Open chat"
+              @click.stop.prevent="handleOpenChat"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="transition-transform group-hover/chat:scale-110"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+          </div>
+
+          <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
         </div>
       </div>
-    </div>
-  </div>
 
-  <NuxtLink v-else :to="detailPath || '#'" :class="rootClass">
-    <!-- Top Zone: Header -->
-    <div class="border-b border-cinnamon-ice/15 bg-white/50 px-5 py-3">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <span class="text-noble-black text-[14px] font-semibold">
-            {{ counterpartName }}
-          </span>
-
-          <button
-            v-if="canOpenChat"
-            class="w-7 h-7 flex items-center justify-center rounded-full bg-burning-orange/[0.12] border border-burning-orange/30 text-burning-orange hover:bg-burning-orange/[0.2] transition-all group/chat"
-            title="Open Chat"
-            aria-label="Open chat"
-            @click.stop.prevent="handleOpenChat"
+      <div class="p-5 flex items-center gap-4 relative">
+        <div class="relative shrink-0">
+          <img
+            v-if="transaction.item.thumbnailImage"
+            :src="transaction.item.thumbnailImage"
+            :alt="transaction.item.name"
+            class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+          />
+          <div
+            v-else
+            class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
           >
             <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
+              class="w-6 h-6 text-cinnamon-ice/40"
               fill="none"
               stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform group-hover/chat:scale-110"
+              viewBox="0 0 24 24"
             >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
             </svg>
-          </button>
+          </div>
         </div>
 
-        <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
-      </div>
-    </div>
-
-    <!-- Bottom Zone: Content -->
-    <div class="p-5 flex items-center gap-4 relative">
-      <div class="relative shrink-0">
-        <img
-          v-if="transaction.item.thumbnailImage"
-          :src="transaction.item.thumbnailImage"
-          :alt="transaction.item.name"
-          class="w-16 h-16 object-cover rounded-[10px] border border-noble-black/5"
-        />
-        <div
-          v-else
-          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-noble-black/5 flex items-center justify-center"
-        >
-          <svg
-            class="w-6 h-6 text-cinnamon-ice/40"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div class="flex-1 min-w-0">
+          <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+            {{ transaction.item.name }}
+          </h4>
+          <div
+            class="flex flex-wrap items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
+            <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
+            <span class="opacity-50 select-none">·</span>
+            <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
+            <span v-else>{{ dateRange }}</span>
+            <span class="opacity-50 select-none">·</span>
+            <span>{{ duration }}</span>
+            <template v-if="isAdminVariant">
+              <span class="opacity-50 select-none">·</span>
+              <span>Commission {{ commissionLabel }}</span>
+            </template>
+          </div>
+
+          <div v-if="reviewActions.length" class="mt-2.5 flex flex-wrap gap-3 relative z-10">
+            <button
+              v-for="action in reviewActions"
+              :key="action.reviewType"
+              class="text-[12px] font-bold text-burning-orange hover:underline underline-offset-4 transition-all"
+              @click.stop.prevent="handleWriteReview(action.reviewType)"
+            >
+              {{ action.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="shrink-0 z-10 text-right">
+          <div class="flex flex-col items-end">
+            <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
+                Total:
+              </span>
+              <span class="text-[16px] font-bold text-burning-orange leading-none">
+                {{ totalLabel }}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div class="flex-1 min-w-0">
-        <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
-          {{ transaction.item.name }}
-        </h4>
+    </NuxtLink>
+  </template>
+  <template v-else>
+    <div :class="rootClass">
+      <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
         <div
-          class="flex flex-wrap items-center gap-1.5 text-[10px] text-noble-black/40 font-medium leading-none"
+          v-if="isAdminVariant"
+          class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
         >
-          <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>{{ dateRange }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>{{ duration }}</span>
+          <div class="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
+                Borrower
+              </span>
+              <span class="truncate text-[14px] font-semibold text-noble-black">
+                {{ borrowerName }}
+              </span>
+              <span
+                v-if="formatRating(borrowerRating)"
+                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+              >
+                {{ formatRating(borrowerRating) }}
+              </span>
+            </div>
+
+            <div class="hidden h-4 w-px bg-cinnamon-ice/40 lg:block"></div>
+
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
+                Lender
+              </span>
+              <span class="truncate text-[14px] font-semibold text-noble-black">
+                {{ lenderName }}
+              </span>
+              <span
+                v-if="formatRating(lenderRating)"
+                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+              >
+                {{ formatRating(lenderRating) }}
+              </span>
+            </div>
+          </div>
+
+          <TransactionStatusBadge :status="transaction.status" :role="activeRole" context="admin" />
         </div>
 
-        <div v-if="reviewActions.length" class="mt-2.5 flex flex-wrap gap-3 relative z-10">
-          <button
-            v-for="action in reviewActions"
-            :key="action.reviewType"
-            class="text-[12px] font-bold text-burning-orange hover:underline underline-offset-4 transition-all"
-            @click.stop.prevent="handleWriteReview(action.reviewType)"
-          >
-            {{ action.label }}
-          </button>
+        <div v-else class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-noble-black text-[14px] font-semibold">
+              {{ counterpartName }}
+            </span>
+
+            <button
+              v-if="canOpenChat"
+              class="w-7 h-7 flex items-center justify-center rounded-full bg-burning-orange/[0.12] border border-burning-orange/30 text-burning-orange hover:bg-burning-orange/[0.2] transition-all group/chat"
+              title="Open Chat"
+              aria-label="Open chat"
+              @click.stop.prevent="handleOpenChat"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="transition-transform group-hover/chat:scale-110"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+          </div>
+
+          <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
         </div>
       </div>
 
-      <div class="shrink-0 text-right">
-        <div class="flex flex-col items-end">
-          <p class="text-[13px] text-noble-black/40 font-medium leading-none mb-1.5">
-            {{ rateLabel }}
-          </p>
-          <div class="flex items-baseline gap-1.5">
-            <span class="text-[11px] text-noble-black/40 font-bold uppercase tracking-wider">
-              Total:
-            </span>
-            <span class="text-[16px] font-bold text-burning-orange leading-none">
-              {{ totalLabel }}
-            </span>
+      <div class="p-5 flex items-center gap-4 relative">
+        <div class="relative shrink-0">
+          <img
+            v-if="transaction.item.thumbnailImage"
+            :src="transaction.item.thumbnailImage"
+            :alt="transaction.item.name"
+            class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+          />
+          <div
+            v-else
+            class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
+          >
+            <svg
+              class="w-6 h-6 text-cinnamon-ice/40"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+            {{ transaction.item.name }}
+          </h4>
+          <div
+            class="flex flex-wrap items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none"
+          >
+            <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
+            <span class="opacity-50 select-none">·</span>
+            <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
+            <span v-else>{{ dateRange }}</span>
+            <span class="opacity-50 select-none">·</span>
+            <span>{{ duration }}</span>
+            <template v-if="isAdminVariant">
+              <span class="opacity-50 select-none">·</span>
+              <span>Commission {{ commissionLabel }}</span>
+            </template>
+          </div>
+
+          <div v-if="reviewActions.length" class="mt-2.5 flex flex-wrap gap-3 relative z-10">
+            <button
+              v-for="action in reviewActions"
+              :key="action.reviewType"
+              class="text-[12px] font-bold text-burning-orange hover:underline underline-offset-4 transition-all"
+              @click.stop.prevent="handleWriteReview(action.reviewType)"
+            >
+              {{ action.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="shrink-0 z-10 text-right">
+          <div class="flex flex-col items-end">
+            <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
+                Total:
+              </span>
+              <span class="text-[16px] font-bold text-burning-orange leading-none">
+                {{ totalLabel }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </NuxtLink>
+  </template>
 </template>
