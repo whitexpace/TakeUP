@@ -321,7 +321,9 @@ function formatRating(value: number | null) {
                 </div>
                 <TransactionStatusBadge :status="transaction.status" context="admin" />
               </div>
-              <div class="mt-3 flex items-center justify-between gap-4 text-[13px] font-medium text-noble-black/45">
+              <div
+                class="mt-3 flex items-center justify-between gap-4 text-[13px] font-medium text-noble-black/45"
+              >
                 <span>{{ formatMoney(transaction.totalAmount) }}</span>
                 <span>{{ formatDateTime(transaction.createdAt) }}</span>
               </div>
@@ -368,7 +370,9 @@ function formatRating(value: number | null) {
                   {{ dispute.status.replaceAll("_", " ") }}
                 </span>
               </div>
-              <div class="mt-3 flex items-center justify-between gap-4 text-[13px] font-medium text-noble-black/45">
+              <div
+                class="mt-3 flex items-center justify-between gap-4 text-[13px] font-medium text-noble-black/45"
+              >
                 <span>{{ dispute.raisedByName || "Unknown reporter" }}</span>
                 <span>{{ formatDateTime(dispute.createdAt) }}</span>
               </div>
@@ -417,7 +421,9 @@ function formatRating(value: number | null) {
                 </svg>
               </div>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-[15px] font-semibold text-noble-black">{{ listing.name }}</p>
+                <p class="truncate text-[15px] font-semibold text-noble-black">
+                  {{ listing.name }}
+                </p>
                 <p class="mt-1 text-[13px] font-medium text-noble-black/45">
                   {{ listing.rating > 0 ? listing.rating.toFixed(1) : "No rating" }} ·
                   {{ listing.bookingCount }} bookings

@@ -22,8 +22,8 @@ definePageMeta({
     >
       <p class="text-[18px] font-bold text-noble-black">Listings management placeholder</p>
       <p class="mx-auto mt-2 max-w-xl text-[14px] font-medium leading-relaxed text-noble-black/45">
-        Use the Overview tab for the latest listing snapshot. Full admin listing controls are out
-        of scope for this branch.
+        Use the Overview tab for the latest listing snapshot. Full admin listing controls are out of
+        scope for this branch.
       </p>
     </section>
   </div>
