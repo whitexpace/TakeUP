@@ -460,7 +460,8 @@ const confirmEarlyReturn = async () => {
     })
     isEarlyReturnModalOpen.value = false
     isSuccessModalOpen.value = true
-    actionSuccessMessage.value = "Early return submitted. The lender was notified to confirm receipt."
+    actionSuccessMessage.value =
+      "Early return submitted. The lender was notified to confirm receipt."
     await refresh()
   } catch (err: unknown) {
     proofUploadErrorMessage.value =
@@ -1942,7 +1943,11 @@ const handleReviewSubmitted = async () => {
                 You can only lend the item within the agreed rental period.
               </p>
               <p class="text-[13px] text-noble-black/40 font-medium mb-8">
-                Rental starts on <span class="font-bold text-noble-black/60">{{ formatDate(booking.startDate) }}</span>.
+                Rental starts on
+                <span class="font-bold text-noble-black/60">{{
+                  formatDate(booking.startDate)
+                }}</span
+                >.
               </p>
               <button
                 class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all"
@@ -2098,8 +2103,12 @@ const handleReviewSubmitted = async () => {
                   <path d="M12 3v6" />
                 </svg>
               </div>
-              <h3 class="text-[22px] font-bold text-noble-black text-center">Confirm Early Return</h3>
-              <p class="mt-1.5 text-[13px] text-noble-black/50 font-medium text-center leading-relaxed">
+              <h3 class="text-[22px] font-bold text-noble-black text-center">
+                Confirm Early Return
+              </h3>
+              <p
+                class="mt-1.5 text-[13px] text-noble-black/50 font-medium text-center leading-relaxed"
+              >
                 Attach proof of return to complete the early return request.
               </p>
             </div>
@@ -2160,7 +2169,9 @@ const handleReviewSubmitted = async () => {
                   v-if="!earlyReturnPreviewData.refund.eligible"
                   class="text-[12px] text-noble-black/40 font-medium leading-relaxed"
                 >
-                  {{ earlyReturnPreviewData.refund.reason ?? "Usage exceeded the refund threshold." }}
+                  {{
+                    earlyReturnPreviewData.refund.reason ?? "Usage exceeded the refund threshold."
+                  }}
                 </p>
               </div>
 
@@ -2183,7 +2194,10 @@ const handleReviewSubmitted = async () => {
                     @change="setEarlyReturnProofFile"
                   />
                 </label>
-                <p v-if="proofUploadErrorMessage" class="mt-2 text-[13px] text-cinnabar-red font-medium">
+                <p
+                  v-if="proofUploadErrorMessage"
+                  class="mt-2 text-[13px] text-cinnabar-red font-medium"
+                >
                   {{ proofUploadErrorMessage }}
                 </p>
               </div>
