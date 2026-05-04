@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server"
 import { describe, expect, it, vi } from "vitest"
 import { adminRouter } from "../admin"
 
@@ -160,7 +159,7 @@ describe("adminRouter", () => {
 
       await expect(
         caller.listings.remove({ id: LISTING_ID, confirmation: true }),
-      ).rejects.toMatchObject<Partial<TRPCError>>({
+      ).rejects.toMatchObject({
         code: "BAD_REQUEST",
         message: "This listing cannot be removed because it has active or upcoming transactions.",
       })

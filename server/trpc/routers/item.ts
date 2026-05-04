@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server"
-import { ItemCategory, ItemCondition, ItemStatus, Prisma, TransactionStatus } from "@prisma/client"
+import type { ItemCategory, ItemCondition, ItemStatus } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {

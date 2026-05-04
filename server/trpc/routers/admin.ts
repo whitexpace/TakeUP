@@ -20,8 +20,6 @@ import {
   NON_TERMINAL_TRANSACTION_STATUS_DB_VALUES,
 } from "../../utils/admin-listings"
 
-const ADMIN_LISTING_ACTIVE_STATUSES = ["AVAILABLE", "UNAVAILABLE", "RENTED"] as const
-
 const ADMIN_LISTING_BASE_SQL = Prisma.sql`(i."status" <> 'DELETED' OR i."adminModerationState" = 'REMOVED')`
 
 const buildAdminListingStatusSql = (
