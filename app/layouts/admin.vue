@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 
 type AdminLink = {
+  key: "overview" | "users" | "transactions" | "disputes" | "listings" | "wallet" | "logs"
   label: string
   to: string
   description: string
@@ -19,24 +20,46 @@ const { notifications, loadNotifications, markNotificationRead, markAllNotificat
 
 const adminLinks: AdminLink[] = [
   {
+    key: "overview",
+    label: "Overview",
+    to: "/admin/overview",
+    description: "Monitor platform metrics, ratings, recent activity, and revenue at a glance.",
+  },
+  {
+    key: "users",
     label: "Users",
     to: "/admin/users",
     description: "Manage users, roles, and account settings.",
   },
   {
+    key: "transactions",
     label: "Transactions",
     to: "/admin/transactions",
     description: "Monitor borrower and lender transactions across the platform.",
   },
   {
-    label: "Dispute Queue",
+    key: "disputes",
+    label: "Disputes",
     to: "/admin/disputes",
     description: "Review submitted rental disputes and appeals.",
   },
   {
-    label: "Commissions",
+    key: "listings",
+    label: "Listings",
+    to: "/admin/listings",
+    description: "Review platform inventory and visibility from one place.",
+  },
+  {
+    key: "wallet",
+    label: "Wallet",
     to: "/admin/wallet",
     description: "Track platform commission revenue and source records.",
+  },
+  {
+    key: "logs",
+    label: "System Logs",
+    to: "/admin/system-logs",
+    description: "Inspect operational audit and system activity placeholders.",
   },
 ]
 
@@ -165,7 +188,21 @@ onMounted(() => {
               :class="isActive(link) ? 'text-white' : 'text-slate-600'"
             >
               <svg
-                v-if="link.label === 'Users'"
+                v-if="link.key === 'overview'"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 3v18h18" />
+                <path d="m7 14 4-4 3 3 5-6" />
+              </svg>
+              <svg
+                v-else-if="link.key === 'users'"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -181,7 +218,7 @@ onMounted(() => {
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
               <svg
-                v-else-if="link.label === 'Transactions'"
+                v-else-if="link.key === 'transactions'"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -197,7 +234,7 @@ onMounted(() => {
                 <path d="M21 13v2a4 4 0 0 1-4 4H3" />
               </svg>
               <svg
-                v-else-if="link.label === 'Dispute Queue'"
+                v-else-if="link.key === 'disputes'"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -214,7 +251,22 @@ onMounted(() => {
                 <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
               </svg>
               <svg
-                v-else-if="link.label === 'System Wallet'"
+                v-else-if="link.key === 'listings'"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M3 10h18" />
+                <path d="M9 20V10" />
+              </svg>
+              <svg
+                v-else-if="link.key === 'wallet'"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -227,6 +279,24 @@ onMounted(() => {
                 <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
                 <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
                 <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+              </svg>
+              <svg
+                v-else-if="link.key === 'logs'"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M8 6h13" />
+                <path d="M8 12h13" />
+                <path d="M8 18h13" />
+                <path d="M3 6h.01" />
+                <path d="M3 12h.01" />
+                <path d="M3 18h.01" />
               </svg>
             </div>
             <span class="text-[14px] font-medium">
