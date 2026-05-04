@@ -203,12 +203,23 @@ const timeline = computed(() => {
   const entries = booking.value.timeline ?? []
   return entries.map((entry, index) => {
     let description = entry.description
+    let proofUrl: string | null = null
+    let proofLabel: string | null = null
 
-    // Deduplicate and refine descriptions
     if (entry.label === "In use") {
       description = "Item picked up by borrower"
-    } else if (entry.label === "Returned" && booking.value.refundAmount > 0) {
-      description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
+      if (booking.value.lenderHandoffProofUrl) {
+        proofUrl = booking.value.lenderHandoffProofUrl
+        proofLabel = "View lending proof"
+      }
+    } else if (entry.label === "Returned") {
+      if (booking.value.refundAmount > 0) {
+        description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
+      }
+      if (booking.value.borrowerReturnProofUrl) {
+        proofUrl = booking.value.borrowerReturnProofUrl
+        proofLabel = "View return proof"
+      }
     }
 
     return {
@@ -216,6 +227,8 @@ const timeline = computed(() => {
       description,
       date: formatDateTime(entry.occurredAt),
       status: index === entries.length - 1 ? "current" : "completed",
+      proofUrl,
+      proofLabel,
     }
   })
 })
@@ -353,8 +366,20 @@ const handleHandoffProof = () => {
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
   handoffProofFile.value = null
+  if (!isRentalPeriodStarted.value) {
+    isTooEarlyForHandoffOpen.value = true
+    return
+  }
   isHandoffProofModalOpen.value = true
 }
+
+const isRentalPeriodStarted = computed(() => {
+  const now = new Date()
+  const start = new Date(booking.value.startDate)
+  return now >= start
+})
+
+const isTooEarlyForHandoffOpen = ref(false)
 
 const isEarlyReturnEligible = computed(() => {
   if (isLender.value || booking.value.status !== "CONFIRMED") return false
@@ -1197,6 +1222,29 @@ const handleReviewSubmitted = async () => {
                     >
                       {{ step.description }}
                     </p>
+                    <a
+                      v-if="step.proofUrl"
+                      :href="step.proofUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                      {{ step.proofLabel }}
+                    </a>
                   </div>
                   <span
                     class="text-[11px] font-mono text-noble-black/30 whitespace-nowrap pt-1 uppercase tracking-tighter"
@@ -1842,6 +1890,66 @@ const handleReviewSubmitted = async () => {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+    </Transition>
+
+    <!-- Too Early to Upload Handoff Proof Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <Teleport to="body">
+        <div
+          v-if="isTooEarlyForHandoffOpen"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="isTooEarlyForHandoffOpen = false"
+          ></div>
+
+          <div
+            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+          >
+            <div class="text-center">
+              <div
+                class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
+              >
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#E8650A"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <h3 class="text-2xl font-bold text-noble-black mb-2">Not Yet Time to Lend</h3>
+              <p class="text-noble-black/60 mb-2 leading-relaxed">
+                You can only lend the item within the agreed rental period.
+              </p>
+              <p class="text-[13px] text-noble-black/40 font-medium mb-8">
+                Rental starts on <span class="font-bold text-noble-black/60">{{ formatDate(booking.startDate) }}</span>.
+              </p>
+              <button
+                class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all"
+                @click="isTooEarlyForHandoffOpen = false"
+              >
+                Got it
+              </button>
             </div>
           </div>
         </div>

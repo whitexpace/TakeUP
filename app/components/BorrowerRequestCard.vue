@@ -7,111 +7,140 @@ const props = defineProps<{
 
 const lenderName = computed(() => {
   const user = props.request.lender.user
-  return `${user.firstName} ${user.lastName[0]}.`
+  const first = (user.firstName || "").trim()
+  const last = (user.lastName || "").trim()
+  if (!first && !last) return "Former user"
+  const displayFirst = first ? first.charAt(0).toUpperCase() + first.slice(1) : "Former user"
+  const isGenericLast = /^user$/i.test(last) || !last
+  if (isGenericLast) return displayFirst
+  return `${displayFirst} ${last.charAt(0).toUpperCase()}.`
 })
 
-const requestId = computed(() => `REQUEST ID. ${props.request.id.slice(0, 16).toUpperCase()}`)
-
 const detailPath = computed(() => `/account/transactions/${props.request.id}`)
+
+const shortId = computed(() => props.request.id.slice(0, 12).toUpperCase())
 
 const formatDate = (value: Date | string) =>
   new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
-const formatDateTime = (value: Date | string) =>
-  new Date(value).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
+const startDateLabel = computed(() => formatDate(props.request.startDate))
 
-const requestedDate = computed(() => formatDate(props.request.requestedAt))
+const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const totalDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+  if (totalDays <= 1) return "1 day"
+  if (totalDays < 7) return `${totalDays} days`
+  const weeks = Math.floor(totalDays / 7)
+  const remainingDays = totalDays % 7
+  if (remainingDays === 0) return weeks === 1 ? "1 week" : `${weeks} weeks`
+  const weekPart = weeks === 1 ? "1 week" : `${weeks} weeks`
+  const dayPart = remainingDays === 1 ? "1 day" : `${remainingDays} days`
+  return `${weekPart} and ${dayPart}`
+}
 
-const requestedTimeFrame = computed(() => {
-  const start = formatDateTime(props.request.startDate)
-  const end = formatDateTime(props.request.endDate)
-  return start === end ? start : `${start} to ${end}`
+const duration = computed(() => computeDuration(props.request.startDate, props.request.endDate))
+
+const formatPeso = (value: number) =>
+  `₱${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
+
+const rateLabel = computed(() => {
+  if (props.request.item.freeToBorrow) return "Free"
+  const unit = props.request.item.rateOption === "PER_HOUR" ? "/hour" : "/day"
+  return `${formatPeso(props.request.item.rentalFee)}${unit}`
 })
 
-const statusBadgeClass = computed(() => {
+const totalLabel = computed(() =>
+  props.request.item.freeToBorrow ? "₱0" : formatPeso(props.request.totalFee),
+)
+
+const badgeClass = computed(() => {
   switch (props.request.requestStatus) {
     case "PENDING":
-      return "bg-amber-100 text-amber-700"
+      return "bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
     case "APPROVED":
-      return "bg-emerald-100 text-emerald-700"
+      return "bg-blue-estate/[0.08] text-blue-estate border-blue-estate/20"
     case "REJECTED":
-      return "bg-rose-100 text-rose-700"
+      return "bg-cinnabar-red/[0.08] text-cinnabar-red border-cinnabar-red/20"
     default:
-      return "bg-cinnamon-ice/60 text-neutral-800"
+      return "bg-gray-100 text-gray-500 border-gray-200"
   }
 })
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-2xl border-[0.50px] border-cinnamon-ice bg-white font-geist">
-    <div
-      class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-stone-300/50 px-4 py-3 sm:px-6"
-    >
-      <span class="mr-auto text-base font-bold tracking-wide text-neutral-800/80">
-        {{ lenderName }}
-      </span>
-
-      <span
-        class="inline-flex items-center rounded-md px-2.5 py-1 text-sm font-normal leading-none sm:px-3 sm:text-base"
-        :class="statusBadgeClass"
-      >
-        {{ request.requestStatusLabel }}
-      </span>
+  <NuxtLink
+    :to="detailPath"
+    class="block overflow-hidden rounded-[16px] border border-cinnamon-ice/20 bg-white font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200 cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] group/card"
+  >
+    <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
+      <div class="flex items-center justify-between">
+        <span class="text-noble-black text-[14px] font-semibold">{{ lenderName }}</span>
+        <span
+          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold font-geist uppercase tracking-[0.1em] shrink-0 border"
+          :class="badgeClass"
+        >
+          {{ request.requestStatusLabel }}
+        </span>
+      </div>
     </div>
 
-    <NuxtLink
-      :to="detailPath"
-      class="flex cursor-pointer items-start gap-3 px-4 py-4 transition-colors hover:bg-cream/50 sm:gap-4 sm:px-6"
-    >
-      <img
-        v-if="request.item.thumbnailImage"
-        :src="request.item.thumbnailImage"
-        :alt="request.item.name"
-        class="h-16 w-16 shrink-0 rounded object-cover sm:h-20 sm:w-20"
-      />
-      <div
-        v-else
-        class="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-cinnamon-ice/40 sm:h-20 sm:w-20"
-      >
-        <svg
-          class="h-7 w-7 text-cinnamon-ice sm:h-8 sm:w-8"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+    <div class="p-5 flex items-center gap-4 relative">
+      <div class="relative shrink-0">
+        <img
+          v-if="request.item.thumbnailImage"
+          :src="request.item.thumbnailImage"
+          :alt="request.item.name"
+          class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+        />
+        <div
+          v-else
+          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
-      </div>
-
-      <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-normal text-neutral-800 sm:text-base">
-          {{ request.item.name }}
-        </p>
-        <p class="mt-1 truncate text-xs font-normal text-neutral-800/80">{{ requestId }}</p>
-        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span class="flex items-center gap-1 text-xs text-neutral-800/80">
-            <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="1" />
-              <line x1="16" y1="2" x2="16" y2="6" stroke-width="1" />
-              <line x1="8" y1="2" x2="8" y2="6" stroke-width="1" />
-              <line x1="3" y1="10" x2="21" y2="10" stroke-width="1" />
-            </svg>
-            Requested {{ requestedDate }}
-          </span>
-          <span class="text-xs text-neutral-800/80">Time frame: {{ requestedTimeFrame }}</span>
+          <svg
+            class="w-6 h-6 text-cinnamon-ice/40"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
         </div>
       </div>
-    </NuxtLink>
-  </div>
+
+      <div class="flex-1 min-w-0">
+        <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+          {{ request.item.name }}
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none"
+        >
+          <span class="font-mono tracking-wider">{{ shortId }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>{{ startDateLabel }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>{{ duration }}</span>
+        </div>
+      </div>
+
+      <div class="shrink-0 z-10 text-right">
+        <div class="flex flex-col items-end">
+          <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
+              Total:
+            </span>
+            <span class="text-[16px] font-bold text-burning-orange leading-none">
+              {{ totalLabel }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </NuxtLink>
 </template>
