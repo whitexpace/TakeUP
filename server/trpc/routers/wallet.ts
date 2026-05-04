@@ -6,11 +6,7 @@ import {
   payWithWallet,
   getWalletTransactions,
 } from "../../utils/wallet"
-import {
-  topUpSchema,
-  payWithWalletSchema,
-  listTransactionsSchema,
-} from "#shared/schemas/wallet"
+import { topUpSchema, payWithWalletSchema, listTransactionsSchema } from "#shared/schemas/wallet"
 
 export const walletRouter = router({
   getWallet: protectedProcedure.query(async ({ ctx }) => {

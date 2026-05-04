@@ -1,7 +1,11 @@
 import type { H3Event } from "h3"
 import { getQuery } from "h3"
 import { listItemsSchema } from "#shared/schemas/item"
-import { hasViewerCredentials, setPrivateNoStoreApiHeaders, setPublicSWRApiHeaders } from "../../utils/request-security"
+import {
+  hasViewerCredentials,
+  setPrivateNoStoreApiHeaders,
+  setPublicSWRApiHeaders,
+} from "../../utils/request-security"
 import { appRouter } from "../../trpc/routers"
 import { createContext } from "../../trpc/context"
 import { parseItemFilterQuery } from "./parse-item-filter-query"
