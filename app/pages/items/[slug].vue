@@ -106,6 +106,7 @@ const itemLoadErrorMessage = computed(
 
 const currentDate = new Date()
 const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+const currentTimeMinutes = currentDate.getHours() * 60 + currentDate.getMinutes()
 
 const currentImageIndex = ref(0)
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -593,6 +594,16 @@ const isSameDay = computed(() => {
   return startDate.value.getTime() === endDate.value.getTime()
 })
 
+const isStartDateToday = computed(() => {
+  if (!startDate.value) return false
+  return startDate.value.getTime() === today.getTime()
+})
+
+const isStartTimePast = (timeValue: string) => {
+  if (!isStartDateToday.value) return false
+  return timeToMinutes(timeValue) <= currentTimeMinutes
+}
+
 const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
   if (!isSameDay.value) return false
   if (!isEnd) return false
@@ -601,6 +612,7 @@ const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
 }
 
 const selectStartTime = (timeValue: string) => {
+  if (isStartTimePast(timeValue)) return
   startTime.value = timeValue
   isStartTimeOpen.value = false
 
@@ -1550,9 +1562,13 @@ onUnmounted(() => {
                             v-for="time in timeOptions"
                             :key="time"
                             class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                            :class="
-                              startTime === time ? 'bg-cream text-burning-orange font-bold' : ''
-                            "
+                            :class="[
+                              isStartTimePast(time)
+                                ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                                : startTime === time
+                                  ? 'bg-cream text-burning-orange font-bold'
+                                  : '',
+                            ]"
                             @click="selectStartTime(time)"
                           >
                             {{ time }}
@@ -1975,9 +1991,13 @@ onUnmounted(() => {
                                 v-for="time in timeOptions"
                                 :key="time"
                                 class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                                :class="
-                                  startTime === time ? 'bg-cream text-burning-orange font-bold' : ''
-                                "
+                                :class="[
+                                  isStartTimePast(time)
+                                    ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                                    : startTime === time
+                                      ? 'bg-cream text-burning-orange font-bold'
+                                      : '',
+                                ]"
                                 @click="selectStartTime(time)"
                               >
                                 {{ time }}
@@ -2596,7 +2616,13 @@ onUnmounted(() => {
                       v-for="time in timeOptions"
                       :key="time"
                       class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                      :class="startTime === time ? 'bg-cream text-burning-orange font-bold' : ''"
+                      :class="[
+                        isStartTimePast(time)
+                          ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                          : startTime === time
+                            ? 'bg-cream text-burning-orange font-bold'
+                            : '',
+                      ]"
                       @click="selectStartTime(time)"
                     >
                       {{ time }}
@@ -3146,7 +3172,13 @@ onUnmounted(() => {
                       v-for="time in timeOptions"
                       :key="time"
                       class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                      :class="startTime === time ? 'bg-cream text-burning-orange font-bold' : ''"
+                      :class="[
+                        isStartTimePast(time)
+                          ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                          : startTime === time
+                            ? 'bg-cream text-burning-orange font-bold'
+                            : '',
+                      ]"
                       @click="selectStartTime(time)"
                     >
                       {{ time }}

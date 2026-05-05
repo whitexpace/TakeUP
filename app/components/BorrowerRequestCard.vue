@@ -23,7 +23,20 @@ const shortId = computed(() => props.request.id.slice(0, 12).toUpperCase())
 const formatDate = (value: Date | string) =>
   new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
-const startDateLabel = computed(() => formatDate(props.request.startDate))
+const formatTime = (value: Date | string) =>
+  new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+
+const dateRange = computed(() => {
+  const start = formatDate(props.request.startDate)
+  const end = formatDate(props.request.endDate)
+  return start === end ? start : `${start} - ${end}`
+})
+
+const timeRange = computed(() => {
+  const start = formatTime(props.request.startDate)
+  const end = formatTime(props.request.endDate)
+  return `${start} – ${end}`
+})
 
 const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
   const start = new Date(startDate)
@@ -122,7 +135,9 @@ const badgeClass = computed(() => {
         >
           <span class="font-mono tracking-wider">{{ shortId }}</span>
           <span class="opacity-50 select-none">·</span>
-          <span>{{ startDateLabel }}</span>
+          <span>{{ dateRange }}</span>
+          <span class="opacity-50 select-none">·</span>
+          <span>{{ timeRange }}</span>
           <span class="opacity-50 select-none">·</span>
           <span>{{ duration }}</span>
         </div>

@@ -52,7 +52,6 @@ const makeFeedRecord = (id: string, overrides: Record<string, unknown> = {}) => 
   rating: 0,
   boostScore: 0,
   boostExpiresAt: null,
-  borrowerId: null,
   ...overrides,
 })
 
@@ -146,7 +145,6 @@ describe("itemRouter", () => {
       bookingCount: 0,
       likeCount: 0,
       rating: 0,
-      borrowerId: null,
     })
 
     const caller = itemRouter.createCaller({
@@ -395,7 +393,6 @@ describe("itemRouter", () => {
       bookingCount: 0,
       likeCount: 0,
       rating: 0,
-      borrowerId: null,
       transactionReviews: [
         {
           id: "review-1",
@@ -735,7 +732,6 @@ describe("itemRouter", () => {
       whatIsIncluded: null,
       knownIssues: null,
       usageLimitations: null,
-      borrowerId: null,
       lenderId,
       lender: {
         user: {

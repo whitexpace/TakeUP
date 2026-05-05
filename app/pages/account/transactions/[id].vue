@@ -226,6 +226,7 @@ const timeline = computed(() => {
 
 const isReturnModalOpen = ref(false)
 const isHandoffProofModalOpen = ref(false)
+const proofImageUrl = ref<string | null>(null)
 const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
 const isSubmittingHandoffProof = ref(false)
@@ -1098,7 +1099,7 @@ const handleReviewSubmitted = async () => {
                     <line x1="3" x2="21" y1="10" y2="10" />
                   </svg>
                   <span
-                    >{{ formatDate(booking.startDate) }} - {{ formatDate(booking.endDate) }}</span
+                    >{{ formatDateTime(booking.startDate) }} – {{ formatDateTime(booking.endDate) }}</span
                   >
                 </div>
               </div>
@@ -1214,12 +1215,11 @@ const handleReviewSubmitted = async () => {
                     >
                       {{ step.description }}
                     </p>
-                    <a
+                    <button
                       v-if="step.proofUrl"
-                      :href="step.proofUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      type="button"
                       class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
+                      @click.stop="proofImageUrl = step.proofUrl"
                     >
                       <svg
                         width="13"
@@ -1236,7 +1236,7 @@ const handleReviewSubmitted = async () => {
                         <polyline points="21 15 16 10 5 21" />
                       </svg>
                       {{ step.proofLabel }}
-                    </a>
+                    </button>
                   </div>
                   <span
                     class="text-[11px] font-mono text-noble-black/30 whitespace-nowrap pt-1 uppercase tracking-tighter"
@@ -2577,6 +2577,52 @@ const handleReviewSubmitted = async () => {
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+      </Teleport>
+    </Transition>
+
+    <!-- Proof Image Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <Teleport to="body">
+        <div
+          v-if="proofImageUrl"
+          class="fixed inset-0 z-[1400] flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/70 backdrop-blur-sm"
+            @click="proofImageUrl = null"
+          />
+          <div class="relative max-w-2xl w-full animate-in zoom-in-95 duration-300">
+            <button
+              class="absolute -top-4 -right-4 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-noble-black/60 hover:text-noble-black transition-colors"
+              @click="proofImageUrl = null"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <img
+              :src="proofImageUrl"
+              alt="Proof image"
+              class="w-full rounded-[20px] shadow-2xl object-contain max-h-[85vh]"
+            />
           </div>
         </div>
       </Teleport>

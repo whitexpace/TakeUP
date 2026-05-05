@@ -44,7 +44,6 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   rating: 4,
   lenderId: "lender-1",
   ownerName: "lender-1",
-  borrowerId: null,
   categories: ["ELECTRONICS"],
   tags: [],
   ...overrides,
