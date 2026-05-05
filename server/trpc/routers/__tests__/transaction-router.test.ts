@@ -350,7 +350,7 @@ describe("transactionRouter", () => {
         makeContext(
           mockUser,
           vi.fn().mockResolvedValue([]),
-          vi.fn().mockResolvedValue({ accountType: "BORROWER" }),
+          vi.fn().mockResolvedValue({ accountType: "USER" }),
         ) as never,
       )
 

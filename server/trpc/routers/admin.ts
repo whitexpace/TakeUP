@@ -121,7 +121,7 @@ export const adminRouter = t.router({
           skip: z.number().int().nonnegative().default(0),
           take: z.number().int().positive().max(100).default(20),
           search: z.string().optional(),
-          role: z.enum(["LENDER", "BORROWER", "ADMIN"]).optional(),
+          role: z.enum(["ADMIN", "USER"]).optional(),
           status: z.enum(["ACTIVE", "SUSPENDED", "BANNED", "PENDING", "DEACTIVATED"]).optional(),
         }),
       )
@@ -1088,16 +1088,10 @@ export const adminRouter = t.router({
           throw new Error("User not found")
         }
 
-        // Determine default role
-        let defaultAccountType: "LENDER" | "BORROWER" = "BORROWER"
-        if (userDetails.lender) {
-          defaultAccountType = "LENDER"
-        }
-
-        // Update account type back to default
+        // Update account type back to USER
         const userUpdated = await ctx.prisma.user.update({
           where: { id: input.userId },
-          data: { accountType: defaultAccountType },
+          data: { accountType: "USER" },
           select: {
             id: true,
             email: true,

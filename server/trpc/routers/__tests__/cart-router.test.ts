@@ -68,7 +68,7 @@ type MakeContextOptions = {
 }
 
 const makeContext = ({
-  accountType = "BORROWER",
+  accountType = "USER",
   item = {
     id: ITEM_ID,
     status: "AVAILABLE",
@@ -226,8 +226,8 @@ describe("cartRouter", () => {
     ).rejects.toMatchObject({ code: "CONFLICT" })
   })
 
-  it("rejects non-borrower accounts", async () => {
-    const context = makeContext({ accountType: "LENDER" })
+  it("rejects non-user accounts", async () => {
+    const context = makeContext({ accountType: "ADMIN" })
     const caller = cartRouter.createCaller(context)
 
     await expect(caller.list()).rejects.toMatchObject({ code: "FORBIDDEN" })
