@@ -98,10 +98,10 @@ export const requestRouter = router({
       })
     }
 
-    if (existingUser.accountType !== "BORROWER") {
+    if (existingUser.accountType !== "USER") {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "Only borrower accounts can post requests.",
+        message: "Only user accounts can post requests.",
       })
     }
 
