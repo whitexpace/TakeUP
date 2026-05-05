@@ -214,10 +214,10 @@ const requireBorrowerAccount = async (
     })
   }
 
-  if (userRecord.accountType !== "BORROWER") {
+  if (userRecord.accountType !== "USER") {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Only borrower accounts can use the bag.",
+      message: "Only user accounts can use the bag.",
     })
   }
 }

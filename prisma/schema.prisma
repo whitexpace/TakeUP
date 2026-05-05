@@ -172,9 +172,8 @@ enum NotificationType {
 }
 
 enum AccountType {
-  LENDER
-  BORROWER
   ADMIN
+  USER
 }
 
 enum UserStatus {

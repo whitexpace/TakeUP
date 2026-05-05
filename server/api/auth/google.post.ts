@@ -65,7 +65,7 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
           username: emailPrefix,
           firstName: emailPrefix,
           lastName: "User",
-          accountType: "BORROWER",
+          accountType: "USER",
           status: "ACTIVE",
         },
         select: userSelect,

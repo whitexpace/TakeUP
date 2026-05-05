@@ -99,7 +99,7 @@ export default defineEventHandler(async (event) => {
         firstName: username,
         lastName: "User",
         googleSub: supabaseSub,
-        accountType: "LENDER",
+        accountType: "USER",
         status: "ACTIVE",
         lender: { create: { lenderRating: 0 } },
         borrower: { create: { borrowStatus: "ACTIVE", borrowerRating: 0 } },

@@ -66,11 +66,11 @@ describe("requestRouter", () => {
     )
   })
 
-  it("creates a request for an authenticated borrower", async () => {
+  it("creates a request for an authenticated user", async () => {
     const findUnique = vi.fn().mockResolvedValue({
       id: "user-1",
       username: "borrower1",
-      accountType: "BORROWER",
+      accountType: "USER",
       status: "ACTIVE",
     })
     const create = vi.fn().mockResolvedValue({
@@ -110,21 +110,21 @@ describe("requestRouter", () => {
     expect(result.requester.username).toBe("borrower1")
   })
 
-  it("rejects request creation for non-borrower accounts", async () => {
+  it("rejects request creation for non-user accounts", async () => {
     const caller = requestRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
         user: {
           findUnique: vi.fn().mockResolvedValue({
             id: "user-2",
-            username: "lender1",
-            accountType: "LENDER",
+            username: "admin1",
+            accountType: "ADMIN",
             status: "ACTIVE",
           }),
         },
         requestPost: { create: vi.fn() },
       } as never,
-      user: { id: "user-2", email: "lender1@up.edu.ph", name: "lender1" },
+      user: { id: "user-2", email: "admin1@up.edu.ph", name: "admin1" },
     })
 
     await expect(
