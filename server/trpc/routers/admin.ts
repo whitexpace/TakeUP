@@ -121,7 +121,7 @@ export const adminRouter = t.router({
           skip: z.number().int().nonnegative().default(0),
           take: z.number().int().positive().max(100).default(20),
           search: z.string().optional(),
-          role: z.enum(["LENDER", "BORROWER", "ADMIN"]).optional(),
+          role: z.enum(["ADMIN", "USER"]).optional(),
           status: z.enum(["ACTIVE", "SUSPENDED", "BANNED", "PENDING", "DEACTIVATED"]).optional(),
         }),
       )

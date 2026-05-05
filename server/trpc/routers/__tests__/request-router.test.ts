@@ -138,7 +138,7 @@ describe("requestRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Only borrower accounts can post requests.",
+      message: "Only user accounts can post requests.",
     })
   })
 })

@@ -9,7 +9,7 @@ const router = useRouter()
 const { $trpc } = useNuxtApp() as unknown as { $trpc: TrpcClient }
 
 const searchQuery = ref("")
-const selectedRole = ref<"LENDER" | "BORROWER" | "ADMIN" | undefined>(undefined)
+const selectedRole = ref<"ADMIN" | "USER" | undefined>(undefined)
 const selectedStatus = ref<
   "ACTIVE" | "SUSPENDED" | "BANNED" | "PENDING" | "DEACTIVATED" | undefined
 >(undefined)
@@ -51,7 +51,7 @@ const handleSearch = (query: string) => {
 }
 
 const handleRoleFilter = (role: string | undefined) => {
-  selectedRole.value = role as "LENDER" | "BORROWER" | "ADMIN" | undefined
+  selectedRole.value = role as "ADMIN" | "USER" | undefined
   currentPage.value = 0
 }
 
@@ -126,8 +126,7 @@ const clearFilters = () => {
       >
         <option value="">All Roles</option>
         <option value="ADMIN">Admin</option>
-        <option value="LENDER">Lender</option>
-        <option value="BORROWER">Borrower</option>
+        <option value="USER">User</option>
       </select>
 
       <!-- Status Filter -->
@@ -281,10 +280,10 @@ const clearFilters = () => {
                   ADMIN
                 </span>
                 <span
-                  v-else-if="u.accountType === 'BORROWER'"
+                  v-else-if="u.accountType === 'USER'"
                   class="rounded-full rounded-tr-[11px] bg-blue-100 px-[10px] py-[2px] text-[12px] font-bold text-blue-700"
                 >
-                  BORROWER
+                  USER
                 </span>
                 <span
                   v-else
