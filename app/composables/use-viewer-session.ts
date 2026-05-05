@@ -1,6 +1,7 @@
 type CachedViewerSession = Awaited<
   ReturnType<ReturnType<typeof useSupabaseClient>["auth"]["getSession"]>
 >["data"]["session"]
+type ViewerAuthHeaders = Record<string, string> | undefined
 
 let inflightSessionRequest: Promise<CachedViewerSession> | null = null
 
@@ -47,7 +48,7 @@ export const useViewerSession = () => {
     return activeSession?.access_token
   }
 
-  const getAuthHeaders = async () => {
+  const getAuthHeaders = async (): Promise<ViewerAuthHeaders> => {
     if (import.meta.server) {
       const headers = useRequestHeaders(["cookie"])
       return headers.cookie ? { cookie: headers.cookie } : undefined
@@ -59,7 +60,7 @@ export const useViewerSession = () => {
     }
 
     return {
-      Authorization: `Bearer ${accessToken}`,
+      authorization: `Bearer ${accessToken}`,
     }
   }
 

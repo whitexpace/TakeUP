@@ -10,22 +10,24 @@ export const requireUser = middleware(async ({ ctx, next }) => {
     })
   }
 
-  const isVerifiedHttpSession = ctx.event.context.authUser?.id === ctx.user.id
-  if (!isVerifiedHttpSession) {
+  const verifiedAuthUserId = ctx.event?.context?.authUser?.id
+  if (!verifiedAuthUserId) {
     return next({
       ctx: { ...ctx, user: ctx.user },
+    })
+  }
+
+  const isVerifiedHttpSession = verifiedAuthUserId === ctx.user.id
+  if (!isVerifiedHttpSession) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "AUTH_UNAUTHORIZED: You must be authenticated to access this resource.",
     })
   }
 
   const hasUserDelegate =
     typeof (ctx.prisma as { user?: { findUnique?: unknown } }).user?.findUnique === "function"
   const userRecord = hasUserDelegate ? await getCachedUserAccess(ctx.prisma, ctx.user.id) : null
-
-  if (!hasUserDelegate) {
-    return next({
-      ctx: { ...ctx, user: ctx.user },
-    })
-  }
 
   if (!userRecord || userRecord.status !== "ACTIVE") {
     throw new TRPCError({
@@ -47,9 +49,17 @@ export const requireAdmin = middleware(async ({ ctx, next }) => {
     })
   }
 
-  const isVerifiedHttpSession = ctx.event.context.authUser?.id === ctx.user.id
-  if (!isVerifiedHttpSession) {
-    if (ctx.user.accountType !== "ADMIN") {
+  const verifiedAuthUserId = ctx.event?.context?.authUser?.id
+  if (!verifiedAuthUserId) {
+    const syntheticUserRecord =
+      typeof (ctx.prisma as { user?: { findUnique?: unknown } }).user?.findUnique === "function"
+        ? await ctx.prisma.user.findUnique({
+            where: { id: ctx.user.id },
+            select: { accountType: true },
+          })
+        : null
+
+    if (syntheticUserRecord?.accountType !== "ADMIN") {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Only admins can access this resource.",
@@ -58,25 +68,20 @@ export const requireAdmin = middleware(async ({ ctx, next }) => {
 
     return next({
       ctx: { ...ctx, user: ctx.user },
+    })
+  }
+
+  const isVerifiedHttpSession = verifiedAuthUserId === ctx.user.id
+  if (!isVerifiedHttpSession) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only admins can access this resource.",
     })
   }
 
   const hasUserDelegate =
     typeof (ctx.prisma as { user?: { findUnique?: unknown } }).user?.findUnique === "function"
   const userRecord = hasUserDelegate ? await getCachedUserAccess(ctx.prisma, ctx.user.id) : null
-
-  if (!hasUserDelegate) {
-    if (ctx.user.accountType !== "ADMIN") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Only admins can access this resource.",
-      })
-    }
-
-    return next({
-      ctx: { ...ctx, user: ctx.user },
-    })
-  }
 
   if (!userRecord || userRecord.status !== "ACTIVE" || userRecord.accountType !== "ADMIN") {
     throw new TRPCError({
