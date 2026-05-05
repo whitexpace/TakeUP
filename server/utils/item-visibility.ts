@@ -6,7 +6,10 @@ import type {
   UserStatus,
 } from "@prisma/client"
 
-export const PUBLIC_VISIBLE_ITEM_STATUS = "AVAILABLE" satisfies ItemStatus
+export const PUBLIC_VISIBLE_ITEM_STATUSES = [
+  "AVAILABLE",
+  "RENTED",
+] as const satisfies readonly ItemStatus[]
 export const PUBLIC_VISIBLE_LENDER_STATUS = "ACTIVE" satisfies UserStatus
 export const ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES = [
   "CONFIRMED",
@@ -71,7 +74,7 @@ const rangesOverlap = (
 ) => left.startMs < right.endMs && left.endMs > right.startMs
 
 export const buildPublicVisibleItemWhere = (now = new Date()): Prisma.ItemWhereInput => ({
-  status: PUBLIC_VISIBLE_ITEM_STATUS,
+  status: { in: PUBLIC_VISIBLE_ITEM_STATUSES },
   lender: {
     user: {
       status: PUBLIC_VISIBLE_LENDER_STATUS,
@@ -90,7 +93,7 @@ export const isPublicVisibleItem = (
   now = new Date(),
   options: { requiredWindow?: VisibilityWindow | null } = {},
 ) => {
-  if (item.status !== PUBLIC_VISIBLE_ITEM_STATUS) return false
+  if (!PUBLIC_VISIBLE_ITEM_STATUSES.includes(item.status as (typeof PUBLIC_VISIBLE_ITEM_STATUSES)[number])) return false
 
   if (
     item.lender?.user?.status !== undefined &&
