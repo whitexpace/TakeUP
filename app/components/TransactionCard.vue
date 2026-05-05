@@ -70,11 +70,20 @@ const formatRating = (rating: number | null) => (rating === null ? null : rating
 const formatDate = (date: Date | string) =>
   new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
+const formatTime = (date: Date | string) =>
+  new Date(date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+
 const dateRange = computed(() => {
   const start = formatDate(props.transaction.startDate)
   const end = formatDate(props.transaction.endDate)
   const sameDay = start === end
   return sameDay ? start : `${start} - ${end}`
+})
+
+const timeRange = computed(() => {
+  const start = formatTime(props.transaction.startDate)
+  const end = formatTime(props.transaction.endDate)
+  return `${start} – ${end}`
 })
 
 const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
@@ -280,6 +289,8 @@ const handleOpenChat = async () => {
             <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
             <span v-else>{{ dateRange }}</span>
             <span class="opacity-50 select-none">·</span>
+            <span v-if="!isAdminVariant">{{ timeRange }}</span>
+            <span v-if="!isAdminVariant" class="opacity-50 select-none">·</span>
             <span>{{ duration }}</span>
             <template v-if="isAdminVariant">
               <span class="opacity-50 select-none">·</span>
@@ -432,6 +443,8 @@ const handleOpenChat = async () => {
             <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
             <span v-else>{{ dateRange }}</span>
             <span class="opacity-50 select-none">·</span>
+            <span v-if="!isAdminVariant">{{ timeRange }}</span>
+            <span v-if="!isAdminVariant" class="opacity-50 select-none">·</span>
             <span>{{ duration }}</span>
             <template v-if="isAdminVariant">
               <span class="opacity-50 select-none">·</span>
