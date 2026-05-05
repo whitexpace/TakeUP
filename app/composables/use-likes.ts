@@ -1,4 +1,5 @@
 import { useState } from "#app"
+import { useViewerSession } from "./use-viewer-session"
 
 export const useLikes = () => {
   const likesCount = useState<number>("likes-count", () => 0)
@@ -12,20 +13,12 @@ export const useLikes = () => {
     isLoading.value = true
 
     try {
-      const supabase = useSupabaseClient()
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
+      const { getAuthHeaders } = useViewerSession()
       const response = await $fetch<{ count: number }>("/api/items/count", {
         query: {
           likedOnly: "true",
         },
-        headers: session?.access_token
-          ? {
-              Authorization: `Bearer ${session.access_token}`,
-            }
-          : undefined,
+        headers: await getAuthHeaders(),
       })
       likesCount.value = response.count
       hasLoaded.value = true

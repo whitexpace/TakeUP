@@ -3,6 +3,7 @@ import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import { resetPaginatedItemsCache } from "./use-paginated-items"
 import { resetFilteredResultsCountCache } from "./use-filtered-results-count"
+import { useViewerSession } from "./use-viewer-session"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type MyListingItem = RouterOutputs["item"]["myListings"]["items"][number]
@@ -35,7 +36,6 @@ const invalidateItemSearchCaches = () => {
 }
 
 export const useMyListings = () => {
-  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const listings = ref<MyListingItem[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -74,15 +74,7 @@ export const useMyListings = () => {
     return query
   }
 
-  const getAccessToken = async () => {
-    if (!supabase) return undefined
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    return session?.access_token
-  }
+  const { getAuthHeaders } = useViewerSession()
 
   const fetchListings = async (
     cursor: PaginationCursor = null,
@@ -94,16 +86,9 @@ export const useMyListings = () => {
     error.value = null
 
     try {
-      const accessToken = await getAccessToken()
       const result = await $fetch<MyListingsResponse>("/api/my-listings", {
         query: buildQuery(cursor),
-        ...(accessToken
-          ? {
-              headers: {
-                authorization: `Bearer ${accessToken}`,
-              },
-            }
-          : {}),
+        headers: await getAuthHeaders(),
       })
 
       if (version !== requestVersion.value) return

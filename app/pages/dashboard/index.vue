@@ -473,6 +473,7 @@ const {
 } = useFilteredResultsCount({
   searchQuery: serverSearchQuery,
   filterParams: filters.filterQueryParams,
+  stateKey: "dashboard-results-count",
 })
 
 const visibleResultsCount = computed(() =>
@@ -518,7 +519,7 @@ const scheduleReload = () => {
 const { data: initialDashboardItemsLoaded } = await useAsyncData(
   "dashboard-initial-listed-items",
   async () => {
-    await refresh()
+    await Promise.all([refresh(), refreshResultsCount()])
     return true
   },
   {
@@ -545,7 +546,6 @@ onMounted(() => {
 
   if (initialDashboardItemsLoaded.value) {
     scheduleNextPagePrefetch()
-    void refreshResultsCount()
   } else {
     void reload()
   }

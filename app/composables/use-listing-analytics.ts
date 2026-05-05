@@ -2,6 +2,7 @@ import { computed, ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import type { ListingAnalyticsRange } from "#shared/schemas/listing-analytics"
+import { useViewerSession } from "./use-viewer-session"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type ListingAnalyticsResponse = RouterOutputs["listingAnalytics"]["list"]
@@ -10,22 +11,13 @@ export type ListingAnalyticsCategory = ListingAnalyticsResponse["categoryBreakdo
 export type { ListingAnalyticsRange }
 
 export const useListingAnalytics = () => {
-  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const analytics = ref<ListingAnalyticsResponse | null>(null)
   const selectedRange = ref<ListingAnalyticsRange>("all")
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const hasFetched = ref(false)
 
-  const getAccessToken = async () => {
-    if (!supabase) return undefined
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    return session?.access_token
-  }
+  const { getAuthHeaders } = useViewerSession()
 
   const fetchAnalytics = async () => {
     if (isLoading.value) return
@@ -33,16 +25,9 @@ export const useListingAnalytics = () => {
     error.value = null
 
     try {
-      const accessToken = await getAccessToken()
       analytics.value = await $fetch<ListingAnalyticsResponse>("/api/account/listing-analytics", {
         query: { range: selectedRange.value },
-        ...(accessToken
-          ? {
-              headers: {
-                authorization: `Bearer ${accessToken}`,
-              },
-            }
-          : {}),
+        headers: await getAuthHeaders(),
       })
     } catch (err: unknown) {
       const httpStatus = (err as { statusCode?: number })?.statusCode

@@ -1,9 +1,11 @@
+import { useState } from "#app"
 import { ref, type Ref } from "vue"
 import type {
   ItemPaginationCursor,
   ListedItem,
   PaginatedItemsResponse,
 } from "../types/item-listing"
+import { useViewerSession } from "./use-viewer-session"
 
 type UsePaginatedItemsOptions = {
   searchQuery: Ref<string>
@@ -95,18 +97,21 @@ export const usePaginatedItems = ({
   pageSize = 12,
   stateKey,
 }: UsePaginatedItemsOptions) => {
-  const supabase =
-    !import.meta.server && typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const canUseSharedCache = !import.meta.server
+  const { getAccessToken, session } = useViewerSession()
   const items: Ref<ListedItem[]> = stateKey
     ? useState<ListedItem[]>(stateKey, () => [])
     : ref<ListedItem[]>([])
-  const cursor = ref<ItemPaginationCursor | null>(null)
+  const cursor: Ref<ItemPaginationCursor | null> = stateKey
+    ? useState<ItemPaginationCursor | null>(`${stateKey}:cursor`, () => null)
+    : ref<ItemPaginationCursor | null>(null)
   const isLoading = ref(false)
-  const hasMore = ref(true)
+  const hasMore: Ref<boolean> = stateKey
+    ? useState<boolean>(`${stateKey}:has-more`, () => true)
+    : ref(true)
   const errorMessage = ref<string | null>(null)
   const requestVersion = ref(0)
-  const loadedIds = new Set<string>()
+  const loadedIds = new Set(items.value.map((item) => item.id))
   const isFreshFetch = ref(false)
 
   const resetState = () => {
@@ -153,12 +158,9 @@ export const usePaginatedItems = ({
     if (import.meta.server) {
       const event = useRequestEvent()
       viewerCacheKey = event?.context.authUser?.id ?? viewerCacheKey
-    } else if (supabase) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      accessToken = session?.access_token
-      viewerCacheKey = session?.user?.id ?? viewerCacheKey
+    } else {
+      accessToken = await getAccessToken()
+      viewerCacheKey = session.value?.user?.id ?? viewerCacheKey
     }
 
     const cacheKey = `${viewerCacheKey}:${serializePaginatedItemsQuery(query)}`

@@ -1,9 +1,12 @@
+import { useState } from "#app"
 import { ref, type Ref } from "vue"
+import { useViewerSession } from "./use-viewer-session"
 
 type UseFilteredResultsCountOptions = {
   searchQuery: Ref<string>
   filterParams?: Ref<Record<string, string | undefined>>
   debounceMs?: number
+  stateKey?: string
 }
 
 type ResultsCountCacheEntry = {
@@ -73,11 +76,13 @@ export const useFilteredResultsCount = ({
   searchQuery,
   filterParams,
   debounceMs = 75,
+  stateKey,
 }: UseFilteredResultsCountOptions) => {
-  const supabase =
-    !import.meta.server && typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const canUseSharedCache = !import.meta.server
-  const totalResultsCount = ref<number | null>(null)
+  const { getAccessToken, session } = useViewerSession()
+  const totalResultsCount: Ref<number | null> = stateKey
+    ? useState<number | null>(stateKey, () => null)
+    : ref<number | null>(null)
   const isCountLoading = ref(false)
   const requestVersion = ref(0)
   let pendingRefreshTimeout: ReturnType<typeof setTimeout> | null = null
@@ -96,12 +101,9 @@ export const useFilteredResultsCount = ({
     if (import.meta.server) {
       const event = useRequestEvent()
       viewerCacheKey = event?.context.authUser?.id ?? viewerCacheKey
-    } else if (supabase) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      accessToken = session?.access_token
-      viewerCacheKey = session?.user?.id ?? viewerCacheKey
+    } else {
+      accessToken = await getAccessToken()
+      viewerCacheKey = session.value?.user?.id ?? viewerCacheKey
     }
 
     const cacheKey = `${viewerCacheKey}:${serializeResultsCountQuery(query)}`

@@ -28,7 +28,7 @@ import {
   sortFeedItemsByRelevance,
   type ViewerInterestProfile,
 } from "../../utils/item-feed-ranking"
-import { expireActiveBoosts } from "../../utils/rewards"
+import { expireActiveBoostsThrottled } from "../../utils/rewards"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
@@ -981,7 +981,7 @@ const collectRankedFeedRecords = async ({
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1013,7 +1013,7 @@ export const itemRouter = router({
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1062,7 +1062,7 @@ export const itemRouter = router({
   }),
 
   countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1243,7 +1243,7 @@ export const itemRouter = router({
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const now = new Date()
     const viewer = ctx.user
       ? await ctx.prisma.user.findUnique({
@@ -1460,7 +1460,7 @@ export const itemRouter = router({
   }),
 
   myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const { search, statuses, categories, limit, cursor } = input
     const userId = ctx.user.id
 

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useViewerSession } from "../../composables/use-viewer-session"
+
 const errorMessage = ref("")
 const supabase = useSupabaseClient()
 const route = useRoute()
@@ -42,10 +44,12 @@ onMounted(async () => {
     }
 
     // Bridge Supabase session → custom JWT so account/listing APIs work
-    const { ensureBridged } = useSessionBridge()
-    await ensureBridged(session.access_token)
+    const { ensureBridgedSession } = useViewerSession()
+    await ensureBridgedSession()
+    const { fetch: fetchAuthUser } = useAuthUser()
+    const authUser = await fetchAuthUser()
 
-    await navigateTo("/dashboard")
+    await navigateTo(authUser?.accountType === "ADMIN" ? "/admin/disputes" : "/dashboard")
   } catch (error) {
     const msg =
       (error as { message?: string })?.message || "Google Sign-In failed. Please try again."

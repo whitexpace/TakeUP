@@ -4,9 +4,36 @@ import { useMyListings } from "../use-my-listings"
 import * as paginatedItemsModule from "../use-paginated-items"
 import * as filteredResultsCountModule from "../use-filtered-results-count"
 
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => unknown
+      }
+    ).useState(key, init),
+}))
+
+vi.mock("../use-viewer-session", () => ({
+  useViewerSession: () => ({
+    getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+  }),
+}))
+
 let fetchMock: ReturnType<typeof vi.fn>
 
 const ITEM_ID = "11111111-1111-1111-1111-111111111111"
+
+const createStateMock = () => {
+  const store = new Map<string, unknown>()
+
+  return (key: string, init: () => unknown) => {
+    if (!store.has(key)) {
+      store.set(key, { value: init() })
+    }
+
+    return store.get(key)
+  }
+}
 
 const makeItem = (id = ITEM_ID) =>
   ({
@@ -57,6 +84,7 @@ beforeEach(() => {
   fetchMock = vi.fn()
   vi.stubGlobal("$fetch", fetchMock)
   vi.stubGlobal("navigateTo", vi.fn())
+  vi.stubGlobal("useState", createStateMock())
   vi.useFakeTimers()
 })
 

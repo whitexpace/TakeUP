@@ -1,4 +1,5 @@
 import { computed, onMounted } from "vue"
+import { useViewerSession } from "./use-viewer-session"
 
 export interface BagItem {
   id: string
@@ -71,21 +72,7 @@ export const useBag = () => {
   const isLoading = useState<boolean>("bag-loading", () => false)
   const hasLoaded = useState<boolean>("bag-loaded", () => false)
   const errorMessage = useState<string | null>("bag-error-message", () => null)
-
-  const getAuthHeaders = async () => {
-    const supabase = useSupabaseClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session?.access_token) {
-      return undefined
-    }
-
-    return {
-      Authorization: `Bearer ${session.access_token}`,
-    }
-  }
+  const { getAuthHeaders } = useViewerSession()
 
   const loadBag = async (options: { force?: boolean } = {}) => {
     if (pendingLoad && !options.force) {

@@ -74,6 +74,7 @@ const {
   searchQuery: serverSearchQuery,
   filterParams,
   pageSize: INITIAL_LIKES_PAGE_SIZE,
+  stateKey: "likes-listed-items",
 })
 
 const locallyFilteredItems = computed(() =>
@@ -198,23 +199,9 @@ const clearFilters = () => {
 
 const fetchLikedCategories = async () => {
   try {
-    let accessToken: string | undefined
-    if (typeof useSupabaseClient === "function") {
-      const supabase = useSupabaseClient()
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      accessToken = session?.access_token
-    }
-
+    const { getAuthHeaders } = useViewerSession()
     return await $fetch<string[]>("/api/items/liked-categories", {
-      ...(accessToken
-        ? {
-            headers: {
-              authorization: `Bearer ${accessToken}`,
-            },
-          }
-        : {}),
+      headers: await getAuthHeaders(),
     })
   } catch {
     return []
@@ -279,6 +266,18 @@ const handleLikeChanged = async (payload: { itemId: string; isLiked: boolean }) 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
+const { data: initialLikesLoaded } = await useAsyncData(
+  "likes-initial-listed-items",
+  async () => {
+    await syncLikedCategories()
+    await refresh()
+    return true
+  },
+  {
+    default: () => false,
+  },
+)
+
 onMounted(() => {
   observer = new IntersectionObserver(
     (entries) => {
@@ -292,7 +291,11 @@ onMounted(() => {
     },
   )
 
-  void reload()
+  if (initialLikesLoaded.value) {
+    scheduleNextPagePrefetch()
+  } else {
+    void reload()
+  }
 
   if (loadMoreTrigger.value) {
     observer.observe(loadMoreTrigger.value)

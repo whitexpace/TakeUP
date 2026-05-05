@@ -9,13 +9,5 @@ export type Context = {
 }
 
 export async function createContext(event: H3Event): Promise<Context> {
-  const sessionUser = event.context.authUser ?? null
-  const activeUser =
-    sessionUser &&
-    (await prisma.user.findUnique({
-      where: { id: sessionUser.id },
-      select: { status: true },
-    }))
-  const user = activeUser?.status === "ACTIVE" ? sessionUser : null
-  return { event, prisma, user }
+  return { event, prisma, user: event.context.authUser ?? null }
 }

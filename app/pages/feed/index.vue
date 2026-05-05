@@ -205,6 +205,8 @@
 </template>
 
 <script setup lang="ts">
+import { useViewerSession } from "../../composables/use-viewer-session"
+
 import { computed, onMounted, ref, watch } from "vue"
 import type {
   CommunityMember,
@@ -298,7 +300,6 @@ const triggerCreatePost = () => {
   createPostRef.value?.triggerHighlight()
 }
 
-const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 
 const asNonEmptyString = (value: unknown) => {
@@ -538,20 +539,14 @@ const normalizeOfferableItem = (item: ApiOfferableItem): CommunityOfferableItem 
   createdAt: toDate(item.createdAt) ?? new Date(),
 })
 
-const getAccessToken = async () => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  return session?.access_token
-}
-
 const getAuthHeaders = async () => {
-  const accessToken = await getAccessToken()
-  if (!accessToken) return undefined
+  const { getAuthHeaders } = useViewerSession()
+  const headers = await getAuthHeaders()
+  const authorization = headers?.Authorization ?? headers?.authorization
+  if (!authorization) return undefined
 
   return {
-    authorization: `Bearer ${accessToken}`,
+    authorization,
   }
 }
 

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useListingAnalytics, type ListingAnalyticsResponse } from "../use-listing-analytics"
 
+vi.mock("../use-viewer-session", () => ({
+  useViewerSession: () => ({
+    getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+  }),
+}))
+
 const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
   summary: {
     totalViews: 10,
@@ -87,13 +93,6 @@ const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
 describe("useListingAnalytics", () => {
   beforeEach(() => {
     vi.stubGlobal("navigateTo", vi.fn())
-    vi.stubGlobal("useSupabaseClient", () => ({
-      auth: {
-        getSession: vi.fn().mockResolvedValue({
-          data: { session: { access_token: "token-123" } },
-        }),
-      },
-    }))
   })
 
   afterEach(() => {
@@ -121,7 +120,7 @@ describe("useListingAnalytics", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/account/listing-analytics", {
       query: { range: "all" },
-      headers: { authorization: "Bearer token-123" },
+      headers: { Authorization: "Bearer token-123" },
     })
     expect(summary.value?.totalViews).toBe(10)
     expect(summary.value?.totalBookingRequests).toBe(5)

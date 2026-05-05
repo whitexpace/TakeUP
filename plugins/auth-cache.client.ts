@@ -9,6 +9,7 @@ export default defineNuxtPlugin(() => {
   const supabaseUser = useSupabaseUser()
   const { clear } = useAuthUser()
   const { clear: clearBridge } = useSessionBridge()
+  const { clear: clearViewerSession } = useViewerSession()
 
   let previousUserId: string | null | undefined = supabaseUser.value?.id ?? null
 
@@ -17,6 +18,7 @@ export default defineNuxtPlugin(() => {
     if (newUserId !== previousUserId) {
       clear()
       clearBridge()
+      clearViewerSession()
       previousUserId = newUserId
     }
   })
