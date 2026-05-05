@@ -366,11 +366,13 @@ const usageLimitationsList = computed(() => splitDetailList(item.value?.usageLim
 const availabilityRanges = computed(() =>
   [...(item.value?.availability ?? []), ...(item.value?.bookingBlocks ?? [])].map((slot) => ({
     id: slot.id,
-    startDate: normalizeDate(new Date(slot.startDate)),
-    endDate: normalizeDate(new Date(slot.endDate)),
+    startDate: new Date(slot.startDate),
+    endDate: new Date(slot.endDate),
     status: slot.status,
   })),
 )
+
+const MIN_BOOKABLE_MS = 30 * 60 * 1000
 
 const isDateUnavailable = (date: Date | null) => {
   if (!date) return true
@@ -379,26 +381,67 @@ const isDateUnavailable = (date: Date | null) => {
   const normalizedDate = normalizeDate(date)
   if (normalizedDate.getTime() < today.getTime()) return true
 
-  if (!availabilityRanges.value.length) return false
+  const ranges = availabilityRanges.value
+  if (!ranges.length) return false
 
-  const hasAvailableRanges = availabilityRanges.value.some((range) => range.status === "AVAILABLE")
+  const dayStart = normalizedDate.getTime()
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000
 
-  const hasAvailableWindow = availabilityRanges.value.some(
+  const hasAvailableRanges = ranges.some((range) => range.status === "AVAILABLE")
+
+  if (!hasAvailableRanges) return false
+
+  const hasAvailableWindow = ranges.some(
     (range) =>
       range.status === "AVAILABLE" &&
-      normalizedDate.getTime() >= range.startDate.getTime() &&
-      normalizedDate.getTime() <= range.endDate.getTime(),
+      range.startDate.getTime() < dayEnd &&
+      range.endDate.getTime() > dayStart,
   )
 
-  const hasBlockedWindow = availabilityRanges.value.some(
+  if (!hasAvailableWindow) return true
+
+  const rentedOnDay = ranges.filter(
     (range) =>
       range.status !== "AVAILABLE" &&
-      normalizedDate.getTime() >= range.startDate.getTime() &&
-      normalizedDate.getTime() <= range.endDate.getTime(),
+      range.startDate.getTime() < dayEnd &&
+      range.endDate.getTime() > dayStart,
   )
 
-  if (hasBlockedWindow) return true
-  return hasAvailableRanges ? !hasAvailableWindow : false
+  if (!rentedOnDay.length) return false
+
+  const availableIntervals = ranges
+    .filter(
+      (range) =>
+        range.status === "AVAILABLE" &&
+        range.startDate.getTime() < dayEnd &&
+        range.endDate.getTime() > dayStart,
+    )
+    .map((range) => ({
+      start: Math.max(range.startDate.getTime(), dayStart),
+      end: Math.min(range.endDate.getTime(), dayEnd),
+    }))
+
+  const bookedIntervals = rentedOnDay.map((range) => ({
+    start: Math.max(range.startDate.getTime(), dayStart),
+    end: Math.min(range.endDate.getTime(), dayEnd),
+  }))
+
+  let remaining = [...availableIntervals]
+  for (const booked of bookedIntervals) {
+    const newRemaining: Array<{ start: number; end: number }> = []
+    for (const avail of remaining) {
+      if (booked.end <= avail.start || booked.start >= avail.end) {
+        newRemaining.push(avail)
+      } else {
+        if (booked.start > avail.start) newRemaining.push({ start: avail.start, end: booked.start })
+        if (booked.end < avail.end) newRemaining.push({ start: booked.end, end: avail.end })
+      }
+    }
+    remaining = newRemaining
+  }
+
+  const remainingMs = remaining.reduce((sum, interval) => sum + interval.end - interval.start, 0)
+  return remainingMs < MIN_BOOKABLE_MS
 }
 
 const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate()
@@ -604,6 +647,22 @@ const isStartTimePast = (timeValue: string) => {
   return timeToMinutes(timeValue) <= currentTimeMinutes
 }
 
+const isTimeOnDayBooked = (timeValue: string, date: Date | null) => {
+  if (!date) return false
+  const dayStart = normalizeDate(date).getTime()
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000
+  const timeMs = dayStart + timeToMinutes(timeValue) * 60 * 1000
+
+  return availabilityRanges.value.some(
+    (range) =>
+      range.status !== "AVAILABLE" &&
+      range.startDate.getTime() < dayEnd &&
+      range.endDate.getTime() > dayStart &&
+      timeMs >= range.startDate.getTime() &&
+      timeMs <= range.endDate.getTime(),
+  )
+}
+
 const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
   if (!isSameDay.value) return false
   if (!isEnd) return false
@@ -613,6 +672,7 @@ const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
 
 const selectStartTime = (timeValue: string) => {
   if (isStartTimePast(timeValue)) return
+  if (isTimeOnDayBooked(timeValue, startDate.value)) return
   startTime.value = timeValue
   isStartTimeOpen.value = false
 
@@ -626,6 +686,7 @@ const selectStartTime = (timeValue: string) => {
 
 const selectEndTime = (timeValue: string) => {
   if (isTimeDisabled(timeValue, true)) return
+  if (isTimeOnDayBooked(timeValue, displayEndDate.value)) return
 
   endTime.value = timeValue
   isEndTimeOpen.value = false
@@ -1563,7 +1624,7 @@ onUnmounted(() => {
                             :key="time"
                             class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                             :class="[
-                              isStartTimePast(time)
+                              isStartTimePast(time) || isTimeOnDayBooked(time, startDate)
                                 ? 'opacity-30 cursor-not-allowed pointer-events-none'
                                 : startTime === time
                                   ? 'bg-cream text-burning-orange font-bold'
@@ -1611,7 +1672,7 @@ onUnmounted(() => {
                             :key="time"
                             class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                             :class="[
-                              isTimeDisabled(time, true)
+                              isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
                                 ? 'opacity-30 cursor-not-allowed pointer-events-none'
                                 : endTime === time
                                   ? 'bg-cream text-burning-orange font-bold'
@@ -1992,7 +2053,7 @@ onUnmounted(() => {
                                 :key="time"
                                 class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                                 :class="[
-                                  isStartTimePast(time)
+                                  isStartTimePast(time) || isTimeOnDayBooked(time, startDate)
                                     ? 'opacity-30 cursor-not-allowed pointer-events-none'
                                     : startTime === time
                                       ? 'bg-cream text-burning-orange font-bold'
@@ -2039,9 +2100,13 @@ onUnmounted(() => {
                                 v-for="time in timeOptions"
                                 :key="time"
                                 class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                                :class="
-                                  endTime === time ? 'bg-cream text-burning-orange font-bold' : ''
-                                "
+                                :class="[
+                                  isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
+                                    ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                                    : endTime === time
+                                      ? 'bg-cream text-burning-orange font-bold'
+                                      : '',
+                                ]"
                                 @click="selectEndTime(time)"
                               >
                                 {{ time }}
@@ -2617,7 +2682,7 @@ onUnmounted(() => {
                       :key="time"
                       class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                       :class="[
-                        isStartTimePast(time)
+                        isStartTimePast(time) || isTimeOnDayBooked(time, startDate)
                           ? 'opacity-30 cursor-not-allowed pointer-events-none'
                           : startTime === time
                             ? 'bg-cream text-burning-orange font-bold'
@@ -2665,7 +2730,7 @@ onUnmounted(() => {
                       :key="time"
                       class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                       :class="[
-                        isTimeDisabled(time, true)
+                        isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
                           ? 'opacity-30 cursor-not-allowed pointer-events-none'
                           : endTime === time
                             ? 'bg-cream text-burning-orange font-bold'
@@ -3173,7 +3238,7 @@ onUnmounted(() => {
                       :key="time"
                       class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                       :class="[
-                        isStartTimePast(time)
+                        isStartTimePast(time) || isTimeOnDayBooked(time, startDate)
                           ? 'opacity-30 cursor-not-allowed pointer-events-none'
                           : startTime === time
                             ? 'bg-cream text-burning-orange font-bold'
@@ -3221,7 +3286,7 @@ onUnmounted(() => {
                       :key="time"
                       class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                       :class="[
-                        isTimeDisabled(time, true)
+                        isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
                           ? 'opacity-30 cursor-not-allowed pointer-events-none'
                           : endTime === time
                             ? 'bg-cream text-burning-orange font-bold'
