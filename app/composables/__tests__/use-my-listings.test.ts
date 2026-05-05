@@ -50,6 +50,7 @@ const makeItem = (id = ITEM_ID) =>
     usageLimitations: null,
     createdAt: new Date("2026-03-15"),
     updatedAt: new Date("2026-03-15"),
+    borrowerId: null,
   }) as MyListingItem
 
 beforeEach(() => {

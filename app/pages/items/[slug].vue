@@ -2101,7 +2101,8 @@ onUnmounted(() => {
                                 :key="time"
                                 class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
                                 :class="[
-                                  isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
+                                  isTimeDisabled(time, true) ||
+                                  isTimeOnDayBooked(time, displayEndDate)
                                     ? 'opacity-30 cursor-not-allowed pointer-events-none'
                                     : endTime === time
                                       ? 'bg-cream text-burning-orange font-bold'

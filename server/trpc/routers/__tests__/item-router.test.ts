@@ -233,7 +233,9 @@ describe("itemRouter", () => {
         where: expect.objectContaining({
           AND: expect.arrayContaining([
             expect.objectContaining({ status: { not: "DELETED" } }),
-            expect.objectContaining({ status: "AVAILABLE" }),
+            expect.objectContaining({
+              status: { in: expect.arrayContaining(["AVAILABLE", "RENTED"]) },
+            }),
           ]),
         }),
       }),

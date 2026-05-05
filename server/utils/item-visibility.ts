@@ -74,7 +74,7 @@ const rangesOverlap = (
 ) => left.startMs < right.endMs && left.endMs > right.startMs
 
 export const buildPublicVisibleItemWhere = (now = new Date()): Prisma.ItemWhereInput => ({
-  status: { in: PUBLIC_VISIBLE_ITEM_STATUSES },
+  status: { in: PUBLIC_VISIBLE_ITEM_STATUSES as unknown as ItemStatus[] },
   lender: {
     user: {
       status: PUBLIC_VISIBLE_LENDER_STATUS,
@@ -93,7 +93,12 @@ export const isPublicVisibleItem = (
   now = new Date(),
   options: { requiredWindow?: VisibilityWindow | null } = {},
 ) => {
-  if (!PUBLIC_VISIBLE_ITEM_STATUSES.includes(item.status as (typeof PUBLIC_VISIBLE_ITEM_STATUSES)[number])) return false
+  if (
+    !PUBLIC_VISIBLE_ITEM_STATUSES.includes(
+      item.status as (typeof PUBLIC_VISIBLE_ITEM_STATUSES)[number],
+    )
+  )
+    return false
 
   if (
     item.lender?.user?.status !== undefined &&
