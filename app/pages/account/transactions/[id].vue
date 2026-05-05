@@ -1099,7 +1099,8 @@ const handleReviewSubmitted = async () => {
                     <line x1="3" x2="21" y1="10" y2="10" />
                   </svg>
                   <span
-                    >{{ formatDateTime(booking.startDate) }} – {{ formatDateTime(booking.endDate) }}</span
+                    >{{ formatDateTime(booking.startDate) }} –
+                    {{ formatDateTime(booking.endDate) }}</span
                   >
                 </div>
               </div>
