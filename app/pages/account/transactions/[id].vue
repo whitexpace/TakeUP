@@ -1935,10 +1935,10 @@ const handleReviewSubmitted = async () => {
                 You can only lend the item within the agreed rental period.
               </p>
               <p class="text-[13px] text-noble-black/40 font-medium mb-8">
-                Rental starts on
-                <span class="font-bold text-noble-black/60">{{
-                  formatDate(booking.startDate)
-                }}</span
+                Rental period:
+                <span class="font-bold text-noble-black/60">{{ formatDateTime(booking.startDate) }}</span>
+                –
+                <span class="font-bold text-noble-black/60">{{ formatDateTime(booking.endDate) }}</span
                 >.
               </p>
               <button
