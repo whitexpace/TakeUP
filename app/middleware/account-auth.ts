@@ -3,21 +3,21 @@
  * If they have a Supabase session but no custom JWT, we bridge it automatically.
  * If neither, redirect to /.
  */
+import { useViewerSession } from "../composables/use-viewer-session"
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (!to.path.startsWith("/account")) return
 
-  // Only run on client — server doesn't have access to Supabase client session
-  if (import.meta.server) return
+  if (import.meta.server) {
+    if (!useRequestEvent()?.context.authUser) {
+      return navigateTo("/")
+    }
 
-  const supabase = useSupabaseClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (!session) {
-    return navigateTo("/")
+    return
   }
 
-  const { ensureBridged } = useSessionBridge()
-  await ensureBridged(session.access_token)
+  const { ensureBridgedSession } = useViewerSession()
+  if (!(await ensureBridgedSession())) {
+    return navigateTo("/")
+  }
 })

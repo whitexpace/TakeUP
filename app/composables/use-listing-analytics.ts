@@ -2,6 +2,9 @@ import { computed, ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import type { ListingAnalyticsRange } from "#shared/schemas/listing-analytics"
+import { usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
+import { useViewerSession } from "./use-viewer-session"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type ListingAnalyticsResponse = RouterOutputs["listingAnalytics"]["list"]
@@ -9,41 +12,54 @@ export type ListingAnalyticsItem = ListingAnalyticsResponse["listings"][number]
 export type ListingAnalyticsCategory = ListingAnalyticsResponse["categoryBreakdown"][number]
 export type { ListingAnalyticsRange }
 
+const LISTING_ANALYTICS_CACHE_TTL_MS = 30_000
+
 export const useListingAnalytics = () => {
-  const supabase = typeof useSupabaseClient === "function" ? useSupabaseClient() : null
-  const analytics = ref<ListingAnalyticsResponse | null>(null)
-  const selectedRange = ref<ListingAnalyticsRange>("all")
+  const analytics = usePersistedSessionState<ListingAnalyticsResponse | null>(
+    "listing-analytics:data",
+    () => null,
+  )
+  const selectedRange = usePersistedSessionState<ListingAnalyticsRange>(
+    "listing-analytics:selected-range",
+    () => "all",
+  )
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const hasFetched = ref(false)
+  const hasFetched = usePersistedSessionState<boolean>("listing-analytics:fetched", () => false)
+  const lastLoadedAt = usePersistedSessionState<number | null>(
+    "listing-analytics:last-loaded-at",
+    () => null,
+  )
+  const hasFreshCache = computed(
+    () =>
+      hasFetched.value &&
+      lastLoadedAt.value !== null &&
+      Date.now() - lastLoadedAt.value < LISTING_ANALYTICS_CACHE_TTL_MS,
+  )
 
-  const getAccessToken = async () => {
-    if (!supabase) return undefined
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    return session?.access_token
-  }
+  const { getAuthHeaders } = useViewerSession()
 
   const fetchAnalytics = async () => {
     if (isLoading.value) return
     isLoading.value = true
     error.value = null
 
+    if (hasFreshCache.value) {
+      recordPerfEvent("listing-analytics", selectedRange.value, "cache-hit")
+    } else if (hasFetched.value) {
+      recordPerfEvent("listing-analytics", selectedRange.value, "cache-stale")
+    } else {
+      recordPerfEvent("listing-analytics", selectedRange.value, "cache-miss")
+    }
+
     try {
-      const accessToken = await getAccessToken()
-      analytics.value = await $fetch<ListingAnalyticsResponse>("/api/account/listing-analytics", {
-        query: { range: selectedRange.value },
-        ...(accessToken
-          ? {
-              headers: {
-                authorization: `Bearer ${accessToken}`,
-              },
-            }
-          : {}),
-      })
+      analytics.value = await withPerfTimer("listing-analytics", selectedRange.value, async () =>
+        $fetch<ListingAnalyticsResponse>("/api/account/listing-analytics", {
+          query: { range: selectedRange.value },
+          headers: await getAuthHeaders(),
+        }),
+      )
+      lastLoadedAt.value = Date.now()
     } catch (err: unknown) {
       const httpStatus = (err as { statusCode?: number })?.statusCode
       if (httpStatus === 401) {
@@ -103,6 +119,7 @@ export const useListingAnalytics = () => {
     isLoading,
     error,
     hasFetched,
+    hasFreshCache,
     hasListings,
     hasActivity,
     fetchAnalytics,

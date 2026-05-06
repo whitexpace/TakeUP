@@ -1,23 +1,37 @@
 /**
  * Clears the cached auth user and session bridge whenever the Supabase session changes.
- * - On logout (user becomes null): clears immediately.
- * - On login / token refresh (user changes): clears so next access re-fetches.
+ * Uses Supabase auth events instead of a raw user watcher so initial client
+ * hydration does not wipe a valid persisted cache and force /api/auth/me again.
  */
 export default defineNuxtPlugin(() => {
   if (import.meta.server) return
 
-  const supabaseUser = useSupabaseUser()
+  const supabase = useSupabaseClient()
   const { clear } = useAuthUser()
   const { clear: clearBridge } = useSessionBridge()
+  const { clear: clearViewerSession } = useViewerSession()
 
-  let previousUserId: string | null | undefined = supabaseUser.value?.id ?? null
+  supabase.auth.onAuthStateChange((event, session) => {
+    const nextUserId = session?.user?.id ?? null
 
-  watch(supabaseUser, (newUser) => {
-    const newUserId = newUser?.id ?? null
-    if (newUserId !== previousUserId) {
+    if (event === "SIGNED_OUT") {
       clear()
       clearBridge()
-      previousUserId = newUserId
+      clearViewerSession()
+      return
+    }
+
+    if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+      clear()
+      clearBridge()
+      clearViewerSession()
+      return
+    }
+
+    if (event === "SIGNED_IN" && !nextUserId) {
+      clear()
+      clearBridge()
+      clearViewerSession()
     }
   })
 })

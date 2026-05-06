@@ -13,6 +13,7 @@ const {
   categoryBreakdown,
   error,
   hasFetched,
+  hasFreshCache,
   hasListings,
   hasActivity,
   fetchAnalytics,
@@ -227,7 +228,14 @@ const filteredAndSortedListings = computed(() => {
 })
 
 onMounted(() => {
-  void fetchAnalytics()
+  if (!hasFetched.value) {
+    void fetchAnalytics()
+    return
+  }
+
+  if (!hasFreshCache.value) {
+    void fetchAnalytics()
+  }
 })
 </script>
 

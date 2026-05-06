@@ -12,6 +12,7 @@ const {
   isLoading,
   error,
   hasFetched,
+  hasFreshCache,
   hasMore,
   searchQuery,
   selectedStatuses,
@@ -171,7 +172,14 @@ const handleBoostListing = async (itemId: string) => {
 }
 
 onMounted(() => {
-  void refresh()
+  if (!hasFetched.value) {
+    void refresh()
+    return
+  }
+
+  if (!hasFreshCache.value) {
+    void refresh()
+  }
 })
 
 onBeforeUnmount(() => {

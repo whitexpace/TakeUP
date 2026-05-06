@@ -510,8 +510,8 @@ const getSafeFileName = (fileName: string) => {
 const fetchCurrentUserId = async () => {
   if (currentUserId.value) return currentUserId.value
 
-  const { fetch: fetchAuthUser } = useAuthUser()
-  const authUser = await fetchAuthUser()
+  const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+  const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
   if (authUser) currentUserId.value = authUser.id
   return currentUserId.value
 }

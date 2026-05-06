@@ -1,9 +1,12 @@
-import { ref, type Ref } from "vue"
+import { computed, ref, type Ref } from "vue"
 import type {
   ItemPaginationCursor,
   ListedItem,
   PaginatedItemsResponse,
 } from "../types/item-listing"
+import { usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
+import { useViewerSession } from "./use-viewer-session"
 
 type UsePaginatedItemsOptions = {
   searchQuery: Ref<string>
@@ -95,19 +98,25 @@ export const usePaginatedItems = ({
   pageSize = 12,
   stateKey,
 }: UsePaginatedItemsOptions) => {
-  const supabase =
-    !import.meta.server && typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const canUseSharedCache = !import.meta.server
+  const { getAccessToken, session } = useViewerSession()
   const items: Ref<ListedItem[]> = stateKey
-    ? useState<ListedItem[]>(stateKey, () => [])
+    ? usePersistedSessionState<ListedItem[]>(stateKey, () => [])
     : ref<ListedItem[]>([])
-  const cursor = ref<ItemPaginationCursor | null>(null)
+  const cursor: Ref<ItemPaginationCursor | null> = stateKey
+    ? usePersistedSessionState<ItemPaginationCursor | null>(`${stateKey}:cursor`, () => null)
+    : ref<ItemPaginationCursor | null>(null)
   const isLoading = ref(false)
-  const hasMore = ref(true)
+  const hasMore: Ref<boolean> = stateKey
+    ? usePersistedSessionState<boolean>(`${stateKey}:has-more`, () => true)
+    : ref(true)
   const errorMessage = ref<string | null>(null)
   const requestVersion = ref(0)
-  const loadedIds = new Set<string>()
+  const loadedIds = new Set(items.value.map((item) => item.id))
   const isFreshFetch = ref(false)
+  const hasCachedState = computed(
+    () => items.value.length > 0 || cursor.value !== null || !hasMore.value,
+  )
 
   const resetState = () => {
     cursor.value = null
@@ -153,28 +162,31 @@ export const usePaginatedItems = ({
     if (import.meta.server) {
       const event = useRequestEvent()
       viewerCacheKey = event?.context.authUser?.id ?? viewerCacheKey
-    } else if (supabase) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      accessToken = session?.access_token
-      viewerCacheKey = session?.user?.id ?? viewerCacheKey
+    } else {
+      accessToken = await getAccessToken()
+      viewerCacheKey = session.value?.user?.id ?? viewerCacheKey
     }
 
     const cacheKey = `${viewerCacheKey}:${serializePaginatedItemsQuery(query)}`
     const cachedResponse = canUseSharedCache ? getCachedPaginatedItemsResponse(cacheKey) : null
 
     if (cachedResponse) {
+      recordPerfEvent("items", cacheKey, "cache-hit")
       applyResponse(cachedResponse, version)
       return
     }
+
+    recordPerfEvent("items", cacheKey, "cache-miss")
 
     isLoading.value = true
 
     try {
       const pendingRequest = canUseSharedCache ? pendingPaginatedItemsRequests.get(cacheKey) : null
       const response = pendingRequest
-        ? await pendingRequest
+        ? await (() => {
+            recordPerfEvent("items", cacheKey, "request-dedup-hit")
+            return pendingRequest
+          })()
         : await (() => {
             const headers = import.meta.server
               ? useRequestHeaders(["cookie"])
@@ -185,7 +197,9 @@ export const usePaginatedItems = ({
               query,
               ...(headers ? { headers } : {}),
             }
-            const request = $fetch<PaginatedItemsResponse>("/api/items", requestOptions)
+            const request = withPerfTimer("items", cacheKey, () =>
+              $fetch<PaginatedItemsResponse>("/api/items", requestOptions),
+            )
 
             if (canUseSharedCache) {
               pendingPaginatedItemsRequests.set(cacheKey, request)
@@ -227,6 +241,7 @@ export const usePaginatedItems = ({
     isLoading,
     hasMore,
     errorMessage,
+    hasCachedState,
     fetchNextPage,
     refresh,
   }

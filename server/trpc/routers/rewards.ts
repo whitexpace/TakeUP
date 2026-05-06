@@ -4,14 +4,14 @@ import { protectedProcedure, publicProcedure } from "../procedures"
 import { redeemBoostSchema } from "#shared/schemas/rewards"
 import {
   RewardEventStatus,
-  expireActiveBoosts,
+  expireActiveBoostsThrottled,
   listRewardLeaderboard,
   redeemListingBoost,
 } from "../../utils/rewards"
 
 export const rewardsRouter = router({
   summary: protectedProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
 
     const [rewardTotals, recentEvents, activeBoosts] = await Promise.all([
       ctx.prisma.userReward.upsert({
@@ -85,7 +85,7 @@ export const rewardsRouter = router({
   }),
 
   activeBoosts: protectedProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
 
     const boosts = await ctx.prisma.itemBoost.findMany({
       where: {
@@ -128,14 +128,14 @@ export const rewardsRouter = router({
   }),
 
   borrowerLeaderboard: publicProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     return {
       leaderboard: await listRewardLeaderboard(ctx.prisma, "BORROWER"),
     }
   }),
 
   lenderLeaderboard: publicProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     return {
       leaderboard: await listRewardLeaderboard(ctx.prisma, "LENDER"),
     }

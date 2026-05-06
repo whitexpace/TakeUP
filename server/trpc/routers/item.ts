@@ -28,7 +28,7 @@ import {
   sortFeedItemsByRelevance,
   type ViewerInterestProfile,
 } from "../../utils/item-feed-ranking"
-import { expireActiveBoosts } from "../../utils/rewards"
+import { expireActiveBoostsThrottled } from "../../utils/rewards"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
@@ -799,32 +799,94 @@ const orderItemsByIds = <T extends { id: string }>(items: T[], orderedIds: strin
   return orderedIds.map((id) => itemsById.get(id)).filter((item): item is T => Boolean(item))
 }
 
+const VIEWER_FEED_PROFILE_TTL_MS = 60_000
+
+const viewerFeedProfileCache = new Map<
+  string,
+  {
+    expiresAt: number
+    profile: ViewerInterestProfile
+  }
+>()
+const pendingViewerFeedProfileRequests = new Map<string, Promise<ViewerInterestProfile>>()
+
+const getCachedViewerFeedProfile = (userId: string) => {
+  const cachedEntry = viewerFeedProfileCache.get(userId)
+  if (!cachedEntry) {
+    return null
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    viewerFeedProfileCache.delete(userId)
+    return null
+  }
+
+  return cachedEntry.profile
+}
+
 const getViewerInterestProfileForFeed = async (prisma: PrismaClientLike, userId: string | null) => {
   if (!userId) {
     return buildViewerInterestProfile([])
   }
 
-  const likedItems = await prisma.like.findMany({
-    where: { userId },
-    select: {
-      item: {
+  const cachedProfile = getCachedViewerFeedProfile(userId)
+  if (cachedProfile) {
+    return cachedProfile
+  }
+
+  const pendingRequest = pendingViewerFeedProfileRequests.get(userId)
+  if (pendingRequest) {
+    return pendingRequest
+  }
+
+  let requestPromise: Promise<ViewerInterestProfile> | null = null
+
+  requestPromise = (async () => {
+    try {
+      const likedItems = await prisma.like.findMany({
+        where: { userId },
         select: {
-          categories: {
-            select: { category: true },
-          },
-          tags: {
+          item: {
             select: {
-              tag: {
-                select: { name: true },
+              categories: {
+                select: { category: true },
+              },
+              tags: {
+                select: {
+                  tag: {
+                    select: { name: true },
+                  },
+                },
               },
             },
           },
         },
-      },
-    },
-  })
+      })
 
-  return buildViewerInterestProfile(likedItems)
+      const profile = buildViewerInterestProfile(likedItems)
+      viewerFeedProfileCache.set(userId, {
+        expiresAt: Date.now() + VIEWER_FEED_PROFILE_TTL_MS,
+        profile,
+      })
+      return profile
+    } catch (error) {
+      if ((error as { code?: string } | null)?.code === "P2024") {
+        console.warn(
+          `[feed] Falling back to neutral viewer profile for user ${userId} after Prisma pool timeout.`,
+        )
+        return buildViewerInterestProfile([])
+      }
+
+      throw error
+    } finally {
+      if (requestPromise && pendingViewerFeedProfileRequests.get(userId) === requestPromise) {
+        pendingViewerFeedProfileRequests.delete(userId)
+      }
+    }
+  })()
+
+  pendingViewerFeedProfileRequests.set(userId, requestPromise)
+  return requestPromise
 }
 
 type PrismaClientLike = {
@@ -981,7 +1043,7 @@ const collectRankedFeedRecords = async ({
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1013,7 +1075,7 @@ export const itemRouter = router({
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1062,7 +1124,7 @@ export const itemRouter = router({
   }),
 
   countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1243,7 +1305,7 @@ export const itemRouter = router({
   }),
 
   byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const now = new Date()
     const viewer = ctx.user
       ? await ctx.prisma.user.findUnique({
@@ -1460,7 +1522,7 @@ export const itemRouter = router({
   }),
 
   myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const { search, statuses, categories, limit, cursor } = input
     const userId = ctx.user.id
 

@@ -5,6 +5,7 @@ import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
 import { filterListedItemsBySearch } from "../../utils/item-search"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
+import { usePersistedSessionState } from "../../composables/use-persisted-session-state"
 
 definePageMeta({
   layout: "dashboard",
@@ -20,8 +21,11 @@ const searchTerm = computed(() => searchInput.value.trim())
 const INITIAL_LIKES_PAGE_SIZE = 8
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
-const selectedCategory = ref("ALL")
-const availableCategoryValues = ref<string[]>([])
+const selectedCategory = usePersistedSessionState<string>("likes:selected-category", () => "ALL")
+const availableCategoryValues = usePersistedSessionState<string[]>(
+  "likes:available-category-values",
+  () => [],
+)
 
 const CATEGORY_OPTIONS = [
   { value: "BOOKS", label: "Books" },
@@ -68,12 +72,14 @@ const {
   isLoading,
   hasMore,
   errorMessage,
+  hasCachedState,
   fetchNextPage,
   refresh,
 } = usePaginatedItems({
   searchQuery: serverSearchQuery,
   filterParams,
   pageSize: INITIAL_LIKES_PAGE_SIZE,
+  stateKey: "likes-listed-items",
 })
 
 const locallyFilteredItems = computed(() =>
@@ -198,23 +204,9 @@ const clearFilters = () => {
 
 const fetchLikedCategories = async () => {
   try {
-    let accessToken: string | undefined
-    if (typeof useSupabaseClient === "function") {
-      const supabase = useSupabaseClient()
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      accessToken = session?.access_token
-    }
-
+    const { getAuthHeaders } = useViewerSession()
     return await $fetch<string[]>("/api/items/liked-categories", {
-      ...(accessToken
-        ? {
-            headers: {
-              authorization: `Bearer ${accessToken}`,
-            },
-          }
-        : {}),
+      headers: await getAuthHeaders(),
     })
   } catch {
     return []
@@ -279,6 +271,22 @@ const handleLikeChanged = async (payload: { itemId: string; isLiked: boolean }) 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
+const { data: initialLikesLoaded } = await useAsyncData(
+  "likes-initial-listed-items",
+  async () => {
+    if (hasCachedState.value && availableCategoryValues.value.length > 0) {
+      return true
+    }
+
+    await syncLikedCategories()
+    await refresh()
+    return true
+  },
+  {
+    default: () => false,
+  },
+)
+
 onMounted(() => {
   observer = new IntersectionObserver(
     (entries) => {
@@ -292,7 +300,13 @@ onMounted(() => {
     },
   )
 
-  void reload()
+  if (hasCachedState.value && availableCategoryValues.value.length > 0) {
+    scheduleNextPagePrefetch()
+  } else if (initialLikesLoaded.value) {
+    scheduleNextPagePrefetch()
+  } else {
+    void reload()
+  }
 
   if (loadMoreTrigger.value) {
     observer.observe(loadMoreTrigger.value)

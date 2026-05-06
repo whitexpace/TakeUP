@@ -2,6 +2,10 @@
 import { ref, onMounted, onUnmounted } from "vue"
 import Header from "../components/Header.vue"
 
+definePageMeta({
+  middleware: "home-auth-redirect",
+})
+
 const images = [
   { src: "/images/landing-pic.jpg", position: "object-[50%_50%]" },
   { src: "/images/landing-pic1.jpg", position: "object-[50%_35%]" },
@@ -80,8 +84,6 @@ onMounted(async () => {
   slideshowInterval = setInterval(() => {
     currentImageIndex.value = (currentImageIndex.value + 1) % images.length
   }, 5000) // Change image every 5 seconds
-
-  await restoreSession()
 })
 
 onUnmounted(() => {
@@ -120,54 +122,6 @@ const scrollToPopularItems = () => {
     scrollToSection(popularItemsRef.value)
   } else {
     scrollToSignIn()
-  }
-}
-
-async function restoreSession() {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    const user = session?.user
-    const accessToken = session?.access_token
-    const email = user?.email?.toLowerCase() ?? ""
-
-    if (!user) {
-      currentUser.value = null
-      if (loginStatus.value !== "error" && loginStatus.value !== "blocked_domain") {
-        loginStatus.value = "idle"
-      }
-      return
-    }
-
-    if (!email.endsWith("@up.edu.ph")) {
-      await supabase.auth.signOut()
-      currentUser.value = null
-      loginStatus.value = "blocked_domain"
-      errorMessage.value = "Only up.edu.ph email addresses are allowed."
-      return
-    }
-
-    currentUser.value = {
-      id: user.id,
-      email: user.email ?? "",
-      name:
-        (user.user_metadata?.full_name as string | undefined) ||
-        (user.user_metadata?.name as string | undefined) ||
-        user.email ||
-        "UP User",
-    }
-    loginStatus.value = "success"
-
-    if (accessToken) {
-      const { ensureBridged } = useSessionBridge()
-      await ensureBridged(accessToken)
-    }
-
-    await navigateTo("/dashboard")
-  } catch {
-    currentUser.value = null
-    loginStatus.value = "idle"
   }
 }
 
@@ -220,7 +174,7 @@ const handleGoogleLogin = async () => {
             v-else
             type="button"
             class="bg-burning-orange text-white px-6 py-2 rounded-full font-geist font-bold text-[14px] flex items-center gap-2 hover:bg-blue-estate transition-colors duration-300"
-            :disabled="loginStatus === 'loading'"
+            :disabled="loginStatus === 'loading' || loginStatus === 'success'"
             @click="handleGoogleLogin"
           >
             <img src="/images/login-button.svg" alt="" class="w-4 h-4 brightness-0 invert" />

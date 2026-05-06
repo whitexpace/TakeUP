@@ -1,9 +1,37 @@
 import { ref } from "vue"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   resetFilteredResultsCountCache,
   useFilteredResultsCount,
 } from "../use-filtered-results-count"
+
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => ReturnType<typeof ref>
+      }
+    ).useState(key, init),
+}))
+
+vi.mock("../use-viewer-session", () => ({
+  useViewerSession: () => ({
+    session: { value: null },
+    getAccessToken: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+const createStateMock = () => {
+  const store = new Map<string, ReturnType<typeof ref>>()
+
+  return (key: string, init: () => unknown) => {
+    if (!store.has(key)) {
+      store.set(key, ref(init()))
+    }
+
+    return store.get(key)!
+  }
+}
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -25,6 +53,10 @@ const flushPromises = async () => {
 }
 
 describe("useFilteredResultsCount", () => {
+  beforeEach(() => {
+    vi.stubGlobal("useState", createStateMock())
+  })
+
   afterEach(() => {
     resetFilteredResultsCountCache()
     vi.useRealTimers()
@@ -133,6 +165,7 @@ describe("useFilteredResultsCount", () => {
     const firstRefresh = firstResultsCount.refreshResultsCount()
     const secondRefresh = secondResultsCount.refreshResultsCount()
 
+    await flushPromises()
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     response.resolve({ count: 18 })
@@ -141,5 +174,25 @@ describe("useFilteredResultsCount", () => {
 
     expect(firstResultsCount.totalResultsCount.value).toBe(18)
     expect(secondResultsCount.totalResultsCount.value).toBe(18)
+  })
+
+  it("persists keyed count state across re-instantiation", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ count: 21 })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const firstResultsCount = useFilteredResultsCount({
+      searchQuery: ref("camera"),
+      filterParams: ref({}),
+      stateKey: "dashboard-count-test",
+    })
+    await firstResultsCount.refreshResultsCount()
+
+    const secondResultsCount = useFilteredResultsCount({
+      searchQuery: ref("camera"),
+      filterParams: ref({}),
+      stateKey: "dashboard-count-test",
+    })
+
+    expect(secondResultsCount.totalResultsCount.value).toBe(21)
   })
 })

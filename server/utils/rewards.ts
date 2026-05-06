@@ -481,6 +481,28 @@ export const expireActiveBoosts = async (prisma: RewardClient) => {
   }
 }
 
+const BOOST_EXPIRY_SYNC_INTERVAL_MS = 60_000
+let lastBoostExpirySyncAt = 0
+let inflightBoostExpirySync: Promise<void> | null = null
+
+export const expireActiveBoostsThrottled = async (prisma: RewardClient) => {
+  const now = Date.now()
+  if (now - lastBoostExpirySyncAt < BOOST_EXPIRY_SYNC_INTERVAL_MS) {
+    return
+  }
+
+  if (inflightBoostExpirySync) {
+    return inflightBoostExpirySync
+  }
+
+  lastBoostExpirySyncAt = now
+  inflightBoostExpirySync = expireActiveBoosts(prisma).finally(() => {
+    inflightBoostExpirySync = null
+  })
+
+  return inflightBoostExpirySync
+}
+
 const findRewardTransaction = async (
   prisma: RewardClient,
   transactionId: string,

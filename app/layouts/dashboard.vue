@@ -106,6 +106,7 @@ import { computed, ref, onMounted, onUnmounted, provide } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import { useDashboardFilters } from "../composables/use-dashboard-filters"
 import { useNotifications } from "../composables/use-notifications"
+import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
@@ -161,6 +162,15 @@ onMounted(() => {
   }
 
   void Promise.allSettled(startupTasks)
+    .then(() => {
+      scheduleIdleWarmup(() => {
+        const { fetch: fetchAuthUser } = useAuthUser()
+        const { loadLikesCount } = useLikes()
+        const { loadBag } = useBag()
+
+        void Promise.allSettled([fetchAuthUser(), loadLikesCount(), loadBag()])
+      })
+    })
 })
 
 onUnmounted(() => {

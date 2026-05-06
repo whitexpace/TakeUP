@@ -205,6 +205,10 @@
 </template>
 
 <script setup lang="ts">
+import { useViewerSession } from "../../composables/use-viewer-session"
+import { usePersistedSessionState } from "../../composables/use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../../utils/performance-telemetry"
+
 import { computed, onMounted, ref, watch } from "vue"
 import type {
   CommunityMember,
@@ -298,7 +302,6 @@ const triggerCreatePost = () => {
   createPostRef.value?.triggerHighlight()
 }
 
-const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 
 const asNonEmptyString = (value: unknown) => {
@@ -384,6 +387,8 @@ const currentUserAvatar = computed(() => currentUserProfile.value.avatar)
 
 type FeedFilter = "Newest" | "Most Offers" | "Open" | "My Requests"
 
+const COMMUNITY_FEED_CACHE_TTL_MS = 30_000
+
 const activeFilter = ref<FeedFilter>("Newest")
 const availableFilters = computed(() => {
   const filters: Array<{ label: string; value: FeedFilter }> = [
@@ -399,10 +404,27 @@ const availableFilters = computed(() => {
   return filters
 })
 
-const requests = ref<CommunityRequest[]>([])
-const notifications = ref<CommunityOfferNotification[]>([])
-const offerableItems = ref<CommunityOfferableItem[]>([])
-const currentDbUserId = ref("")
+const requests = usePersistedSessionState<CommunityRequest[]>("community-feed:requests", () => [], {
+  deserialize: (value) => JSON.parse(value).map(normalizeRequest),
+})
+const notifications = usePersistedSessionState<CommunityOfferNotification[]>(
+  "community-feed:notifications",
+  () => [],
+  {
+    deserialize: (value) => JSON.parse(value).map(normalizeNotification),
+  },
+)
+const offerableItems = usePersistedSessionState<CommunityOfferableItem[]>(
+  "community-feed:offerable-items",
+  () => [],
+  {
+    deserialize: (value) => JSON.parse(value).map(normalizeOfferableItem),
+  },
+)
+const currentDbUserId = usePersistedSessionState<string>(
+  "community-feed:current-db-user-id",
+  () => "",
+)
 const isLoadingFeed = ref(true)
 const isCreatingRequest = ref(false)
 const isSubmittingOffer = ref(false)
@@ -415,7 +437,15 @@ const preferredOfferItemId = ref<number | null>(null)
 const isNewItemComposerOpen = ref(false)
 const isSubmittingNewItem = ref(false)
 const newItemComposerError = ref<string | null>(null)
-const feedHydrated = ref(false)
+const feedHydrated = usePersistedSessionState<boolean>("community-feed:hydrated", () => false)
+const feedLastLoadedAt = usePersistedSessionState<number | null>(
+  "community-feed:last-loaded-at",
+  () => null,
+)
+const feedViewerKey = usePersistedSessionState<string>(
+  "community-feed:viewer-key",
+  () => "anonymous",
+)
 const { createListing } = useMyListings()
 
 const toDate = (value: string | Date | null | undefined) => {
@@ -467,91 +497,93 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
   )
 }
 
-const normalizeMember = (member: ApiCommunityMember): CommunityMember => ({
-  profileId: Number(member.profileId),
-  userId: member.userId,
-  username: member.username,
-  name: member.name,
-  avatar: member.avatar || "",
-})
+function normalizeMember(member: ApiCommunityMember): CommunityMember {
+  return {
+    profileId: Number(member.profileId),
+    userId: member.userId,
+    username: member.username,
+    name: member.name,
+    avatar: member.avatar || "",
+  }
+}
 
-const normalizeOffer = (offer: ApiCommunityOffer): CommunityOffer => ({
-  id: Number(offer.id),
-  lenderID: Number(offer.lenderID),
-  requestID: Number(offer.requestID),
-  itemID: Number(offer.itemID),
-  itemName: offer.itemName,
-  itemThumbnailImage: offer.itemThumbnailImage,
-  rentalFee: Number(offer.rentalFee),
-  availability: Boolean(offer.availability),
-  condition: offer.condition as CommunityOffer["condition"],
-  rentalTerms: offer.rentalTerms ?? "",
-  status: offer.status as CommunityOfferStatus,
-  borrowerReadAt: toDate(offer.borrowerReadAt),
-  createdAt: toDate(offer.createdAt) ?? new Date(),
-  updatedAt: toDate(offer.updatedAt) ?? new Date(),
-  lender: normalizeMember(offer.lender),
-})
+function normalizeOffer(offer: ApiCommunityOffer): CommunityOffer {
+  return {
+    id: Number(offer.id),
+    lenderID: Number(offer.lenderID),
+    requestID: Number(offer.requestID),
+    itemID: Number(offer.itemID),
+    itemName: offer.itemName,
+    itemThumbnailImage: offer.itemThumbnailImage,
+    rentalFee: Number(offer.rentalFee),
+    availability: Boolean(offer.availability),
+    condition: offer.condition as CommunityOffer["condition"],
+    rentalTerms: offer.rentalTerms ?? "",
+    status: offer.status as CommunityOfferStatus,
+    borrowerReadAt: toDate(offer.borrowerReadAt),
+    createdAt: toDate(offer.createdAt) ?? new Date(),
+    updatedAt: toDate(offer.updatedAt) ?? new Date(),
+    lender: normalizeMember(offer.lender),
+  }
+}
 
-const normalizeRequest = (request: ApiCommunityRequest): CommunityRequest => ({
-  id: Number(request.id),
-  borrowerID: Number(request.borrowerID),
-  itemNeeded: request.itemNeeded,
-  referenceImageUrl: request.referenceImageUrl,
-  requestedDates: request.requestedDates
-    .map((value) => toDate(value))
-    .filter((value): value is Date => Boolean(value)),
-  priceRange: [Number(request.priceRange[0] ?? 0), Number(request.priceRange[1] ?? 0)],
-  description: request.description,
-  status: request.status as CommunityRequestStatus,
-  createdAt: toDate(request.createdAt) ?? new Date(),
-  updatedAt: toDate(request.updatedAt) ?? new Date(),
-  offersCount: Number(request.offersCount ?? 0),
-  borrower: normalizeMember(request.borrower),
-  offers: request.offers.map(normalizeOffer),
-})
+function normalizeRequest(request: ApiCommunityRequest): CommunityRequest {
+  return {
+    id: Number(request.id),
+    borrowerID: Number(request.borrowerID),
+    itemNeeded: request.itemNeeded,
+    referenceImageUrl: request.referenceImageUrl,
+    requestedDates: request.requestedDates
+      .map((value) => toDate(value))
+      .filter((value): value is Date => Boolean(value)),
+    priceRange: [Number(request.priceRange[0] ?? 0), Number(request.priceRange[1] ?? 0)],
+    description: request.description,
+    status: request.status as CommunityRequestStatus,
+    createdAt: toDate(request.createdAt) ?? new Date(),
+    updatedAt: toDate(request.updatedAt) ?? new Date(),
+    offersCount: Number(request.offersCount ?? 0),
+    borrower: normalizeMember(request.borrower),
+    offers: request.offers.map(normalizeOffer),
+  }
+}
 
-const normalizeNotification = (
-  notification: ApiCommunityNotification,
-): CommunityOfferNotification => ({
-  id: Number(notification.id),
-  requestId: Number(notification.requestId),
-  requestTitle: notification.requestTitle,
-  recipientId: Number(notification.recipientId),
-  actorName: notification.actorName,
-  itemName: notification.itemName,
-  fee: Number(notification.fee),
-  createdAt: toDate(notification.createdAt) ?? new Date(),
-  read: Boolean(notification.read),
-})
+function normalizeNotification(notification: ApiCommunityNotification): CommunityOfferNotification {
+  return {
+    id: Number(notification.id),
+    requestId: Number(notification.requestId),
+    requestTitle: notification.requestTitle,
+    recipientId: Number(notification.recipientId),
+    actorName: notification.actorName,
+    itemName: notification.itemName,
+    fee: Number(notification.fee),
+    createdAt: toDate(notification.createdAt) ?? new Date(),
+    read: Boolean(notification.read),
+  }
+}
 
-const normalizeOfferableItem = (item: ApiOfferableItem): CommunityOfferableItem => ({
-  id: item.id,
-  numericId: Number(item.numericId),
-  name: item.name,
-  thumbnailImage: item.thumbnailImage,
-  condition: item.condition as CommunityOfferableItem["condition"],
-  rentalFee: Number(item.rentalFee),
-  freeToBorrow: Boolean(item.freeToBorrow),
-  status: item.status,
-  rateOption: item.rateOption,
-  createdAt: toDate(item.createdAt) ?? new Date(),
-})
-
-const getAccessToken = async () => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  return session?.access_token
+function normalizeOfferableItem(item: ApiOfferableItem): CommunityOfferableItem {
+  return {
+    id: item.id,
+    numericId: Number(item.numericId),
+    name: item.name,
+    thumbnailImage: item.thumbnailImage,
+    condition: item.condition as CommunityOfferableItem["condition"],
+    rentalFee: Number(item.rentalFee),
+    freeToBorrow: Boolean(item.freeToBorrow),
+    status: item.status,
+    rateOption: item.rateOption,
+    createdAt: toDate(item.createdAt) ?? new Date(),
+  }
 }
 
 const getAuthHeaders = async () => {
-  const accessToken = await getAccessToken()
-  if (!accessToken) return undefined
+  const { getAuthHeaders } = useViewerSession()
+  const headers = await getAuthHeaders()
+  const authorization = headers?.Authorization ?? headers?.authorization
+  if (!authorization) return undefined
 
   return {
-    authorization: `Bearer ${accessToken}`,
+    authorization,
   }
 }
 
@@ -598,31 +630,41 @@ const refreshFeed = async () => {
 
   try {
     const headers = await getAuthHeaders()
+    feedViewerKey.value = user.value?.id ?? "anonymous"
 
     if (headers) {
-      const { fetch: fetchAuthUser } = useAuthUser()
-      const authUser = await fetchAuthUser()
+      const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+      const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
       currentDbUserId.value = authUser?.id ?? ""
     } else {
       currentDbUserId.value = ""
     }
 
-    const [requestResponse, notificationResponse, offerableItemResponse] = await Promise.all([
-      $fetch<ApiCommunityRequest[]>("/api/item-requests", {
-        query: { includeCancelledOffers: true },
-        ...(headers ? { headers } : {}),
-      }),
-      headers
-        ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", { headers })
-        : Promise.resolve([]),
-      headers
-        ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
-        : Promise.resolve([]),
-    ])
+    const [requestResponse, notificationResponse, offerableItemResponse] = await withPerfTimer(
+      "community-feed",
+      feedViewerKey.value,
+      () =>
+        Promise.all([
+          $fetch<ApiCommunityRequest[]>("/api/item-requests", {
+            query: { includeCancelledOffers: true },
+            ...(headers ? { headers } : {}),
+          }),
+          headers
+            ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", { headers })
+            : Promise.resolve([]),
+          headers
+            ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
+            : Promise.resolve([]),
+        ]),
+      {
+        detail: "refreshFeed",
+      },
+    )
 
     requests.value = requestResponse.map(normalizeRequest)
     notifications.value = notificationResponse.map(normalizeNotification)
     offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
+    feedLastLoadedAt.value = Date.now()
   } catch (error) {
     console.error("Failed to load community feed", error)
     feedError.value = "Unable to load the live community feed right now."
@@ -1044,6 +1086,29 @@ const markAllNotificationsRead = async () => {
 }
 
 onMounted(() => {
+  const currentViewerKey = user.value?.id ?? "anonymous"
+  const isViewerCacheMatch = feedViewerKey.value === currentViewerKey
+  const isCachedFeedFresh =
+    feedHydrated.value &&
+    isViewerCacheMatch &&
+    feedLastLoadedAt.value !== null &&
+    Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS
+
+  if (isCachedFeedFresh) {
+    recordPerfEvent("community-feed", currentViewerKey, "cache-hit")
+    isLoadingFeed.value = false
+    return
+  }
+
+  if (feedHydrated.value && isViewerCacheMatch) {
+    recordPerfEvent("community-feed", currentViewerKey, "background-refresh")
+    isLoadingFeed.value = false
+    void refreshFeed()
+    return
+  }
+
+  recordPerfEvent("community-feed", currentViewerKey, "cache-miss")
+
   void refreshFeed()
 })
 

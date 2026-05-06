@@ -1,4 +1,7 @@
 import { computed, onMounted } from "vue"
+import { usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
+import { useViewerSession } from "./use-viewer-session"
 
 export interface BagItem {
   id: string
@@ -40,6 +43,7 @@ type CartListResponse = {
 }
 
 let pendingLoad: Promise<void> | null = null
+const BAG_CACHE_TTL_MS = 30_000
 
 const formatTimeLabel = (value: Date) =>
   value.toLocaleTimeString("en-US", {
@@ -67,25 +71,14 @@ const normalizeBagItem = (item: RawBagItem): BagItem => {
 }
 
 export const useBag = () => {
-  const bagItems = useState<BagItem[]>("bag-items", () => [])
+  const bagItems = usePersistedSessionState<BagItem[]>("bag-items", () => [], {
+    deserialize: (value) => JSON.parse(value).map(normalizeBagItem),
+  })
   const isLoading = useState<boolean>("bag-loading", () => false)
-  const hasLoaded = useState<boolean>("bag-loaded", () => false)
-  const errorMessage = useState<string | null>("bag-error-message", () => null)
-
-  const getAuthHeaders = async () => {
-    const supabase = useSupabaseClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session?.access_token) {
-      return undefined
-    }
-
-    return {
-      Authorization: `Bearer ${session.access_token}`,
-    }
-  }
+  const hasLoaded = usePersistedSessionState<boolean>("bag-loaded", () => false)
+  const errorMessage = usePersistedSessionState<string | null>("bag-error-message", () => null)
+  const lastLoadedAt = usePersistedSessionState<number | null>("bag-last-loaded-at", () => null)
+  const { getAuthHeaders } = useViewerSession()
 
   const loadBag = async (options: { force?: boolean } = {}) => {
     if (pendingLoad && !options.force) {
@@ -93,8 +86,22 @@ export const useBag = () => {
       return
     }
 
-    if (hasLoaded.value && !options.force) {
+    const isCacheFresh =
+      hasLoaded.value &&
+      lastLoadedAt.value !== null &&
+      Date.now() - lastLoadedAt.value < BAG_CACHE_TTL_MS
+
+    if (isCacheFresh && !options.force) {
+      recordPerfEvent("bag", "cart", "cache-hit")
       return
+    }
+
+    if (hasLoaded.value && !options.force) {
+      recordPerfEvent("bag", "cart", "cache-stale")
+    } else if (options.force) {
+      recordPerfEvent("bag", "cart", "cache-bypass")
+    } else {
+      recordPerfEvent("bag", "cart", "cache-miss")
     }
 
     pendingLoad = (async () => {
@@ -102,21 +109,26 @@ export const useBag = () => {
 
       try {
         const headers = await getAuthHeaders()
-        const result = await $fetch<CartListResponse>("/api/cart", { headers })
+        const result = await withPerfTimer("bag", "cart", () =>
+          $fetch<CartListResponse>("/api/cart", { headers }),
+        )
         bagItems.value = result.items.map(normalizeBagItem)
         errorMessage.value = null
+        lastLoadedAt.value = Date.now()
       } catch (error: unknown) {
         const statusCode = (error as { statusCode?: number })?.statusCode
 
         if (statusCode === 401) {
           bagItems.value = []
           errorMessage.value = null
+          lastLoadedAt.value = Date.now()
           return
         }
 
         if (statusCode === 403) {
           bagItems.value = []
           errorMessage.value = "You are not authorized to use the bag."
+          lastLoadedAt.value = Date.now()
           return
         }
 
@@ -154,6 +166,7 @@ export const useBag = () => {
 
     hasLoaded.value = true
     errorMessage.value = null
+    lastLoadedAt.value = Date.now()
 
     return normalizedEntry
   }
@@ -167,6 +180,7 @@ export const useBag = () => {
     })
 
     bagItems.value = bagItems.value.filter((item) => item.id !== id)
+    lastLoadedAt.value = Date.now()
   }
 
   const hasItemWithWindow = (itemId: string, startAt: Date, endAt: Date) =>

@@ -1,7 +1,35 @@
 import { ref } from "vue"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { resetPaginatedItemsCache, usePaginatedItems } from "../use-paginated-items"
 import type { ListedItem, PaginatedItemsResponse } from "../../types/item-listing"
+
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => ReturnType<typeof ref>
+      }
+    ).useState(key, init),
+}))
+
+vi.mock("../use-viewer-session", () => ({
+  useViewerSession: () => ({
+    session: { value: null },
+    getAccessToken: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+const createStateMock = () => {
+  const store = new Map<string, ReturnType<typeof ref>>()
+
+  return (key: string, init: () => unknown) => {
+    if (!store.has(key)) {
+      store.set(key, ref(init()))
+    }
+
+    return store.get(key)!
+  }
+}
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -55,6 +83,10 @@ const flushPromises = async () => {
 }
 
 describe("usePaginatedItems", () => {
+  beforeEach(() => {
+    vi.stubGlobal("useState", createStateMock())
+  })
+
   afterEach(() => {
     resetPaginatedItemsCache()
     vi.restoreAllMocks()
@@ -216,6 +248,7 @@ describe("usePaginatedItems", () => {
     const firstRefresh = firstPaginatedItems.refresh()
     const secondRefresh = secondPaginatedItems.refresh()
 
+    await flushPromises()
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     response.resolve({
@@ -231,5 +264,53 @@ describe("usePaginatedItems", () => {
     expect(secondPaginatedItems.items.value.map((item) => item.id)).toEqual([
       "44444444-4444-4444-4444-444444444444",
     ])
+  })
+
+  it("persists cursor state for keyed lists across re-instantiation", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [makeItem("11111111-1111-1111-1111-111111111111")],
+        nextCursor: {
+          version: 1,
+          scanExhausted: true,
+          scanCursor: null,
+          pendingIds: [],
+        },
+      } satisfies PaginatedItemsResponse)
+      .mockResolvedValueOnce({
+        items: [makeItem("22222222-2222-2222-2222-222222222222")],
+        nextCursor: null,
+      } satisfies PaginatedItemsResponse)
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const firstInstance = usePaginatedItems({
+      searchQuery: ref(""),
+      filterParams: ref({}),
+      stateKey: "dashboard-items-test",
+    })
+    await firstInstance.refresh()
+
+    const secondInstance = usePaginatedItems({
+      searchQuery: ref(""),
+      filterParams: ref({}),
+      stateKey: "dashboard-items-test",
+    })
+    await secondInstance.fetchNextPage()
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/items",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          cursor: JSON.stringify({
+            version: 1,
+            scanExhausted: true,
+            scanCursor: null,
+            pendingIds: [],
+          }),
+        }),
+      }),
+    )
   })
 })
