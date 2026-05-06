@@ -1936,9 +1936,13 @@ const handleReviewSubmitted = async () => {
               </p>
               <p class="text-[13px] text-noble-black/40 font-medium mb-8">
                 Rental period:
-                <span class="font-bold text-noble-black/60">{{ formatDateTime(booking.startDate) }}</span>
+                <span class="font-bold text-noble-black/60">{{
+                  formatDateTime(booking.startDate)
+                }}</span>
                 –
-                <span class="font-bold text-noble-black/60">{{ formatDateTime(booking.endDate) }}</span
+                <span class="font-bold text-noble-black/60">{{
+                  formatDateTime(booking.endDate)
+                }}</span
                 >.
               </p>
               <button
