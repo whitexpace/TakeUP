@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
+import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
 type AdminLink = {
   key: "overview" | "users" | "transactions" | "disputes" | "listings" | "wallet" | "logs"
@@ -98,6 +99,12 @@ onMounted(() => {
   })
 
   void loadNotifications()
+  scheduleIdleWarmup(() => {
+    const { fetch: fetchAuthUser } = useAuthUser()
+    const { fetchOverview } = useAdminOverview()
+
+    void Promise.allSettled([fetchAuthUser(), fetchOverview()])
+  })
 })
 </script>
 

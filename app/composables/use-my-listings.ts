@@ -3,6 +3,8 @@ import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import { resetPaginatedItemsCache } from "./use-paginated-items"
 import { resetFilteredResultsCountCache } from "./use-filtered-results-count"
+import { clearPersistedSessionState, usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 import { useViewerSession } from "./use-viewer-session"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
@@ -29,23 +31,50 @@ export type MyListingCategory =
 type PaginationCursor = { id: string; createdAt: Date } | null
 
 const SEARCH_DEBOUNCE_MS = 250
+const MY_LISTINGS_CACHE_TTL_MS = 30_000
 
 const invalidateItemSearchCaches = () => {
   resetPaginatedItemsCache()
   resetFilteredResultsCountCache()
+  clearPersistedSessionState("dashboard-listed-items")
+  clearPersistedSessionState("dashboard-listed-items:cursor")
+  clearPersistedSessionState("dashboard-listed-items:has-more")
+  clearPersistedSessionState("dashboard-results-count")
+  clearPersistedSessionState("likes-listed-items")
+  clearPersistedSessionState("likes-listed-items:cursor")
+  clearPersistedSessionState("likes-listed-items:has-more")
 }
 
 export const useMyListings = () => {
-  const listings = ref<MyListingItem[]>([])
+  const listings = usePersistedSessionState<MyListingItem[]>("my-listings:items", () => [])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const nextCursor = ref<PaginationCursor>(null)
-  const hasFetched = ref(false)
+  const nextCursor = usePersistedSessionState<PaginationCursor>(
+    "my-listings:next-cursor",
+    () => null,
+  )
+  const hasFetched = usePersistedSessionState<boolean>("my-listings:fetched", () => false)
   const requestVersion = ref(0)
-  const searchQuery = ref("")
-  const selectedStatuses = ref<MyListingFilterStatus[]>([])
-  const selectedCategories = ref<MyListingCategory[]>([])
+  const searchQuery = usePersistedSessionState<string>("my-listings:search-query", () => "")
+  const selectedStatuses = usePersistedSessionState<MyListingFilterStatus[]>(
+    "my-listings:selected-statuses",
+    () => [],
+  )
+  const selectedCategories = usePersistedSessionState<MyListingCategory[]>(
+    "my-listings:selected-categories",
+    () => [],
+  )
+  const lastLoadedAt = usePersistedSessionState<number | null>(
+    "my-listings:last-loaded-at",
+    () => null,
+  )
   const hasMore = computed(() => nextCursor.value !== null)
+  const hasFreshCache = computed(
+    () =>
+      hasFetched.value &&
+      lastLoadedAt.value !== null &&
+      Date.now() - lastLoadedAt.value < MY_LISTINGS_CACHE_TTL_MS,
+  )
   const hasActiveFilters = computed(
     () =>
       searchQuery.value.trim().length > 0 ||
@@ -85,11 +114,23 @@ export const useMyListings = () => {
     isLoading.value = true
     error.value = null
 
+    if (!append && cursor === null) {
+      if (hasFreshCache.value && !isLoading.value) {
+        recordPerfEvent("my-listings", "list", "cache-hit")
+      } else if (hasFetched.value) {
+        recordPerfEvent("my-listings", "list", "cache-stale")
+      } else {
+        recordPerfEvent("my-listings", "list", "cache-miss")
+      }
+    }
+
     try {
-      const result = await $fetch<MyListingsResponse>("/api/my-listings", {
-        query: buildQuery(cursor),
-        headers: await getAuthHeaders(),
-      })
+      const result = await withPerfTimer("my-listings", "list", async () =>
+        $fetch<MyListingsResponse>("/api/my-listings", {
+          query: buildQuery(cursor),
+          headers: await getAuthHeaders(),
+        }),
+      )
 
       if (version !== requestVersion.value) return
 
@@ -99,6 +140,7 @@ export const useMyListings = () => {
         listings.value = result.items
       }
       nextCursor.value = result.nextCursor as PaginationCursor
+      lastLoadedAt.value = Date.now()
     } catch (err: unknown) {
       const httpStatus = (err as { statusCode?: number })?.statusCode
       if (httpStatus === 401) {
@@ -228,6 +270,7 @@ export const useMyListings = () => {
     error,
     hasFetched,
     hasMore,
+    hasFreshCache,
     searchQuery,
     selectedStatuses,
     selectedCategories,

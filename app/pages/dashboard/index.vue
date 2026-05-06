@@ -442,6 +442,7 @@ const {
   isLoading,
   hasMore,
   errorMessage,
+  hasCachedState,
   fetchNextPage,
   refresh,
 } = usePaginatedItems({
@@ -467,6 +468,7 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
 
 const {
   totalResultsCount,
+  hasCachedCount,
   refreshResultsCount,
   scheduleResultsCountRefresh,
   cancelPendingResultsCountRefresh,
@@ -506,20 +508,27 @@ const scheduleNextPagePrefetch = () => {
 const reload = async () => {
   await refresh()
   scheduleNextPagePrefetch()
-  void refreshResultsCount()
+  await refreshResultsCount()
 }
 
 const scheduleReload = () => {
   void refresh().then(() => {
     scheduleNextPagePrefetch()
+    scheduleResultsCountRefresh()
   })
-  scheduleResultsCountRefresh()
 }
 
 const { data: initialDashboardItemsLoaded } = await useAsyncData(
   "dashboard-initial-listed-items",
   async () => {
-    await Promise.all([refresh(), refreshResultsCount()])
+    if (hasCachedState.value && hasCachedCount.value) {
+      return true
+    }
+
+    await refresh()
+    if (!hasCachedCount.value) {
+      await refreshResultsCount()
+    }
     return true
   },
   {
@@ -544,7 +553,9 @@ onMounted(() => {
     },
   )
 
-  if (initialDashboardItemsLoaded.value) {
+  if (hasCachedState.value && hasCachedCount.value) {
+    scheduleNextPagePrefetch()
+  } else if (initialDashboardItemsLoaded.value) {
     scheduleNextPagePrefetch()
   } else {
     void reload()

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { ref } from "vue"
 import type { MyListingItem } from "../use-my-listings"
 import { useMyListings } from "../use-my-listings"
 import * as paginatedItemsModule from "../use-paginated-items"
@@ -24,14 +25,14 @@ let fetchMock: ReturnType<typeof vi.fn>
 const ITEM_ID = "11111111-1111-1111-1111-111111111111"
 
 const createStateMock = () => {
-  const store = new Map<string, unknown>()
+  const store = new Map<string, ReturnType<typeof ref>>()
 
   return (key: string, init: () => unknown) => {
     if (!store.has(key)) {
-      store.set(key, { value: init() })
+      store.set(key, ref(init()))
     }
 
-    return store.get(key)
+    return store.get(key)!
   }
 }
 

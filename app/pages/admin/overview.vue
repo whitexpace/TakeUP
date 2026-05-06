@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, onMounted } from "vue"
 import { useAdminOverview } from "~/composables/use-admin-overview"
 
 definePageMeta({
@@ -7,7 +7,7 @@ definePageMeta({
   middleware: "admin-auth",
 })
 
-const { overview, isLoading, error, refresh } = useAdminOverview()
+const { overview, isLoading, error, refresh, hasFetched, hasFreshCache } = useAdminOverview()
 
 const summaryCards = computed(() => {
   const summary = overview.value?.summary
@@ -103,6 +103,12 @@ function formatDateTime(value: string | Date) {
 function formatRating(value: number | null) {
   return value === null ? "No ratings yet" : value.toFixed(2)
 }
+
+onMounted(() => {
+  if (!hasFetched.value || !hasFreshCache.value) {
+    void refresh()
+  }
+})
 </script>
 
 <template>

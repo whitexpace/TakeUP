@@ -1,6 +1,15 @@
 import { ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => ReturnType<typeof ref>
+      }
+    ).useState(key, init),
+}))
+
 vi.mock("vue", async () => {
   const actual = await vi.importActual<typeof import("vue")>("vue")
   return {

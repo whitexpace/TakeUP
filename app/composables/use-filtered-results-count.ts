@@ -1,5 +1,6 @@
-import { useState } from "#app"
-import { ref, type Ref } from "vue"
+import { computed, ref, type Ref } from "vue"
+import { usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 import { useViewerSession } from "./use-viewer-session"
 
 type UseFilteredResultsCountOptions = {
@@ -81,9 +82,10 @@ export const useFilteredResultsCount = ({
   const canUseSharedCache = !import.meta.server
   const { getAccessToken, session } = useViewerSession()
   const totalResultsCount: Ref<number | null> = stateKey
-    ? useState<number | null>(stateKey, () => null)
+    ? usePersistedSessionState<number | null>(stateKey, () => null)
     : ref<number | null>(null)
   const isCountLoading = ref(false)
+  const hasCachedCount = computed(() => totalResultsCount.value !== null)
   const requestVersion = ref(0)
   let pendingRefreshTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -110,6 +112,7 @@ export const useFilteredResultsCount = ({
     const cachedCount = canUseSharedCache ? getCachedResultsCount(cacheKey) : null
 
     if (cachedCount !== null) {
+      recordPerfEvent("item-count", cacheKey, "cache-hit")
       if (version === requestVersion.value) {
         totalResultsCount.value = cachedCount
         isCountLoading.value = false
@@ -117,12 +120,17 @@ export const useFilteredResultsCount = ({
       return
     }
 
+    recordPerfEvent("item-count", cacheKey, "cache-miss")
+
     isCountLoading.value = true
 
     try {
       const pendingRequest = canUseSharedCache ? pendingResultsCountRequests.get(cacheKey) : null
       const count = pendingRequest
-        ? await pendingRequest
+        ? await (() => {
+            recordPerfEvent("item-count", cacheKey, "request-dedup-hit")
+            return pendingRequest
+          })()
         : await (() => {
             const headers = import.meta.server
               ? useRequestHeaders(["cookie"])
@@ -133,9 +141,9 @@ export const useFilteredResultsCount = ({
               query,
               ...(headers ? { headers } : {}),
             }
-            const request = $fetch<{ count: number }>("/api/items/count", requestOptions).then(
-              (result) => result.count,
-            )
+            const request = withPerfTimer("item-count", cacheKey, () =>
+              $fetch<{ count: number }>("/api/items/count", requestOptions),
+            ).then((result) => result.count)
 
             if (canUseSharedCache) {
               pendingResultsCountRequests.set(cacheKey, request)
@@ -185,6 +193,7 @@ export const useFilteredResultsCount = ({
   return {
     totalResultsCount,
     isCountLoading,
+    hasCachedCount,
     refreshResultsCount,
     scheduleResultsCountRefresh,
     cancelPendingResultsCountRefresh,

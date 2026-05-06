@@ -1,11 +1,33 @@
+import { ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useListingAnalytics, type ListingAnalyticsResponse } from "../use-listing-analytics"
+
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => ReturnType<typeof ref>
+      }
+    ).useState(key, init),
+}))
 
 vi.mock("../use-viewer-session", () => ({
   useViewerSession: () => ({
     getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
   }),
 }))
+
+const createStateMock = () => {
+  const store = new Map<string, ReturnType<typeof ref>>()
+
+  return (key: string, init: () => unknown) => {
+    if (!store.has(key)) {
+      store.set(key, ref(init()))
+    }
+
+    return store.get(key)!
+  }
+}
 
 const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
   summary: {
@@ -92,6 +114,7 @@ const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
 
 describe("useListingAnalytics", () => {
   beforeEach(() => {
+    vi.stubGlobal("useState", createStateMock())
     vi.stubGlobal("navigateTo", vi.fn())
   })
 

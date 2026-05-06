@@ -1,10 +1,11 @@
-import { useState } from "#app"
-import { ref, type Ref } from "vue"
+import { computed, ref, type Ref } from "vue"
 import type {
   ItemPaginationCursor,
   ListedItem,
   PaginatedItemsResponse,
 } from "../types/item-listing"
+import { usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 import { useViewerSession } from "./use-viewer-session"
 
 type UsePaginatedItemsOptions = {
@@ -100,19 +101,22 @@ export const usePaginatedItems = ({
   const canUseSharedCache = !import.meta.server
   const { getAccessToken, session } = useViewerSession()
   const items: Ref<ListedItem[]> = stateKey
-    ? useState<ListedItem[]>(stateKey, () => [])
+    ? usePersistedSessionState<ListedItem[]>(stateKey, () => [])
     : ref<ListedItem[]>([])
   const cursor: Ref<ItemPaginationCursor | null> = stateKey
-    ? useState<ItemPaginationCursor | null>(`${stateKey}:cursor`, () => null)
+    ? usePersistedSessionState<ItemPaginationCursor | null>(`${stateKey}:cursor`, () => null)
     : ref<ItemPaginationCursor | null>(null)
   const isLoading = ref(false)
   const hasMore: Ref<boolean> = stateKey
-    ? useState<boolean>(`${stateKey}:has-more`, () => true)
+    ? usePersistedSessionState<boolean>(`${stateKey}:has-more`, () => true)
     : ref(true)
   const errorMessage = ref<string | null>(null)
   const requestVersion = ref(0)
   const loadedIds = new Set(items.value.map((item) => item.id))
   const isFreshFetch = ref(false)
+  const hasCachedState = computed(
+    () => items.value.length > 0 || cursor.value !== null || !hasMore.value,
+  )
 
   const resetState = () => {
     cursor.value = null
@@ -167,16 +171,22 @@ export const usePaginatedItems = ({
     const cachedResponse = canUseSharedCache ? getCachedPaginatedItemsResponse(cacheKey) : null
 
     if (cachedResponse) {
+      recordPerfEvent("items", cacheKey, "cache-hit")
       applyResponse(cachedResponse, version)
       return
     }
+
+    recordPerfEvent("items", cacheKey, "cache-miss")
 
     isLoading.value = true
 
     try {
       const pendingRequest = canUseSharedCache ? pendingPaginatedItemsRequests.get(cacheKey) : null
       const response = pendingRequest
-        ? await pendingRequest
+        ? await (() => {
+            recordPerfEvent("items", cacheKey, "request-dedup-hit")
+            return pendingRequest
+          })()
         : await (() => {
             const headers = import.meta.server
               ? useRequestHeaders(["cookie"])
@@ -187,7 +197,9 @@ export const usePaginatedItems = ({
               query,
               ...(headers ? { headers } : {}),
             }
-            const request = $fetch<PaginatedItemsResponse>("/api/items", requestOptions)
+            const request = withPerfTimer("items", cacheKey, () =>
+              $fetch<PaginatedItemsResponse>("/api/items", requestOptions),
+            )
 
             if (canUseSharedCache) {
               pendingPaginatedItemsRequests.set(cacheKey, request)
@@ -229,6 +241,7 @@ export const usePaginatedItems = ({
     isLoading,
     hasMore,
     errorMessage,
+    hasCachedState,
     fetchNextPage,
     refresh,
   }

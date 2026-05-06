@@ -5,6 +5,7 @@ import { mapListedItemsToCards } from "../../utils/item-card-mapper"
 import { DEFAULT_TRENDING_BADGE_STRATEGY, getTrendingItemIds } from "../../utils/item-trending"
 import { filterListedItemsBySearch } from "../../utils/item-search"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
+import { usePersistedSessionState } from "../../composables/use-persisted-session-state"
 
 definePageMeta({
   layout: "dashboard",
@@ -20,8 +21,11 @@ const searchTerm = computed(() => searchInput.value.trim())
 const INITIAL_LIKES_PAGE_SIZE = 8
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
 
-const selectedCategory = ref("ALL")
-const availableCategoryValues = ref<string[]>([])
+const selectedCategory = usePersistedSessionState<string>("likes:selected-category", () => "ALL")
+const availableCategoryValues = usePersistedSessionState<string[]>(
+  "likes:available-category-values",
+  () => [],
+)
 
 const CATEGORY_OPTIONS = [
   { value: "BOOKS", label: "Books" },
@@ -68,6 +72,7 @@ const {
   isLoading,
   hasMore,
   errorMessage,
+  hasCachedState,
   fetchNextPage,
   refresh,
 } = usePaginatedItems({
@@ -269,6 +274,10 @@ let observer: IntersectionObserver | null = null
 const { data: initialLikesLoaded } = await useAsyncData(
   "likes-initial-listed-items",
   async () => {
+    if (hasCachedState.value && availableCategoryValues.value.length > 0) {
+      return true
+    }
+
     await syncLikedCategories()
     await refresh()
     return true
@@ -291,7 +300,9 @@ onMounted(() => {
     },
   )
 
-  if (initialLikesLoaded.value) {
+  if (hasCachedState.value && availableCategoryValues.value.length > 0) {
+    scheduleNextPagePrefetch()
+  } else if (initialLikesLoaded.value) {
     scheduleNextPagePrefetch()
   } else {
     void reload()
