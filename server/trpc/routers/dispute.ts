@@ -1172,12 +1172,28 @@ export const disputeRouter = router({
     }
   }),
 
+  counts: adminProcedure.query(async ({ ctx }) => {
+    const [submitted, open, appealed, rejected, closed] = await Promise.all([
+      ctx.prisma.transactionDispute.count({ where: { status: SUBMITTED_DISPUTE_STATUS } }),
+      ctx.prisma.transactionDispute.count({ where: { status: OPEN_DISPUTE_STATUS } }),
+      ctx.prisma.transactionDispute.count({ where: { status: fromApiDisputeStatus("APPEALED") } }),
+      ctx.prisma.transactionDispute.count({ where: { status: REJECTED_DISPUTE_STATUS } }),
+      ctx.prisma.transactionDispute.count({ where: { status: fromApiDisputeStatus("CLOSED") } }),
+    ])
+
+    return {
+      SUBMITTED: submitted,
+      OPEN: open,
+      APPEALED: appealed,
+      REJECTED: rejected,
+      CLOSED: closed,
+    }
+  }),
+
   list: adminProcedure.input(listDisputesSchema).query(async ({ ctx, input }) => {
     const disputePrisma = getDisputePrisma(ctx)
     const disputes = await disputePrisma.transactionDispute.findMany({
-      where: {
-        status: fromApiDisputeStatus(input.status),
-      },
+      where: input.status ? { status: fromApiDisputeStatus(input.status) } : undefined,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: disputeRecordSelect,
     })

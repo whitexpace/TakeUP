@@ -7,7 +7,8 @@ import { handleDisputeApiError } from "./disputes/handle-dispute-api-error"
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const parsed = listDisputesSchema.safeParse({
-    status: typeof query.status === "string" ? query.status : undefined,
+    status:
+      typeof query.status === "string" && query.status !== "ALL" ? query.status : undefined,
   })
 
   if (!parsed.success) {

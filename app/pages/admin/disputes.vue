@@ -12,7 +12,10 @@ definePageMeta({
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type AdminDisputeDetail = RouterOutputs["dispute"]["byId"]
-type AdminStatusFilter = "OPEN" | "SUBMITTED" | "APPEALED" | "REJECTED" | "CLOSED"
+type DisputeStatus = "SUBMITTED" | "OPEN" | "APPEALED" | "REJECTED" | "CLOSED"
+type AdminStatusFilter = "ALL" | DisputeStatus
+type DisputeCounts = Record<DisputeStatus, number>
+type DisputeListItem = RouterOutputs["dispute"]["list"]["disputes"][number]
 type FinalDecision = NonNullable<AdminDisputeDetail["finalDecision"]>
 type ResolutionActionType = AdminDisputeDetail["actions"][number]["type"]
 
@@ -20,6 +23,7 @@ const route = useRoute()
 const router = useRouter()
 
 const statusFilters: Array<{ value: AdminStatusFilter; label: string; description: string }> = [
+  { value: "ALL", label: "All", description: "All disputes across every status" },
   { value: "SUBMITTED", label: "Submitted", description: "New concerns awaiting intake review" },
   { value: "OPEN", label: "Open", description: "Ready for final resolution" },
   { value: "APPEALED", label: "Appealed", description: "Rejected concerns sent back for review" },
@@ -83,21 +87,71 @@ const actionLabel = (type: ResolutionActionType) => {
 }
 
 const requestFetch = useRequestFetch()
+const nuxtApp = useNuxtApp()
 
-const {
-  data: queueData,
-  pending,
-  refresh,
-} = useLazyAsyncData(
+// Counts — fetched once on load; used for all tab badges
+const { data: countsData, refresh: refreshCounts } = useLazyAsyncData(
+  "admin:dispute:counts",
+  () => requestFetch<DisputeCounts>("/api/disputes/counts"),
+)
+
+const statusCount = (status: AdminStatusFilter): number => {
+  if (!countsData.value) return 0
+  if (status === "ALL") return Object.values(countsData.value).reduce((a, b) => a + b, 0)
+  return countsData.value[status as DisputeStatus] ?? 0
+}
+
+// Per-tab dispute list — cached so switching tabs is instant
+const { data: queueData, pending, refresh: refreshQueue } = useLazyAsyncData(
   () => `admin:disputes:${activeStatus.value}`,
   () =>
     requestFetch<RouterOutputs["dispute"]["list"]>("/api/disputes", {
-      query: { status: activeStatus.value },
+      query: activeStatus.value === "ALL" ? {} : { status: activeStatus.value },
     }),
   {
     watch: [activeStatus],
+    getCachedData: (key) => nuxtApp.payload.data[key] ?? nuxtApp.static.data[key],
   },
 )
+
+// Pre-fetch every tab in the background after mount so switching is instant
+onMounted(async () => {
+  await Promise.all(
+    statusFilters
+      .filter((f) => f.value !== activeStatus.value)
+      .map(async ({ value: status }) => {
+        const key = `admin:disputes:${status}`
+        if (nuxtApp.payload.data[key]) return
+        try {
+          nuxtApp.payload.data[key] = await requestFetch<RouterOutputs["dispute"]["list"]>(
+            "/api/disputes",
+            { query: status === "ALL" ? {} : { status } },
+          )
+        } catch {
+          // pre-fetch errors are non-critical
+        }
+      }),
+  )
+})
+
+// When counts change (polled or refreshed), invalidate stale tab caches
+watch(countsData, (newCounts, oldCounts) => {
+  if (!newCounts || !oldCounts) return
+  for (const status of Object.keys(newCounts) as DisputeStatus[]) {
+    if (newCounts[status] !== oldCounts[status]) {
+      delete nuxtApp.payload.data[`admin:disputes:${status}`]
+      delete nuxtApp.payload.data["admin:disputes:ALL"]
+    }
+  }
+})
+
+const refresh = async () => {
+  // Wipe all tab caches so the next visit to any tab re-fetches fresh data
+  for (const filter of statusFilters) {
+    delete nuxtApp.payload.data[`admin:disputes:${filter.value}`]
+  }
+  await Promise.all([refreshQueue(), refreshCounts()])
+}
 
 const selectedDisputeId = ref<string | null>(
   typeof route.query.dispute === "string" ? route.query.dispute : null,
@@ -141,7 +195,7 @@ const openBanModal = (userId: string, displayName: string) => {
   showBanModal.value = true
 }
 
-const { $trpc } = useNuxtApp() as unknown as { $trpc: TrpcClient }
+const { $trpc } = nuxtApp as unknown as { $trpc: TrpcClient }
 
 const suspendUser = async () => {
   if (!suspendTargetId.value || !suspendReason.value.trim()) return
@@ -184,7 +238,7 @@ const banUser = async () => {
   }
 }
 
-const queue = computed(() => queueData.value?.disputes ?? [])
+const queue = computed<DisputeListItem[]>(() => queueData.value?.disputes ?? [])
 
 const resetResolutionForm = (dispute: AdminDisputeDetail | null) => {
   const defaultTargetId = dispute?.resolutionTargets[0]?.id ?? ""
@@ -557,7 +611,7 @@ const closeResolvedDispute = async () => {
             class="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gray-100 px-1.5 text-[10px] font-bold text-gray-500 transition-colors"
             :class="{ 'bg-orange-100 text-orange-600': activeStatus === filter.value }"
           >
-            {{ filter.value === activeStatus ? queue.length : "0" }}
+            {{ statusCount(filter.value) }}
           </span>
           <span
             v-if="activeStatus === filter.value"

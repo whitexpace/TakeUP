@@ -18,7 +18,7 @@ export const submitDisputeSchema = z.object({
 
 export const listDisputesSchema = z
   .object({
-    status: disputeStatusSchema.optional().default("SUBMITTED"),
+    status: disputeStatusSchema.optional(),
   })
   .default({})
 
