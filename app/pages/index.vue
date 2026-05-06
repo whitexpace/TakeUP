@@ -144,7 +144,6 @@ const handleGoogleLogin = async () => {
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
       queryParams: {
-        hd: "up.edu.ph",
         prompt: "select_account",
       },
     },
@@ -271,7 +270,7 @@ const handleGoogleLogin = async () => {
                 />
               </svg>
               <span class="font-geist font-medium"
-                >Access Denied: You must use a valid up.edu.ph email address to register.</span
+                >Access Denied: You must use a valid up.edu.ph or gmail.com email address.</span
               >
             </div>
 
@@ -298,7 +297,7 @@ const handleGoogleLogin = async () => {
             </div>
 
             <p class="font-geist font-light text-[17px] text-noble-black m-0 mb-8 text-left">
-              Sign in with your UP mail to join the community.
+              Sign in with your Google account to join the community.
             </p>
             <button
               class="bg-burning-orange rounded-[10px] border-none w-full h-[52px] flex items-center justify-center gap-3 cursor-pointer mb-4 text-white font-geist font-medium text-base hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -330,11 +329,11 @@ const handleGoogleLogin = async () => {
               </template>
               <template v-else>
                 <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" />
-                <span>Sign in using your UP mail</span>
+                <span>Sign in with Google</span>
               </template>
             </button>
             <p class="font-geist font-light text-[15px] text-noble-black m-0 text-center">
-              Only accounts ending with <span class="font-semibold">up.edu.ph</span> are accepted
+              Accounts ending with <span class="font-semibold">up.edu.ph</span> or <span class="font-semibold">gmail.com</span> are accepted
             </p>
           </div>
           <div class="mt-6 flex flex-wrap justify-center w-full max-w-[600px] gap-6">

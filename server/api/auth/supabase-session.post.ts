@@ -80,7 +80,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (!email.endsWith("@up.edu.ph")) {
+  if (!email.endsWith("@up.edu.ph") && !email.endsWith("@gmail.com")) {
     throw createError({ statusCode: 403, statusMessage: "Only @up.edu.ph accounts are allowed." })
   }
 
