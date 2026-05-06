@@ -18,7 +18,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
-  const { authUser, fetch: fetchAuthUser } = useAuthUser()
+  const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
   if (authUser.value) {
     return navigateTo(destinationFor(authUser.value.accountType), { replace: true })
   }
@@ -28,7 +28,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
-  const fetchedUser = await fetchAuthUser()
+  if (!hasFreshAuthUserCache.value && !authUser.value) {
+    const fetchedUser = await fetchAuthUser()
+    if (!fetchedUser) {
+      return
+    }
+
+    return navigateTo(destinationFor(fetchedUser.accountType), { replace: true })
+  }
+
+  const fetchedUser = authUser.value
   if (!fetchedUser) {
     return
   }

@@ -39,7 +39,7 @@ const { likesCount, loadLikesCount } = useLikes()
 const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount } = useChat()
 const user = useSupabaseUser()
 const route = useRoute()
-const { authUser, fetch: fetchAuthUser } = useAuthUser()
+const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
 const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 const headerRef = ref<HTMLElement | null>(null)
 const showNotifications = ref(false)
@@ -74,7 +74,13 @@ const bridgeAndLoadAccountType = async () => {
     return
   }
 
-  const fetchedUser = await fetchAuthUser()
+  if (!hasFreshAuthUserCache.value && !authUser.value) {
+    const fetchedUser = await fetchAuthUser()
+    accountType.value = fetchedUser?.accountType ?? null
+    return
+  }
+
+  const fetchedUser = authUser.value
   accountType.value = fetchedUser?.accountType ?? null
 }
 

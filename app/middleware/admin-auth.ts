@@ -60,8 +60,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   try {
-    const { fetch: fetchAuthUser } = useAuthUser()
-    const authUser = await fetchAuthUser()
+    const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+    const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
 
     authCache.value = {
       accessToken,

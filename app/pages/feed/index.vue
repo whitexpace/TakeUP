@@ -633,8 +633,8 @@ const refreshFeed = async () => {
     feedViewerKey.value = user.value?.id ?? "anonymous"
 
     if (headers) {
-      const { fetch: fetchAuthUser } = useAuthUser()
-      const authUser = await fetchAuthUser()
+      const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+      const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
       currentDbUserId.value = authUser?.id ?? ""
     } else {
       currentDbUserId.value = ""

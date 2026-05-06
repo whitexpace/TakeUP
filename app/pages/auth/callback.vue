@@ -46,8 +46,8 @@ onMounted(async () => {
     // Bridge Supabase session → custom JWT so account/listing APIs work
     const { ensureBridgedSession } = useViewerSession()
     await ensureBridgedSession()
-    const { fetch: fetchAuthUser } = useAuthUser()
-    const authUser = await fetchAuthUser()
+    const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+    const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
 
     await navigateTo(authUser?.accountType === "ADMIN" ? "/admin/disputes" : "/dashboard")
   } catch (error) {

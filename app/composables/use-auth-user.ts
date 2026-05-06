@@ -6,6 +6,7 @@
  *
  * Client-only — must not run during SSR (module-level dedup is not request-scoped).
  */
+import { computed } from "vue"
 import { usePersistedSessionState } from "./use-persisted-session-state"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 
@@ -32,6 +33,12 @@ const AUTH_USER_CACHE_TTL_MS = 60_000
 export const useAuthUser = () => {
   const authUser = usePersistedSessionState<AuthMeUser | null>("auth-user-cache", () => null)
   const lastFetchedAt = usePersistedSessionState<number | null>("auth-user-cache:fetched-at", () => null)
+  const hasFreshCache = computed(
+    () =>
+      Boolean(authUser.value) &&
+      lastFetchedAt.value !== null &&
+      Date.now() - lastFetchedAt.value < AUTH_USER_CACHE_TTL_MS,
+  )
 
   /** Seed the shared cache from another authenticated endpoint. */
   const setCached = (user: AuthMeUser | null) => {
@@ -42,12 +49,7 @@ export const useAuthUser = () => {
   /** Fetch once; returns cached value on subsequent calls. */
   const fetch = async (): Promise<AuthMeUser | null> => {
     if (import.meta.server) return null
-    const isFreshCache =
-      authUser.value &&
-      lastFetchedAt.value !== null &&
-      Date.now() - lastFetchedAt.value < AUTH_USER_CACHE_TTL_MS
-
-    if (isFreshCache) {
+    if (hasFreshCache.value) {
       recordPerfEvent("auth-user", "me", "cache-hit")
       return authUser.value
     }
@@ -107,5 +109,5 @@ export const useAuthUser = () => {
     inflightRequest = null
   }
 
-  return { authUser, fetch, refresh, clear, setCached }
+  return { authUser, hasFreshCache, fetch, refresh, clear, setCached }
 }

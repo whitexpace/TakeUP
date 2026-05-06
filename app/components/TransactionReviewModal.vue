@@ -322,8 +322,8 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
     return []
   }
 
-  const { fetch: fetchAuthUser } = useAuthUser()
-  const authUser = await fetchAuthUser()
+  const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+  const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
   if (!authUser) throw new Error("Not authenticated")
   const userId = authUser.id
 

@@ -54,7 +54,12 @@ const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
 const avatarBucket = runtimeConfig.public.userAvatarBucket
 
-const { authUser: cachedAuthUser, fetch: fetchAuthUser, refresh: refreshAuthUser } = useAuthUser()
+const {
+  authUser: cachedAuthUser,
+  hasFreshCache: hasFreshAuthUserCache,
+  fetch: fetchAuthUser,
+  refresh: refreshAuthUser,
+} = useAuthUser()
 
 // Provide a compatible shape for existing template refs (authData.value?.user.X → authData.value?.user.X)
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
@@ -64,7 +69,9 @@ const isHydrated = ref(false)
 
 onMounted(async () => {
   isHydrated.value = true
-  await fetchAuthUser()
+  if (!hasFreshAuthUserCache.value && !cachedAuthUser.value) {
+    await fetchAuthUser()
+  }
   isAuthDataPending.value = false
 })
 
