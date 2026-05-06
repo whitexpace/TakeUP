@@ -10,10 +10,7 @@ export const scheduleIdleWarmup = (task: () => void, options: { timeout?: number
   const timeout = options.timeout ?? 1200
 
   const w = globalThis as unknown as Window & {
-    requestIdleCallback?: (
-      callback: IdleRequestCallback,
-      options?: IdleRequestOptions,
-    ) => number
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
   }
 
   if (typeof w.requestIdleCallback !== "undefined") {
