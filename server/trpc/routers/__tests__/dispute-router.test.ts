@@ -388,7 +388,7 @@ describe("disputeRouter", () => {
     ctx.prisma.transactionDispute.findMany.mockResolvedValue([makeDisputeRecord()])
 
     const caller = disputeRouter.createCaller(ctx as never)
-    const result = await caller.list({})
+    const result = await caller.list({ status: "SUBMITTED" })
 
     expect(ctx.prisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: ADMIN_ID },
@@ -582,6 +582,7 @@ describe("disputeRouter", () => {
         {
           type: "SUSPENSION",
           targetUserId: OTHER_USER_ID,
+          durationDays: 7,
           note: "Repeat policy violations.",
         },
       ],

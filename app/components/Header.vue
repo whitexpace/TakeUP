@@ -79,9 +79,6 @@ const bridgeAndLoadAccountType = async () => {
     accountType.value = fetchedUser?.accountType ?? null
     return
   }
-
-  const fetchedUser = authUser.value
-  accountType.value = fetchedUser?.accountType ?? null
 }
 
 let accountTypeLoadTimeout: ReturnType<typeof setTimeout> | null = null
