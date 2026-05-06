@@ -82,7 +82,10 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!email.endsWith("@up.edu.ph") && !email.endsWith("@gmail.com")) {
-    throw createError({ statusCode: 403, statusMessage: "Only @up.edu.ph accounts are allowed." })
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Only @up.edu.ph or @gmail.com accounts are allowed.",
+    })
   }
 
   let user = await prisma.user.findUnique({

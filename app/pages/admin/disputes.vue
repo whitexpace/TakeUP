@@ -571,7 +571,7 @@ const closeResolvedDispute = async () => {
       class="grid gap-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm xl:grid-cols-[40%_60%] h-[calc(100vh-220px)]"
     >
       <!-- Left Panel: List -->
-      <section class="flex flex-col border-r border-gray-100 bg-white">
+      <section class="flex flex-col border-r border-gray-100 bg-white min-h-0">
         <div class="border-b border-gray-100 p-4">
           <h2 class="text-[16px] font-bold text-gray-900">
             {{ queue.length }} {{ queue.length === 1 ? "Dispute" : "Disputes" }}
@@ -653,7 +653,7 @@ const closeResolvedDispute = async () => {
         </div>
       </section>
       <!-- Right Panel: Detail -->
-      <section class="flex flex-col bg-white">
+      <section class="flex flex-col bg-white min-h-0 overflow-hidden">
         <div class="flex-1 overflow-y-auto custom-admin-main-scrollbar">
           <div v-if="detailPending" class="p-8 space-y-6">
             <div class="h-8 w-1/3 animate-pulse rounded-lg bg-gray-50"></div>
@@ -862,6 +862,17 @@ const closeResolvedDispute = async () => {
               >
                 Additional notes: {{ selectedDispute.rebuttalNotes }}
               </p>
+              <div v-if="selectedDispute.rebuttalImageUrl" class="mt-4">
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-estate/70 mb-2">
+                  Evidence Image
+                </p>
+                <img
+                  :src="selectedDispute.rebuttalImageUrl"
+                  alt="Rebuttal evidence"
+                  class="max-h-64 w-full rounded-2xl object-cover border border-blue-estate/20 cursor-pointer"
+                  @click="navigateTo(selectedDispute.rebuttalImageUrl!, { open: { target: '_blank' } })"
+                />
+              </div>
               <div v-if="(selectedDispute as any).rebuttalImageUrl" class="mt-4">
                 <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-estate/70 mb-2">Evidence Image</p>
                 <img
