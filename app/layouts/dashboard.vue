@@ -161,16 +161,15 @@ onMounted(() => {
     startupTasks.push(fetchFilterMetadata())
   }
 
-  void Promise.allSettled(startupTasks)
-    .then(() => {
-      scheduleIdleWarmup(() => {
-        const { fetch: fetchAuthUser } = useAuthUser()
-        const { loadLikesCount } = useLikes()
-        const { loadBag } = useBag()
+  void Promise.allSettled(startupTasks).then(() => {
+    scheduleIdleWarmup(() => {
+      const { fetch: fetchAuthUser } = useAuthUser()
+      const { loadLikesCount } = useLikes()
+      const { loadBag } = useBag()
 
-        void Promise.allSettled([fetchAuthUser(), loadLikesCount(), loadBag()])
-      })
+      void Promise.allSettled([fetchAuthUser(), loadLikesCount(), loadBag()])
     })
+  })
 })
 
 onUnmounted(() => {

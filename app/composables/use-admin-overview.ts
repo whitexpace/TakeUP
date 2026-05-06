@@ -7,11 +7,17 @@ const ADMIN_OVERVIEW_CACHE_TTL_MS = 30_000
 let inflightOverviewRequest: Promise<AdminOverviewResponse> | null = null
 
 export const useAdminOverview = () => {
-  const overview = usePersistedSessionState<AdminOverviewResponse | null>("admin-overview:data", () => null)
+  const overview = usePersistedSessionState<AdminOverviewResponse | null>(
+    "admin-overview:data",
+    () => null,
+  )
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const hasFetched = usePersistedSessionState<boolean>("admin-overview:fetched", () => false)
-  const lastFetchedAt = usePersistedSessionState<number | null>("admin-overview:last-fetched-at", () => null)
+  const lastFetchedAt = usePersistedSessionState<number | null>(
+    "admin-overview:last-fetched-at",
+    () => null,
+  )
   const hasFreshCache = computed(
     () =>
       hasFetched.value &&

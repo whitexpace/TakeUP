@@ -90,9 +90,8 @@ const requestFetch = useRequestFetch()
 const nuxtApp = useNuxtApp()
 
 // Counts — fetched once on load; used for all tab badges
-const { data: countsData, refresh: refreshCounts } = useLazyAsyncData(
-  "admin:dispute:counts",
-  () => requestFetch<DisputeCounts>("/api/disputes/counts"),
+const { data: countsData, refresh: refreshCounts } = useLazyAsyncData("admin:dispute:counts", () =>
+  requestFetch<DisputeCounts>("/api/disputes/counts"),
 )
 
 const statusCount = (status: AdminStatusFilter): number => {
@@ -102,7 +101,11 @@ const statusCount = (status: AdminStatusFilter): number => {
 }
 
 // Per-tab dispute list — cached so switching tabs is instant
-const { data: queueData, pending, refresh: refreshQueue } = useLazyAsyncData(
+const {
+  data: queueData,
+  pending,
+  refresh: refreshQueue,
+} = useLazyAsyncData(
   () => `admin:disputes:${activeStatus.value}`,
   () =>
     requestFetch<RouterOutputs["dispute"]["list"]>("/api/disputes", {
@@ -139,7 +142,7 @@ watch(countsData, (newCounts, oldCounts) => {
   if (!newCounts || !oldCounts) return
   for (const status of Object.keys(newCounts) as DisputeStatus[]) {
     if (newCounts[status] !== oldCounts[status]) {
-      delete nuxtApp.payload.data[`admin:disputes:${status}`]
+      Reflect.deleteProperty(nuxtApp.payload.data, `admin:disputes:${status}`)
       delete nuxtApp.payload.data["admin:disputes:ALL"]
     }
   }
@@ -148,7 +151,7 @@ watch(countsData, (newCounts, oldCounts) => {
 const refresh = async () => {
   // Wipe all tab caches so the next visit to any tab re-fetches fresh data
   for (const filter of statusFilters) {
-    delete nuxtApp.payload.data[`admin:disputes:${filter.value}`]
+    Reflect.deleteProperty(nuxtApp.payload.data, `admin:disputes:${filter.value}`)
   }
   await Promise.all([refreshQueue(), refreshCounts()])
 }
@@ -776,7 +779,10 @@ const closeResolvedDispute = async () => {
               </div>
             </div>
 
-            <div v-if="userActionSuccess" class="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm font-medium text-green-700">
+            <div
+              v-if="userActionSuccess"
+              class="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm font-medium text-green-700"
+            >
               {{ userActionSuccess }}
             </div>
 
@@ -795,21 +801,34 @@ const closeResolvedDispute = async () => {
                   Points: {{ selectedDispute.participants.borrower?.points ?? "Unavailable" }}
                 </p>
                 <div
-                  v-if="selectedDispute.participants.borrower && selectedDispute.participants.borrower.status !== 'BANNED'"
+                  v-if="
+                    selectedDispute.participants.borrower &&
+                    selectedDispute.participants.borrower.status !== 'BANNED'
+                  "
                   class="mt-4 flex gap-2"
                 >
                   <button
                     v-if="selectedDispute.participants.borrower.status !== 'SUSPENDED'"
                     type="button"
                     class="rounded-xl bg-burning-orange/10 px-3 py-1.5 text-xs font-bold text-burning-orange hover:bg-burning-orange/20 transition-colors"
-                    @click="openSuspendModal(selectedDispute.participants.borrower.id, selectedDispute.participants.borrower.displayName)"
+                    @click="
+                      openSuspendModal(
+                        selectedDispute.participants.borrower.id,
+                        selectedDispute.participants.borrower.displayName,
+                      )
+                    "
                   >
                     Suspend
                   </button>
                   <button
                     type="button"
                     class="rounded-xl bg-cinnabar-red/10 px-3 py-1.5 text-xs font-bold text-cinnabar-red hover:bg-cinnabar-red/20 transition-colors"
-                    @click="openBanModal(selectedDispute.participants.borrower.id, selectedDispute.participants.borrower.displayName)"
+                    @click="
+                      openBanModal(
+                        selectedDispute.participants.borrower.id,
+                        selectedDispute.participants.borrower.displayName,
+                      )
+                    "
                   >
                     Ban
                   </button>
@@ -830,21 +849,34 @@ const closeResolvedDispute = async () => {
                   Points: {{ selectedDispute.participants.lender?.points ?? "Unavailable" }}
                 </p>
                 <div
-                  v-if="selectedDispute.participants.lender && selectedDispute.participants.lender.status !== 'BANNED'"
+                  v-if="
+                    selectedDispute.participants.lender &&
+                    selectedDispute.participants.lender.status !== 'BANNED'
+                  "
                   class="mt-4 flex gap-2"
                 >
                   <button
                     v-if="selectedDispute.participants.lender.status !== 'SUSPENDED'"
                     type="button"
                     class="rounded-xl bg-burning-orange/10 px-3 py-1.5 text-xs font-bold text-burning-orange hover:bg-burning-orange/20 transition-colors"
-                    @click="openSuspendModal(selectedDispute.participants.lender.id, selectedDispute.participants.lender.displayName)"
+                    @click="
+                      openSuspendModal(
+                        selectedDispute.participants.lender.id,
+                        selectedDispute.participants.lender.displayName,
+                      )
+                    "
                   >
                     Suspend
                   </button>
                   <button
                     type="button"
                     class="rounded-xl bg-cinnabar-red/10 px-3 py-1.5 text-xs font-bold text-cinnabar-red hover:bg-cinnabar-red/20 transition-colors"
-                    @click="openBanModal(selectedDispute.participants.lender.id, selectedDispute.participants.lender.displayName)"
+                    @click="
+                      openBanModal(
+                        selectedDispute.participants.lender.id,
+                        selectedDispute.participants.lender.displayName,
+                      )
+                    "
                   >
                     Ban
                   </button>
@@ -883,10 +915,10 @@ const closeResolvedDispute = async () => {
               v-if="selectedDispute.item?.thumbnailImage"
               class="rounded-3xl border border-cinnamon-ice bg-cream/50 p-5"
             >
-              <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
-                Item
+              <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">Item</p>
+              <p class="mt-3 text-sm font-semibold text-noble-black">
+                {{ selectedDispute.item.name }}
               </p>
-              <p class="mt-3 text-sm font-semibold text-noble-black">{{ selectedDispute.item.name }}</p>
               <img
                 :src="selectedDispute.item.thumbnailImage"
                 :alt="selectedDispute.item.name"
@@ -924,16 +956,25 @@ const closeResolvedDispute = async () => {
                   :src="selectedDispute.rebuttalImageUrl"
                   alt="Rebuttal evidence"
                   class="max-h-64 w-full rounded-2xl object-cover border border-blue-estate/20 cursor-pointer"
-                  @click="navigateTo(selectedDispute.rebuttalImageUrl!, { open: { target: '_blank' } })"
+                  @click="
+                    navigateTo(selectedDispute.rebuttalImageUrl!, { open: { target: '_blank' } })
+                  "
                 />
               </div>
               <div v-if="(selectedDispute as any).rebuttalImageUrl" class="mt-4">
-                <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-estate/70 mb-2">Evidence Image</p>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-estate/70 mb-2">
+                  Evidence Image
+                </p>
                 <img
                   :src="(selectedDispute as any).rebuttalImageUrl"
                   alt="Rebuttal evidence"
                   class="max-h-64 w-full rounded-2xl object-cover border border-blue-estate/20 cursor-pointer"
-                  @click="(selectedDispute as any).rebuttalImageUrl && navigateTo((selectedDispute as any).rebuttalImageUrl, { open: { target: '_blank' } })"
+                  @click="
+                    (selectedDispute as any).rebuttalImageUrl &&
+                    navigateTo((selectedDispute as any).rebuttalImageUrl, {
+                      open: { target: '_blank' },
+                    })
+                  "
                 />
               </div>
             </div>
@@ -1299,113 +1340,135 @@ const closeResolvedDispute = async () => {
         </div>
       </section>
     </div>
+
+    <!-- Suspend User Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showSuspendModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="showSuspendModal = false"
+          />
+          <div
+            class="relative w-full max-w-md rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] p-8"
+          >
+            <h3 class="text-[20px] font-bold text-noble-black">Suspend Account</h3>
+            <p class="mt-1 text-sm text-noble-black/55">
+              Suspending <span class="font-semibold">{{ suspendTargetName }}</span>
+            </p>
+
+            <div class="mt-6 space-y-4">
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black">Duration (days)</span>
+                <input
+                  v-model.number="suspendDays"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
+                />
+              </label>
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black"
+                  >Reason <span class="text-cinnabar-red">*</span></span
+                >
+                <textarea
+                  v-model="suspendReason"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="State the reason for suspension."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
+                ></textarea>
+              </label>
+              <p
+                v-if="userActionError"
+                class="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm font-medium text-red-600"
+              >
+                {{ userActionError }}
+              </p>
+            </div>
+
+            <div class="mt-6 flex gap-3">
+              <button
+                type="button"
+                class="flex-1 rounded-2xl border border-cinnamon-ice bg-cream px-5 py-3 font-bold text-noble-black hover:bg-pale-cashmere transition-colors"
+                @click="showSuspendModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                :disabled="isActingOnUser || !suspendReason.trim()"
+                class="flex-1 rounded-2xl bg-burning-orange px-5 py-3 font-bold text-white hover:bg-burning-orange/90 transition-colors disabled:opacity-50"
+                @click="suspendUser"
+              >
+                {{ isActingOnUser ? "Suspending..." : "Confirm Suspension" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Ban User Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showBanModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="showBanModal = false"
+          />
+          <div
+            class="relative w-full max-w-md rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] p-8"
+          >
+            <h3 class="text-[20px] font-bold text-noble-black">Ban Account</h3>
+            <p class="mt-1 text-sm text-noble-black/55">
+              Banning <span class="font-semibold">{{ banTargetName }}</span
+              >. This prevents them from accessing the system.
+            </p>
+
+            <div class="mt-6 space-y-4">
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black"
+                  >Reason <span class="text-cinnabar-red">*</span></span
+                >
+                <textarea
+                  v-model="banReason"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="State the reason for the ban."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
+                ></textarea>
+              </label>
+              <p
+                v-if="userActionError"
+                class="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm font-medium text-red-600"
+              >
+                {{ userActionError }}
+              </p>
+            </div>
+
+            <div class="mt-6 flex gap-3">
+              <button
+                type="button"
+                class="flex-1 rounded-2xl border border-cinnamon-ice bg-cream px-5 py-3 font-bold text-noble-black hover:bg-pale-cashmere transition-colors"
+                @click="showBanModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                :disabled="isActingOnUser || !banReason.trim()"
+                class="flex-1 rounded-2xl bg-cinnabar-red px-5 py-3 font-bold text-white hover:bg-cinnabar-red/90 transition-colors disabled:opacity-50"
+                @click="banUser"
+              >
+                {{ isActingOnUser ? "Banning..." : "Confirm Ban" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
-
-  <!-- Suspend User Modal -->
-  <Teleport to="body">
-    <Transition name="fade">
-      <div
-        v-if="showSuspendModal"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
-      >
-        <div class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm" @click="showSuspendModal = false" />
-        <div class="relative w-full max-w-md rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] p-8">
-          <h3 class="text-[20px] font-bold text-noble-black">Suspend Account</h3>
-          <p class="mt-1 text-sm text-noble-black/55">Suspending <span class="font-semibold">{{ suspendTargetName }}</span></p>
-
-          <div class="mt-6 space-y-4">
-            <label class="block">
-              <span class="text-sm font-bold text-noble-black">Duration (days)</span>
-              <input
-                v-model.number="suspendDays"
-                type="number"
-                min="1"
-                max="365"
-                class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
-              />
-            </label>
-            <label class="block">
-              <span class="text-sm font-bold text-noble-black">Reason <span class="text-cinnabar-red">*</span></span>
-              <textarea
-                v-model="suspendReason"
-                rows="3"
-                maxlength="500"
-                placeholder="State the reason for suspension."
-                class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
-              ></textarea>
-            </label>
-            <p v-if="userActionError" class="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm font-medium text-red-600">
-              {{ userActionError }}
-            </p>
-          </div>
-
-          <div class="mt-6 flex gap-3">
-            <button
-              type="button"
-              class="flex-1 rounded-2xl border border-cinnamon-ice bg-cream px-5 py-3 font-bold text-noble-black hover:bg-pale-cashmere transition-colors"
-              @click="showSuspendModal = false"
-            >
-              Cancel
-            </button>
-            <button
-              :disabled="isActingOnUser || !suspendReason.trim()"
-              class="flex-1 rounded-2xl bg-burning-orange px-5 py-3 font-bold text-white hover:bg-burning-orange/90 transition-colors disabled:opacity-50"
-              @click="suspendUser"
-            >
-              {{ isActingOnUser ? "Suspending..." : "Confirm Suspension" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-
-  <!-- Ban User Modal -->
-  <Teleport to="body">
-    <Transition name="fade">
-      <div
-        v-if="showBanModal"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
-      >
-        <div class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm" @click="showBanModal = false" />
-        <div class="relative w-full max-w-md rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] p-8">
-          <h3 class="text-[20px] font-bold text-noble-black">Ban Account</h3>
-          <p class="mt-1 text-sm text-noble-black/55">Banning <span class="font-semibold">{{ banTargetName }}</span>. This prevents them from accessing the system.</p>
-
-          <div class="mt-6 space-y-4">
-            <label class="block">
-              <span class="text-sm font-bold text-noble-black">Reason <span class="text-cinnabar-red">*</span></span>
-              <textarea
-                v-model="banReason"
-                rows="3"
-                maxlength="500"
-                placeholder="State the reason for the ban."
-                class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
-              ></textarea>
-            </label>
-            <p v-if="userActionError" class="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm font-medium text-red-600">
-              {{ userActionError }}
-            </p>
-          </div>
-
-          <div class="mt-6 flex gap-3">
-            <button
-              type="button"
-              class="flex-1 rounded-2xl border border-cinnamon-ice bg-cream px-5 py-3 font-bold text-noble-black hover:bg-pale-cashmere transition-colors"
-              @click="showBanModal = false"
-            >
-              Cancel
-            </button>
-            <button
-              :disabled="isActingOnUser || !banReason.trim()"
-              class="flex-1 rounded-2xl bg-cinnabar-red px-5 py-3 font-bold text-white hover:bg-cinnabar-red/90 transition-colors disabled:opacity-50"
-              @click="banUser"
-            >
-              {{ isActingOnUser ? "Banning..." : "Confirm Ban" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
 </template>

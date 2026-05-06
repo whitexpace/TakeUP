@@ -333,7 +333,8 @@ const handleGoogleLogin = async () => {
               </template>
             </button>
             <p class="font-geist font-light text-[15px] text-noble-black m-0 text-center">
-              Accounts ending with <span class="font-semibold">up.edu.ph</span> or <span class="font-semibold">gmail.com</span> are accepted
+              Accounts ending with <span class="font-semibold">up.edu.ph</span> or
+              <span class="font-semibold">gmail.com</span> are accepted
             </p>
           </div>
           <div class="mt-6 flex flex-wrap justify-center w-full max-w-[600px] gap-6">

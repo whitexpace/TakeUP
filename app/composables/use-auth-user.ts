@@ -32,7 +32,10 @@ const AUTH_USER_CACHE_TTL_MS = 60_000
 
 export const useAuthUser = () => {
   const authUser = usePersistedSessionState<AuthMeUser | null>("auth-user-cache", () => null)
-  const lastFetchedAt = usePersistedSessionState<number | null>("auth-user-cache:fetched-at", () => null)
+  const lastFetchedAt = usePersistedSessionState<number | null>(
+    "auth-user-cache:fetched-at",
+    () => null,
+  )
   const hasFreshCache = computed(
     () =>
       Boolean(authUser.value) &&

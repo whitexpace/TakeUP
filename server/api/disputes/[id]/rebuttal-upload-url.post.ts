@@ -29,7 +29,11 @@ export default defineEventHandler(async (event) => {
 
   const parsed = bodySchema.safeParse(await readBody(event))
   if (!parsed.success) {
-    throw createError({ statusCode: 400, statusMessage: "Invalid request.", data: parsed.error.flatten() })
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid request.",
+      data: parsed.error.flatten(),
+    })
   }
 
   const dispute = await ctx.prisma.transactionDispute.findUnique({
@@ -47,12 +51,14 @@ export default defineEventHandler(async (event) => {
   }
 
   const isParticipant =
-    dispute.transaction.borrowerId === ctx.user.id ||
-    dispute.transaction.lenderId === ctx.user.id
+    dispute.transaction.borrowerId === ctx.user.id || dispute.transaction.lenderId === ctx.user.id
   const isCounterparty = isParticipant && dispute.raisedById !== ctx.user.id
 
   if (!isCounterparty) {
-    throw createError({ statusCode: 403, statusMessage: "Only the counterparty can upload a rebuttal image." })
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Only the counterparty can upload a rebuttal image.",
+    })
   }
 
   if (dispute.rebuttalSubmittedAt) {
@@ -92,10 +98,15 @@ export default defineEventHandler(async (event) => {
     `${crypto.randomUUID()}-${getSafeFileName(parsed.data.fileName)}`,
   ].join("/")
 
-  const { data, error } = await supabaseClient.storage.from(bucket).createSignedUploadUrl(storagePath)
+  const { data, error } = await supabaseClient.storage
+    .from(bucket)
+    .createSignedUploadUrl(storagePath)
 
   if (error || !data?.token) {
-    throw createError({ statusCode: 500, statusMessage: error?.message || "Unable to create upload URL." })
+    throw createError({
+      statusCode: 500,
+      statusMessage: error?.message || "Unable to create upload URL.",
+    })
   }
 
   const { data: publicUrlData } = supabaseClient.storage.from(bucket).getPublicUrl(storagePath)
