@@ -367,7 +367,7 @@ const handleHandoffProof = () => {
 
 const isRentalPeriodStarted = computed(() => {
   const now = new Date()
-  const start = new Date(booking.value.startDate)
+  const start = new Date(booking.value.transactionStartDate ?? booking.value.startDate)
   return now >= start
 })
 
@@ -1937,11 +1937,11 @@ const handleReviewSubmitted = async () => {
               <p class="text-[13px] text-noble-black/40 font-medium mb-8">
                 Rental period:
                 <span class="font-bold text-noble-black/60">{{
-                  formatDateTime(booking.startDate)
+                  formatDateTime(booking.transactionStartDate ?? booking.startDate)
                 }}</span>
                 –
                 <span class="font-bold text-noble-black/60">{{
-                  formatDateTime(booking.endDate)
+                  formatDateTime(booking.transactionEndDate ?? booking.endDate)
                 }}</span
                 >.
               </p>
