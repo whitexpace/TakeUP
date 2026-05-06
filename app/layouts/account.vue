@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
+import { useAuthUser } from "../composables/use-auth-user"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
@@ -11,35 +12,18 @@ const hideSidebar = computed(() => route.meta.hideAccountSidebar === true)
 
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
-
-type AuthMeResponse = {
-  user: {
-    id: string
-    email: string
-    name: string
-    username: string
-    firstName: string
-    middleName: string | null
-    lastName: string
-    accountType: string | null
-    createdAt: string | null
-    location: string | null
-    avatarUrl: string | null
-    bio: string | null
-    pronouns: string | null
-  }
-}
-
-const { data: authData } = await useAsyncData("account:auth-me", async () => {
-  try {
-    return await $fetch<AuthMeResponse>("/api/auth/me")
-  } catch (err) {
-    console.error("Failed to fetch auth data in layout:", err)
-    return null
-  }
-})
+const {
+  authUser: cachedAuthUser,
+  hasFreshCache: hasFreshAuthUserCache,
+  fetch: fetchAuthUser,
+} = useAuthUser()
+const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
 onMounted(() => {
+  if (user.value && !hasFreshAuthUserCache.value && !cachedAuthUser.value) {
+    void fetchAuthUser()
+  }
+
   isMobile.value = window.innerWidth < 1024
   if (isMobile.value) isSidebarOpen.value = false
 
