@@ -890,6 +890,89 @@ export const adminRouter = t.router({
       }),
 
     /**
+     * Suspend a user for a specified number of days
+     */
+    suspendUser: adminProcedure
+      .input(
+        z.object({
+          userId: z.string().uuid(),
+          reason: z.string().min(1, "Reason is required"),
+          durationDays: z.number().int().min(1).max(365),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const currentUser = ctx.user
+        if (!currentUser) throw new Error("Not authenticated")
+
+        if (currentUser.id === input.userId) {
+          throw new Error("You cannot suspend yourself")
+        }
+
+        const suspendedUntil = new Date(Date.now() + input.durationDays * 24 * 60 * 60 * 1000)
+
+        const updated = await ctx.prisma.user.update({
+          where: { id: input.userId },
+          data: { status: "SUSPENDED", suspendedUntil },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        })
+
+        await createAdminActionLog(ctx.prisma, {
+          adminId: currentUser.id,
+          actionType: ADMIN_ACTION_TYPES.SUSPEND_USER,
+          targetType: ADMIN_ACTION_TARGET_TYPES.USER,
+          targetId: input.userId,
+          targetLabel: `${updated.firstName} ${updated.lastName}`,
+          description: input.reason,
+          metadata: {
+            email: updated.email,
+            name: `${updated.firstName} ${updated.lastName}`,
+            durationDays: input.durationDays,
+            suspendedUntil: suspendedUntil.toISOString(),
+          },
+        })
+
+        return updated
+      }),
+
+    /**
+     * Unsuspend a user
+     */
+    unsuspendUser: adminProcedure
+      .input(z.object({ userId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const currentUser = ctx.user
+        if (!currentUser) throw new Error("Not authenticated")
+
+        const updated = await ctx.prisma.user.update({
+          where: { id: input.userId },
+          data: { status: "ACTIVE", suspendedUntil: null },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        })
+
+        await createAdminActionLog(ctx.prisma, {
+          adminId: currentUser.id,
+          actionType: ADMIN_ACTION_TYPES.UNSUSPEND_USER,
+          targetType: ADMIN_ACTION_TARGET_TYPES.USER,
+          targetId: input.userId,
+          targetLabel: `${updated.firstName} ${updated.lastName}`,
+          description: "User unsuspended by admin",
+          metadata: { email: updated.email, name: `${updated.firstName} ${updated.lastName}` },
+        })
+
+        return updated
+      }),
+
+    /**
      * Delete a user (with safeguards)
      */
     deleteUser: adminProcedure

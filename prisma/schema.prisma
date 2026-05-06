@@ -507,6 +507,7 @@ model User {
   pronouns                          String?
   accountType                       AccountType
   status                            UserStatus
+  suspendedUntil                    DateTime?                  @map("suspended_until") @db.Timestamptz(6)
   points                            Int                        @default(0)
   admin                             Admin?
   adminActionLogs                   AdminActionLog[]           @relation("admin_action_logs_admin_user_idToUser")
@@ -736,6 +737,7 @@ model TransactionDispute {
   rebuttalById        String?               @map("rebuttal_by_user_id")
   rebuttalText        String?               @map("rebuttal_text")
   rebuttalNotes       String?               @map("rebuttal_notes")
+  rebuttalImageUrl    String?               @map("rebuttal_image_url")
   rebuttalSubmittedAt DateTime?             @map("rebuttal_submitted_at") @db.Timestamptz(6)
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
 

@@ -237,6 +237,8 @@ const rebuttalModalStep = ref<"form" | "confirm">("form")
 const isSubmittingRebuttal = ref(false)
 const rebuttalText = ref("")
 const rebuttalNotes = ref("")
+const rebuttalImageFile = ref<File | null>(null)
+const rebuttalImagePreview = ref<string | null>(null)
 const rebuttalValidationMessage = ref("")
 
 const parsedDisputeDescription = computed(() => {
@@ -739,8 +741,29 @@ const handleDispute = async () => {
 const resetRebuttalForm = () => {
   rebuttalText.value = ""
   rebuttalNotes.value = ""
+  rebuttalImageFile.value = null
+  rebuttalImagePreview.value = null
   rebuttalValidationMessage.value = ""
   rebuttalModalStep.value = "form"
+}
+
+const setRebuttalImageFile = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  if (file && !file.type.startsWith("image/")) {
+    rebuttalValidationMessage.value = "Please upload an image file."
+    return
+  }
+  rebuttalImageFile.value = file
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      rebuttalImagePreview.value = (e.target?.result as string) ?? null
+    }
+    reader.readAsDataURL(file)
+  } else {
+    rebuttalImagePreview.value = null
+  }
 }
 
 const openRebuttalModal = () => {
@@ -778,15 +801,44 @@ const submitRebuttal = async () => {
   actionSuccessMessage.value = ""
 
   try {
+    let rebuttalImageUrl: string | undefined
+
+    if (rebuttalImageFile.value) {
+      type UploadUrlResponse = { token: string; path: string; publicUrl: string; bucket: string }
+      const uploadData = await $fetch<UploadUrlResponse>(
+        `/api/disputes/${latestDispute.value.id}/rebuttal-upload-url`,
+        {
+          method: "POST",
+          body: { fileName: rebuttalImageFile.value.name },
+        },
+      )
+
+      const { error: uploadError } = await supabase.storage
+        .from(uploadData.bucket)
+        .uploadToSignedUrl(uploadData.path, uploadData.token, rebuttalImageFile.value, {
+          contentType: rebuttalImageFile.value.type || "image/jpeg",
+          upsert: false,
+        })
+
+      if (uploadError) {
+        throw new Error(uploadError.message || "Unable to upload rebuttal image.")
+      }
+
+      rebuttalImageUrl = uploadData.publicUrl
+    }
+
     await $fetch(`/api/disputes/${latestDispute.value.id}/rebuttal`, {
       method: "POST",
       body: {
         rebuttalText: rebuttalText.value.trim(),
         rebuttalNotes: rebuttalNotes.value.trim() || undefined,
+        rebuttalImageUrl,
       },
     })
 
-    closeRebuttalModal()
+    // Directly close without guard since we're still in submitting state
+    isRebuttalModalOpen.value = false
+    resetRebuttalForm()
     actionSuccessMessage.value = "Your rebuttal has been submitted."
     await refresh()
   } catch (err: unknown) {
@@ -2483,6 +2535,40 @@ const handleReviewSubmitted = async () => {
                         This is optional and only visible to the moderation team.
                       </p>
                     </label>
+
+                    <div class="block">
+                      <span class="text-[13px] font-semibold text-[#374151]">Evidence Image</span>
+                      <p class="mt-1 text-[12px] text-noble-black/40 font-medium italic">
+                        Optional. Attach one image as supporting evidence.
+                      </p>
+                      <label
+                        class="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[10px] border-[1.5px] border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center transition hover:border-burning-orange hover:bg-burning-orange/5"
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          class="hidden"
+                          @change="setRebuttalImageFile"
+                        />
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-noble-black/30">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                        <span v-if="!rebuttalImageFile" class="text-[12px] text-noble-black/40 font-medium">
+                          Click to upload an image
+                        </span>
+                        <span v-else class="text-[12px] font-semibold text-burning-orange">
+                          {{ rebuttalImageFile.name }}
+                        </span>
+                      </label>
+                      <img
+                        v-if="rebuttalImagePreview"
+                        :src="rebuttalImagePreview"
+                        alt="Rebuttal evidence preview"
+                        class="mt-3 max-h-40 w-full rounded-[10px] object-cover border border-gray-200"
+                      />
+                    </div>
                   </div>
 
                   <p
@@ -2541,6 +2627,19 @@ const handleReviewSubmitted = async () => {
                     <p class="text-[14px] leading-relaxed text-noble-black/70 font-medium italic">
                       {{ rebuttalNotes.trim() }}
                     </p>
+                  </div>
+
+                  <div v-if="rebuttalImagePreview" class="pt-4 border-t border-gray-100">
+                    <p
+                      class="text-[11px] font-bold uppercase tracking-wider text-noble-black/40 mb-2"
+                    >
+                      Evidence Image
+                    </p>
+                    <img
+                      :src="rebuttalImagePreview"
+                      alt="Rebuttal evidence"
+                      class="max-h-48 w-full rounded-[10px] object-cover border border-gray-200"
+                    />
                   </div>
                 </div>
               </div>
