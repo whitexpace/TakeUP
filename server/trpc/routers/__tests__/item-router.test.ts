@@ -52,7 +52,6 @@ const makeFeedRecord = (id: string, overrides: Record<string, unknown> = {}) => 
   rating: 0,
   boostScore: 0,
   boostExpiresAt: null,
-  borrowerId: null,
   ...overrides,
 })
 
@@ -146,7 +145,6 @@ describe("itemRouter", () => {
       bookingCount: 0,
       likeCount: 0,
       rating: 0,
-      borrowerId: null,
     })
 
     const caller = itemRouter.createCaller({
@@ -235,7 +233,9 @@ describe("itemRouter", () => {
         where: expect.objectContaining({
           AND: expect.arrayContaining([
             expect.objectContaining({ status: { not: "DELETED" } }),
-            expect.objectContaining({ status: "AVAILABLE" }),
+            expect.objectContaining({
+              status: { in: expect.arrayContaining(["AVAILABLE", "RENTED"]) },
+            }),
           ]),
         }),
       }),
@@ -395,7 +395,6 @@ describe("itemRouter", () => {
       bookingCount: 0,
       likeCount: 0,
       rating: 0,
-      borrowerId: null,
       transactionReviews: [
         {
           id: "review-1",
@@ -735,7 +734,6 @@ describe("itemRouter", () => {
       whatIsIncluded: null,
       knownIssues: null,
       usageLimitations: null,
-      borrowerId: null,
       lenderId,
       lender: {
         user: {

@@ -29,7 +29,6 @@ const makeItem = (overrides: Partial<ListedItem> = {}): ListedItem => ({
   rating: 4.2,
   lenderId: "owner-1",
   ownerName: "Owner",
-  borrowerId: null,
   categories: ["ELECTRONICS"],
   tags: [],
   hasActiveBoost: false,

@@ -303,12 +303,10 @@ model Item {
   boostScore           Int                       @default(0)
   boostExpiresAt       DateTime?
   lenderId             String
-  borrowerId           String?
   adminModerationState AdminItemModerationState?
   adminModeratedById   String?
   adminModeratedAt     DateTime?                 @db.Timestamptz(6)
 
-  borrower           Borrower?            @relation(fields: [borrowerId], references: [userId], onDelete: SetNull)
   adminModeratedBy   User?                @relation("admin_moderated_items", fields: [adminModeratedById], references: [id], onDelete: SetNull)
   adminActionLogs    AdminActionLog[]     @relation("admin_action_logs_target_item_idToItem")
   lender             Lender               @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
@@ -325,7 +323,6 @@ model Item {
   transactions       RentalTransaction[]
 
   @@index([lenderId])
-  @@index([borrowerId])
   @@index([numericId])
   @@index([adminModerationState, createdAt(sort: Desc)])
   @@index([adminModeratedById])
@@ -667,10 +664,9 @@ model Borrower {
   borrowStatus   String
   borrowerRating Float  @default(0)
 
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookings      Booking[]
-  borrowedItems Item[]
-  itemRequests  ItemRequest[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+  itemRequests ItemRequest[]
 }
 
 model ItemRequest {
