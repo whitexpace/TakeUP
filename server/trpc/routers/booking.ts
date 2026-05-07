@@ -299,6 +299,8 @@ type BookingDetailTransaction = {
   status: PrismaTransactionStatus
   borrowerId: string | null
   lenderId: string | null
+  startDate: Date | null
+  endDate: Date | null
   createdAt: Date
   statusLogs: Array<{
     id: string
@@ -1321,6 +1323,8 @@ export const bookingRouter = router({
         status: true,
         borrowerId: true,
         lenderId: true,
+        startDate: true,
+        endDate: true,
         createdAt: true,
         statusLogs: {
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -1404,6 +1408,8 @@ export const bookingRouter = router({
     return {
       ...mapBookingRecord(bookingWithProof),
       transactionId: transaction?.id ?? null,
+      transactionStartDate: transaction?.startDate ?? null,
+      transactionEndDate: transaction?.endDate ?? null,
       timeline: buildBookingTimeline(bookingWithProof, transaction),
       canRaiseDispute:
         Boolean(transaction?.id && (transaction.borrowerId || transaction.lenderId)) &&

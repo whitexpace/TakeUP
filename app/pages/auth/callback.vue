@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { useViewerSession } from "../../composables/use-viewer-session"
-
 const errorMessage = ref("")
 const supabase = useSupabaseClient()
 const route = useRoute()
@@ -44,8 +42,8 @@ onMounted(async () => {
     }
 
     // Bridge Supabase session → custom JWT so account/listing APIs work
-    const { ensureBridgedSession } = useViewerSession()
-    await ensureBridgedSession()
+    const { ensureBridged } = useSessionBridge()
+    await ensureBridged(session.access_token)
     const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
     const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
 

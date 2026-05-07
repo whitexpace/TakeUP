@@ -158,7 +158,7 @@ onMounted(() => {
       <p class="mt-2 max-w-md text-[14px] font-medium text-noble-black/45">{{ error }}</p>
       <button
         class="mt-6 rounded-[12px] bg-burning-orange px-6 py-2.5 text-[14px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all hover:brightness-110"
-        @click="refresh"
+        @click="() => refresh()"
       >
         Retry
       </button>

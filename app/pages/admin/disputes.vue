@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { inferRouterOutputs } from "@trpc/server"
+import type { inferRouterProxyClient } from "@trpc/client"
 import type { AppRouter } from "../../../server/trpc/routers"
+
+type TrpcClient = inferRouterProxyClient<AppRouter>
 
 definePageMeta({
   layout: "admin",
@@ -9,7 +12,10 @@ definePageMeta({
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type AdminDisputeDetail = RouterOutputs["dispute"]["byId"]
-type AdminStatusFilter = "OPEN" | "SUBMITTED" | "APPEALED" | "REJECTED" | "CLOSED"
+type DisputeStatus = "SUBMITTED" | "OPEN" | "APPEALED" | "REJECTED" | "CLOSED"
+type AdminStatusFilter = "ALL" | DisputeStatus
+type DisputeCounts = Record<DisputeStatus, number>
+type DisputeListItem = RouterOutputs["dispute"]["list"]["disputes"][number]
 type FinalDecision = NonNullable<AdminDisputeDetail["finalDecision"]>
 type ResolutionActionType = AdminDisputeDetail["actions"][number]["type"]
 
@@ -17,6 +23,7 @@ const route = useRoute()
 const router = useRouter()
 
 const statusFilters: Array<{ value: AdminStatusFilter; label: string; description: string }> = [
+  { value: "ALL", label: "All", description: "All disputes across every status" },
   { value: "SUBMITTED", label: "Submitted", description: "New concerns awaiting intake review" },
   { value: "OPEN", label: "Open", description: "Ready for final resolution" },
   { value: "APPEALED", label: "Appealed", description: "Rejected concerns sent back for review" },
@@ -80,21 +87,74 @@ const actionLabel = (type: ResolutionActionType) => {
 }
 
 const requestFetch = useRequestFetch()
+const nuxtApp = useNuxtApp()
 
+// Counts — fetched once on load; used for all tab badges
+const { data: countsData, refresh: refreshCounts } = useLazyAsyncData("admin:dispute:counts", () =>
+  requestFetch<DisputeCounts>("/api/disputes/counts"),
+)
+
+const statusCount = (status: AdminStatusFilter): number => {
+  if (!countsData.value) return 0
+  if (status === "ALL") return Object.values(countsData.value).reduce((a, b) => a + b, 0)
+  return countsData.value[status as DisputeStatus] ?? 0
+}
+
+// Per-tab dispute list — cached so switching tabs is instant
 const {
   data: queueData,
   pending,
-  refresh,
+  refresh: refreshQueue,
 } = useLazyAsyncData(
   () => `admin:disputes:${activeStatus.value}`,
   () =>
     requestFetch<RouterOutputs["dispute"]["list"]>("/api/disputes", {
-      query: { status: activeStatus.value },
+      query: activeStatus.value === "ALL" ? {} : { status: activeStatus.value },
     }),
   {
     watch: [activeStatus],
+    getCachedData: (key) => nuxtApp.payload.data[key] ?? nuxtApp.static.data[key],
   },
 )
+
+// Pre-fetch every tab in the background after mount so switching is instant
+onMounted(async () => {
+  await Promise.all(
+    statusFilters
+      .filter((f) => f.value !== activeStatus.value)
+      .map(async ({ value: status }) => {
+        const key = `admin:disputes:${status}`
+        if (nuxtApp.payload.data[key]) return
+        try {
+          nuxtApp.payload.data[key] = await requestFetch<RouterOutputs["dispute"]["list"]>(
+            "/api/disputes",
+            { query: status === "ALL" ? {} : { status } },
+          )
+        } catch {
+          // pre-fetch errors are non-critical
+        }
+      }),
+  )
+})
+
+// When counts change (polled or refreshed), invalidate stale tab caches
+watch(countsData, (newCounts, oldCounts) => {
+  if (!newCounts || !oldCounts) return
+  for (const status of Object.keys(newCounts) as DisputeStatus[]) {
+    if (newCounts[status] !== oldCounts[status]) {
+      Reflect.deleteProperty(nuxtApp.payload.data, `admin:disputes:${status}`)
+      delete nuxtApp.payload.data["admin:disputes:ALL"]
+    }
+  }
+})
+
+const refresh = async () => {
+  // Wipe all tab caches so the next visit to any tab re-fetches fresh data
+  for (const filter of statusFilters) {
+    Reflect.deleteProperty(nuxtApp.payload.data, `admin:disputes:${filter.value}`)
+  }
+  await Promise.all([refreshQueue(), refreshCounts()])
+}
 
 const selectedDisputeId = ref<string | null>(
   typeof route.query.dispute === "string" ? route.query.dispute : null,
@@ -106,8 +166,82 @@ const actionSuccessMessage = ref("")
 const isReviewing = ref(false)
 const isResolving = ref(false)
 const isClosing = ref(false)
+const isActingOnUser = ref(false)
+const userActionError = ref("")
+const userActionSuccess = ref("")
 
-const queue = computed(() => queueData.value?.disputes ?? [])
+const showSuspendModal = ref(false)
+const suspendTargetId = ref("")
+const suspendTargetName = ref("")
+const suspendReason = ref("")
+const suspendDays = ref(7)
+
+const showBanModal = ref(false)
+const banModalTargetId = ref("")
+const banTargetName = ref("")
+const banReason = ref("")
+
+const openSuspendModal = (userId: string, displayName: string) => {
+  suspendTargetId.value = userId
+  suspendTargetName.value = displayName
+  suspendReason.value = ""
+  suspendDays.value = 7
+  userActionError.value = ""
+  showSuspendModal.value = true
+}
+
+const openBanModal = (userId: string, displayName: string) => {
+  banModalTargetId.value = userId
+  banTargetName.value = displayName
+  banReason.value = ""
+  userActionError.value = ""
+  showBanModal.value = true
+}
+
+const { $trpc } = nuxtApp as unknown as { $trpc: TrpcClient }
+
+const suspendUser = async () => {
+  if (!suspendTargetId.value || !suspendReason.value.trim()) return
+  isActingOnUser.value = true
+  userActionError.value = ""
+  try {
+    await $trpc.admin.actions.suspendUser.mutate({
+      userId: suspendTargetId.value,
+      reason: suspendReason.value.trim(),
+      durationDays: suspendDays.value,
+    })
+    userActionSuccess.value = `${suspendTargetName.value} has been suspended for ${suspendDays.value} day(s).`
+    showSuspendModal.value = false
+    if (selectedDisputeId.value) await loadDisputeDetail(selectedDisputeId.value)
+  } catch (err: unknown) {
+    userActionError.value =
+      (err as { message?: string })?.message ?? "Unable to suspend user right now."
+  } finally {
+    isActingOnUser.value = false
+  }
+}
+
+const banUser = async () => {
+  if (!banModalTargetId.value || !banReason.value.trim()) return
+  isActingOnUser.value = true
+  userActionError.value = ""
+  try {
+    await $trpc.admin.actions.banUser.mutate({
+      userId: banModalTargetId.value,
+      reason: banReason.value.trim(),
+    })
+    userActionSuccess.value = `${banTargetName.value} has been banned.`
+    showBanModal.value = false
+    if (selectedDisputeId.value) await loadDisputeDetail(selectedDisputeId.value)
+  } catch (err: unknown) {
+    userActionError.value =
+      (err as { message?: string })?.message ?? "Unable to ban user right now."
+  } finally {
+    isActingOnUser.value = false
+  }
+}
+
+const queue = computed<DisputeListItem[]>(() => queueData.value?.disputes ?? [])
 
 const resetResolutionForm = (dispute: AdminDisputeDetail | null) => {
   const defaultTargetId = dispute?.resolutionTargets[0]?.id ?? ""
@@ -124,6 +258,7 @@ const resetResolutionForm = (dispute: AdminDisputeDetail | null) => {
   pointDeductionNote.value = ""
   suspensionEnabled.value = false
   suspensionTargetId.value = defaultTargetId
+  suspensionDurationDays.value = 7
   suspensionNote.value = ""
   banEnabled.value = false
   banTargetId.value = defaultTargetId
@@ -202,6 +337,7 @@ const pointDeductionPoints = ref(1)
 const pointDeductionNote = ref("")
 const suspensionEnabled = ref(false)
 const suspensionTargetId = ref("")
+const suspensionDurationDays = ref(7)
 const suspensionNote = ref("")
 const banEnabled = ref(false)
 const banTargetId = ref("")
@@ -237,6 +373,7 @@ const buildResolutionActions = () => {
     targetUserId: string
     note?: string
     points?: number
+    durationDays?: number
   }> = []
 
   if (warningEnabled.value && warningTargetId.value) {
@@ -260,6 +397,7 @@ const buildResolutionActions = () => {
     actions.push({
       type: "SUSPENSION",
       targetUserId: suspensionTargetId.value,
+      durationDays: suspensionDurationDays.value,
       note: suspensionNote.value.trim() || undefined,
     })
   }
@@ -476,7 +614,7 @@ const closeResolvedDispute = async () => {
             class="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gray-100 px-1.5 text-[10px] font-bold text-gray-500 transition-colors"
             :class="{ 'bg-orange-100 text-orange-600': activeStatus === filter.value }"
           >
-            {{ filter.value === activeStatus ? queue.length : "0" }}
+            {{ statusCount(filter.value) }}
           </span>
           <span
             v-if="activeStatus === filter.value"
@@ -490,7 +628,7 @@ const closeResolvedDispute = async () => {
       class="grid gap-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm xl:grid-cols-[40%_60%] h-[calc(100vh-220px)]"
     >
       <!-- Left Panel: List -->
-      <section class="flex flex-col border-r border-gray-100 bg-white">
+      <section class="flex flex-col border-r border-gray-100 bg-white min-h-0">
         <div class="border-b border-gray-100 p-4">
           <h2 class="text-[16px] font-bold text-gray-900">
             {{ queue.length }} {{ queue.length === 1 ? "Dispute" : "Disputes" }}
@@ -572,7 +710,7 @@ const closeResolvedDispute = async () => {
         </div>
       </section>
       <!-- Right Panel: Detail -->
-      <section class="flex flex-col bg-white">
+      <section class="flex flex-col bg-white min-h-0 overflow-hidden">
         <div class="flex-1 overflow-y-auto custom-admin-main-scrollbar">
           <div v-if="detailPending" class="p-8 space-y-6">
             <div class="h-8 w-1/3 animate-pulse rounded-lg bg-gray-50"></div>
@@ -641,6 +779,13 @@ const closeResolvedDispute = async () => {
               </div>
             </div>
 
+            <div
+              v-if="userActionSuccess"
+              class="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm font-medium text-green-700"
+            >
+              {{ userActionSuccess }}
+            </div>
+
             <div class="grid gap-4 lg:grid-cols-2">
               <div class="rounded-3xl bg-cream p-5">
                 <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">
@@ -655,6 +800,39 @@ const closeResolvedDispute = async () => {
                 <p class="mt-1 text-sm text-noble-black/65">
                   Points: {{ selectedDispute.participants.borrower?.points ?? "Unavailable" }}
                 </p>
+                <div
+                  v-if="
+                    selectedDispute.participants.borrower &&
+                    selectedDispute.participants.borrower.status !== 'BANNED'
+                  "
+                  class="mt-4 flex gap-2"
+                >
+                  <button
+                    v-if="selectedDispute.participants.borrower.status !== 'SUSPENDED'"
+                    type="button"
+                    class="rounded-xl bg-burning-orange/10 px-3 py-1.5 text-xs font-bold text-burning-orange hover:bg-burning-orange/20 transition-colors"
+                    @click="
+                      openSuspendModal(
+                        selectedDispute.participants.borrower.id,
+                        selectedDispute.participants.borrower.displayName,
+                      )
+                    "
+                  >
+                    Suspend
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-xl bg-cinnabar-red/10 px-3 py-1.5 text-xs font-bold text-cinnabar-red hover:bg-cinnabar-red/20 transition-colors"
+                    @click="
+                      openBanModal(
+                        selectedDispute.participants.borrower.id,
+                        selectedDispute.participants.borrower.displayName,
+                      )
+                    "
+                  >
+                    Ban
+                  </button>
+                </div>
               </div>
 
               <div class="rounded-3xl bg-cream p-5">
@@ -670,6 +848,39 @@ const closeResolvedDispute = async () => {
                 <p class="mt-1 text-sm text-noble-black/65">
                   Points: {{ selectedDispute.participants.lender?.points ?? "Unavailable" }}
                 </p>
+                <div
+                  v-if="
+                    selectedDispute.participants.lender &&
+                    selectedDispute.participants.lender.status !== 'BANNED'
+                  "
+                  class="mt-4 flex gap-2"
+                >
+                  <button
+                    v-if="selectedDispute.participants.lender.status !== 'SUSPENDED'"
+                    type="button"
+                    class="rounded-xl bg-burning-orange/10 px-3 py-1.5 text-xs font-bold text-burning-orange hover:bg-burning-orange/20 transition-colors"
+                    @click="
+                      openSuspendModal(
+                        selectedDispute.participants.lender.id,
+                        selectedDispute.participants.lender.displayName,
+                      )
+                    "
+                  >
+                    Suspend
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-xl bg-cinnabar-red/10 px-3 py-1.5 text-xs font-bold text-cinnabar-red hover:bg-cinnabar-red/20 transition-colors"
+                    @click="
+                      openBanModal(
+                        selectedDispute.participants.lender.id,
+                        selectedDispute.participants.lender.displayName,
+                      )
+                    "
+                  >
+                    Ban
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -701,6 +912,21 @@ const closeResolvedDispute = async () => {
             </div>
 
             <div
+              v-if="selectedDispute.item?.thumbnailImage"
+              class="rounded-3xl border border-cinnamon-ice bg-cream/50 p-5"
+            >
+              <p class="text-xs font-bold uppercase tracking-[0.14em] text-noble-black/35">Item</p>
+              <p class="mt-3 text-sm font-semibold text-noble-black">
+                {{ selectedDispute.item.name }}
+              </p>
+              <img
+                :src="selectedDispute.item.thumbnailImage"
+                :alt="selectedDispute.item.name"
+                class="mt-3 max-h-48 w-full rounded-2xl object-cover border border-cinnamon-ice"
+              />
+            </div>
+
+            <div
               v-if="selectedDispute.hasRebuttal"
               class="rounded-3xl border border-blue-estate/15 bg-blue-estate/5 p-5"
             >
@@ -722,6 +948,35 @@ const closeResolvedDispute = async () => {
               >
                 Additional notes: {{ selectedDispute.rebuttalNotes }}
               </p>
+              <div v-if="selectedDispute.rebuttalImageUrl" class="mt-4">
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-estate/70 mb-2">
+                  Evidence Image
+                </p>
+                <img
+                  :src="selectedDispute.rebuttalImageUrl"
+                  alt="Rebuttal evidence"
+                  class="max-h-64 w-full rounded-2xl object-cover border border-blue-estate/20 cursor-pointer"
+                  @click="
+                    navigateTo(selectedDispute.rebuttalImageUrl!, { open: { target: '_blank' } })
+                  "
+                />
+              </div>
+              <div v-if="(selectedDispute as any).rebuttalImageUrl" class="mt-4">
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-blue-estate/70 mb-2">
+                  Evidence Image
+                </p>
+                <img
+                  :src="(selectedDispute as any).rebuttalImageUrl"
+                  alt="Rebuttal evidence"
+                  class="max-h-64 w-full rounded-2xl object-cover border border-blue-estate/20 cursor-pointer"
+                  @click="
+                    (selectedDispute as any).rebuttalImageUrl &&
+                    navigateTo((selectedDispute as any).rebuttalImageUrl, {
+                      open: { target: '_blank' },
+                    })
+                  "
+                />
+              </div>
             </div>
 
             <div
@@ -990,6 +1245,15 @@ const closeResolvedDispute = async () => {
                         </option>
                       </select>
                       <input
+                        v-model.number="suspensionDurationDays"
+                        :disabled="!suspensionEnabled || noActionSelected"
+                        type="number"
+                        min="1"
+                        max="365"
+                        placeholder="Duration in days"
+                        class="w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none"
+                      />
+                      <input
                         v-model="suspensionNote"
                         :disabled="!suspensionEnabled || noActionSelected"
                         type="text"
@@ -1076,5 +1340,135 @@ const closeResolvedDispute = async () => {
         </div>
       </section>
     </div>
+
+    <!-- Suspend User Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showSuspendModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="showSuspendModal = false"
+          />
+          <div
+            class="relative w-full max-w-md rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] p-8"
+          >
+            <h3 class="text-[20px] font-bold text-noble-black">Suspend Account</h3>
+            <p class="mt-1 text-sm text-noble-black/55">
+              Suspending <span class="font-semibold">{{ suspendTargetName }}</span>
+            </p>
+
+            <div class="mt-6 space-y-4">
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black">Duration (days)</span>
+                <input
+                  v-model.number="suspendDays"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
+                />
+              </label>
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black"
+                  >Reason <span class="text-cinnabar-red">*</span></span
+                >
+                <textarea
+                  v-model="suspendReason"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="State the reason for suspension."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
+                ></textarea>
+              </label>
+              <p
+                v-if="userActionError"
+                class="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm font-medium text-red-600"
+              >
+                {{ userActionError }}
+              </p>
+            </div>
+
+            <div class="mt-6 flex gap-3">
+              <button
+                type="button"
+                class="flex-1 rounded-2xl border border-cinnamon-ice bg-cream px-5 py-3 font-bold text-noble-black hover:bg-pale-cashmere transition-colors"
+                @click="showSuspendModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                :disabled="isActingOnUser || !suspendReason.trim()"
+                class="flex-1 rounded-2xl bg-burning-orange px-5 py-3 font-bold text-white hover:bg-burning-orange/90 transition-colors disabled:opacity-50"
+                @click="suspendUser"
+              >
+                {{ isActingOnUser ? "Suspending..." : "Confirm Suspension" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Ban User Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showBanModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+            @click="showBanModal = false"
+          />
+          <div
+            class="relative w-full max-w-md rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] p-8"
+          >
+            <h3 class="text-[20px] font-bold text-noble-black">Ban Account</h3>
+            <p class="mt-1 text-sm text-noble-black/55">
+              Banning <span class="font-semibold">{{ banTargetName }}</span
+              >. This prevents them from accessing the system.
+            </p>
+
+            <div class="mt-6 space-y-4">
+              <label class="block">
+                <span class="text-sm font-bold text-noble-black"
+                  >Reason <span class="text-cinnabar-red">*</span></span
+                >
+                <textarea
+                  v-model="banReason"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="State the reason for the ban."
+                  class="mt-2 w-full rounded-2xl border border-cinnamon-ice bg-cream px-4 py-3 text-sm text-noble-black outline-none focus:border-burning-orange"
+                ></textarea>
+              </label>
+              <p
+                v-if="userActionError"
+                class="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm font-medium text-red-600"
+              >
+                {{ userActionError }}
+              </p>
+            </div>
+
+            <div class="mt-6 flex gap-3">
+              <button
+                type="button"
+                class="flex-1 rounded-2xl border border-cinnamon-ice bg-cream px-5 py-3 font-bold text-noble-black hover:bg-pale-cashmere transition-colors"
+                @click="showBanModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                :disabled="isActingOnUser || !banReason.trim()"
+                class="flex-1 rounded-2xl bg-cinnabar-red px-5 py-3 font-bold text-white hover:bg-cinnabar-red/90 transition-colors disabled:opacity-50"
+                @click="banUser"
+              >
+                {{ isActingOnUser ? "Banning..." : "Confirm Ban" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>

@@ -36,11 +36,4 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     return navigateTo(destinationFor(fetchedUser.accountType), { replace: true })
   }
-
-  const fetchedUser = authUser.value
-  if (!fetchedUser) {
-    return
-  }
-
-  return navigateTo(destinationFor(fetchedUser.accountType), { replace: true })
 })
