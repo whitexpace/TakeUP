@@ -35,24 +35,15 @@
           :aria-pressed="isLiked"
           @click.stop="toggleLike"
         >
-          <svg
+          <Icon
+            :name="isLiked ? 'ph:heart-fill' : 'ph:heart-light'"
             class="w-4 h-4 transition-all duration-200"
             :class="
               isLiked
-                ? 'fill-burning-orange stroke-burning-orange scale-110'
-                : 'stroke-noble-black group-hover/heart:fill-burning-orange/20 group-hover/heart:stroke-burning-orange'
+                ? 'text-burning-orange scale-110'
+                : 'text-noble-black group-hover/heart:text-burning-orange'
             "
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          />
         </button>
       </div>
 
@@ -69,29 +60,7 @@
         </div>
 
         <div v-if="isTrending" class="group/trending relative shrink-0 flex items-center">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="text-blue-estate"
-          >
-            <path
-              d="M22 7L13.5 15.5L8.5 10.5L2 17"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M16 7H22V13"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <Icon name="ph:trend-up-light" class="w-3.5 h-3.5 text-blue-estate" />
           <!-- Custom Tooltip -->
           <div
             class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-noble-black px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-lg transition-opacity group-hover/trending:opacity-100 z-30"
@@ -118,7 +87,7 @@
 
         <!-- Refined Rating -->
         <div v-if="hasGoodRating" class="flex items-center gap-1 shrink-0">
-          <span class="text-[13px] text-burning-orange">★</span>
+          <Icon name="ph:star-fill" class="w-3.5 h-3.5 text-burning-orange" />
           <span class="text-[13px] font-semibold text-noble-black">{{ rating }}</span>
           <span class="text-[12px] font-normal text-noble-black/50">({{ reviews }})</span>
         </div>

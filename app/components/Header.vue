@@ -353,21 +353,10 @@ onBeforeUnmount(() => {
             :aria-expanded="showNotifications"
             @click="toggleNotifications"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-            </svg>
+            <Icon
+              name="ph:bell-light"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
 
             <span
               v-if="unreadNotificationCount > 0"
@@ -437,62 +426,19 @@ onBeforeUnmount(() => {
                         v-if="isDisputeRebuttal(notification)"
                         class="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-estate"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                        </svg>
+                        <Icon name="ph:chat-centered-text-light" class="w-[18px] h-[18px]" />
                       </div>
                       <div
                         v-else-if="isDispute(notification)"
                         class="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center text-cinnabar-red"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path
-                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                          />
-                          <line x1="12" y1="9" x2="12" y2="13" />
-                          <line x1="12" y1="17" x2="12.01" y2="17" />
-                        </svg>
+                        <Icon name="ph:warning-light" class="w-[18px] h-[18px]" />
                       </div>
                       <div
                         v-else
                         class="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center text-success-green"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                          <line x1="16" y1="2" x2="16" y2="6" />
-                          <line x1="8" y1="2" x2="8" y2="6" />
-                          <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
+                        <Icon name="ph:calendar-blank-light" class="w-[18px] h-[18px]" />
                       </div>
                     </div>
 
@@ -524,21 +470,7 @@ onBeforeUnmount(() => {
                 <div
                   class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-gray-300"
-                  >
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                  </svg>
+                  <Icon name="ph:bell-light" class="w-6 h-6 text-gray-300" />
                 </div>
                 <p class="text-[13px] text-gray-400 leading-relaxed px-4">
                   {{ notificationEmptyState }}
@@ -555,20 +487,10 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
+            <Icon
+              name="ph:chat-centered-text-light"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
             <span
               v-if="chatUnreadCount > 0"
               class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
@@ -590,22 +512,10 @@ onBeforeUnmount(() => {
             active-class="active-nav-link"
             aria-label="Likes"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
-              />
-            </svg>
+            <Icon
+              name="ph:heart-light"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
             <span
               v-if="likesCount > 0"
               class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
@@ -626,22 +536,10 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-              <path d="M3 6h18" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
+            <Icon
+              name="ph:handbag-light"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
             <span
               v-if="bagCount > 0"
               class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
@@ -670,21 +568,10 @@ onBeforeUnmount(() => {
               :class="{ 'active-nav-link': isAdminSectionActive }"
               active-class="active-nav-link"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-              >
-                <path d="M12 3l7 4v5c0 5-3.5 7.74-7 9-3.5-1.26-7-4-7-9V7l7-4Z" />
-                <path d="M9.5 12 11 13.5l3.5-3.5" />
-              </svg>
+              <Icon
+                name="ph:shield-check-light"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              />
             </NuxtLink>
             <div class="custom-tooltip">
               Admin Panel
@@ -698,21 +585,10 @@ onBeforeUnmount(() => {
               :class="{ 'active-nav-link': isAccountSectionActive }"
               active-class="active-nav-link"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-              >
-                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
+              <Icon
+                name="ph:user-light"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              />
             </NuxtLink>
             <div class="custom-tooltip">
               Profile

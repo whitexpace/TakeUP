@@ -205,22 +205,10 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M4 6H20M4 12H20M4 18H20"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon
+              name="ph:list-light"
+              class="w-5.5 h-5.5 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
           </button>
           <div class="custom-tooltip">
             Toggle Sidebar
@@ -350,144 +338,54 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
                 @click="isMobile && (isSidebarOpen = false)"
               >
                 <!-- Icons -->
-                <div class="shrink-0 transition-transform duration-200 group-hover:scale-110">
-                  <svg
+                <div
+                  class="w-5 h-5 flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110"
+                >
+                  <Icon
                     v-if="link.icon === 'user'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                  <svg
+                    name="ph:user-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'wallet'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"
-                    />
-                    <path d="M16 12h5" />
-                  </svg>
-                  <svg
+                    name="ph:wallet-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'transactions'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  <svg
+                    name="ph:receipt-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'dispute'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                    />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                  <svg
+                    name="ph:warning-circle-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'listings'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect x="3" y="3" width="7" height="7" />
-                    <rect x="14" y="3" width="7" height="7" />
-                    <rect x="14" y="14" width="7" height="7" />
-                    <rect x="3" y="14" width="7" height="7" />
-                  </svg>
-                  <svg
+                    name="ph:squares-four-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'analytics'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <line x1="18" y1="20" x2="18" y2="10" />
-                    <line x1="12" y1="20" x2="12" y2="4" />
-                    <line x1="6" y1="20" x2="6" y2="14" />
-                  </svg>
-                  <svg
+                    name="ph:chart-bar-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'rewards'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="8" r="7" />
-                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                  </svg>
-                  <svg
+                    name="ph:gift-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'reviews'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-                    />
-                  </svg>
-                  <svg
+                    name="ph:chat-centered-text-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'admin-dispute'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-                    />
-                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-                    <path d="m9 14 2 2 4-4" />
-                  </svg>
+                    name="ph:shield-warning-light"
+                    class="w-5 h-5 translate-y-[1px]"
+                  />
                 </div>
                 <span class="text-[15px] truncate">{{ link.label }}</span>
               </NuxtLink>
@@ -502,22 +400,12 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
             class="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-cinnabar-red hover:bg-cinnabar-red/5 transition-all font-bold group"
             @click="handleSignOut"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform group-hover:-translate-x-1"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
+            <div class="w-5 h-5 flex items-center justify-center shrink-0">
+              <Icon
+                name="ph:sign-out-light"
+                class="w-5 h-5 transition-transform group-hover:-translate-x-1 translate-y-[1px]"
+              />
+            </div>
             <span class="font-medium text-[15px]">Log Out</span>
           </button>
         </div>

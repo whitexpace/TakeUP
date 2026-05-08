@@ -581,17 +581,7 @@ const closeResolvedDispute = async () => {
         to="/account"
         class="inline-flex items-center gap-2 rounded-[8px] border-[1.5px] border-gray-200 px-4 py-2 text-[13px] font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-95"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="m12 19-7-7 7-7" />
-          <path d="M19 12H5" />
-        </svg>
+        <Icon name="ph:arrow-left-light" class="w-4 h-4" />
         Back to My Account
       </NuxtLink>
     </div>
@@ -649,19 +639,7 @@ const closeResolvedDispute = async () => {
             class="flex h-full flex-col items-center justify-center p-8 text-center"
           >
             <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50">
-              <svg
-                width="48"
-                height="48"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#E5E7EB"
-                stroke-width="1.5"
-              >
-                <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-                <path
-                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                />
-              </svg>
+              <Icon name="ph:tray-light" class="w-12 h-12 text-gray-200" />
             </div>
             <p class="text-[16px] font-semibold text-gray-400">No disputes in this queue</p>
             <p class="mt-1 text-[13px] text-gray-400">
@@ -728,23 +706,7 @@ const closeResolvedDispute = async () => {
             <div
               class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50 text-gray-300"
             >
-              <svg
-                width="48"
-                height="48"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <path d="m3 10 2.5 2.5L3 15" />
-                <path d="M13 19h8" />
-                <path d="M13 14h8" />
-                <path d="M13 9h8" />
-                <path d="M13 4h8" />
-                <path d="M5 19h2" />
-                <path d="M5 4h2" />
-                <path d="M3 7h4" />
-              </svg>
+              <Icon name="ph:clipboard-text-light" class="w-12 h-12" />
             </div>
             <p class="text-[18px] font-semibold text-gray-400">Select a dispute to review</p>
             <p class="mt-1 text-[14px] text-gray-400">

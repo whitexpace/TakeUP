@@ -361,34 +361,13 @@ watch(
               title="Clear search"
               @click="clearSearch"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
             </button>
-            <svg
+            <Icon
               v-else
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-noble-black/30"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
+              name="ph:magnifying-glass-light"
+              class="w-[18px] h-[18px] text-noble-black/30"
+            />
           </div>
 
           <!-- Search Input -->
@@ -426,20 +405,10 @@ watch(
               @mousedown.prevent="selectSuggestion(suggestion.value)"
             >
               <div class="flex items-center gap-3">
-                <svg
-                  class="text-noble-black/20 group-hover:text-burning-orange transition-colors"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
+                <Icon
+                  name="ph:magnifying-glass-light"
+                  class="w-3.5 h-3.5 text-noble-black/20 group-hover:text-burning-orange transition-colors"
+                />
                 <span class="font-medium">{{ suggestion.label }}</span>
               </div>
               <span
@@ -492,18 +461,7 @@ watch(
             class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
             :class="selectedCategory !== 'ALL' ? 'text-white' : 'text-noble-black/40'"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
+            <Icon name="ph:caret-down-light" class="w-3.5 h-3.5" />
           </div>
         </div>
       </div>

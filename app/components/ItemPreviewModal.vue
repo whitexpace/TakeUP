@@ -228,18 +228,7 @@ watch(
               class="p-2 text-noble-black/50 hover:text-noble-black transition-all hover:scale-110 active:scale-95"
               @click="emit('close')"
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x-light" class="w-5 h-5" />
             </button>
           </div>
 
@@ -248,16 +237,7 @@ watch(
             <div class="mx-auto max-w-7xl px-4 py-8 sm:px-8">
               <!-- Back Link Placeholder -->
               <div class="mb-6 flex items-center gap-2 text-noble-black/30">
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path d="m15 18-6-6 6-6" />
-                </svg>
+                <Icon name="ph:caret-left-light" class="w-5 h-5" />
                 <span class="text-sm">Back to listings</span>
               </div>
 
@@ -278,43 +258,15 @@ watch(
                   </h1>
                 </div>
                 <div class="flex items-center gap-4 text-noble-black/30">
-                  <svg
-                    width="22"
-                    height="22"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                  >
-                    <circle cx="18" cy="5" r="3" />
-                    <circle cx="6" cy="12" r="3" />
-                    <circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
-                    <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
-                  </svg>
-                  <svg
-                    width="22"
-                    height="22"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                  >
-                    <path
-                      d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
-                    />
-                  </svg>
+                  <Icon name="ph:share-network-light" class="w-[22px] h-[22px]" />
+                  <Icon name="ph:heart-light" class="w-[22px] h-[22px]" />
                 </div>
               </div>
 
               <!-- Rating Row -->
               <div class="mb-8 flex items-center gap-2 text-sm">
                 <div class="flex items-center gap-1 text-burning-orange">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <polygon
-                      points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                    />
-                  </svg>
+                  <Icon name="ph:star-fill" class="w-4 h-4" />
                   <span class="font-bold">{{ ratingLabel }}</span>
                 </div>
                 <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
@@ -341,31 +293,13 @@ watch(
                         class="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         @click="prevImage"
                       >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path d="m15 18-6-6 6-6" />
-                        </svg>
+                        <Icon name="ph:caret-left-light" class="w-6 h-6" />
                       </button>
                       <button
                         class="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         @click="nextImage"
                       >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path d="m9 18 6-6-6-6" />
-                        </svg>
+                        <Icon name="ph:caret-right-light" class="w-6 h-6" />
                       </button>
                       <div
                         class="absolute bottom-4 left-4 px-3 py-1.5 bg-white/80 backdrop-blur-sm text-[13px] font-medium rounded-full shadow-sm"
@@ -515,17 +449,7 @@ watch(
                         class="flex items-center gap-2.5 rounded-xl border border-cinnamon-ice/20 bg-cream px-3 py-2"
                       >
                         <div class="shrink-0 scale-90 text-burning-orange">
-                          <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.8"
-                          >
-                            <path d="M5 12h14" />
-                            <path d="M12 5v14" />
-                          </svg>
+                          <Icon name="ph:plus-light" class="w-[18px] h-[18px]" />
                         </div>
                         <span class="text-sm text-noble-black/90">{{ offer }}</span>
                       </div>
@@ -539,18 +463,10 @@ watch(
                         :key="idx"
                         class="flex items-center gap-2.5 text-sm text-noble-black/90"
                       >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          class="text-burning-orange"
-                        >
-                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                          <polyline points="22 4 12 14.01 9 11.01" />
-                        </svg>
+                        <Icon
+                          name="ph:check-circle-light"
+                          class="w-[18px] h-[18px] text-burning-orange"
+                        />
                         {{ included }}
                       </li>
                     </ul>
@@ -572,11 +488,7 @@ watch(
                         </h3>
                         <div class="flex items-center gap-1.5 text-sm">
                           <div class="flex items-center gap-1 text-burning-orange">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                              <polygon
-                                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                              />
-                            </svg>
+                            <Icon name="ph:star-fill" class="w-3.5 h-3.5" />
                             <span class="font-bold">{{ ratingLabel }}</span>
                           </div>
                           <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
@@ -586,18 +498,7 @@ watch(
                     <button
                       class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-estate shadow-sm"
                     >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="1.8"
-                      >
-                        <path
-                          d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-                        />
-                      </svg>
+                      <Icon name="ph:chat-centered-text-light" class="w-5 h-5 text-white" />
                     </button>
                   </div>
                 </div>
@@ -612,25 +513,8 @@ watch(
                         {{ monthNames[viewMonth] }} {{ viewYear }}
                       </h3>
                       <div class="flex gap-2 text-noble-black/40">
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                        >
-                          <path d="m15 18-6-6 6-6" /></svg
-                        ><svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                        >
-                          <path d="m9 18 6-6-6-6" />
-                        </svg>
+                        <Icon name="ph:caret-left-light" class="w-5 h-5" />
+                        <Icon name="ph:caret-right-light" class="w-5 h-5" />
                       </div>
                     </div>
                     <div class="grid grid-cols-7 text-center mb-2">
@@ -672,16 +556,7 @@ watch(
                         class="flex h-12 w-full items-center justify-between rounded-2xl border border-cinnamon-ice bg-cream px-4 text-sm font-medium text-noble-black/40"
                       >
                         09:00 AM
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        <Icon name="ph:caret-down-light" class="w-4 h-4" />
                       </div>
                     </div>
                     <div class="flex flex-col gap-1.5">
@@ -693,16 +568,7 @@ watch(
                         class="flex h-12 w-full items-center justify-between rounded-2xl border border-cinnamon-ice bg-cream px-4 text-sm font-medium text-noble-black/40"
                       >
                         06:00 PM
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        <Icon name="ph:caret-down-light" class="w-4 h-4" />
                       </div>
                     </div>
                   </div>
@@ -738,16 +604,7 @@ watch(
                     </p>
                     <div class="my-4 h-px bg-cinnamon-ice/30" />
                     <div class="flex items-center justify-center gap-2 text-noble-black/40">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                      </svg>
+                      <Icon name="ph:shield-check-light" class="w-3.5 h-3.5" />
                       <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
                     </div>
                   </div>
@@ -761,17 +618,7 @@ watch(
                   <div
                     class="flex items-center gap-1.5 px-3 py-1 bg-burning-orange/10 rounded-full"
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      class="text-burning-orange"
-                    >
-                      <polygon
-                        points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                      />
-                    </svg>
+                    <Icon name="ph:star-fill" class="w-4 h-4 text-burning-orange" />
                     <span class="text-sm font-bold text-burning-orange">{{ ratingLabel }}</span>
                     <span class="text-xs text-burning-orange/60 font-medium"
                       >({{ bookingCountLabel }})</span

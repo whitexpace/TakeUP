@@ -102,21 +102,12 @@ const getReviewImageUrl = (image: string) =>
           </div>
 
           <div class="flex items-center gap-0.5 text-burning-orange shrink-0 pt-1">
-            <svg
+            <Icon
               v-for="star in 5"
               :key="star"
+              :name="star <= review.rating ? 'ph:star-fill' : 'ph:star-light'"
               class="w-4 h-4"
-              viewBox="0 0 24 24"
-              :fill="star <= review.rating ? 'currentColor' : 'none'"
-              :stroke="star <= review.rating ? 'currentColor' : 'currentColor'"
-              stroke-width="1.5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
-              />
-            </svg>
+            />
           </div>
         </div>
 

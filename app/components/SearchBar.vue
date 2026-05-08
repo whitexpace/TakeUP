@@ -5,26 +5,11 @@
     @submit.prevent="onSubmit"
   >
     <!-- Search Icon (Visible when query is empty) -->
-    <svg
+    <Icon
       v-if="!query"
-      width="24"
-      height="24"
-      viewBox="0 0 19 15"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      class="text-noble-black opacity-70 flex-shrink-0"
-    >
-      <circle cx="7" cy="7" r="6.25" stroke="currentColor" stroke-width="1"></circle>
-      <line
-        x1="13.0401"
-        y1="10.792"
-        x2="17.792"
-        y2="13.9599"
-        stroke="currentColor"
-        stroke-width="1"
-        stroke-linecap="round"
-      ></line>
-    </svg>
+      name="ph:magnifying-glass-light"
+      class="w-6 h-6 text-noble-black opacity-70 flex-shrink-0"
+    />
 
     <!-- Clear Icon (Visible when query has text) -->
     <button
@@ -33,21 +18,7 @@
       class="text-noble-black opacity-70 flex-shrink-0 hover:opacity-100 transition-opacity"
       @click="clearSearch"
     >
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M18 6L6 18M6 6L18 18"
-          stroke="currentColor"
-          stroke-width="1"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <Icon name="ph:x-light" class="w-6 h-6" />
     </button>
 
     <input

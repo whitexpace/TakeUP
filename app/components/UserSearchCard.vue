@@ -27,17 +27,7 @@
 
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-1">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            class="text-burning-orange"
-          >
-            <path
-              d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-            />
-          </svg>
+          <Icon name="ph:star-fill" class="w-3 h-3 text-burning-orange" />
           <span class="text-xs font-bold text-noble-black">{{ rating.toFixed(1) }}</span>
         </div>
         <span class="text-[10px] text-noble-black/30">•</span>
@@ -46,19 +36,7 @@
     </div>
 
     <div class="text-noble-black/20 group-hover:text-burning-orange transition-colors">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="m9 18 6-6-6-6" />
-      </svg>
+      <Icon name="ph:caret-right-light" class="w-5 h-5" />
     </div>
   </NuxtLink>
 </template>

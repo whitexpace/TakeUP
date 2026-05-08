@@ -16,22 +16,10 @@
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M4 6H20M4 12H20M4 18H20"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon
+              name="ph:list-light"
+              class="w-5.5 h-5.5 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
           </button>
           <div class="custom-tooltip">
             Toggle Sidebar

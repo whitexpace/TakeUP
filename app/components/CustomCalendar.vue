@@ -6,19 +6,10 @@
       :class="{ 'border-burning-orange ring-1 ring-burning-orange/20': isOpen }"
       @click="toggleCalendar"
     >
-      <svg
+      <Icon
+        name="ph:calendar-blank-light"
         class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-      </svg>
+      />
       <span
         class="ml-2 font-geist text-[13px] transition-colors"
         :class="modelValue ? 'text-noble-black' : 'text-noble-black/40'"
@@ -47,14 +38,7 @@
             class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="prevMonth"
           >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2.5"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            <Icon name="ph:caret-left-light" class="w-4 h-4" />
           </button>
 
           <h4 class="font-bold text-[14px] text-noble-black tracking-tight">
@@ -66,14 +50,7 @@
             class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="nextMonth"
           >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2.5"
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
+            <Icon name="ph:caret-right-light" class="w-4 h-4" />
           </button>
         </div>
 

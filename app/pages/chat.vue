@@ -505,19 +505,11 @@ onUnmounted(() => {
               placeholder="Search conversations..."
               class="w-full rounded-full border border-cinnamon-ice/30 bg-cream/50 py-2 pl-11 pr-4 text-[14px] outline-none transition-all duration-300 focus:border-burning-orange/50 focus:bg-white"
             />
-            <svg
+            <Icon
+              name="ph:magnifying-glass-light"
               class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
+              size="16"
+            />
           </div>
         </div>
 
@@ -539,18 +531,7 @@ onUnmounted(() => {
             <div
               class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-cinnabar-red/5 text-cinnabar-red/60"
             >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" x2="12" y1="8" y2="12" />
-                <line x1="12" x2="12.01" y1="16" y2="16" />
-              </svg>
+              <Icon name="ph:warning-circle-light" size="24" />
             </div>
             <p class="mb-4 text-sm font-medium text-noble-black/60">Failed to load conversations</p>
             <button
@@ -679,17 +660,7 @@ onUnmounted(() => {
                 class="-ml-2 rounded-full p-2 transition-colors hover:bg-cream lg:hidden"
                 @click="handleCloseChat"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <path d="m15 18-6-6 6-6" />
-                </svg>
+                <Icon name="ph:caret-left-light" size="20" />
               </button>
 
               <NuxtLink
@@ -816,16 +787,7 @@ onUnmounted(() => {
               class="flex flex-1 flex-col items-center justify-center py-12 text-center opacity-40"
             >
               <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
+                <Icon name="ph:chat-centered-dots-light" size="24" />
               </div>
               <p class="text-sm font-bold">No messages yet</p>
               <p class="text-xs">Start the conversation</p>
@@ -910,18 +872,7 @@ onUnmounted(() => {
               <div
                 class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 text-stone-600"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M8.5 12h7" />
-                </svg>
+                <Icon name="ph:minus-circle-light" size="18" />
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-noble-black">
@@ -964,19 +915,7 @@ onUnmounted(() => {
                 :disabled="isUploadingImage"
                 @click="triggerPhotoPicker"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                >
-                  <rect x="3" y="5" width="18" height="14" rx="2" />
-                  <circle cx="8.5" cy="10" r="1.5" />
-                  <path d="m21 15-4.2-4.2a1 1 0 0 0-1.4 0L9 17" />
-                </svg>
+                <Icon name="ph:image-light" size="20" />
               </button>
 
               <div
@@ -1007,20 +946,7 @@ onUnmounted(() => {
                     type="button"
                     @click.stop="toggleEmojiPicker"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                    >
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                      <line x1="9" x2="9.01" y1="9" y2="9" />
-                      <line x1="15" x2="15.01" y1="9" y2="9" />
-                    </svg>
+                    <Icon name="ph:smiley-light" size="18" />
                   </button>
 
                   <div
@@ -1049,18 +975,7 @@ onUnmounted(() => {
                 :disabled="!canSendMessage"
                 @click="handleSendMessage"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="22" x2="11" y1="2" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
+                <Icon name="ph:paper-plane-tilt-light" size="20" />
               </button>
             </div>
 
@@ -1088,19 +1003,7 @@ onUnmounted(() => {
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-cinnamon-ice/20 bg-white text-cinnabar-red/70 shadow-sm"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" x2="12" y1="8" y2="12" />
-              <line x1="12" x2="12.01" y1="16" y2="16" />
-            </svg>
+            <Icon name="ph:warning-circle-light" size="32" />
           </div>
           <h2 class="mb-2 text-xl font-bold">Unable to open chat</h2>
           <p class="max-w-sm text-sm text-noble-black/60">{{ error }}</p>
@@ -1113,17 +1016,7 @@ onUnmounted(() => {
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
+            <Icon name="ph:chat-centered-dots-light" size="32" />
           </div>
           <h2 class="mb-2 text-xl font-bold">Select a conversation</h2>
           <p class="max-w-sm text-sm text-noble-black/60">
@@ -1155,14 +1048,7 @@ onUnmounted(() => {
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeReportModal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <Icon name="ph:x-light" size="18" />
               </button>
             </div>
 

@@ -356,15 +356,7 @@ onBeforeUnmount(() => {
     <div
       class="flex items-center gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-12 px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
     >
-      <svg
-        class="w-5 h-5 text-gray-400 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <circle cx="11" cy="11" r="8" stroke-width="2" />
-        <path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" />
-      </svg>
+      <Icon name="ph:magnifying-glass-light" class="w-5 h-5 text-gray-400 shrink-0" />
       <input
         v-model="searchQuery"
         type="text"
@@ -378,19 +370,7 @@ onBeforeUnmount(() => {
         title="Clear search"
         @click="searchQuery = ''"
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
+        <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
       </button>
     </div>
 
@@ -467,16 +447,10 @@ onBeforeUnmount(() => {
         v-else-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
-        <svg
+        <Icon
+          name="ph:warning-circle-light"
           class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <circle cx="12" cy="12" r="10" stroke-width="1.5" />
-          <line x1="12" y1="8" x2="12" y2="12" stroke-width="2" stroke-linecap="round" />
-          <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke-width="2" />
-        </svg>
+        />
         <p class="text-noble-black/50 text-base mb-6 font-medium">{{ combinedError }}</p>
         <button
           class="bg-burning-orange text-white rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:brightness-110 transition-all shadow-lg shadow-burning-orange/20"
@@ -494,11 +468,7 @@ onBeforeUnmount(() => {
         <div
           class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
         >
-          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
-            <path d="M3 9h18" stroke-width="1.5" />
-            <path d="M9 21V9" stroke-width="1.5" />
-          </svg>
+          <Icon name="ph:files-light" class="w-10 h-10" />
         </div>
         <p class="text-noble-black text-[18px] font-bold mb-1">{{ emptyTitle }}</p>
         <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">{{ emptySubtitle }}</p>
@@ -541,17 +511,7 @@ onBeforeUnmount(() => {
           @click="loadMore"
         >
           <span v-if="isLoading" class="flex items-center gap-2">
-            <svg
-              class="animate-spin"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-            >
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
+            <Icon name="ph:spinner-gap-light" class="animate-spin w-4 h-4" />
             Loading…
           </span>
           <span v-else>Load More</span>

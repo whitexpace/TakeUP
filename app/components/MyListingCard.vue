@@ -108,18 +108,7 @@ const boostLabel = computed(() => {
         v-if="hasActiveBoost"
         class="absolute right-3 top-3 z-20 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/30 flex items-center gap-1"
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="4"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m5 12 5 5L20 7" />
-        </svg>
+        <Icon name="ph:check-light" class="w-2.5 h-2.5" />
         Boosted
       </div>
     </template>

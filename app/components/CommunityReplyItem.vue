@@ -38,18 +38,11 @@
             "
             @click="toggleUpvote"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              class="group-hover/upvote:translate-y-[-1px] transition-transform"
+            <Icon
+              name="ph:arrow-up-light"
+              class="w-[14px] h-[14px] group-hover/upvote:translate-y-[-1px] transition-transform"
               :class="{ 'fill-burning-orange/5': isUpvoted }"
-            >
-              <path d="M7 11l5-5 5 5M12 18V6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
+            />
             <span>{{ reply.upvotes + (isUpvoted ? 1 : 0) }}</span>
           </button>
           <button
