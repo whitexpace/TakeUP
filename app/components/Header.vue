@@ -48,7 +48,21 @@ const {
   markAllNotificationsRead: globalMarkAllRead,
 } = useNotifications()
 
-const displayNotifications = computed(() => props.notifications ?? globalNotifications.value)
+const displayNotifications = computed(() => {
+  const propNotifs = props.notifications || []
+  const globalNotifs = globalNotifications.value || []
+
+  if (propNotifs.length === 0) return globalNotifs
+  if (globalNotifs.length === 0) return propNotifs
+
+  const map = new Map()
+  globalNotifs.forEach((n) => map.set(`global-${n.id}`, n))
+  propNotifs.forEach((n) => map.set(`prop-${n.id}`, n))
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
+})
 
 const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 const headerRef = ref<HTMLElement | null>(null)

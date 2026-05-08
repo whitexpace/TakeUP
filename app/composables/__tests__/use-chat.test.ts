@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ref } from "vue"
 import {
   useChat,
   type ChatMessage,
@@ -79,10 +80,18 @@ const makeMessage = (id: string, overrides: Partial<ChatMessage> = {}): ChatMess
 })
 
 let fetchMock = vi.fn()
+let stateStore: Record<string, unknown> = {}
 
 beforeEach(() => {
   fetchMock = vi.fn()
+  stateStore = {}
   vi.stubGlobal("$fetch", fetchMock)
+  vi.stubGlobal("useState", (key: string, init?: () => unknown) => {
+    if (!stateStore[key]) {
+      stateStore[key] = ref(init ? init() : undefined)
+    }
+    return stateStore[key]
+  })
 })
 
 afterEach(() => {

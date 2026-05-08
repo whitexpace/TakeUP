@@ -1,4 +1,4 @@
-import { computed, ref } from "vue"
+import { computed } from "vue"
 import { mergeChatMessages } from "../utils/chat-message-utils"
 import {
   getChatClosedNotice,
@@ -98,18 +98,21 @@ const resetConversationState = (
 }
 
 export const useChat = () => {
-  const conversations = ref<ConversationSummary[]>([])
-  const activeConversation = ref<ConversationDetail | null>(null)
-  const messages = ref<ChatMessage[]>([])
-  const isLoadingConversations = ref(false)
-  const isLoadingMessages = ref(false)
-  const isOpeningConversation = ref(false)
-  const isSending = ref(false)
-  const isReporting = ref(false)
-  const error = ref<string | null>(null)
-  const hasMoreMessages = ref(false)
-  const nextCursor = ref<string | null>(null)
-  const totalUnreadCount = ref(0)
+  const conversations = useState<ConversationSummary[]>("chat-conversations", () => [])
+  const activeConversation = useState<ConversationDetail | null>(
+    "chat-active-conversation",
+    () => null,
+  )
+  const messages = useState<ChatMessage[]>("chat-messages", () => [])
+  const isLoadingConversations = useState("chat-loading-conv", () => false)
+  const isLoadingMessages = useState("chat-loading-msg", () => false)
+  const isOpeningConversation = useState("chat-opening", () => false)
+  const isSending = useState("chat-sending", () => false)
+  const isReporting = useState("chat-reporting", () => false)
+  const error = useState<string | null>("chat-error", () => null)
+  const hasMoreMessages = useState("chat-has-more", () => false)
+  const nextCursor = useState<string | null>("chat-next-cursor", () => null)
+  const totalUnreadCount = useState("chat-unread-count", () => 0)
 
   const updateConversationClosureState = (
     conversationId: string,
