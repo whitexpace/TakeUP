@@ -16,8 +16,7 @@ const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const showLogoutModal = ref(false)
 
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+const { notifications, loadNotifications } = useNotifications()
 
 const adminLinks: AdminLink[] = [
   {
@@ -113,8 +112,6 @@ onMounted(() => {
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-admin-main-scrollbar"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
       <template #left>

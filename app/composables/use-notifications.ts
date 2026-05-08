@@ -1,4 +1,3 @@
-import { ref } from "vue"
 import type { AppHeaderNotification } from "../types/notifications"
 
 type ApiNotification = {
@@ -22,8 +21,8 @@ const normalizeNotification = (notification: ApiNotification): AppHeaderNotifica
 })
 
 export const useNotifications = () => {
-  const notifications = ref<AppHeaderNotification[]>([])
-  const isLoading = ref(false)
+  const notifications = useState<AppHeaderNotification[]>("app-notifications", () => [])
+  const isLoading = useState("app-notifications-loading", () => false)
 
   const loadNotifications = async () => {
     if (isLoading.value) return

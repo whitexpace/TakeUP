@@ -4,6 +4,7 @@ import { useBag } from "../composables/use-bag"
 import { useChat } from "../composables/use-chat"
 import { useLikes } from "../composables/use-likes"
 import { useViewerSession } from "../composables/use-viewer-session"
+import { useNotifications } from "../composables/use-notifications"
 import type { CommunityOfferNotification } from "~/types/community-requests"
 import type { AppHeaderNotification } from "../types/notifications"
 
@@ -20,7 +21,7 @@ const props = withDefaults(
     customPadding?: string
   }>(),
   {
-    notifications: () => [],
+    notifications: undefined,
     scrollContainerSelector: "",
     showNav: true,
     hideIcons: false,
@@ -40,6 +41,15 @@ const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount 
 const user = useSupabaseUser()
 const route = useRoute()
 const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
+const {
+  notifications: globalNotifications,
+  loadNotifications: loadGlobalNotifications,
+  markNotificationRead: globalMarkRead,
+  markAllNotificationsRead: globalMarkAllRead,
+} = useNotifications()
+
+const displayNotifications = computed(() => props.notifications ?? globalNotifications.value)
+
 const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 const headerRef = ref<HTMLElement | null>(null)
 const showNotifications = ref(false)
@@ -138,7 +148,7 @@ const handleScroll = () => {
 }
 
 const unreadNotificationCount = computed(() => {
-  return props.notifications.filter((notification) => !notification.read).length
+  return displayNotifications.value.filter((notification) => !notification.read).length
 })
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -226,6 +236,9 @@ const handleNotificationClick = async (
   notification: CommunityOfferNotification | AppHeaderNotification,
 ) => {
   emit("mark-notification-read", notification.id)
+  if (isAppHeaderNotification(notification)) {
+    void globalMarkRead(notification.id)
+  }
   const actionPath = getNotificationActionPath(notification)
   if (actionPath) {
     showNotifications.value = false
@@ -235,6 +248,9 @@ const handleNotificationClick = async (
 
 const markAllNotificationsRead = () => {
   emit("mark-all-notifications-read")
+  if (displayNotifications.value.some(isAppHeaderNotification)) {
+    void globalMarkAllRead()
+  }
 }
 
 const handlePointerDownOutside = (event: PointerEvent) => {
@@ -274,6 +290,7 @@ onMounted(() => {
   scheduleAccountTypeLoad()
   void loadLikesCount()
   void loadChatUnreadCount()
+  void loadGlobalNotifications()
 })
 
 onBeforeUnmount(() => {
@@ -399,12 +416,12 @@ onBeforeUnmount(() => {
 
               <!-- Notifications List -->
               <div
-                v-if="notifications.length > 0"
+                v-if="displayNotifications.length > 0"
                 class="overflow-y-auto custom-scrollbar flex-1 relative z-10 rounded-b-[16px]"
               >
                 <div class="flex flex-col">
                   <button
-                    v-for="notification in notifications"
+                    v-for="notification in displayNotifications"
                     :key="notification.id"
                     class="relative flex gap-4 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
                     :class="[

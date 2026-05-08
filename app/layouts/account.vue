@@ -19,7 +19,10 @@ const {
 } = useAuthUser()
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
+const { notifications, loadNotifications } = useNotifications()
+
 onMounted(() => {
+  void loadNotifications()
   if (user.value && !hasFreshAuthUserCache.value && !cachedAuthUser.value) {
     void fetchAuthUser()
   }
@@ -184,8 +187,6 @@ const navGroups = computed(() => {
   }
   return groups
 })
-
-const { notifications, markNotificationRead, markAllNotificationsRead } = useNotifications()
 </script>
 
 <template>
@@ -193,8 +194,6 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-account-main-scrollbar"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
       <template #left>

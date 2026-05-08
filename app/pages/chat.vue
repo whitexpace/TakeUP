@@ -15,8 +15,7 @@ definePageMeta({
 const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
 
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+const { notifications, loadNotifications } = useNotifications()
 
 const {
   sortedConversations,
@@ -480,11 +479,7 @@ onUnmounted(() => {
 
 <template>
   <div class="h-screen flex flex-col overflow-hidden bg-white pt-14 font-geist text-noble-black">
-    <Header
-      :notifications="notifications"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
-    />
+    <Header :notifications="notifications" />
 
     <div class="relative flex flex-1 overflow-hidden">
       <aside

@@ -4,8 +4,6 @@
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-main-scrollbar"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
       <template #left>
@@ -80,7 +78,7 @@
 
       <!-- Main Content Area -->
       <main
-        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative"
+        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative px-6 sm:px-10 lg:px-16 xl:px-24"
         :class="isHeaderVisible ? 'pt-14' : 'pt-0'"
       >
         <slot />
@@ -101,8 +99,7 @@ const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const hideSidebar = computed(() => Boolean(route.meta.hideDashboardSidebar))
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+const { notifications, loadNotifications } = useNotifications()
 
 const toggleSidebar = () => {
   if (hideSidebar.value) return

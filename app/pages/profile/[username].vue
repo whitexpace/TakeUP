@@ -4,7 +4,7 @@
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-burning-orange"></div>
     </div>
 
-    <div v-else-if="profileData" class="max-w-[1200px] mx-auto px-6 py-6 flex flex-col gap-6">
+    <div v-else-if="profileData" class="max-w-[1200px] mx-auto py-6 flex flex-col gap-6">
       <!-- TOP HERO SECTION -->
       <header class="profile-hero shadow-xl">
         <div class="hero-deco-1"></div>
