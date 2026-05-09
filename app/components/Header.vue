@@ -55,9 +55,16 @@ const displayNotifications = computed(() => {
   if (propNotifs.length === 0) return globalNotifs
   if (globalNotifs.length === 0) return propNotifs
 
-  const map = new Map()
-  globalNotifs.forEach((n) => map.set(`global-${n.id}`, n))
-  propNotifs.forEach((n) => map.set(`prop-${n.id}`, n))
+  const map = new Map<string | number, CommunityOfferNotification | AppHeaderNotification>()
+
+  // Deduplicate by using a composite key to handle potential ID collisions between different notification types
+  const getEntryKey = (n: CommunityOfferNotification | AppHeaderNotification) => {
+    if ("type" in n) return `app-${n.id}`
+    return `offer-${n.id}`
+  }
+
+  globalNotifs.forEach((n) => map.set(getEntryKey(n), n))
+  propNotifs.forEach((n) => map.set(getEntryKey(n), n))
 
   return Array.from(map.values()).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
