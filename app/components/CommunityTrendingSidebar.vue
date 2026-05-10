@@ -15,7 +15,7 @@
             <h3 class="text-[13px] font-semibold text-gray-900 leading-snug truncate">
               {{ item.title }}
             </h3>
-            <Icon name="ph:trend-up-light" class="w-3 h-3 text-burning-orange shrink-0" />
+            <Icon name="ph:trend-up" class="w-3 h-3 text-burning-orange shrink-0" />
           </div>
           <span class="text-[11px] text-gray-400"
             >{{ item.offersCount }} {{ item.offersCount === 1 ? "offer" : "offers" }}</span

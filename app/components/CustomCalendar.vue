@@ -7,7 +7,7 @@
       @click="toggleCalendar"
     >
       <Icon
-        name="ph:calendar-blank-light"
+        name="ph:calendar-blank"
         class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors"
       />
       <span
@@ -38,7 +38,7 @@
             class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="prevMonth"
           >
-            <Icon name="ph:caret-left-light" class="w-4 h-4" />
+            <Icon name="ph:caret-left" class="w-4 h-4" />
           </button>
 
           <h4 class="font-bold text-[14px] text-noble-black tracking-tight">
@@ -50,7 +50,7 @@
             class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
             @click.stop="nextMonth"
           >
-            <Icon name="ph:caret-right-light" class="w-4 h-4" />
+            <Icon name="ph:caret-right" class="w-4 h-4" />
           </button>
         </div>
 

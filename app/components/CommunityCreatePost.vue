@@ -86,7 +86,7 @@
                 </div>
 
                 <div class="px-1 text-gray-300">
-                  <Icon name="ph:arrow-right-light" class="w-[14px] h-[14px]" />
+                  <Icon name="ph:arrow-right" class="w-[14px] h-[14px]" />
                 </div>
 
                 <!-- End Date/Time Stacked -->
@@ -175,7 +175,7 @@
                 :disabled="isUploadingReferenceImage || props.isSubmitting"
                 @click="triggerReferenceImageUpload"
               >
-                <Icon name="ph:image-light" class="w-[18px] h-[18px]" />
+                <Icon name="ph:image" class="w-[18px] h-[18px]" />
                 <span class="text-[13px] font-medium">+ Add photo</span>
               </button>
 
@@ -190,7 +190,7 @@
                   class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                   @click="removeReferenceImage"
                 >
-                  <Icon name="ph:x-light" class="w-2 h-2" />
+                  <Icon name="ph:x" class="w-2 h-2" />
                 </button>
               </div>
             </div>

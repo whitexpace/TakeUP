@@ -9,7 +9,7 @@
           <span class="text-[13px] text-gray-500 group-hover:text-gray-700 transition-colors">
             {{ item.label }}
           </span>
-          <span class="text-[15px] font-bold text-gray-900">
+          <span class="text-[15px] font-semibold text-gray-900">
             {{ item.value }}
           </span>
         </div>

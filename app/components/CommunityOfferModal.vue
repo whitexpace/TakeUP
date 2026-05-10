@@ -28,7 +28,7 @@
               aria-label="Close offer form"
               @click="closeModal"
             >
-              <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
           </div>
 

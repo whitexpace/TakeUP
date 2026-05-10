@@ -8,7 +8,7 @@
     >
       <div class="flex items-center flex-1">
         <Icon
-          name="ph:clock-light"
+          name="ph:clock"
           class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors shrink-0"
         />
         <span
@@ -19,7 +19,7 @@
         </span>
       </div>
       <Icon
-        name="ph:caret-down-light"
+        name="ph:caret-down"
         class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors ml-1"
         :class="{ 'rotate-180': isOpen }"
       />

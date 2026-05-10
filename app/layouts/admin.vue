@@ -122,12 +122,12 @@ onMounted(() => {
             @click="toggleSidebar"
           >
             <Icon
-              name="ph:list-light"
-              class="w-5.5 h-5.5 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              name="ph:list"
+              class="w-5.5 h-5.5 shrink-0 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
             />
           </button>
           <div class="custom-tooltip">
-            Toggle Sidebar
+            Sidebar
             <div class="tooltip-arrow"></div>
           </div>
         </div>
@@ -176,26 +176,46 @@ onMounted(() => {
             @click="isMobile && (isSidebarOpen = false)"
           >
             <div
-              class="shrink-0 transition-colors"
+              class="shrink-0 transition-colors w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
               :class="isActive(link) ? 'text-white' : 'text-slate-600'"
             >
-              <Icon v-if="link.key === 'overview'" name="ph:chart-line-up-light" class="w-5 h-5" />
-              <Icon v-else-if="link.key === 'users'" name="ph:users-three-light" class="w-5 h-5" />
+              <Icon
+                v-if="link.key === 'overview'"
+                name="ph:chart-line-up"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
+                v-else-if="link.key === 'users'"
+                name="ph:users-three"
+                class="w-[22px] h-[22px] shrink-0"
+              />
               <Icon
                 v-else-if="link.key === 'transactions'"
-                name="ph:arrows-left-right-light"
-                class="w-5 h-5"
+                name="ph:arrows-left-right"
+                class="w-[22px] h-[22px] shrink-0"
               />
-              <Icon v-else-if="link.key === 'disputes'" name="ph:scales-light" class="w-5 h-5" />
+              <Icon
+                v-else-if="link.key === 'disputes'"
+                name="ph:scales"
+                class="w-[22px] h-[22px] shrink-0"
+              />
               <Icon
                 v-else-if="link.key === 'listings'"
-                name="ph:squares-four-light"
-                class="w-5 h-5"
+                name="ph:squares-four"
+                class="w-[22px] h-[22px] shrink-0"
               />
-              <Icon v-else-if="link.key === 'wallet'" name="ph:wallet-light" class="w-5 h-5" />
-              <Icon v-else-if="link.key === 'logs'" name="ph:activity-light" class="w-5 h-5" />
+              <Icon
+                v-else-if="link.key === 'wallet'"
+                name="ph:wallet"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
+                v-else-if="link.key === 'logs'"
+                name="ph:activity"
+                class="w-[22px] h-[22px] shrink-0"
+              />
             </div>
-            <span class="text-[14px] font-medium">
+            <span class="text-[14px] font-medium leading-none">
               {{ link.label }}
             </span>
           </NuxtLink>
@@ -207,10 +227,12 @@ onMounted(() => {
             class="group flex items-center gap-3 px-4 py-3 text-slate-400 transition-all duration-200 hover:bg-white/5 border-l-[3px] border-transparent"
             @click="isMobile && (isSidebarOpen = false)"
           >
-            <div class="shrink-0 text-slate-600 transition-colors">
-              <Icon name="ph:arrow-left-light" class="w-4.5 h-4.5" />
+            <div
+              class="shrink-0 text-slate-600 transition-colors w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
+            >
+              <Icon name="ph:arrow-left" class="w-[22px] h-[22px] shrink-0" />
             </div>
-            <span class="text-[14px] font-medium">Personal Account</span>
+            <span class="text-[14px] font-medium leading-none">Personal Account</span>
           </NuxtLink>
         </nav>
 
@@ -220,11 +242,17 @@ onMounted(() => {
             class="flex w-full items-center gap-3 px-4 py-3 text-slate-400 group transition-all duration-200 hover:text-white"
             @click="openLogoutModal"
           >
-            <Icon
-              name="ph:sign-out-light"
-              class="w-4.5 h-4.5 transition-colors duration-200 text-slate-600 group-hover:text-burning-orange"
-            />
-            <span class="text-[14px] font-medium transition-colors duration-200"> Log Out </span>
+            <div
+              class="shrink-0 w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
+            >
+              <Icon
+                name="ph:sign-out"
+                class="w-[22px] h-[22px] shrink-0 transition-colors duration-200 text-slate-600 group-hover:text-burning-orange"
+              />
+            </div>
+            <span class="text-[14px] font-medium leading-none transition-colors duration-200">
+              Log Out
+            </span>
           </button>
         </div>
       </aside>
@@ -255,7 +283,7 @@ onMounted(() => {
         >
           <div class="flex flex-col items-center p-8 text-center">
             <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream">
-              <Icon name="ph:sign-out-light" class="w-8 h-8 text-noble-black" />
+              <Icon name="ph:sign-out" class="w-8 h-8 text-noble-black" />
             </div>
             <h3 class="text-[24px] font-bold text-noble-black">Log out?</h3>
             <p class="mt-2 text-[15px] leading-relaxed text-noble-black/60">

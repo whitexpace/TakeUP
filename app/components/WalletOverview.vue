@@ -112,10 +112,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
   <div class="space-y-6 font-geist">
     <section class="space-y-3">
       <div class="space-y-2">
-        <h1 class="text-[28px] font-semibold text-noble-black">{{ title }}</h1>
+        <h1 class="font-montravia text-[36px] font-medium text-noble-black">{{ title }}</h1>
         <div class="w-10 h-0.5 bg-burning-orange"></div>
       </div>
-      <p class="text-[16px] font-medium text-noble-black/50">
+      <p class="text-[16px] font-light text-noble-black/50">
         {{ subtitle }}
       </p>
     </section>
@@ -176,14 +176,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                 title="Toggle Balance Visibility"
                 @click="onToggleBalance"
               >
-                <Icon v-if="isBalanceVisible" name="ph:eye-light" class="w-6 h-6" />
-                <Icon v-else name="ph:eye-slash-light" class="w-6 h-6" />
+                <Icon v-if="isBalanceVisible" name="ph:eye" class="w-6 h-6 shrink-0" />
+                <Icon v-else name="ph:eye-slash" class="w-6 h-6 shrink-0" />
               </button>
-              <Icon
-                v-if="isSystemWallet"
-                name="ph:lock-simple-light"
-                class="w-5 h-5 text-white/40"
-              />
+              <Icon v-if="isSystemWallet" name="ph:lock-simple" class="w-5 h-5 text-white/40" />
             </div>
           </div>
         </div>
@@ -226,7 +222,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         class="flex items-center gap-3 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-3 w-full max-w-[760px]"
       >
         <div class="text-blue-700 shrink-0">
-          <Icon name="ph:shield-check-light" class="w-[18px] h-[18px]" />
+          <Icon name="ph:shield-check" class="w-[18px] h-[18px]" />
         </div>
         <p class="text-[13px] leading-relaxed">
           <span class="font-bold text-blue-900">{{ protectionTitle }}</span>
@@ -237,10 +233,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
 
       <div v-else class="inline-flex items-start sm:items-center gap-3 max-w-full">
         <div class="text-burning-orange shrink-0 mt-0.5 sm:mt-0">
-          <Icon name="ph:shield-check-light" class="w-[18px] h-[18px]" />
+          <Icon name="ph:shield-check" class="w-[18px] h-[18px]" />
         </div>
-        <p class="text-[13px] font-medium text-noble-black/70 leading-relaxed">
-          <span class="font-bold text-noble-black">{{ protectionTitle }}</span>
+        <p class="text-[13px] font-light text-noble-black/50 leading-relaxed">
+          <span class="font-semibold text-noble-black">{{ protectionTitle }}</span>
           <span class="mx-2 text-noble-black/20 select-none hidden sm:inline">·</span>
           <span class="opacity-90 block sm:inline">{{ protectionMessage }}</span>
         </p>
@@ -255,8 +251,8 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-8 space-y-8 flex flex-col h-full shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div class="border-l-[3px] border-burning-orange pl-4">
-          <h3 class="text-[20px] font-bold text-noble-black font-geist">Linked Accounts</h3>
-          <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">
+          <h3 class="text-[20px] font-semibold text-noble-black font-geist">Linked Accounts</h3>
+          <p class="mt-0.5 text-[13px] font-light text-noble-black/50">
             Manage your payment methods
           </p>
         </div>
@@ -279,14 +275,14 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             <button
               class="p-2 text-noble-black/30 hover:text-noble-black hover:bg-neutral-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
             >
-              <Icon name="ph:dots-three-vertical-light" class="w-5 h-5" />
+              <Icon name="ph:dots-three-vertical" class="w-5 h-5" />
             </button>
           </div>
         </div>
         <button
           class="w-full py-4 border-2 border-dashed border-burning-orange/30 text-burning-orange rounded-[14px] font-bold hover:bg-burning-orange/5 hover:border-burning-orange transition-all flex items-center justify-center gap-3 text-[16px] active:scale-[0.98]"
         >
-          <Icon name="ph:plus-light" class="w-5 h-5" />
+          <Icon name="ph:plus" class="w-5 h-5" />
           Add Payment Method
         </button>
       </div>
@@ -301,8 +297,8 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         "
       >
         <div class="border-l-[3px] border-burning-orange pl-4">
-          <h3 class="text-[20px] font-bold text-noble-black font-geist">{{ activityTitle }}</h3>
-          <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">{{ activitySubtitle }}</p>
+          <h3 class="text-[20px] font-semibold text-noble-black font-geist">{{ activityTitle }}</h3>
+          <p class="mt-0.5 text-[13px] font-light text-noble-black/50">{{ activitySubtitle }}</p>
         </div>
 
         <div
@@ -310,7 +306,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
           class="flex-1 flex flex-col items-center justify-center py-12 text-center"
         >
           <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <Icon name="ph:currency-circle-dollar-light" class="w-6 h-6 text-gray-400" />
+            <Icon name="ph:currency-circle-dollar" class="w-6 h-6 text-gray-400" />
           </div>
           <p class="text-[15px] font-semibold text-gray-400">
             {{ isSystemWallet ? "No commission activity yet" : "No transactions yet" }}
@@ -387,10 +383,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                 >
                   <Icon
                     v-if="tx.direction === 'CREDIT'"
-                    name="ph:arrow-up-right-light"
+                    name="ph:arrow-up-right"
                     class="w-[18px] h-[18px]"
                   />
-                  <Icon v-else name="ph:arrow-down-left-light" class="w-[18px] h-[18px]" />
+                  <Icon v-else name="ph:arrow-down-left" class="w-[18px] h-[18px]" />
                 </div>
                 <div class="min-w-0">
                   <p class="font-semibold text-noble-black text-[15px] leading-tight">
@@ -450,7 +446,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
               class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="showTopUpModal = false"
             >
-              <Icon name="ph:x-light" class="w-5 h-5" />
+              <Icon name="ph:x" class="w-5 h-5" />
             </button>
           </div>
 
@@ -459,7 +455,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             <div class="py-6">
               <div class="bg-burning-orange/5 p-4 rounded-[16px] mb-8 flex items-start gap-3">
                 <Icon
-                  name="ph:info-light"
+                  name="ph:info"
                   class="text-burning-orange mt-0.5 shrink-0 w-[18px] h-[18px]"
                 />
                 <p class="text-[13px] font-medium text-burning-orange/80 leading-relaxed">

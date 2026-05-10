@@ -953,13 +953,13 @@ const handleReviewSubmitted = async () => {
     <!-- Header with Back Button -->
     <NuxtLink
       :to="backToTransactionsPath"
-      class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
+      class="flex items-center gap-3 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
     >
       <Icon
-        name="ph:caret-left-light"
-        class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1"
+        name="ph:caret-left"
+        class="w-[18px] h-[18px] shrink-0 transition-transform group-hover:-translate-x-1"
       />
-      <span class="text-[15px] font-bold">Back to My Transactions</span>
+      <span class="text-[15px] font-bold leading-none">Back to My Transactions</span>
     </NuxtLink>
 
     <template v-if="pending">
@@ -981,29 +981,34 @@ const handleReviewSubmitted = async () => {
       <!-- Redesigned Page Header Strip -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div class="space-y-1.5">
-          <h1 class="text-[24px] font-bold text-noble-black leading-tight">Order Details</h1>
-          <div class="flex flex-wrap items-center gap-2.5 text-[13px] text-gray-500 font-medium">
+          <div class="space-y-2 mb-2">
+            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+              Order Details
+            </h1>
+            <div class="w-10 h-0.5 bg-burning-orange"></div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-[13px] text-gray-500 font-medium">
             <div
-              class="flex items-center gap-1.5 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
+              class="flex items-center gap-2 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
             >
-              <span>ORDER ID. {{ orderIdForDisplay }}</span>
+              <span class="leading-none">ORDER ID. {{ orderIdForDisplay }}</span>
               <button
-                class="hover:text-burning-orange transition-colors"
+                class="hover:text-burning-orange transition-colors flex items-center justify-center shrink-0 -translate-y-[0.5px]"
                 title="Copy Order ID"
                 @click="copyOrderId"
               >
-                <Icon name="ph:copy-light" class="w-3 h-3" />
+                <Icon name="ph:copy" class="w-3 h-3 shrink-0" />
               </button>
             </div>
             <span class="opacity-30 select-none">·</span>
-            <span>Placed on {{ formatDateTime(booking.requestedAt) }}</span>
+            <span class="leading-none">Placed on {{ formatDateTime(booking.requestedAt) }}</span>
           </div>
         </div>
 
         <div class="shrink-0">
           <span
             v-if="isPendingRequest"
-            class="inline-flex items-center rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
+            class="inline-flex items-center gap-2 rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
           >
             Requested
           </span>
@@ -1024,10 +1029,7 @@ const handleReviewSubmitted = async () => {
             v-if="isPendingRequest"
             class="rounded-[20px] border border-burning-orange/10 bg-burning-orange/[0.03] px-5 py-4 text-[14px] font-bold text-noble-black flex items-start gap-3"
           >
-            <Icon
-              name="ph:info-light"
-              class="w-[18px] h-[18px] text-burning-orange mt-0.5 shrink-0"
-            />
+            <Icon name="ph:info" class="w-[18px] h-[18px] text-burning-orange mt-0.5 shrink-0" />
             {{ requestStageMessage }}
           </div>
 
@@ -1041,8 +1043,8 @@ const handleReviewSubmitted = async () => {
                 :to="itemDetailPath"
                 class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-burning-orange font-bold text-[13px] hover:bg-burning-orange/5 transition-all"
               >
-                View Full Listing
-                <Icon name="ph:arrow-square-out-light" class="w-3.5 h-3.5" />
+                <span class="leading-none">View Full Listing</span>
+                <Icon name="ph:arrow-square-out" class="w-3.5 h-3.5 -translate-y-[0.5px]" />
               </NuxtLink>
             </div>
             <div class="flex flex-col sm:flex-row gap-6">
@@ -1057,7 +1059,7 @@ const handleReviewSubmitted = async () => {
                   v-else
                   class="w-24 h-24 bg-cinnamon-ice/10 rounded-[12px] border border-gray-100 flex items-center justify-center"
                 >
-                  <Icon name="ph:image-light" class="w-8 h-8 text-cinnamon-ice/40" />
+                  <Icon name="ph:image" class="w-8 h-8 text-cinnamon-ice/40" />
                 </div>
               </div>
               <div class="flex flex-col justify-center min-w-0">
@@ -1076,8 +1078,11 @@ const handleReviewSubmitted = async () => {
                 <div
                   class="flex items-center gap-2.5 text-[12px] font-bold text-gray-600 bg-gray-100 w-fit px-4 py-2 rounded-full border border-gray-200/50 shadow-sm"
                 >
-                  <Icon name="ph:calendar-blank-light" class="w-3.5 h-3.5 text-gray-400" />
-                  <span
+                  <Icon
+                    name="ph:calendar-blank"
+                    class="w-3.5 h-3.5 text-gray-400 -translate-y-[0.5px] shrink-0"
+                  />
+                  <span class="leading-none"
                     >{{ formatDateTime(booking.startDate) }} –
                     {{ formatDateTime(booking.endDate) }}</span
                   >
@@ -1098,16 +1103,19 @@ const handleReviewSubmitted = async () => {
               v-if="actionSuccessMessage"
               class="mb-6 flex items-center gap-3 text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-4 rounded-[14px]"
             >
-              <Icon name="ph:check-light" class="w-[18px] h-[18px]" />
-              {{ actionSuccessMessage }}
+              <Icon name="ph:check" class="w-[18px] h-[18px] shrink-0 -translate-y-[0.5px]" />
+              <span class="leading-none">{{ actionSuccessMessage }}</span>
             </div>
 
             <div
               v-if="actionErrorMessage"
               class="mb-6 flex items-center gap-3 text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-4 rounded-[14px]"
             >
-              <Icon name="ph:warning-circle-light" class="w-[18px] h-[18px]" />
-              {{ actionErrorMessage }}
+              <Icon
+                name="ph:warning-circle"
+                class="w-[18px] h-[18px] shrink-0 -translate-y-[0.5px]"
+              />
+              <span class="leading-none">{{ actionErrorMessage }}</span>
             </div>
 
             <div class="space-y-0 relative pl-1">
@@ -1129,7 +1137,7 @@ const handleReviewSubmitted = async () => {
                     v-if="step.status === 'completed'"
                     class="w-8 h-8 rounded-full bg-white border-2 border-success-green flex items-center justify-center shadow-sm"
                   >
-                    <Icon name="ph:check-light" class="w-4 h-4 text-[#22C55E]" />
+                    <Icon name="ph:check" class="w-4 h-4 text-[#22C55E]" />
                   </div>
                   <div
                     v-else-if="step.status === 'current'"
@@ -1166,8 +1174,11 @@ const handleReviewSubmitted = async () => {
                       class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
                       @click.stop="proofImageUrl = step.proofUrl"
                     >
-                      <Icon name="ph:image-light" class="w-[13px] h-[13px]" />
-                      {{ step.proofLabel }}
+                      <Icon
+                        name="ph:image"
+                        class="w-[13px] h-[13px] shrink-0 -translate-y-[0.5px]"
+                      />
+                      <span class="leading-none">{{ step.proofLabel }}</span>
                     </button>
                   </div>
                   <span
@@ -1224,7 +1235,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-burning-orange/20 shadow-sm"
               >
-                <Icon name="ph:seal-check-light" class="w-6 h-6 text-burning-orange" />
+                <Icon name="ph:seal-check" class="w-6 h-6 text-burning-orange" />
               </div>
             </div>
           </section>
@@ -1322,7 +1333,7 @@ const handleReviewSubmitted = async () => {
                 class="rounded-[16px] border border-success-green/20 bg-success-green/[0.04] p-5"
               >
                 <div class="flex items-center gap-2 text-success-green mb-2">
-                  <Icon name="ph:check-light" class="w-[18px] h-[18px]" />
+                  <Icon name="ph:check" class="w-[18px] h-[18px]" />
                   <p class="text-[14px] font-bold">
                     {{ finalDecisionLabel(latestDispute.finalDecision) }}
                   </p>
@@ -1372,7 +1383,7 @@ const handleReviewSubmitted = async () => {
                 class="flex-1 min-w-[160px] h-11 inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[14px] font-bold hover:bg-cinnabar-red hover:text-white transition-all"
                 @click="handleDispute"
               >
-                <Icon name="ph:warning-light" class="w-[18px] h-[18px]" />
+                <Icon name="ph:warning" class="w-[18px] h-[18px]" />
                 Report Issue
               </button>
             </div>
@@ -1431,7 +1442,7 @@ const handleReviewSubmitted = async () => {
             >
               <Icon
                 v-if="isSubmittingHandoffProof"
-                name="ph:circle-notch-light"
+                name="ph:circle-notch"
                 class="animate-spin w-4 h-4"
               />
               Upload Handoff Proof
@@ -1443,11 +1454,7 @@ const handleReviewSubmitted = async () => {
               class="w-full h-12 flex items-center justify-center gap-2 bg-burning-orange text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
               @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
             >
-              <Icon
-                v-if="isFetchingPreview"
-                name="ph:circle-notch-light"
-                class="animate-spin w-4 h-4"
-              />
+              <Icon v-if="isFetchingPreview" name="ph:circle-notch" class="animate-spin w-4 h-4" />
               {{ isEarlyReturnEligible ? "Confirm Early Return" : "Return Item Now" }}
             </button>
 
@@ -1537,10 +1544,12 @@ const handleReviewSubmitted = async () => {
               <div
                 class="bg-blue-estate/[0.03] border border-blue-estate/10 rounded-[12px] p-4 flex gap-3 items-start"
               >
-                <div class="shrink-0 text-blue-estate">
-                  <Icon name="ph:shield-check-light" class="w-[18px] h-[18px]" />
+                <div
+                  class="shrink-0 text-blue-estate flex items-center justify-center -translate-y-[0.5px]"
+                >
+                  <Icon name="ph:shield-check" class="w-[18px] h-[18px] shrink-0" />
                 </div>
-                <p class="text-[12px] text-blue-estate font-medium leading-relaxed">
+                <p class="text-[12px] text-blue-estate font-medium leading-snug">
                   <span class="font-bold">TakeUP Secure.</span> Funds are held safely until the
                   transaction is fully complete.
                 </p>
@@ -1576,12 +1585,12 @@ const handleReviewSubmitted = async () => {
                     <div
                       class="flex items-center gap-0.5 text-burning-orange font-bold text-[13px]"
                     >
-                      <span>{{
+                      <span class="leading-none">{{
                         isLender
                           ? booking.borrower.borrowerRating?.toFixed(1) || "5.0"
                           : booking.lender.lenderRating?.toFixed(1) || "5.0"
                       }}</span>
-                      <Icon name="ph:star-light" class="w-3 h-3" />
+                      <Icon name="ph:star-fill" class="w-3 h-3 -translate-y-[0.5px]" />
                     </div>
                     <span class="text-noble-black/30 text-[12px] font-medium"
                       >•
@@ -1596,8 +1605,8 @@ const handleReviewSubmitted = async () => {
                 class="w-full h-10 flex items-center justify-center gap-2 rounded-[10px] bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.12] font-bold text-[13px] transition-all"
                 @click="openChat"
               >
-                <Icon name="ph:chat-teardrop-text-light" class="w-4 h-4" />
-                Message {{ isLender ? "Borrower" : "Lender" }}
+                <Icon name="ph:chat-teardrop-text" class="w-4 h-4 shrink-0 -translate-y-[0.5px]" />
+                <span class="leading-none">Message {{ isLender ? "Borrower" : "Lender" }}</span>
               </button>
             </div>
           </section>
@@ -1609,7 +1618,7 @@ const handleReviewSubmitted = async () => {
       <div
         class="w-20 h-20 bg-cinnabar-red/10 rounded-full flex items-center justify-center mx-auto mb-6"
       >
-        <Icon name="ph:warning-circle-light" class="w-10 h-10 text-cinnabar-red" />
+        <Icon name="ph:warning-circle" class="w-10 h-10 text-cinnabar-red" />
       </div>
       <h2 class="text-2xl font-bold text-noble-black mb-4">Transaction Not Found</h2>
       <p class="text-noble-black/50 mb-8 max-w-sm mx-auto">
@@ -1657,7 +1666,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <Icon name="ph:upload-simple-light" class="w-10 h-10" style="color: #1f3a5f" />
+                <Icon name="ph:upload-simple" class="w-10 h-10" style="color: #1f3a5f" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
               <p class="text-noble-black/60 mb-6 leading-relaxed">
@@ -1687,7 +1696,7 @@ const handleReviewSubmitted = async () => {
                 >
                   <Icon
                     v-if="isSubmittingHandoffProof"
-                    name="ph:circle-notch-light"
+                    name="ph:circle-notch"
                     class="w-5 h-5 animate-spin mr-2"
                   />
                   {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
@@ -1731,7 +1740,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <Icon name="ph:warning-circle-light" class="w-10 h-10" style="color: #e8650a" />
+                <Icon name="ph:warning-circle" class="w-10 h-10" style="color: #e8650a" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Not Yet Time to Lend</h3>
               <p class="text-noble-black/60 mb-2 leading-relaxed">
@@ -1788,7 +1797,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <Icon name="ph:package-light" class="w-10 h-10" style="color: #ff7124" />
+                <Icon name="ph:package" class="w-10 h-10" style="color: #ff7124" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
               <p class="text-noble-black/60 mb-8 leading-relaxed">
@@ -1818,7 +1827,7 @@ const handleReviewSubmitted = async () => {
                 >
                   <Icon
                     v-if="isSubmittingReturn"
-                    name="ph:circle-notch-light"
+                    name="ph:circle-notch"
                     class="w-5 h-5 animate-spin mr-2"
                   />
                   {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
@@ -1863,7 +1872,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-5"
               >
-                <Icon name="ph:package-light" class="w-8 h-8" style="color: #e8650a" />
+                <Icon name="ph:package" class="w-8 h-8" style="color: #e8650a" />
               </div>
               <h3 class="text-[22px] font-bold text-noble-black text-center">
                 Confirm Early Return
@@ -1974,7 +1983,7 @@ const handleReviewSubmitted = async () => {
               >
                 <Icon
                   v-if="isSubmittingReturn"
-                  name="ph:circle-notch-light"
+                  name="ph:circle-notch"
                   class="w-4 h-4 animate-spin"
                 />
                 {{ isSubmittingReturn ? "Submitting..." : "Confirm Early Return" }}
@@ -2020,7 +2029,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-success-green/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <Icon name="ph:check-light" class="w-10 h-10" style="color: #34a853" />
+                <Icon name="ph:check" class="w-10 h-10" style="color: #34a853" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Success!</h3>
               <p class="text-noble-black/60 mb-8 leading-relaxed">
@@ -2080,7 +2089,7 @@ const handleReviewSubmitted = async () => {
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeRebuttalModal"
               >
-                <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -2238,7 +2247,7 @@ const handleReviewSubmitted = async () => {
                           class="hidden"
                           @change="setRebuttalImageFile"
                         />
-                        <Icon name="ph:image-light" class="w-5 h-5 text-noble-black/30" />
+                        <Icon name="ph:image" class="w-5 h-5 text-noble-black/30" />
                         <span
                           v-if="!rebuttalImageFile"
                           class="text-[12px] text-noble-black/40 font-medium"
@@ -2350,7 +2359,7 @@ const handleReviewSubmitted = async () => {
                 @click="rebuttalModalStep === 'form' ? continueRebuttalReview() : submitRebuttal()"
               >
                 <span v-if="isSubmittingRebuttal" class="flex items-center justify-center gap-2">
-                  <Icon name="ph:circle-notch-light" class="w-4 h-4 animate-spin" />
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
                   Processing...
                 </span>
                 <span v-else>
@@ -2386,7 +2395,7 @@ const handleReviewSubmitted = async () => {
               class="absolute -top-4 -right-4 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-noble-black/60 hover:text-noble-black transition-colors"
               @click="proofImageUrl = null"
             >
-              <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
             <img
               :src="proofImageUrl"

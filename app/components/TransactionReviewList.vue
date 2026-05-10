@@ -105,8 +105,9 @@ const getReviewImageUrl = (image: string) =>
             <Icon
               v-for="star in 5"
               :key="star"
-              :name="star <= review.rating ? 'ph:star-fill' : 'ph:star-light'"
-              class="w-4 h-4"
+              name="ph:star-fill"
+              class="w-4 h-4 -translate-y-[0.5px]"
+              :class="star <= review.rating ? 'opacity-100' : 'opacity-20'"
             />
           </div>
         </div>

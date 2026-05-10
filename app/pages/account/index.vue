@@ -133,10 +133,6 @@ const buildDbFullName = (payload: AuthMeUser | undefined) => {
   const first = (payload.firstName || "").trim()
   const last = (payload.lastName || "").trim()
 
-  if (last.toLowerCase() === "user" || !last) {
-    return first.charAt(0).toUpperCase() + first.slice(1)
-  }
-
   const parts = [first, payload.middleName, last].filter(Boolean)
   return parts.length > 0 ? parts.join(" ") : null
 }
@@ -562,10 +558,12 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
     <template v-if="isHydrated && authData">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">Account Information</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+            Account Information
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Manage your personal details and account settings.
         </p>
       </section>
@@ -578,8 +576,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
           class="relative px-5 py-5 bg-gradient-to-br from-cream/95 to-cream/80 backdrop-blur-md border-b border-cinnamon-ice/10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <div class="border-l-[3px] border-burning-orange pl-4">
-            <h2 class="text-[20px] font-bold text-noble-black">Profile</h2>
-            <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">
+            <h2 class="text-[20px] font-semibold text-noble-black">Profile</h2>
+            <p class="mt-0.5 text-[13px] font-light text-noble-black/50">
               Your personal information and profile picture
             </p>
           </div>
@@ -653,7 +651,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               </div>
             </div>
             <div class="min-w-0 flex-1 pt-1">
-              <h3 class="truncate text-[18px] font-semibold text-noble-black">
+              <h3 class="truncate text-[22px] font-semibold text-noble-black">
                 {{ profileDetails.fullName }}
               </h3>
               <div
@@ -675,8 +673,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-5 py-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6"
       >
         <div class="border-l-[3px] border-burning-orange pl-4">
-          <h2 class="text-[20px] font-bold text-noble-black">Danger Zone</h2>
-          <p class="text-[13px] font-medium text-noble-black/50">
+          <h2 class="text-[20px] font-semibold text-noble-black">Danger Zone</h2>
+          <p class="text-[13px] font-light text-noble-black/50">
             Irreversible actions related to your account security and data.
           </p>
         </div>
@@ -685,14 +683,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-bold text-noble-black">Deactivate Account</h3>
-              <p class="text-[13px] font-medium text-noble-black/50">
+              <h3 class="text-[16px] font-medium text-noble-black">Deactivate Account</h3>
+              <p class="text-[13px] font-light text-noble-black/50">
                 Hide your profile and listings until you sign in again. Your data remains safe.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-bold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
+              class="h-10 px-6 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-semibold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
               @click="openDeactivateAccountModal"
             >
               Deactivate
@@ -702,14 +700,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-bold text-noble-black">Delete Account</h3>
-              <p class="text-[13px] font-medium text-noble-black/50">
+              <h3 class="text-[16px] font-medium text-noble-black">Delete Account</h3>
+              <p class="text-[13px] font-light text-noble-black/50">
                 Permanently erase your account, active listings, and all personal data from TakeUP.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-bold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
+              class="h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-semibold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
               @click="openDeleteAccountModal"
             >
               Delete
@@ -735,8 +733,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <!-- Header -->
             <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[24px] font-bold text-noble-black">Edit Profile</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                <h2 class="text-[24px] font-semibold text-noble-black">Edit Profile</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Update your public account details.
                 </p>
               </div>
@@ -745,7 +743,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeEditProfileModal"
               >
-                <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -812,13 +810,13 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                       <div
                         class="absolute inset-0 bg-noble-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                       >
-                        <Icon name="ph:camera-light" class="w-6 h-6 text-white" />
+                        <Icon name="ph:camera" class="w-6 h-6 text-white" />
                       </div>
                     </div>
                     <div
                       class="absolute bottom-1 right-1 w-7 h-7 bg-burning-orange rounded-full flex items-center justify-center shadow-md z-20 transition-transform duration-300 group-hover:scale-110"
                     >
-                      <Icon name="ph:pencil-simple-light" class="w-3 h-3 text-white" />
+                      <Icon name="ph:pencil-simple" class="w-3 h-3 text-white" />
                     </div>
                   </div>
                 </div>
@@ -845,7 +843,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <Icon name="ph:user-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:user" class="w-[18px] h-[18px]" />
                   </div>
                   <input
                     id="edit-profile-name"
@@ -869,7 +867,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                       <div
                         class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300 z-10"
                       >
-                        <Icon name="ph:at-light" class="w-[18px] h-[18px]" />
+                        <Icon name="ph:at" class="w-[18px] h-[18px]" />
                       </div>
                       <div class="flex-1 relative">
                         <input
@@ -891,7 +889,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                           v-if="usernameStatus === 'available'"
                           class="absolute right-3 top-1/2 -translate-y-1/2 mt-2 text-success-green"
                         >
-                          <Icon name="ph:check-light" class="w-4 h-4" />
+                          <Icon name="ph:check" class="w-4 h-4" />
                         </div>
                       </div>
                     </div>
@@ -917,7 +915,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <Icon name="ph:map-pin-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:map-pin" class="w-[18px] h-[18px]" />
                   </div>
                   <input
                     id="edit-profile-location"
@@ -937,7 +935,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <Icon name="ph:smiley-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:smiley" class="w-[18px] h-[18px]" />
                   </div>
                   <input
                     id="edit-profile-pronouns"
@@ -957,7 +955,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <Icon name="ph:pencil-simple-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:pencil-simple" class="w-[18px] h-[18px]" />
                   </div>
                   <textarea
                     id="edit-profile-bio"
@@ -991,14 +989,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-semibold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
                   @click="closeEditProfileModal"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                   :disabled="!canSaveProfile"
                   @click="saveProfile"
                 >
@@ -1024,8 +1022,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <!-- Header -->
             <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[24px] font-bold text-noble-black">Deactivate Account</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                <h2 class="text-[24px] font-semibold text-noble-black">Deactivate Account</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Temporarily hide your profile and listings.
                 </p>
               </div>
@@ -1035,7 +1033,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 :disabled="isDeactivatingAccount"
                 @click="closeDeactivateAccountModal"
               >
-                <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -1047,7 +1045,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   v-if="isLoadingDeactivationEligibility"
                   class="rounded-[14px] border-[1.5px] border-cinnamon-ice/20 bg-cream p-5 text-[14px] font-medium text-noble-black/60 flex items-center gap-2"
                 >
-                  <Icon name="ph:circle-notch-light" class="w-4 h-4 animate-spin" />
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
                   Checking eligibility...
                 </div>
 
@@ -1065,7 +1063,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                       class="text-[13px] font-medium text-noble-black/80 flex items-start gap-3"
                     >
                       <Icon
-                        name="ph:warning-circle-light"
+                        name="ph:warning-circle"
                         class="w-[18px] h-[18px] text-cinnabar-red shrink-0 mt-0.5"
                       />
                       <span class="leading-relaxed">{{ blocker.message }}</span>
@@ -1078,7 +1076,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   class="rounded-[14px] border border-cinnamon-ice/20 bg-cream p-5"
                 >
                   <div class="flex items-center gap-3 text-success-green">
-                    <Icon name="ph:check-light" class="w-5 h-5" />
+                    <Icon name="ph:check" class="w-5 h-5" />
                     <h3 class="text-[16px] font-bold">Account ready to deactivate</h3>
                   </div>
                   <p class="mt-2 text-[13px] font-medium text-noble-black/50 leading-relaxed">
@@ -1109,7 +1107,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-bold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5 disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-semibold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5 disabled:opacity-50"
                   :disabled="isDeactivatingAccount"
                   @click="closeDeactivateAccountModal"
                 >
@@ -1117,7 +1115,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 </button>
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="!canDeactivateAccount"
                   @click="deactivateAccount"
                 >
@@ -1143,8 +1141,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <!-- Header -->
             <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[24px] font-bold text-noble-black">Delete Account</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                <h2 class="text-[24px] font-semibold text-noble-black">Delete Account</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   This action is permanent and cannot be undone.
                 </p>
               </div>
@@ -1153,7 +1151,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeDeleteAccountModal"
               >
-                <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -1164,7 +1162,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   class="rounded-[16px] border border-cinnabar-red/10 bg-cinnabar-red/[0.03] p-5"
                 >
                   <div class="flex items-start gap-3 text-cinnabar-red">
-                    <Icon name="ph:info-light" class="w-[18px] h-[18px] shrink-0 mt-0.5" />
+                    <Icon name="ph:info" class="w-[18px] h-[18px] shrink-0 mt-0.5" />
                     <p class="text-[13px] font-bold leading-relaxed">
                       Required financial and transaction records are retained in an anonymized form
                       for compliance.
@@ -1177,7 +1175,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                     <div
                       class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-cinnabar-red transition-colors duration-300"
                     >
-                      <Icon name="ph:check-light" class="w-[18px] h-[18px]" />
+                      <Icon name="ph:check" class="w-[18px] h-[18px]" />
                     </div>
                     <input
                       id="delete-confirmation"
@@ -1210,14 +1208,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-bold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-semibold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5"
                   @click="closeDeleteAccountModal"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="!canDeleteAccount"
                   @click="deleteAccount"
                 >

@@ -739,19 +739,19 @@ const availabilityRowErrors = computed(() =>
         class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
       >
         <Icon
-          name="ph:caret-left-light"
-          class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1"
+          name="ph:caret-left"
+          class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1 shrink-0"
         />
         <span class="text-[15px] font-bold">Back to My Listings</span>
       </NuxtLink>
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
             {{ props.mode === "new" ? "Add New Item" : "Edit Listing" }}
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           {{
             props.mode === "new"
               ? "Share your items with the community and earn rewards."
@@ -784,8 +784,8 @@ const availabilityRowErrors = computed(() =>
             >
               <Icon
                 v-if="isStepCompleted(step.id)"
-                name="ph:check-light"
-                class="w-[18px] h-[18px]"
+                name="ph:check"
+                class="w-[18px] h-[18px] shrink-0"
               />
               <span v-else class="text-[13px] font-bold">{{ index + 1 }}</span>
             </div>
@@ -859,8 +859,8 @@ const availabilityRowErrors = computed(() =>
                 class="w-12 h-12 rounded-full bg-noble-black/5 flex items-center justify-center mb-4 group-hover:bg-burning-orange/10 transition-colors"
               >
                 <Icon
-                  name="ph:image-light"
-                  class="w-6 h-6 text-noble-black/40 group-hover:text-burning-orange transition-colors"
+                  name="ph:image"
+                  class="w-6 h-6 text-noble-black/40 group-hover:text-burning-orange transition-colors shrink-0"
                 />
               </div>
               <p
@@ -906,7 +906,7 @@ const availabilityRowErrors = computed(() =>
                 class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-noble-black/60 text-white flex items-center justify-center shadow-lg backdrop-blur-sm opacity-0 group-hover/thumb:opacity-100 transition-all hover:bg-cinnabar-red active:scale-90"
                 @click.stop="removeGalleryImage(img.id)"
               >
-                <Icon name="ph:x-light" class="w-3 h-3" />
+                <Icon name="ph:x" class="w-3 h-3 shrink-0" />
               </button>
             </div>
             <div
@@ -969,7 +969,7 @@ const availabilityRowErrors = computed(() =>
                   >
                     <span>{{ CATEGORIES.find((c) => c.value === cat)?.label }}</span
                     ><button type="button" @click.stop="selectCategory(cat)">
-                      <Icon name="ph:x-light" class="w-[10px] h-[10px]" />
+                      <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                     </button>
                   </div>
                   <span
@@ -1064,7 +1064,7 @@ const availabilityRowErrors = computed(() =>
               >
                 <span>{{ offer }}</span
                 ><button type="button" @click="removeOffer(idx)">
-                  <Icon name="ph:x-light" class="w-[10px] h-[10px]" />
+                  <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                 </button>
               </div>
               <input
@@ -1093,7 +1093,7 @@ const availabilityRowErrors = computed(() =>
               >
                 <span>{{ includedItem }}</span
                 ><button type="button" @click="removeIncluded(idx)">
-                  <Icon name="ph:x-light" class="w-[10px] h-[10px]" />
+                  <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                 </button>
               </div>
               <input
@@ -1190,7 +1190,7 @@ const availabilityRowErrors = computed(() =>
                     @click="toggleRateUnitDropdown"
                   >
                     {{ form.rateOption === "PER_DAY" ? "Per Day" : "Per Hour" }}
-                    <Icon name="ph:caret-down-light" class="w-[14px] h-[14px]" />
+                    <Icon name="ph:caret-down" class="w-[14px] h-[14px] shrink-0" />
                   </button>
                   <div
                     v-if="isRateUnitDropdownOpen"
@@ -1316,7 +1316,8 @@ const availabilityRowErrors = computed(() =>
               class="w-full flex items-center justify-center gap-2 p-3 rounded-[10px] border-[1.5px] border-dashed border-cinnamon-ice/20 bg-white text-[13px] font-bold text-noble-black/50 hover:border-burning-orange hover:text-burning-orange hover:bg-burning-orange/[0.02] transition-all"
               @click="addAvailabilityRow"
             >
-              <Icon name="ph:plus-light" class="w-[18px] h-[18px]" />Add another availability date
+              <Icon name="ph:plus" class="w-[18px] h-[18px] shrink-0" />Add another availability
+              date
             </button>
           </div>
         </section>
@@ -1340,7 +1341,7 @@ const availabilityRowErrors = computed(() =>
             >
               <span>{{ tag }}</span>
               <button type="button" @click="removeTag(tag)">
-                <Icon name="ph:x-light" class="w-[10px] h-[10px]" />
+                <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
               </button>
             </div>
             <input
@@ -1420,7 +1421,7 @@ const availabilityRowErrors = computed(() =>
           class="absolute right-6 top-6 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
           @click="closeLightbox"
         >
-          <Icon name="ph:x-light" class="w-6 h-6" />
+          <Icon name="ph:x" class="w-6 h-6" />
         </button>
         <div class="flex flex-col items-center gap-4" @click.stop>
           <img :src="lightboxImage.url" class="max-h-[80vh] w-auto rounded-2xl shadow-2xl" />
@@ -1441,7 +1442,7 @@ const availabilityRowErrors = computed(() =>
           <div
             class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream mx-auto text-cinnabar-red shadow-inner"
           >
-            <Icon name="ph:warning-light" class="w-[30px] h-[30px]" />
+            <Icon name="ph:warning" class="w-[30px] h-[30px] shrink-0" />
           </div>
           <h3 class="mb-3 text-[22px] font-bold text-noble-black">Discard changes?</h3>
           <p class="mb-10 text-[14px] text-noble-black/40">

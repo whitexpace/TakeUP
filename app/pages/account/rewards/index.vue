@@ -81,7 +81,7 @@ const earnActions = [
     desc: "Complete borrowing activity to steadily build points.",
     pts: "+10 pts",
     link: "/dashboard",
-    icon: "ph:package-light",
+    icon: "ph:package",
   },
   {
     id: "review",
@@ -89,7 +89,7 @@ const earnActions = [
     desc: "Leave timely reviews after completed transactions.",
     pts: "+5 pts",
     link: "/account/transactions",
-    icon: "ph:note-pencil-light",
+    icon: "ph:note-pencil",
   },
 ]
 
@@ -97,12 +97,12 @@ const redemptions = [
   {
     title: "5% Discount Coupon",
     cost: 200,
-    icon: "ph:ticket-light",
+    icon: "ph:ticket",
   },
   {
     title: "₱50 Wallet Credit",
     cost: 600,
-    icon: "ph:wallet-light",
+    icon: "ph:wallet",
   },
 ]
 
@@ -156,7 +156,9 @@ const formatDateTime = (value: string | Date) => {
       <section class="space-y-3">
         <div class="flex items-center gap-4">
           <div class="space-y-2">
-            <h1 class="text-[28px] font-semibold text-noble-black leading-tight">My Rewards</h1>
+            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+              My Rewards
+            </h1>
             <div class="w-10 h-0.5 bg-burning-orange"></div>
           </div>
           <div
@@ -167,7 +169,7 @@ const formatDateTime = (value: string | Date) => {
             >
           </div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Quality reviews earn you reward points you can redeem for perks.
         </p>
       </section>
@@ -194,9 +196,7 @@ const formatDateTime = (value: string | Date) => {
               {{ (summary?.availablePoints ?? 0).toLocaleString() }}
             </h2>
           </div>
-          <p class="text-[14px] font-semibold text-noble-black/50 mt-2">
-            points available to spend
-          </p>
+          <p class="text-[14px] font-light text-noble-black/50 mt-2">points available to spend</p>
         </div>
 
         <!-- Progress Ring -->
@@ -240,8 +240,8 @@ const formatDateTime = (value: string | Date) => {
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
-          <h2 class="text-[20px] font-bold text-noble-black">How to Earn</h2>
-          <p class="text-[13px] font-medium text-noble-black/50">
+          <h2 class="text-[20px] font-semibold text-noble-black">How to Earn</h2>
+          <p class="text-[13px] font-light text-noble-black/50">
             Ways to build your points balance
           </p>
         </div>
@@ -260,7 +260,7 @@ const formatDateTime = (value: string | Date) => {
                 <Icon :name="action.icon" class="w-5 h-5" />
               </div>
               <Icon
-                name="ph:arrow-right-light"
+                name="ph:arrow-right"
                 class="w-5 h-5 text-noble-black/20 group-hover:text-burning-orange group-hover:translate-x-1 transition-all"
               />
             </div>
@@ -286,8 +286,8 @@ const formatDateTime = (value: string | Date) => {
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
-          <h2 class="text-[20px] font-bold text-noble-black">Spend Your Points</h2>
-          <p class="text-[13px] font-medium text-noble-black/50">
+          <h2 class="text-[20px] font-semibold text-noble-black">Spend Your Points</h2>
+          <p class="text-[13px] font-light text-noble-black/50">
             Redeem your points for exclusive perks or listing visibility
           </p>
         </div>
@@ -328,7 +328,7 @@ const formatDateTime = (value: string | Date) => {
                   >
                     <Icon
                       v-if="!canAfford(reward.cost)"
-                      name="ph:lock-simple-light"
+                      name="ph:lock-simple"
                       class="w-3.5 h-3.5"
                     />
                     {{ canAfford(reward.cost) ? "Claim" : "Locked" }}
@@ -427,7 +427,7 @@ const formatDateTime = (value: string | Date) => {
           <div
             class="w-14 h-14 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/10 mb-4"
           >
-            <Icon name="ph:rocket-launch-light" class="w-8 h-8" />
+            <Icon name="ph:rocket-launch" class="w-8 h-8" />
           </div>
           <p class="text-[15px] font-bold text-noble-black/40">No active boosts</p>
           <p
@@ -476,7 +476,7 @@ const formatDateTime = (value: string | Date) => {
                   </div>
                 </div>
                 <div class="flex items-center gap-1.5 text-[12px] font-medium text-noble-black/40">
-                  <Icon name="ph:clock-light" class="w-3.5 h-3.5" />
+                  <Icon name="ph:clock" class="w-3.5 h-3.5" />
                   <span
                     >{{ formatDateTime(boost.boostStartedAt) }} →
                     {{ formatDateTime(boost.boostExpiresAt) }}</span

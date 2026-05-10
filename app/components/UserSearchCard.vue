@@ -26,17 +26,26 @@
       <p class="text-xs text-noble-black/50 truncate mb-1.5">@{{ username }}</p>
 
       <div class="flex items-center gap-3">
-        <div class="flex items-center gap-1">
-          <Icon name="ph:star-fill" class="w-3 h-3 text-burning-orange" />
-          <span class="text-xs font-bold text-noble-black">{{ rating.toFixed(1) }}</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-noble-black leading-none">{{
+            rating.toFixed(1)
+          }}</span>
+          <Icon
+            name="ph:star-fill"
+            class="w-3 h-3 text-burning-orange shrink-0 -translate-y-[0.5px]"
+          />
         </div>
         <span class="text-[10px] text-noble-black/30">•</span>
-        <span class="text-xs text-noble-black/60">{{ activeListings }} active listings</span>
+        <span class="text-xs text-noble-black/60 leading-none"
+          >{{ activeListings }} active listings</span
+        >
       </div>
     </div>
 
-    <div class="text-noble-black/20 group-hover:text-burning-orange transition-colors">
-      <Icon name="ph:caret-right-light" class="w-5 h-5" />
+    <div
+      class="text-noble-black/20 group-hover:text-burning-orange transition-colors shrink-0 flex items-center justify-center"
+    >
+      <Icon name="ph:caret-right" class="w-5 h-5 shrink-0" />
     </div>
   </NuxtLink>
 </template>

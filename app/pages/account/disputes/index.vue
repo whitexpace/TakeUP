@@ -405,10 +405,10 @@ const prevStep = () => {
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-10">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">My Disputes</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">My Disputes</h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Report transaction issues and track your ongoing disputes.
         </p>
       </section>
@@ -421,7 +421,7 @@ const prevStep = () => {
           v-for="tab in disputeTabs"
           :key="tab.id"
           type="button"
-          class="relative pb-4 text-[18px] font-bold transition-all duration-300 outline-none"
+          class="relative pb-4 text-[18px] font-semibold transition-all duration-300 outline-none"
           :class="[
             activeTab === tab.id
               ? 'text-burning-orange'
@@ -443,14 +443,14 @@ const prevStep = () => {
         v-if="actionSuccessMessage"
         class="flex items-center gap-3 text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-4 rounded-[14px]"
       >
-        <Icon name="ph:check-light" class="w-[18px] h-[18px]" />
+        <Icon name="ph:check" class="w-[18px] h-[18px]" />
         {{ actionSuccessMessage }}
       </div>
       <div
         v-if="actionErrorMessage"
         class="flex items-center gap-3 text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-4 rounded-[14px]"
       >
-        <Icon name="ph:warning-circle-light" class="w-[18px] h-[18px]" />
+        <Icon name="ph:warning-circle" class="w-[18px] h-[18px]" />
         {{ actionErrorMessage }}
       </div>
     </div>
@@ -483,7 +483,7 @@ const prevStep = () => {
                       : 'bg-white border-gray-100 text-gray-300',
                 ]"
               >
-                <Icon v-if="currentReportStep > step.id" name="ph:check-light" class="w-5 h-5" />
+                <Icon v-if="currentReportStep > step.id" name="ph:check" class="w-5 h-5" />
                 <span v-else>{{ step.id }}</span>
               </div>
               <span
@@ -512,9 +512,9 @@ const prevStep = () => {
               <div
                 class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-gray-100"
               >
-                <Icon name="ph:shield-light" class="text-noble-black/20 w-8 h-8" />
+                <Icon name="ph:shield" class="text-noble-black/20 w-8 h-8" />
               </div>
-              <p class="text-xl font-bold text-noble-black">No reportable transactions</p>
+              <p class="text-xl font-semibold text-noble-black">No reportable transactions</p>
               <p class="mt-2 text-sm text-noble-black/50 max-w-[280px] mx-auto leading-relaxed">
                 Transactions become eligible for reporting for 15 days after they are marked as
                 completed.
@@ -529,9 +529,9 @@ const prevStep = () => {
                   class="space-y-8 animate-in fade-in duration-500"
                 >
                   <div class="space-y-4 border-l-[3px] border-burning-orange pl-4">
-                    <h2 class="text-[22px] font-bold text-noble-black">What's the problem?</h2>
-                    <p class="text-[14px] text-noble-black/50 font-medium">
-                      Select the category that best describes your issue.
+                    <h2 class="text-[22px] font-semibold text-noble-black">What's the problem?</h2>
+                    <p class="text-[14px] text-noble-black/50 font-light">
+                      Please select the reason that best describes your issue.
                     </p>
                   </div>
 
@@ -558,20 +558,20 @@ const prevStep = () => {
                       >
                         <Icon
                           v-if="issueType.icon === 'damage'"
-                          name="ph:package-light"
+                          name="ph:package"
                           class="w-8 h-8"
                         />
                         <Icon
                           v-else-if="issueType.icon === 'clock'"
-                          name="ph:clock-light"
+                          name="ph:clock"
                           class="w-8 h-8"
                         />
                         <Icon
                           v-else-if="issueType.icon === 'shield'"
-                          name="ph:shield-warning-light"
+                          name="ph:shield-warning"
                           class="w-8 h-8"
                         />
-                        <Icon v-else name="ph:question-light" class="w-8 h-8" />
+                        <Icon v-else name="ph:question" class="w-8 h-8" />
                       </div>
                       <span class="text-[14px] font-bold mb-1 text-noble-black">
                         {{ issueType.label }}
@@ -619,7 +619,7 @@ const prevStep = () => {
                             </option>
                           </select>
                           <Icon
-                            name="ph:caret-down-light"
+                            name="ph:caret-down"
                             class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-noble-black/30 w-[18px] h-[18px]"
                           />
                         </div>
@@ -645,7 +645,7 @@ const prevStep = () => {
                             <div
                               class="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100"
                             >
-                              <Icon name="ph:package-light" class="w-5 h-5 text-gray-400" />
+                              <Icon name="ph:package" class="w-5 h-5 text-gray-400" />
                             </div>
                             <span class="text-[14px] font-bold text-noble-black/70 truncate">
                               {{ selectedTransaction?.item.name ?? "---" }}
@@ -718,7 +718,7 @@ const prevStep = () => {
                           <div
                             class="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100 mb-4 transition-colors group-hover:text-burning-orange text-[#9CA3AF]"
                           >
-                            <Icon name="ph:upload-simple-light" class="w-6 h-6" />
+                            <Icon name="ph:upload-simple" class="w-6 h-6" />
                           </div>
                           <p class="text-[14px] font-bold text-[#6B7280]">
                             Drag photos or files here
@@ -747,7 +747,7 @@ const prevStep = () => {
                           :key="index"
                           class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-burning-orange/[0.08] text-burning-orange text-[12px] font-bold border border-burning-orange/10"
                         >
-                          <Icon name="ph:upload-simple-light" class="w-3.5 h-3.5" />
+                          <Icon name="ph:upload-simple" class="w-3.5 h-3.5" />
                           <span class="max-w-[140px] truncate">{{ fileName }}</span>
                         </div>
                       </div>
@@ -861,7 +861,7 @@ const prevStep = () => {
                           class="h-12 px-6 rounded-[14px] bg-blue-estate/[0.08] text-blue-estate hover:bg-blue-estate/[0.12] font-bold text-[13px] transition-all flex items-center gap-2"
                           @click="openReportFilePicker"
                         >
-                          <Icon name="ph:upload-simple-light" class="w-5 h-5" />
+                          <Icon name="ph:upload-simple" class="w-5 h-5" />
                           {{
                             reportEvidenceFiles.length
                               ? `Manage Files (${reportEvidenceFiles.length})`
@@ -887,7 +887,7 @@ const prevStep = () => {
                 >
                   <!-- Left: Security Disclaimer -->
                   <div class="flex items-center gap-2.5 text-[#9CA3AF]">
-                    <Icon name="ph:warning-circle-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:warning-circle" class="w-[18px] h-[18px]" />
                     <p class="text-[12px] font-medium leading-none">
                       False reports may lead to account action
                     </p>
@@ -929,7 +929,7 @@ const prevStep = () => {
                       @click="submitReport"
                     >
                       <span v-if="isSubmittingReport" class="flex items-center gap-2">
-                        <Icon name="ph:spinner-light" class="w-4 h-4 animate-spin" />
+                        <Icon name="ph:spinner" class="w-4 h-4 animate-spin" />
                         Submitting...
                       </span>
                       <span v-else>Submit Report</span>
@@ -951,7 +951,7 @@ const prevStep = () => {
                   <div
                     class="w-8 h-8 rounded-full bg-blue-estate/[0.08] text-blue-estate flex items-center justify-center shrink-0"
                   >
-                    <Icon name="ph:book-open-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:book-open" class="w-[18px] h-[18px]" />
                   </div>
                   <div>
                     <p class="text-[14px] font-bold text-noble-black">Admin Review</p>
@@ -965,7 +965,7 @@ const prevStep = () => {
                   <div
                     class="w-8 h-8 rounded-full bg-blue-estate/[0.08] text-blue-estate flex items-center justify-center shrink-0"
                   >
-                    <Icon name="ph:chat-centered-text-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:chat-centered-text" class="w-[18px] h-[18px]" />
                   </div>
                   <div>
                     <p class="text-[14px] font-bold text-noble-black">Dispute Opening</p>
@@ -979,7 +979,7 @@ const prevStep = () => {
                   <div
                     class="w-8 h-8 rounded-full bg-blue-estate/[0.08] text-blue-estate flex items-center justify-center shrink-0"
                   >
-                    <Icon name="ph:check-circle-light" class="w-[18px] h-[18px]" />
+                    <Icon name="ph:check-circle" class="w-[18px] h-[18px]" />
                   </div>
                   <div>
                     <p class="text-[14px] font-bold text-noble-black">Final Judgment</p>
@@ -996,7 +996,7 @@ const prevStep = () => {
                   class="bg-[#FFFBF5] border border-[#FED7AA] rounded-[10px] p-4 flex gap-3 items-center"
                 >
                   <div class="shrink-0 text-burning-orange">
-                    <Icon name="ph:lightbulb-light" class="w-5 h-5" />
+                    <Icon name="ph:lightbulb" class="w-5 h-5" />
                   </div>
                   <p class="text-[13px] text-[#6B7280] leading-relaxed">
                     <span
@@ -1011,7 +1011,7 @@ const prevStep = () => {
             </div>
 
             <div class="flex items-center gap-3 px-4 text-noble-black/30">
-              <Icon name="ph:shield-light" class="w-4 h-4" />
+              <Icon name="ph:shield" class="w-4 h-4" />
               <p class="text-[11px] font-bold uppercase tracking-widest">TakeUP Secure Policy</p>
             </div>
           </aside>
@@ -1046,7 +1046,7 @@ const prevStep = () => {
             <div
               class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100 shadow-sm"
             >
-              <Icon name="ph:shield-check-light" class="text-noble-black/20 w-8 h-8" />
+              <Icon name="ph:shield-check" class="text-noble-black/20 w-8 h-8" />
             </div>
             <p class="text-[18px] font-bold text-noble-black">No disputes yet</p>
             <p class="mt-1 text-[13px] text-noble-black/40 max-w-[280px] mx-auto">
@@ -1117,7 +1117,7 @@ const prevStep = () => {
                   class="mt-5 rounded-[16px] border border-success-green/10 bg-success-green/[0.03] p-4"
                 >
                   <div class="flex items-center gap-2 text-success-green mb-1.5">
-                    <Icon name="ph:check-light" class="w-4 h-4" />
+                    <Icon name="ph:check" class="w-4 h-4" />
                     <p class="text-[13px] font-bold">
                       {{ finalDecisionLabel(dispute.finalDecision) }}
                     </p>
@@ -1150,7 +1150,7 @@ const prevStep = () => {
                       v-else-if="dispute.hasRebuttal"
                       class="h-9 px-4 flex items-center justify-center rounded-lg bg-blue-estate/[0.08] text-blue-estate text-[12px] font-bold border border-blue-estate/10"
                     >
-                      <Icon name="ph:check-light" class="w-3.5 h-3.5 mr-1.5" />
+                      <Icon name="ph:check" class="w-3.5 h-3.5 mr-1.5" />
                       Rebuttal submitted
                     </div>
                   </div>
@@ -1161,7 +1161,7 @@ const prevStep = () => {
                     class="text-[12px] font-bold text-burning-orange hover:underline flex items-center gap-1"
                   >
                     View Details
-                    <Icon name="ph:caret-right-light" class="w-3.5 h-3.5" />
+                    <Icon name="ph:caret-right" class="w-3.5 h-3.5" />
                   </NuxtLink>
                 </div>
               </div>
@@ -1201,7 +1201,7 @@ const prevStep = () => {
             <div
               class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100 shadow-sm"
             >
-              <Icon name="ph:shield-check-light" class="text-noble-black/20 w-8 h-8" />
+              <Icon name="ph:shield-check" class="text-noble-black/20 w-8 h-8" />
             </div>
             <p class="text-[18px] font-bold text-noble-black">No appeal-ready disputes</p>
             <p class="mt-1 text-[13px] text-noble-black/40 max-w-[280px] mx-auto">
@@ -1233,7 +1233,7 @@ const prevStep = () => {
                   <div
                     class="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-noble-black/30"
                   >
-                    <Icon name="ph:caret-down-light" class="w-5 h-5" />
+                    <Icon name="ph:caret-down" class="w-5 h-5" />
                   </div>
                 </div>
               </div>
@@ -1254,7 +1254,7 @@ const prevStep = () => {
                   class="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-white border border-blue-estate/20 text-blue-estate font-bold text-[13px] hover:bg-white/80 transition-all shadow-sm"
                   @click="openAppealFilePicker"
                 >
-                  <Icon name="ph:upload-simple-light" class="w-5 h-5" />
+                  <Icon name="ph:upload-simple" class="w-5 h-5" />
                   Attach Files
                 </button>
                 <p class="mt-3 text-[11px] text-blue-estate/40 font-bold uppercase tracking-wider">

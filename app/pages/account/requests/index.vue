@@ -122,7 +122,7 @@ const handleBookingDecision = async (
       class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
     >
       <Icon
-        name="ph:caret-left-light"
+        name="ph:caret-left"
         class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1"
       />
       <span class="text-[15px] font-bold">Back to My Listings</span>
@@ -131,10 +131,10 @@ const handleBookingDecision = async (
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">{{ pageTitle }}</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">{{ pageTitle }}</h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           {{ pageSubtitle }}
         </p>
       </section>
@@ -145,8 +145,8 @@ const handleBookingDecision = async (
       class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
     >
       <div class="border-l-[3px] border-burning-orange pl-4 mb-6">
-        <h2 class="text-[20px] font-bold text-noble-black">Requests</h2>
-        <p class="text-[13px] font-medium text-noble-black/50">
+        <h2 class="text-[20px] font-semibold text-noble-black">Requests</h2>
+        <p class="text-[13px] font-light text-noble-black/50">
           Manage your incoming booking requests
         </p>
       </div>
@@ -188,10 +188,10 @@ const handleBookingDecision = async (
         <div
           class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
         >
-          <Icon name="ph:layout-light" class="w-10 h-10" />
+          <Icon name="ph:layout" class="w-10 h-10" />
         </div>
-        <p class="text-noble-black text-[18px] font-bold mb-1">No booking requests found</p>
-        <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">
+        <p class="text-noble-black text-[18px] font-semibold mb-1">No booking requests found</p>
+        <p class="text-noble-black/40 text-[14px] font-light max-w-xs">
           Requests for your listings will appear here when borrowers submit them.
         </p>
       </div>
@@ -235,7 +235,7 @@ const handleBookingDecision = async (
                 v-else
                 class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
               >
-                <Icon name="ph:image-light" class="w-6 h-6 text-cinnamon-ice/40" />
+                <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40" />
               </div>
             </div>
 
@@ -307,7 +307,7 @@ const handleBookingDecision = async (
           @click="loadMore"
         >
           <span v-if="isLoading" class="flex items-center gap-2">
-            <Icon name="ph:circle-notch-light" class="w-4 h-4 animate-spin" />
+            <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
             Loading…
           </span>
           <span v-else>Load More</span>

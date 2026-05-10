@@ -31,7 +31,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (event: "mark-notification-read", notificationId: string | number): void
-  (event: "mark-all-notifications-read"): void
+  (event: "mark-all-notifications-read" | "sign-in"): void
   (event: "visibility-change", visible: boolean): void
 }>()
 
@@ -136,6 +136,7 @@ watch(isVisible, (val) => {
 
 const lastScrollY = ref(0)
 const scrollThreshold = 10 // Minimum scroll to trigger hide
+const isScrolled = ref(false)
 
 const handleScroll = () => {
   let currentScrollY = window.scrollY
@@ -146,6 +147,8 @@ const handleScroll = () => {
       currentScrollY = container.scrollTop
     }
   }
+
+  isScrolled.value = currentScrollY > 20
 
   // Always show at the very top
   if (currentScrollY < 50) {
@@ -331,8 +334,13 @@ onBeforeUnmount(() => {
 <template>
   <header
     ref="headerRef"
-    class="fixed top-0 left-0 w-full h-14 bg-white border-b border-cinnamon-ice/40 flex items-center z-[1000] shrink-0 transition-transform duration-500 ease-in-out"
-    :class="{ '-translate-y-full': !isVisible }"
+    class="fixed top-0 left-0 w-full h-16 border-b transition-all duration-300 ease-in-out z-[1000] shrink-0 flex items-center"
+    :class="[
+      !isVisible ? '-translate-y-full' : '',
+      isScrolled
+        ? 'bg-white/80 backdrop-blur-md border-cinnamon-ice/30'
+        : 'bg-white border-cinnamon-ice/30',
+    ]"
   >
     <!-- Left Section: Logo & App Name -->
     <div
@@ -341,7 +349,7 @@ onBeforeUnmount(() => {
     >
       <slot name="left" />
       <NuxtLink to="/dashboard" class="flex items-center gap-3">
-        <img src="/images/logo.svg" alt="TakeUP Logo" class="h-8 w-auto" />
+        <img src="/images/takeup-logo.png" alt="TakeUP Logo" class="h-8 w-auto" />
       </NuxtLink>
     </div>
 
@@ -392,8 +400,8 @@ onBeforeUnmount(() => {
             @click="toggleNotifications"
           >
             <Icon
-              name="ph:bell-light"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              name="ph:bell"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
             />
 
             <span
@@ -423,7 +431,7 @@ onBeforeUnmount(() => {
               <div
                 class="relative z-10 flex items-center justify-between px-4 py-4 border-b border-gray-100 shrink-0"
               >
-                <span class="text-[13px] font-bold uppercase tracking-[1.5px] text-gray-400">
+                <span class="font-montravia text-[20px] font-semibold text-noble-black italic">
                   Notifications
                 </span>
                 <button
@@ -444,7 +452,7 @@ onBeforeUnmount(() => {
                   <button
                     v-for="notification in displayNotifications"
                     :key="notification.id"
-                    class="relative flex gap-4 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
+                    class="relative flex gap-3 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
                     :class="[
                       !notification.read
                         ? 'bg-burning-orange/[0.03] border-l-[3px] border-l-burning-orange'
@@ -464,37 +472,37 @@ onBeforeUnmount(() => {
                         v-if="isDisputeRebuttal(notification)"
                         class="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-estate"
                       >
-                        <Icon name="ph:chat-centered-text-light" class="w-[18px] h-[18px]" />
+                        <Icon name="ph:chat-centered-text" class="w-[18px] h-[18px] shrink-0" />
                       </div>
                       <div
                         v-else-if="isDispute(notification)"
                         class="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center text-cinnabar-red"
                       >
-                        <Icon name="ph:warning-light" class="w-[18px] h-[18px]" />
+                        <Icon name="ph:warning" class="w-[18px] h-[18px] shrink-0" />
                       </div>
                       <div
                         v-else
                         class="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center text-success-green"
                       >
-                        <Icon name="ph:calendar-blank-light" class="w-[18px] h-[18px]" />
+                        <Icon name="ph:calendar-blank" class="w-[18px] h-[18px] shrink-0" />
                       </div>
                     </div>
 
                     <!-- Content -->
                     <div class="flex-1 min-w-0">
-                      <h4 class="text-[14px] font-semibold text-noble-black truncate leading-tight">
+                      <h4 class="text-[14px] font-semibold text-noble-black truncate leading-none">
                         {{ getNotificationTitle(notification) }}
                       </h4>
-                      <p class="mt-1 text-[13px] text-gray-500 line-clamp-2 leading-snug">
+                      <p class="mt-1.5 text-[13px] text-gray-500 line-clamp-2 leading-snug">
                         {{ getNotificationBody(notification) }}
                       </p>
                       <div class="mt-2.5 flex items-center justify-between">
                         <span
-                          class="text-[12px] font-semibold text-burning-orange group-hover:underline"
+                          class="text-[12px] font-semibold text-burning-orange group-hover:underline leading-none"
                         >
                           {{ getNotificationAccent(notification) ?? "View Details" }} →
                         </span>
-                        <span class="text-[11px] text-gray-400">
+                        <span class="text-[11px] text-gray-400 leading-none">
                           {{ formatRelativeTime(notification.createdAt) }}
                         </span>
                       </div>
@@ -508,7 +516,7 @@ onBeforeUnmount(() => {
                 <div
                   class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3"
                 >
-                  <Icon name="ph:bell-light" class="w-6 h-6 text-gray-300" />
+                  <Icon name="ph:bell" class="w-6 h-6 text-gray-300 shrink-0" />
                 </div>
                 <p class="text-[13px] text-gray-400 leading-relaxed px-4">
                   {{ notificationEmptyState }}
@@ -526,8 +534,8 @@ onBeforeUnmount(() => {
             active-class="active-nav-link"
           >
             <Icon
-              name="ph:chat-centered-text-light"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              name="ph:chat-centered-text"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
             />
             <span
               v-if="chatUnreadCount > 0"
@@ -551,8 +559,8 @@ onBeforeUnmount(() => {
             aria-label="Likes"
           >
             <Icon
-              name="ph:heart-light"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              name="ph:heart"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
             />
             <span
               v-if="likesCount > 0"
@@ -575,8 +583,8 @@ onBeforeUnmount(() => {
             active-class="active-nav-link"
           >
             <Icon
-              name="ph:handbag-light"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              name="ph:handbag"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
             />
             <span
               v-if="bagCount > 0"
@@ -607,8 +615,8 @@ onBeforeUnmount(() => {
               active-class="active-nav-link"
             >
               <Icon
-                name="ph:shield-check-light"
-                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+                name="ph:shield-check"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
               />
             </NuxtLink>
             <div class="custom-tooltip">
@@ -624,15 +632,28 @@ onBeforeUnmount(() => {
               active-class="active-nav-link"
             >
               <Icon
-                name="ph:user-light"
-                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+                name="ph:user"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
               />
             </NuxtLink>
             <div class="custom-tooltip">
-              Profile
+              Account
               <div class="tooltip-arrow"></div>
             </div>
           </div>
+        </div>
+      </template>
+
+      <!-- Auth Action (Login Button for Landing/Guests) -->
+      <template v-else-if="!user">
+        <div class="flex items-center">
+          <button
+            type="button"
+            class="h-10 px-6 border-[1.5px] border-burning-orange text-burning-orange bg-white rounded-[10px] font-semibold text-[14px] hover:bg-burning-orange hover:text-white transition-all duration-300 active:scale-95 whitespace-nowrap"
+            @click="$emit('sign-in')"
+          >
+            Sign In
+          </button>
         </div>
       </template>
     </div>

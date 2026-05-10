@@ -63,7 +63,7 @@ const resetFilters = async () => {
         <div
           class="flex h-12 items-center gap-3 rounded-[12px] border-[1.5px] border-gray-200 bg-white px-5 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
         >
-          <Icon name="ph:magnifying-glass-light" class="h-5 w-5 shrink-0 text-gray-400" />
+          <Icon name="ph:magnifying-glass" class="h-5 w-5 shrink-0 text-gray-400" />
           <input
             v-model="searchQuery"
             type="text"
@@ -77,7 +77,7 @@ const resetFilters = async () => {
             aria-label="Clear search"
             @click="searchQuery = ''"
           >
-            <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+            <Icon name="ph:x" class="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>
@@ -149,7 +149,7 @@ const resetFilters = async () => {
         v-else-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 text-center sm:py-16"
       >
-        <Icon name="ph:warning-circle-light" class="mb-4 h-12 w-12 text-cinnamon-ice" />
+        <Icon name="ph:warning-circle" class="mb-4 h-12 w-12 text-cinnamon-ice" />
         <p class="mb-6 text-[15px] font-medium text-noble-black/50">{{ error }}</p>
         <button
           class="rounded-[12px] bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all hover:brightness-110"
@@ -166,7 +166,7 @@ const resetFilters = async () => {
         <div
           class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-cinnamon-ice/10 text-cinnamon-ice/40"
         >
-          <Icon name="ph:arrows-left-right-light" class="h-10 w-10" />
+          <Icon name="ph:arrows-left-right" class="h-10 w-10" />
         </div>
         <p class="mb-1 text-[18px] font-bold text-noble-black">
           No transactions matched your filters

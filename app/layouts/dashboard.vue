@@ -15,12 +15,12 @@
             @click="toggleSidebar"
           >
             <Icon
-              name="ph:list-light"
+              name="ph:list"
               class="w-5.5 h-5.5 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
             />
           </button>
           <div class="custom-tooltip">
-            Toggle Sidebar
+            Sidebar
             <div class="tooltip-arrow"></div>
           </div>
         </div>

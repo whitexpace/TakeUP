@@ -37,7 +37,7 @@
                   v-if="profileData.user.location"
                   class="flex items-center gap-1 text-white/60 text-sm font-medium"
                 >
-                  <Icon name="ph:map-pin-light" class="w-[14px] h-[14px]" />
+                  <Icon name="ph:map-pin" class="w-[14px] h-[14px]" />
                   {{ profileData.user.location }}
                 </span>
               </div>
@@ -474,11 +474,10 @@ const formatDate = (date: string | Date) => {
 
 .hero-name {
   font-size: 48px;
-  font-weight: 800;
-  font-family: "Rewon", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: -1px;
-  line-height: 1;
+  font-weight: 500;
+  font-family: "Nv Montravia", serif;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
   margin-bottom: 8px;
 }
 

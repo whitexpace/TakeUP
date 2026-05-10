@@ -104,7 +104,7 @@ const clearFilters = () => {
           @input="handleSearch(($event.target as HTMLInputElement).value)"
         />
         <Icon
-          name="ph:magnifying-glass-light"
+          name="ph:magnifying-glass"
           class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
         />
       </div>
@@ -148,7 +148,7 @@ const clearFilters = () => {
       <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div v-if="pending" class="p-12 text-center">
           <div class="inline-block animate-spin text-burning-orange">
-            <Icon name="ph:circle-notch-light" class="h-8 w-8" />
+            <Icon name="ph:circle-notch" class="h-8 w-8" />
           </div>
         </div>
 
@@ -158,7 +158,7 @@ const clearFilters = () => {
         </div>
 
         <div v-else-if="users.length === 0" class="p-12 text-center text-gray-500">
-          <Icon name="ph:users-light" class="mx-auto h-12 w-12 text-gray-200 mb-4" />
+          <Icon name="ph:users" class="mx-auto h-12 w-12 text-gray-200 mb-4" />
           <p class="text-[16px] font-semibold text-gray-400">No users found</p>
           <p class="mt-1 text-sm">Try adjusting your search or filters.</p>
         </div>
@@ -304,7 +304,7 @@ const clearFilters = () => {
                 <button
                   class="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-gray-900 transition-all"
                 >
-                  <Icon name="ph:dots-three-light" class="w-[18px] h-[18px]" />
+                  <Icon name="ph:dots-three" class="w-[18px] h-[18px]" />
                 </button>
               </td>
             </tr>

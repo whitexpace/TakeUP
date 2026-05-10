@@ -219,7 +219,7 @@ onMounted(() => {
                 v-else
                 class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[12px] border border-gray-100 bg-cinnamon-ice/10 text-cinnamon-ice/40"
               >
-                <Icon name="ph:image-light" class="h-6 w-6" />
+                <Icon name="ph:image" class="h-6 w-6" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-[15px] font-semibold text-noble-black">{{ item.name }}</p>
@@ -416,7 +416,7 @@ onMounted(() => {
                 v-else
                 class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[12px] border border-gray-100 bg-cinnamon-ice/10 text-cinnamon-ice/40"
               >
-                <Icon name="ph:image-light" class="h-6 w-6" />
+                <Icon name="ph:image" class="h-6 w-6" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-[15px] font-semibold text-noble-black">

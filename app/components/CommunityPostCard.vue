@@ -17,7 +17,7 @@
           <div class="flex items-center gap-2">
             <NuxtLink
               :to="`/profile/${request.borrower.username}`"
-              class="text-[13px] font-semibold text-gray-900 hover:text-burning-orange transition-colors truncate"
+              class="text-[13px] font-medium text-gray-900 hover:text-burning-orange transition-colors truncate"
             >
               {{ request.borrower.name }}
             </NuxtLink>
@@ -45,12 +45,12 @@
         </span>
 
         <!-- Options Menu -->
-        <div class="relative">
+        <div v-if="isOwner" class="relative">
           <button
             class="h-8 w-8 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-all"
             @click.stop="toggleMenu"
           >
-            <Icon name="ph:dots-three-light" class="w-[18px] h-[18px]" />
+            <Icon name="ph:dots-three" class="w-[18px] h-[18px] shrink-0" />
           </button>
 
           <transition name="menu">
@@ -59,29 +59,25 @@
               class="absolute right-0 top-10 z-20 w-48 rounded-xl border border-gray-100 bg-white p-1.5 shadow-xl"
             >
               <button
-                v-if="isOwner && request.status === 'OPEN'"
+                v-if="request.status === 'OPEN'"
                 class="w-full flex items-center px-3 py-2 rounded-lg text-[13px] font-semibold text-burning-orange hover:bg-burning-orange/5 transition-colors"
                 @click="updateRequestStatus('CANCELLED')"
               >
                 Cancel Request
               </button>
               <button
-                v-if="isOwner && request.status === 'CANCELLED'"
+                v-if="request.status === 'CANCELLED'"
                 class="w-full flex items-center px-3 py-2 rounded-lg text-[13px] font-semibold text-blue-estate hover:bg-blue-estate/5 transition-colors"
                 @click="updateRequestStatus('OPEN')"
               >
                 Reopen Request
               </button>
               <button
-                v-if="isOwner"
                 class="w-full flex items-center px-3 py-2 rounded-lg text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
                 @click="deleteRequest"
               >
                 Delete Request
               </button>
-              <div v-if="!isOwner" class="px-3 py-2 text-[12px] text-gray-400 italic">
-                No actions available
-              </div>
             </div>
           </transition>
         </div>
@@ -91,7 +87,7 @@
     <!-- Title and Body Content -->
     <div class="flex gap-4">
       <div class="flex-1 flex flex-col gap-2">
-        <h3 class="text-[16px] font-semibold text-gray-900 leading-tight">
+        <h3 class="text-[16px] font-medium text-gray-900 leading-tight">
           {{ request.itemNeeded }}
         </h3>
         <div class="relative">
@@ -130,7 +126,7 @@
         <div
           class="flex items-center gap-1.5 bg-gray-100 rounded-[8px] px-2.5 py-1 text-[12px] text-gray-500"
         >
-          <Icon name="ph:calendar-blank-light" class="w-[14px] h-[14px] text-gray-400" />
+          <Icon name="ph:calendar-blank" class="w-[14px] h-[14px] text-gray-400 shrink-0" />
           {{ formatDateRange(request.requestedDates) }}
         </div>
 
@@ -138,7 +134,7 @@
         <div
           class="flex items-center gap-1.5 bg-gray-100 rounded-[8px] px-2.5 py-1 text-[12px] text-gray-500"
         >
-          <Icon name="ph:wallet-light" class="w-[14px] h-[14px] text-gray-400" />
+          <Icon name="ph:wallet" class="w-[14px] h-[14px] text-gray-400 shrink-0" />
           {{ formatPriceRange(request.priceRange) }}
         </div>
 
@@ -150,8 +146,21 @@
         </span>
       </div>
 
-      <!-- Action Button -->
+      <!-- Action Button Group -->
       <div class="flex items-center gap-4 ml-auto">
+        <button
+          class="flex items-center gap-1.5 text-[13px] font-bold text-noble-black/40 hover:text-blue-estate transition-colors group/comment-btn"
+          @click="showComments = !showComments"
+        >
+          <Icon
+            name="ph:chat-circle"
+            class="w-[18px] h-[18px] group-hover/comment-btn:scale-110 transition-transform"
+          />
+          <span class="font-geist">{{ totalRepliesCount }}</span>
+        </button>
+
+        <span class="w-[1px] h-4 bg-gray-100"></span>
+
         <span class="flex items-center gap-1.5 text-[12px] text-gray-400">
           {{ request.offersCount }} {{ request.offersCount === 1 ? "offer" : "offers" }}
         </span>
@@ -169,6 +178,46 @@
         >
           {{ showOffers ? "Hide Offers" : "View Offers" }}
         </button>
+      </div>
+    </div>
+
+    <!-- Discussion Section (Reddit-style Luxury) -->
+    <div
+      v-if="showComments"
+      class="mt-4 pt-6 border-t border-gray-100 animate-in fade-in slide-in-from-top-2 duration-300"
+    >
+      <!-- Quick Reply Input -->
+      <div class="flex gap-3 mb-8">
+        <UserAvatar size="sm" class="shrink-0 mt-1" user-name="You" />
+        <div class="flex-1 relative group/input">
+          <input
+            ref="replyInputRef"
+            v-model="commentText"
+            type="text"
+            :placeholder="
+              replyingTo ? `Replying to ${replyingTo.name}...` : 'Add to the discussion...'
+            "
+            class="w-full bg-cream/30 border border-cinnamon-ice/10 rounded-[14px] px-4 py-2.5 text-[14px] font-geist focus:outline-none focus:border-burning-orange/30 focus:bg-white transition-all duration-300"
+            @keydown.esc="cancelReply"
+            @keydown.enter="postComment"
+          />
+          <button
+            class="absolute right-2 top-1.5 h-7 px-3 bg-noble-black text-white text-[11px] font-bold uppercase tracking-wider rounded-[8px] opacity-0 group-focus-within/input:opacity-100 transition-opacity"
+            @click="postComment"
+          >
+            Post
+          </button>
+        </div>
+      </div>
+
+      <!-- Nested Replies List -->
+      <div class="flex flex-col gap-6">
+        <CommunityReplyItem
+          v-for="reply in mockReplies"
+          :key="reply.id"
+          :reply="reply"
+          @reply="handleReplyToUser"
+        />
       </div>
     </div>
 
@@ -254,11 +303,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 import type {
   CommunityOfferStatus,
   CommunityRequest,
   CommunityRequestStatus,
+  Reply,
 } from "~/types/community-requests"
 
 const props = defineProps<{
@@ -283,9 +333,131 @@ const emit = defineEmits<{
 }>()
 
 const showOffers = ref(false)
+const showComments = ref(false)
 const showMenu = ref(false)
 const isExpandedBody = ref(false)
 const cardRef = ref<HTMLElement | null>(null)
+const replyInputRef = ref<HTMLInputElement | null>(null)
+
+// Discussion State
+const commentText = ref("")
+const replyingTo = ref<{ name: string; id: string } | null>(null)
+
+// Mock Data for Discussion Demonstration
+const mockReplies = ref([
+  {
+    id: "r1",
+    user: {
+      name: "Sophia Laurent",
+      username: "sophia_l",
+      avatar: "",
+    },
+    text: "I actually have a vintage film camera that might fit what you're looking for! Is it for a professional shoot?",
+    upvotes: 12,
+    isUpvoted: false,
+    createdAt: new Date(Date.now() - 3600000),
+    replies: [
+      {
+        id: "r2",
+        user: {
+          name: "Marcus Chen",
+          username: "mchen",
+          avatar: "",
+        },
+        text: "Sophia, is it the Leica M6? I've been looking for one too!",
+        upvotes: 5,
+        isUpvoted: true,
+        createdAt: new Date(Date.now() - 1800000),
+        replies: [],
+      },
+    ],
+  },
+  {
+    id: "r3",
+    user: {
+      name: "Isabella Reed",
+      username: "isabella_r",
+      avatar: "",
+    },
+    text: "Make sure to check the lens compatibility if you're borrowing an older body.",
+    upvotes: 8,
+    isUpvoted: false,
+    createdAt: new Date(Date.now() - 7200000),
+    replies: [],
+  },
+])
+
+const totalRepliesCount = computed(() => {
+  const countReplies = (list: Reply[]): number => {
+    let total = 0
+    for (const item of list) {
+      total += 1
+      if (item.replies && item.replies.length > 0) {
+        total += countReplies(item.replies)
+      }
+    }
+    return total
+  }
+  return countReplies(mockReplies.value)
+})
+
+const handleReplyToUser = (userName: string, replyId: string) => {
+  replyingTo.value = { name: userName, id: replyId }
+  commentText.value = `@${userName} `
+
+  // Focus the input field
+  nextTick(() => {
+    replyInputRef.value?.focus()
+  })
+}
+
+const cancelReply = () => {
+  replyingTo.value = null
+  commentText.value = ""
+  replyInputRef.value?.blur()
+}
+
+const postComment = () => {
+  if (!commentText.value.trim()) return
+
+  const newReply = {
+    id: `r-new-${Date.now()}`,
+    user: {
+      name: "You", // Mocking current user
+      username: "current_user",
+      avatar: "",
+    },
+    text: commentText.value,
+    upvotes: 0,
+    isUpvoted: false,
+    createdAt: new Date(),
+    replies: [],
+  }
+
+  if (replyingTo.value) {
+    // Helper to find and add reply to a nested thread (Mock version)
+    const findAndAddReply = (list: Reply[]) => {
+      for (const item of list) {
+        if (item.id === replyingTo.value?.id) {
+          if (!item.replies) item.replies = []
+          item.replies.push(newReply)
+          return true
+        }
+        if (item.replies && findAndAddReply(item.replies)) return true
+      }
+      return false
+    }
+    findAndAddReply(mockReplies.value)
+  } else {
+    // Add as top-level comment
+    mockReplies.value.unshift(newReply)
+  }
+
+  // Reset after "posting"
+  commentText.value = ""
+  replyingTo.value = null
+  replyInputRef.value?.blur()
+}
 
 const isOwner = computed(() => {
   return props.request.borrower.userId === props.currentUserId

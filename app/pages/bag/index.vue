@@ -295,20 +295,20 @@ const handleRequestBooking = async () => {
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12 pt-24">
       <div class="mb-10">
-        <div
-          class="text-noble-black mb-1"
-          style="font-size: 30px; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em"
-        >
-          My Bag
+        <div class="space-y-2">
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            My Bag
+          </h1>
+          <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
         </div>
-        <p class="text-base text-noble-black/40 font-medium tracking-tight">
+        <p class="mt-2 font-geist text-[16px] font-light text-noble-black/50">
           Review and manage items you want to book
         </p>
       </div>
 
       <div v-if="bagItems.length === 0" class="py-20 text-center">
         <div class="mb-6 flex justify-center text-noble-black/10">
-          <Icon name="ph:shopping-bag-light" class="w-20 h-20" />
+          <Icon name="ph:shopping-bag" class="w-20 h-20" />
         </div>
         <h2 class="text-xl font-bold text-noble-black mb-2">Your bag is empty</h2>
         <p class="text-noble-black/60 mb-8">Items you add to your bag will appear here.</p>
@@ -340,7 +340,7 @@ const handleRequestBooking = async () => {
                   "
                   @click="toggleSelectAll"
                 >
-                  <Icon v-if="isAllSelected" name="ph:check-light" class="w-3 h-3 text-white" />
+                  <Icon v-if="isAllSelected" name="ph:check" class="w-3 h-3 text-white" />
                 </button>
                 <span class="text-[13px] font-medium text-gray-500 tracking-tight">Select All</span>
               </div>
@@ -371,7 +371,7 @@ const handleRequestBooking = async () => {
                   >
                     <Icon
                       v-if="isLenderSelected(lenderId)"
-                      name="ph:check-light"
+                      name="ph:check"
                       class="w-2.5 h-2.5 text-white"
                     />
                   </button>
@@ -411,7 +411,7 @@ const handleRequestBooking = async () => {
                     >
                       <Icon
                         v-if="selectedItemIds.has(item.id)"
-                        name="ph:check-light"
+                        name="ph:check"
                         class="w-3 h-3 text-white"
                       />
                     </button>
@@ -462,7 +462,7 @@ const handleRequestBooking = async () => {
                         title="Remove from bag"
                         @click="handleDeleteItem(item.id)"
                       >
-                        <Icon name="ph:trash-light" class="w-[18px] h-[18px]" />
+                        <Icon name="ph:trash" class="w-[18px] h-[18px]" />
                       </button>
                     </div>
                   </div>
@@ -557,7 +557,7 @@ const handleRequestBooking = async () => {
               <div
                 class="flex items-center gap-2 px-4 py-2 bg-blue-estate/5 border border-blue-estate/10 rounded-full justify-center"
               >
-                <Icon name="ph:shield-light" class="w-3.5 h-3.5 text-blue-estate" />
+                <Icon name="ph:shield" class="w-3.5 h-3.5 text-blue-estate" />
                 <span class="text-[12px] font-semibold text-blue-estate"
                   >Protected by TakeUP Secure</span
                 >
@@ -594,7 +594,7 @@ const handleRequestBooking = async () => {
               <div
                 class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center text-burning-orange"
               >
-                <Icon name="ph:check-circle-light" class="w-10 h-10" />
+                <Icon name="ph:check-circle" class="w-10 h-10" />
               </div>
             </div>
             <h2 class="text-4xl font-extrabold text-noble-black mb-3 tracking-tight">

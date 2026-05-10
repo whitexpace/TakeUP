@@ -94,14 +94,9 @@ const fullName = computed(() => {
   // 1. Try DB name first (Highest priority for local edits)
   const u = authData.value?.user
   if (u) {
-    const first = (u.firstName || "").trim()
-    const last = (u.lastName || "").trim()
-
-    if (last.toLowerCase() === "user" || !last) {
-      return first.charAt(0).toUpperCase() + first.slice(1)
-    }
-
-    const dbParts = [first, u.middleName, last].filter(Boolean)
+    const dbParts = [(u.firstName || "").trim(), u.middleName, (u.lastName || "").trim()].filter(
+      Boolean,
+    )
     if (dbParts.length > 0) return dbParts.join(" ")
     if (u.name && u.name !== u.username) return u.name
   }
@@ -155,7 +150,7 @@ const fallbackBgClass = computed(() => {
 const navGroups = computed(() => {
   const groups = [
     {
-      title: "Personal",
+      title: "Account",
       links: [
         { label: "Account Information", to: "/account", icon: "user" },
         { label: "My Wallet", to: "/account/wallet", icon: "wallet" },
@@ -205,12 +200,12 @@ const navGroups = computed(() => {
             @click="toggleSidebar"
           >
             <Icon
-              name="ph:list-light"
-              class="w-5.5 h-5.5 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+              name="ph:list"
+              class="w-5.5 h-5.5 shrink-0 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
             />
           </button>
           <div class="custom-tooltip">
-            Toggle Sidebar
+            Sidebar
             <div class="tooltip-arrow"></div>
           </div>
         </div>
@@ -236,84 +231,88 @@ const navGroups = computed(() => {
           isHeaderVisible ? 'pt-14' : 'pt-0',
         ]"
       >
-        <!-- Profile Section -->
-        <div class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30 shrink-0">
-          <div class="flex items-center gap-4">
-            <div class="relative group shrink-0">
-              <!-- Branded Tri-color Border Container (Tight fit) -->
-              <div class="relative w-16 h-16 flex items-center justify-center rounded-full">
-                <!-- SVG Arcs for Border -->
-                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 64 64">
-                  <!-- Cinnamon Ice Arc -->
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="31"
-                    fill="none"
-                    stroke="currentColor"
-                    class="text-cinnamon-ice"
-                    stroke-width="2"
-                    stroke-dasharray="64.9 129.8"
-                    stroke-linecap="round"
-                  />
-                  <!-- Burning Orange Arc -->
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="31"
-                    fill="none"
-                    stroke="currentColor"
-                    class="text-burning-orange"
-                    stroke-width="2"
-                    stroke-dasharray="64.9 129.8"
-                    stroke-dashoffset="-64.9"
-                    stroke-linecap="round"
-                  />
-                  <!-- Blue Estate Arc -->
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="31"
-                    fill="none"
-                    stroke="currentColor"
-                    class="text-blue-estate"
-                    stroke-width="2"
-                    stroke-dasharray="64.9 129.8"
-                    stroke-dashoffset="-129.8"
-                    stroke-linecap="round"
-                  />
-                </svg>
+        <!-- User Profile Container -->
+        <NuxtLink
+          v-if="authData?.user.username"
+          :to="`/profile/${authData.user.username}`"
+          class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30 shrink-0 flex items-center gap-4 hover:bg-pale-cashmere/30 transition-all duration-300 group/profile-link"
+        >
+          <div class="relative group shrink-0">
+            <!-- Branded Tri-color Border Container (Tight fit) -->
+            <div class="relative w-16 h-16 flex items-center justify-center rounded-full">
+              <!-- SVG Arcs for Border -->
+              <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 64 64">
+                <!-- Cinnamon Ice Arc -->
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="31"
+                  fill="none"
+                  stroke="currentColor"
+                  class="text-cinnamon-ice"
+                  stroke-width="2"
+                  stroke-dasharray="64.9 129.8"
+                  stroke-linecap="round"
+                />
+                <!-- Burning Orange Arc -->
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="31"
+                  fill="none"
+                  stroke="currentColor"
+                  class="text-burning-orange"
+                  stroke-width="2"
+                  stroke-dasharray="64.9 129.8"
+                  stroke-dashoffset="-64.9"
+                  stroke-linecap="round"
+                />
+                <!-- Blue Estate Arc -->
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="31"
+                  fill="none"
+                  stroke="currentColor"
+                  class="text-blue-estate"
+                  stroke-width="2"
+                  stroke-dasharray="64.9 129.8"
+                  stroke-dashoffset="-129.8"
+                  stroke-linecap="round"
+                />
+              </svg>
 
+              <div
+                class="w-[58px] h-[58px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover/profile-link:scale-105 z-10"
+              >
+                <!-- Direct Image Tag for maximum reliability -->
+                <img
+                  v-if="profileAvatar"
+                  :src="profileAvatar"
+                  class="w-full h-full object-cover"
+                  referrerpolicy="no-referrer"
+                />
                 <div
-                  class="w-[58px] h-[58px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
+                  v-else
+                  class="w-full h-full flex items-center justify-center text-white font-bold text-xl"
+                  :class="fallbackBgClass"
                 >
-                  <!-- Direct Image Tag for maximum reliability -->
-                  <img
-                    v-if="profileAvatar"
-                    :src="profileAvatar"
-                    class="w-full h-full object-cover"
-                    referrerpolicy="no-referrer"
-                  />
-                  <div
-                    v-else
-                    class="w-full h-full flex items-center justify-center text-white font-bold text-xl"
-                    :class="fallbackBgClass"
-                  >
-                    {{ firstInitial }}
-                  </div>
+                  {{ firstInitial }}
                 </div>
               </div>
             </div>
-            <div class="min-w-0 flex-1">
-              <h2 class="font-bold text-[16px] text-noble-black truncate leading-tight mb-0.5">
-                {{ fullName }}
-              </h2>
-              <p class="text-[13px] text-noble-black/50 font-medium truncate">
-                {{ authData?.user.email || "" }}
-              </p>
-            </div>
           </div>
-        </div>
+          <div class="min-w-0 flex-1">
+            <h2
+              class="font-semibold text-[16px] text-noble-black truncate leading-tight mb-0.5 group-hover/profile-link:text-burning-orange transition-colors"
+            >
+              {{ fullName }}
+            </h2>
+            <p class="text-[13px] text-noble-black/50 font-light truncate">
+              {{ authData?.user.email || "" }}
+            </p>
+          </div>
+        </NuxtLink>
 
         <!-- Navigation Groups (Tightened for non-scroll) -->
         <nav class="flex-1 overflow-hidden py-6 px-4 space-y-6">
@@ -331,62 +330,62 @@ const navGroups = computed(() => {
                 class="group flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200"
                 :class="
                   isActive(link.to)
-                    ? 'bg-burning-orange/15 text-burning-orange font-bold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
+                    ? 'bg-burning-orange/15 text-burning-orange font-semibold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
                     : 'text-noble-black/70 hover:bg-pale-cashmere/50 hover:text-noble-black border-l-4 border-transparent'
                 "
                 @click="isMobile && (isSidebarOpen = false)"
               >
                 <!-- Icons -->
                 <div
-                  class="w-5 h-5 flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110"
+                  class="w-[22px] h-[22px] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110 -translate-y-[0.5px]"
                 >
                   <Icon
                     v-if="link.icon === 'user'"
-                    name="ph:user-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:user"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'wallet'"
-                    name="ph:wallet-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:wallet"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'transactions'"
-                    name="ph:receipt-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:receipt"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'dispute'"
-                    name="ph:warning-circle-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:warning-circle"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'listings'"
-                    name="ph:squares-four-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:squares-four"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'analytics'"
-                    name="ph:chart-bar-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:chart-bar"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'rewards'"
-                    name="ph:gift-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:gift"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'reviews'"
-                    name="ph:chat-centered-text-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:chat-centered-text"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                   <Icon
                     v-else-if="link.icon === 'admin-dispute'"
-                    name="ph:shield-warning-light"
-                    class="w-5 h-5 translate-y-[1px]"
+                    name="ph:shield-warning"
+                    class="w-[22px] h-[22px] shrink-0"
                   />
                 </div>
-                <span class="text-[15px] truncate">{{ link.label }}</span>
+                <span class="text-[15px] truncate leading-none">{{ link.label }}</span>
               </NuxtLink>
             </div>
           </div>
@@ -399,13 +398,15 @@ const navGroups = computed(() => {
             class="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-cinnabar-red hover:bg-cinnabar-red/5 transition-all font-bold group"
             @click="handleSignOut"
           >
-            <div class="w-5 h-5 flex items-center justify-center shrink-0">
+            <div
+              class="w-[22px] h-[22px] flex items-center justify-center shrink-0 -translate-y-[0.5px]"
+            >
               <Icon
-                name="ph:sign-out-light"
-                class="w-5 h-5 transition-transform group-hover:-translate-x-1 translate-y-[1px]"
+                name="ph:sign-out"
+                class="w-[22px] h-[22px] transition-transform group-hover:-translate-x-1 shrink-0"
               />
             </div>
-            <span class="font-medium text-[15px]">Log Out</span>
+            <span class="font-medium text-[15px] leading-none">Log Out</span>
           </button>
         </div>
       </aside>

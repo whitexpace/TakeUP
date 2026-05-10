@@ -489,7 +489,7 @@ onUnmounted(() => {
         ]"
       >
         <div class="flex items-center justify-between p-4">
-          <h1 class="text-2xl font-bold">Inbox</h1>
+          <h1 class="font-montravia text-2xl font-semibold">Inbox</h1>
         </div>
 
         <div class="px-4 pb-4">
@@ -501,8 +501,8 @@ onUnmounted(() => {
               class="w-full rounded-full border border-cinnamon-ice/30 bg-cream/50 py-2 pl-11 pr-4 text-[14px] outline-none transition-all duration-300 focus:border-burning-orange/50 focus:bg-white"
             />
             <Icon
-              name="ph:magnifying-glass-light"
-              class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
+              name="ph:magnifying-glass"
+              class="absolute left-4 top-1/2 -translate-y-1/2 shrink-0 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
               size="16"
             />
           </div>
@@ -526,7 +526,7 @@ onUnmounted(() => {
             <div
               class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-cinnabar-red/5 text-cinnabar-red/60"
             >
-              <Icon name="ph:warning-circle-light" size="24" />
+              <Icon name="ph:warning-circle" class="shrink-0" size="24" />
             </div>
             <p class="mb-4 text-sm font-medium text-noble-black/60">Failed to load conversations</p>
             <button
@@ -655,7 +655,7 @@ onUnmounted(() => {
                 class="-ml-2 rounded-full p-2 transition-colors hover:bg-cream lg:hidden"
                 @click="handleCloseChat"
               >
-                <Icon name="ph:caret-left-light" size="20" />
+                <Icon name="ph:caret-left" class="shrink-0" size="20" />
               </button>
 
               <NuxtLink
@@ -782,7 +782,7 @@ onUnmounted(() => {
               class="flex flex-1 flex-col items-center justify-center py-12 text-center opacity-40"
             >
               <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">
-                <Icon name="ph:chat-centered-dots-light" size="24" />
+                <Icon name="ph:chat-centered-dots" class="shrink-0" size="24" />
               </div>
               <p class="text-sm font-bold">No messages yet</p>
               <p class="text-xs">Start the conversation</p>
@@ -867,7 +867,7 @@ onUnmounted(() => {
               <div
                 class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 text-stone-600"
               >
-                <Icon name="ph:minus-circle-light" size="18" />
+                <Icon name="ph:minus-circle" class="shrink-0" size="18" />
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-noble-black">
@@ -910,7 +910,7 @@ onUnmounted(() => {
                 :disabled="isUploadingImage"
                 @click="triggerPhotoPicker"
               >
-                <Icon name="ph:image-light" size="20" />
+                <Icon name="ph:image" class="shrink-0" size="20" />
               </button>
 
               <div
@@ -941,7 +941,7 @@ onUnmounted(() => {
                     type="button"
                     @click.stop="toggleEmojiPicker"
                   >
-                    <Icon name="ph:smiley-light" size="18" />
+                    <Icon name="ph:smiley" class="shrink-0" size="18" />
                   </button>
 
                   <div
@@ -970,7 +970,7 @@ onUnmounted(() => {
                 :disabled="!canSendMessage"
                 @click="handleSendMessage"
               >
-                <Icon name="ph:paper-plane-tilt-light" size="20" />
+                <Icon name="ph:paper-plane-tilt" class="shrink-0" size="20" />
               </button>
             </div>
 
@@ -998,7 +998,7 @@ onUnmounted(() => {
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-cinnamon-ice/20 bg-white text-cinnabar-red/70 shadow-sm"
           >
-            <Icon name="ph:warning-circle-light" size="32" />
+            <Icon name="ph:warning-circle" class="shrink-0" size="32" />
           </div>
           <h2 class="mb-2 text-xl font-bold">Unable to open chat</h2>
           <p class="max-w-sm text-sm text-noble-black/60">{{ error }}</p>
@@ -1011,7 +1011,7 @@ onUnmounted(() => {
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"
           >
-            <Icon name="ph:chat-centered-dots-light" size="32" />
+            <Icon name="ph:chat-centered-dots" class="shrink-0" size="32" />
           </div>
           <h2 class="mb-2 text-xl font-bold">Select a conversation</h2>
           <p class="max-w-sm text-sm text-noble-black/60">
@@ -1043,7 +1043,7 @@ onUnmounted(() => {
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeReportModal"
               >
-                <Icon name="ph:x-light" size="18" />
+                <Icon name="ph:x" class="shrink-0" size="18" />
               </button>
             </div>
 

@@ -108,7 +108,7 @@ const boostLabel = computed(() => {
         v-if="hasActiveBoost"
         class="absolute right-3 top-3 z-20 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/30 flex items-center gap-1"
       >
-        <Icon name="ph:check-light" class="w-2.5 h-2.5" />
+        <Icon name="ph:check" class="w-2.5 h-2.5" />
         Boosted
       </div>
     </template>

@@ -83,10 +83,7 @@ const handlePayment = async () => {
       v-if="!canAfford && wallet"
       class="p-4 bg-cinnabar-red/5 border border-cinnabar-red/20 rounded-2xl flex items-start gap-3"
     >
-      <Icon
-        name="ph:warning-circle-light"
-        class="text-cinnabar-red shrink-0 mt-0.5 w-[18px] h-[18px]"
-      />
+      <Icon name="ph:warning-circle" class="text-cinnabar-red shrink-0 mt-0.5 w-[18px] h-[18px]" />
       <div>
         <p class="text-sm font-bold text-cinnabar-red">Insufficient balance</p>
         <p class="text-xs text-cinnabar-red/70 mt-0.5">

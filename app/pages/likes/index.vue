@@ -340,8 +340,13 @@ watch(
 <template>
   <div class="mx-auto max-w-7xl py-8 pt-20 sm:pt-24">
     <div class="mb-8">
-      <h1 class="font-geist text-[36px] font-bold leading-tight text-noble-black">Liked Items</h1>
-      <p class="mt-1 font-geist text-[20px] text-noble-black/70">
+      <div class="space-y-2">
+        <h1 class="font-montravia text-[36px] font-medium leading-tight text-noble-black">
+          Liked Items
+        </h1>
+        <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
+      </div>
+      <p class="mt-2 font-geist text-[16px] font-light text-noble-black/50">
         Review and manage items you like
       </p>
     </div>
@@ -360,13 +365,9 @@ watch(
             title="Clear search"
             @click="clearSearch"
           >
-            <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+            <Icon name="ph:x" class="w-[18px] h-[18px]" />
           </button>
-          <Icon
-            v-else
-            name="ph:magnifying-glass-light"
-            class="w-[18px] h-[18px] text-noble-black/30"
-          />
+          <Icon v-else name="ph:magnifying-glass" class="w-[18px] h-[18px] text-noble-black/30" />
         </div>
 
         <!-- Search Input -->
@@ -405,7 +406,7 @@ watch(
           >
             <div class="flex items-center gap-3">
               <Icon
-                name="ph:magnifying-glass-light"
+                name="ph:magnifying-glass"
                 class="w-3.5 h-3.5 text-noble-black/20 group-hover:text-burning-orange transition-colors"
               />
               <span class="font-medium">{{ suggestion.label }}</span>
@@ -460,7 +461,7 @@ watch(
           class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
           :class="selectedCategory !== 'ALL' ? 'text-white' : 'text-noble-black/40'"
         >
-          <Icon name="ph:caret-down-light" class="w-3.5 h-3.5" />
+          <Icon name="ph:caret-down" class="w-3.5 h-3.5" />
         </div>
       </div>
     </div>

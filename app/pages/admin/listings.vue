@@ -209,7 +209,7 @@ const getRowTone = (listing: AdminListingRecord) => {
         <div
           class="flex h-12 items-center gap-3 rounded-[12px] border-[1.5px] border-gray-200 bg-white px-5 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
         >
-          <Icon name="ph:magnifying-glass-light" class="h-5 w-5 shrink-0 text-gray-400" />
+          <Icon name="ph:magnifying-glass" class="h-5 w-5 shrink-0 text-gray-400" />
           <input
             v-model="searchQuery"
             type="text"

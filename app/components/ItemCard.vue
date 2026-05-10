@@ -36,8 +36,8 @@
           @click.stop="toggleLike"
         >
           <Icon
-            :name="isLiked ? 'ph:heart-fill' : 'ph:heart-light'"
-            class="w-4 h-4 transition-all duration-200"
+            :name="isLiked ? 'ph:heart-fill' : 'ph:heart'"
+            class="w-4 h-4 transition-all duration-200 shrink-0"
             :class="
               isLiked
                 ? 'text-burning-orange scale-110'
@@ -60,7 +60,10 @@
         </div>
 
         <div v-if="isTrending" class="group/trending relative shrink-0 flex items-center">
-          <Icon name="ph:trend-up-light" class="w-3.5 h-3.5 text-blue-estate" />
+          <Icon
+            name="ph:trend-up"
+            class="w-3.5 h-3.5 text-blue-estate shrink-0 -translate-y-[0.5px]"
+          />
           <!-- Custom Tooltip -->
           <div
             class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-noble-black px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-lg transition-opacity group-hover/trending:opacity-100 z-30"
@@ -74,22 +77,29 @@
       </div>
 
       <!-- Row 2: Item Name (14px truncated) -->
-      <h3 class="text-[14px] font-semibold text-noble-black leading-tight truncate mb-2">
+      <h3 class="text-[14px] font-light text-noble-black leading-tight truncate mb-2">
         {{ name }}
       </h3>
 
       <!-- Row 3: Price & Rating (Unified Row) -->
       <div class="flex items-center justify-between gap-2 mt-auto">
         <div class="flex items-center gap-1 min-w-0">
-          <span class="text-[15px] font-bold text-burning-orange">₱{{ price }}</span>
-          <span class="text-[11px] font-medium text-noble-black/40">/{{ displayPriceUnit }}</span>
+          <span class="text-[15px] font-bold text-burning-orange leading-none">₱{{ price }}</span>
+          <span class="text-[11px] font-light text-noble-black/40 leading-none"
+            >/{{ displayPriceUnit }}</span
+          >
         </div>
 
         <!-- Refined Rating -->
-        <div v-if="hasGoodRating" class="flex items-center gap-1 shrink-0">
-          <Icon name="ph:star-fill" class="w-3.5 h-3.5 text-burning-orange" />
-          <span class="text-[13px] font-semibold text-noble-black">{{ rating }}</span>
-          <span class="text-[12px] font-normal text-noble-black/50">({{ reviews }})</span>
+        <div v-if="hasGoodRating" class="flex items-center gap-2 shrink-0">
+          <Icon
+            name="ph:star-fill"
+            class="w-3.5 h-3.5 text-burning-orange shrink-0 -translate-y-[0.5px]"
+          />
+          <span class="text-[13px] font-light text-noble-black leading-none">{{ rating }}</span>
+          <span class="text-[12px] font-light text-noble-black/50 leading-none"
+            >({{ reviews }})</span
+          >
         </div>
       </div>
     </div>

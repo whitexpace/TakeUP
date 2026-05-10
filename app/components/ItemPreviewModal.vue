@@ -228,7 +228,7 @@ watch(
               class="p-2 text-noble-black/50 hover:text-noble-black transition-all hover:scale-110 active:scale-95"
               @click="emit('close')"
             >
-              <Icon name="ph:x-light" class="w-5 h-5" />
+              <Icon name="ph:x" class="shrink-0 w-5 h-5" />
             </button>
           </div>
 
@@ -237,7 +237,7 @@ watch(
             <div class="mx-auto max-w-7xl px-4 py-8 sm:px-8">
               <!-- Back Link Placeholder -->
               <div class="mb-6 flex items-center gap-2 text-noble-black/30">
-                <Icon name="ph:caret-left-light" class="w-5 h-5" />
+                <Icon name="ph:caret-left" class="shrink-0 w-5 h-5" />
                 <span class="text-sm">Back to listings</span>
               </div>
 
@@ -258,18 +258,18 @@ watch(
                   </h1>
                 </div>
                 <div class="flex items-center gap-4 text-noble-black/30">
-                  <Icon name="ph:share-network-light" class="w-[22px] h-[22px]" />
-                  <Icon name="ph:heart-light" class="w-[22px] h-[22px]" />
+                  <Icon name="ph:share-network" class="shrink-0 w-[22px] h-[22px]" />
+                  <Icon name="ph:heart" class="shrink-0 w-[22px] h-[22px]" />
                 </div>
               </div>
 
               <!-- Rating Row -->
               <div class="mb-8 flex items-center gap-2 text-sm">
                 <div class="flex items-center gap-1 text-burning-orange">
-                  <Icon name="ph:star-fill" class="w-4 h-4" />
-                  <span class="font-bold">{{ ratingLabel }}</span>
+                  <Icon name="ph:star-fill" class="shrink-0 w-4 h-4 -translate-y-[0.5px]" />
+                  <span class="font-bold leading-none">{{ ratingLabel }}</span>
                 </div>
-                <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
               </div>
 
               <!-- Main Grid -->
@@ -293,13 +293,13 @@ watch(
                         class="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         @click="prevImage"
                       >
-                        <Icon name="ph:caret-left-light" class="w-6 h-6" />
+                        <Icon name="ph:caret-left" class="shrink-0 w-6 h-6" />
                       </button>
                       <button
                         class="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         @click="nextImage"
                       >
-                        <Icon name="ph:caret-right-light" class="w-6 h-6" />
+                        <Icon name="ph:caret-right" class="shrink-0 w-6 h-6" />
                       </button>
                       <div
                         class="absolute bottom-4 left-4 px-3 py-1.5 bg-white/80 backdrop-blur-sm text-[13px] font-medium rounded-full shadow-sm"
@@ -449,7 +449,7 @@ watch(
                         class="flex items-center gap-2.5 rounded-xl border border-cinnamon-ice/20 bg-cream px-3 py-2"
                       >
                         <div class="shrink-0 scale-90 text-burning-orange">
-                          <Icon name="ph:plus-light" class="w-[18px] h-[18px]" />
+                          <Icon name="ph:plus" class="shrink-0 w-[18px] h-[18px]" />
                         </div>
                         <span class="text-sm text-noble-black/90">{{ offer }}</span>
                       </div>
@@ -464,8 +464,8 @@ watch(
                         class="flex items-center gap-2.5 text-sm text-noble-black/90"
                       >
                         <Icon
-                          name="ph:check-circle-light"
-                          class="w-[18px] h-[18px] text-burning-orange"
+                          name="ph:check-circle"
+                          class="shrink-0 w-[18px] h-[18px] text-burning-orange"
                         />
                         {{ included }}
                       </li>
@@ -488,17 +488,22 @@ watch(
                         </h3>
                         <div class="flex items-center gap-1.5 text-sm">
                           <div class="flex items-center gap-1 text-burning-orange">
-                            <Icon name="ph:star-fill" class="w-3.5 h-3.5" />
-                            <span class="font-bold">{{ ratingLabel }}</span>
+                            <Icon
+                              name="ph:star-bold"
+                              class="shrink-0 w-3.5 h-3.5 -translate-y-[0.5px]"
+                            />
+                            <span class="font-bold leading-none">{{ ratingLabel }}</span>
                           </div>
-                          <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                          <span class="text-noble-black/60 leading-none"
+                            >({{ bookingCountLabel }})</span
+                          >
                         </div>
                       </div>
                     </div>
                     <button
                       class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-estate shadow-sm"
                     >
-                      <Icon name="ph:chat-centered-text-light" class="w-5 h-5 text-white" />
+                      <Icon name="ph:chat-centered-text" class="shrink-0 w-5 h-5 text-white" />
                     </button>
                   </div>
                 </div>
@@ -513,8 +518,8 @@ watch(
                         {{ monthNames[viewMonth] }} {{ viewYear }}
                       </h3>
                       <div class="flex gap-2 text-noble-black/40">
-                        <Icon name="ph:caret-left-light" class="w-5 h-5" />
-                        <Icon name="ph:caret-right-light" class="w-5 h-5" />
+                        <Icon name="ph:caret-left" class="shrink-0 w-5 h-5" />
+                        <Icon name="ph:caret-right" class="shrink-0 w-5 h-5" />
                       </div>
                     </div>
                     <div class="grid grid-cols-7 text-center mb-2">
@@ -556,7 +561,7 @@ watch(
                         class="flex h-12 w-full items-center justify-between rounded-2xl border border-cinnamon-ice bg-cream px-4 text-sm font-medium text-noble-black/40"
                       >
                         09:00 AM
-                        <Icon name="ph:caret-down-light" class="w-4 h-4" />
+                        <Icon name="ph:caret-down" class="shrink-0 w-4 h-4" />
                       </div>
                     </div>
                     <div class="flex flex-col gap-1.5">
@@ -568,7 +573,7 @@ watch(
                         class="flex h-12 w-full items-center justify-between rounded-2xl border border-cinnamon-ice bg-cream px-4 text-sm font-medium text-noble-black/40"
                       >
                         06:00 PM
-                        <Icon name="ph:caret-down-light" class="w-4 h-4" />
+                        <Icon name="ph:caret-down" class="shrink-0 w-4 h-4" />
                       </div>
                     </div>
                   </div>
@@ -604,8 +609,13 @@ watch(
                     </p>
                     <div class="my-4 h-px bg-cinnamon-ice/30" />
                     <div class="flex items-center justify-center gap-2 text-noble-black/40">
-                      <Icon name="ph:shield-check-light" class="w-3.5 h-3.5" />
-                      <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
+                      <Icon
+                        name="ph:shield-check"
+                        class="shrink-0 w-3.5 h-3.5 -translate-y-[0.5px]"
+                      />
+                      <span class="text-[11px] font-normal leading-none"
+                        >Protected by TakeUP Guarantee</span
+                      >
                     </div>
                   </div>
                 </div>
@@ -618,9 +628,14 @@ watch(
                   <div
                     class="flex items-center gap-1.5 px-3 py-1 bg-burning-orange/10 rounded-full"
                   >
-                    <Icon name="ph:star-fill" class="w-4 h-4 text-burning-orange" />
-                    <span class="text-sm font-bold text-burning-orange">{{ ratingLabel }}</span>
-                    <span class="text-xs text-burning-orange/60 font-medium"
+                    <Icon
+                      name="ph:star-fill"
+                      class="shrink-0 w-4 h-4 text-burning-orange -translate-y-[0.5px]"
+                    />
+                    <span class="text-sm font-bold text-burning-orange leading-none">{{
+                      ratingLabel
+                    }}</span>
+                    <span class="text-xs text-burning-orange/60 font-medium leading-none"
                       >({{ bookingCountLabel }})</span
                     >
                   </div>

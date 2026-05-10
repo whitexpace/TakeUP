@@ -195,10 +195,10 @@ onBeforeUnmount(() => {
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">My Listings</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">My Listings</h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Manage your listed items and track their availability.
         </p>
       </section>
@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
           to="/account/listings/new"
           class="inline-flex h-10 items-center gap-2 px-6 bg-burning-orange text-white rounded-[10px] text-[13px] font-bold hover:brightness-110 shadow-[0_4px_14px_rgba(232,101,10,0.3)] transition-all"
         >
-          <Icon name="ph:plus-light" class="w-[18px] h-[18px]" />
+          <Icon name="ph:plus" class="w-[18px] h-[18px]" />
           Add New Item
         </NuxtLink>
       </div>
@@ -233,7 +233,7 @@ onBeforeUnmount(() => {
     >
       <div class="flex items-center gap-3">
         <!-- Small Trophy Icon -->
-        <Icon name="ph:trophy-light" class="shrink-0 text-burning-orange w-5 h-5" />
+        <Icon name="ph:trophy" class="shrink-0 text-burning-orange w-5 h-5" />
 
         <div class="flex flex-wrap items-center gap-1.5 font-geist">
           <span class="text-[14px] font-semibold text-noble-black">
@@ -266,7 +266,7 @@ onBeforeUnmount(() => {
       <div
         class="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-[10px] border-[1.5px] border-noble-black/20 bg-white px-4 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
       >
-        <Icon name="ph:magnifying-glass-light" class="shrink-0 text-noble-black/50 w-4 h-4" />
+        <Icon name="ph:magnifying-glass" class="shrink-0 text-noble-black/50 w-4 h-4" />
         <input
           v-model="searchQuery"
           type="text"
@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
           title="Clear search"
           @click="searchQuery = ''"
         >
-          <Icon name="ph:x-light" class="w-4 h-4" />
+          <Icon name="ph:x" class="w-4 h-4" />
         </button>
       </div>
 
@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
               }}
             </span>
             <Icon
-              name="ph:caret-down-light"
+              name="ph:caret-down"
               class="h-4 w-4 text-noble-black/50 transition-transform duration-300"
               :class="{ 'rotate-180': isCategoryDropdownOpen }"
             />
@@ -368,7 +368,7 @@ onBeforeUnmount(() => {
                     class="w-5 h-5 rounded-md border-2 border-noble-black/20 peer-checked:border-burning-orange peer-checked:bg-burning-orange transition-all"
                   ></div>
                   <Icon
-                    name="ph:check-light"
+                    name="ph:check"
                     class="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity"
                   />
                 </div>
@@ -392,7 +392,7 @@ onBeforeUnmount(() => {
         @click="removeStatusFilter(status)"
       >
         {{ STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status }}
-        <Icon name="ph:x-light" class="w-3 h-3" />
+        <Icon name="ph:x" class="w-3 h-3" />
       </button>
 
       <button
@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
         @click="removeCategoryFilter(category.value)"
       >
         {{ category.label }}
-        <Icon name="ph:x-light" class="w-3 h-3" />
+        <Icon name="ph:x" class="w-3 h-3" />
       </button>
 
       <button
@@ -445,15 +445,15 @@ onBeforeUnmount(() => {
         <div
           class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-sm border border-noble-black/10"
         >
-          <Icon name="ph:squares-four-light" class="w-10 h-10 text-noble-black/20" />
+          <Icon name="ph:squares-four" class="w-10 h-10 text-noble-black/20" />
         </div>
         <div>
-          <p class="text-[18px] font-bold text-noble-black">
+          <p class="text-[18px] font-semibold text-noble-black">
             {{ emptyStateMessage }}
           </p>
           <p
             v-if="!searchQuery && !hasActiveFilters"
-            class="mt-1 text-[14px] text-noble-black/40 font-medium"
+            class="mt-1 text-[14px] text-noble-black/40 font-light"
           >
             Start listing items to earn rewards and build your profile.
           </p>

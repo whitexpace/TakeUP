@@ -581,7 +581,7 @@ const closeResolvedDispute = async () => {
         to="/account"
         class="inline-flex items-center gap-2 rounded-[8px] border-[1.5px] border-gray-200 px-4 py-2 text-[13px] font-semibold text-gray-700 transition-all hover:bg-gray-50 active:scale-95"
       >
-        <Icon name="ph:arrow-left-light" class="w-4 h-4" />
+        <Icon name="ph:arrow-left" class="w-4 h-4" />
         Back to My Account
       </NuxtLink>
     </div>
@@ -639,7 +639,7 @@ const closeResolvedDispute = async () => {
             class="flex h-full flex-col items-center justify-center p-8 text-center"
           >
             <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50">
-              <Icon name="ph:tray-light" class="w-12 h-12 text-gray-200" />
+              <Icon name="ph:tray" class="w-12 h-12 text-gray-200" />
             </div>
             <p class="text-[16px] font-semibold text-gray-400">No disputes in this queue</p>
             <p class="mt-1 text-[13px] text-gray-400">
@@ -706,7 +706,7 @@ const closeResolvedDispute = async () => {
             <div
               class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50 text-gray-300"
             >
-              <Icon name="ph:clipboard-text-light" class="w-12 h-12" />
+              <Icon name="ph:clipboard-text" class="w-12 h-12" />
             </div>
             <p class="text-[18px] font-semibold text-gray-400">Select a dispute to review</p>
             <p class="mt-1 text-[14px] text-gray-400">

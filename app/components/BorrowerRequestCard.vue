@@ -110,7 +110,7 @@ const badgeClass = computed(() => {
           v-else
           class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center shrink-0"
         >
-          <Icon name="ph:image-light" class="w-6 h-6 text-cinnamon-ice/40" />
+          <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40" />
         </div>
       </div>
 

@@ -660,7 +660,7 @@ const submitReview = async () => {
               class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="closeModal"
             >
-              <Icon name="ph:x-light" class="w-6 h-6" />
+              <Icon name="ph:x" class="w-6 h-6" />
             </button>
           </div>
 
@@ -680,7 +680,7 @@ const submitReview = async () => {
                     @mouseleave="hoverRating = 0"
                   >
                     <Icon
-                      :name="(hoverRating || rating) >= star ? 'ph:star-fill' : 'ph:star-light'"
+                      name="ph:star-fill"
                       class="w-8 h-8 transition-colors"
                       :class="
                         (hoverRating || rating) >= star ? 'text-burning-orange' : 'text-gray-200'
@@ -716,7 +716,7 @@ const submitReview = async () => {
                 <div class="flex items-center justify-between">
                   <label class="flex items-center gap-2 cursor-pointer group">
                     <Icon
-                      name="ph:camera-plus-light"
+                      name="ph:camera-plus"
                       class="w-5 h-5 text-gray-400 group-hover:text-burning-orange transition-colors"
                     />
                     <span
@@ -745,7 +745,7 @@ const submitReview = async () => {
                       class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-gray-900 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                       @click="removePersistedDraftImage(image)"
                     >
-                      <Icon name="ph:x-light" class="h-2 w-2" />
+                      <Icon name="ph:x" class="h-2 w-2" />
                     </button>
                   </div>
                 </div>
@@ -766,7 +766,7 @@ const submitReview = async () => {
                 </button>
                 <span class="text-[13px] font-medium text-gray-600">Submit anonymously</span>
                 <div class="relative group/tooltip">
-                  <Icon name="ph:question-light" class="w-4 h-4 text-gray-400 cursor-help" />
+                  <Icon name="ph:question" class="w-4 h-4 text-gray-400 cursor-help" />
                   <div
                     class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-[11px] font-medium rounded-lg whitespace-nowrap opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all"
                   >

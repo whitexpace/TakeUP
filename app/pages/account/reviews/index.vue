@@ -369,10 +369,12 @@ onBeforeUnmount(() => {
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black leading-tight">My Reviews</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            My Reviews
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Keep track of what you still need to review, save drafts, and manage your review history.
         </p>
       </section>
@@ -435,7 +437,7 @@ onBeforeUnmount(() => {
 
       <div class="relative w-full sm:max-w-[280px] mb-4 z-20">
         <Icon
-          name="ph:magnifying-glass-light"
+          name="ph:magnifying-glass"
           class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noble-black/30 pointer-events-none"
         />
         <input
@@ -450,7 +452,7 @@ onBeforeUnmount(() => {
           class="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-md text-noble-black/20 hover:text-noble-black/40 hover:bg-noble-black/5 transition-all"
           @click="searchQuery = ''"
         >
-          <Icon name="ph:x-light" class="w-3 h-3" />
+          <Icon name="ph:x" class="w-3 h-3" />
         </button>
       </div>
     </div>
@@ -538,7 +540,7 @@ onBeforeUnmount(() => {
                       v-else
                       class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                     >
-                      <Icon name="ph:package-light" class="w-5 h-5" />
+                      <Icon name="ph:package" class="w-5 h-5" />
                     </div>
                   </div>
 
@@ -590,7 +592,7 @@ onBeforeUnmount(() => {
                     v-else
                     class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                   >
-                    <Icon name="ph:package-light" class="w-6 h-6" />
+                    <Icon name="ph:package" class="w-6 h-6" />
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
@@ -641,7 +643,7 @@ onBeforeUnmount(() => {
                     v-else
                     class="w-12 h-12 rounded-[8px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                   >
-                    <Icon name="ph:package-light" class="w-5 h-5" />
+                    <Icon name="ph:package" class="w-5 h-5" />
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between gap-2 mb-1">
@@ -652,8 +654,8 @@ onBeforeUnmount(() => {
                         <Icon
                           v-for="star in 5"
                           :key="star"
-                          name="ph:star-light"
-                          class="h-3.5 w-3.5"
+                          name="ph:star-fill"
+                          class="h-3.5 w-3.5 -translate-y-[0.5px]"
                           :class="star <= review.rating ? 'opacity-100' : 'opacity-20'"
                         />
                       </div>
@@ -680,10 +682,7 @@ onBeforeUnmount(() => {
         <!-- Checklist Card -->
         <article class="rounded-[16px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm">
           <div class="flex items-center gap-2 text-noble-black/80 mb-5">
-            <Icon
-              name="ph:check-square-offset-light"
-              class="w-[18px] h-[18px] text-burning-orange"
-            />
+            <Icon name="ph:check-square-offset" class="w-[18px] h-[18px] text-burning-orange" />
             <h2 class="text-[14px] font-bold">Your checklist</h2>
           </div>
           <div class="space-y-3.5">
@@ -700,7 +699,7 @@ onBeforeUnmount(() => {
               <div
                 class="w-4 h-4 rounded-full bg-success-green flex items-center justify-center text-white shrink-0 mt-0.5"
               >
-                <Icon name="ph:check-light" class="w-2.5 h-2.5" />
+                <Icon name="ph:check" class="w-2.5 h-2.5" />
               </div>
               <p class="text-[13px] font-medium text-noble-black/50 leading-tight">{{ item }}</p>
             </div>
@@ -711,10 +710,7 @@ onBeforeUnmount(() => {
         <div
           class="rounded-[12px] border border-blue-estate/20 bg-blue-estate/[0.04] p-4 flex gap-3"
         >
-          <Icon
-            name="ph:lightbulb-light"
-            class="text-blue-estate shrink-0 mt-0.5 w-[18px] h-[18px]"
-          />
+          <Icon name="ph:lightbulb" class="text-blue-estate shrink-0 mt-0.5 w-[18px] h-[18px]" />
           <p class="text-[13px] leading-relaxed text-noble-black/60">
             <span class="text-[12px] font-black uppercase text-blue-estate mr-1">Tip</span>
             Save a draft if you’re busy, then come back when you’re ready to submit.
@@ -800,11 +796,13 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="flex items-center gap-1 font-bold text-[14px]">
-                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
+                <span class="text-burning-orange leading-none">{{
+                  entry.averageRating.toFixed(1)
+                }}</span>
                 <Icon
-                  name="ph:star-light"
+                  name="ph:star-fill"
                   :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
-                  class="w-3 h-3"
+                  class="w-3 h-3 -translate-y-[0.5px]"
                 />
               </div>
             </div>
@@ -886,11 +884,13 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="flex items-center gap-1 font-bold text-[14px]">
-                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
+                <span class="text-burning-orange leading-none">{{
+                  entry.averageRating.toFixed(1)
+                }}</span>
                 <Icon
-                  name="ph:star-light"
+                  name="ph:star-fill"
                   :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
-                  class="w-3 h-3"
+                  class="w-3 h-3 -translate-y-[0.5px]"
                 />
               </div>
             </div>

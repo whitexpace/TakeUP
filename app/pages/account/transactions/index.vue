@@ -336,10 +336,10 @@ onBeforeUnmount(() => {
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">My Transactions</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">My Transactions</h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Review your borrowing and lending history
         </p>
       </section>
@@ -356,7 +356,7 @@ onBeforeUnmount(() => {
     <div
       class="flex items-center gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-12 px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
     >
-      <Icon name="ph:magnifying-glass-light" class="w-5 h-5 text-gray-400 shrink-0" />
+      <Icon name="ph:magnifying-glass" class="w-5 h-5 text-gray-400 shrink-0" />
       <input
         v-model="searchQuery"
         type="text"
@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
         title="Clear search"
         @click="searchQuery = ''"
       >
-        <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+        <Icon name="ph:x" class="w-[18px] h-[18px]" />
       </button>
     </div>
 
@@ -447,10 +447,7 @@ onBeforeUnmount(() => {
         v-else-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
-        <Icon
-          name="ph:warning-circle-light"
-          class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4"
-        />
+        <Icon name="ph:warning-circle" class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4" />
         <p class="text-noble-black/50 text-base mb-6 font-medium">{{ combinedError }}</p>
         <button
           class="bg-burning-orange text-white rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:brightness-110 transition-all shadow-lg shadow-burning-orange/20"
@@ -468,7 +465,7 @@ onBeforeUnmount(() => {
         <div
           class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
         >
-          <Icon name="ph:files-light" class="w-10 h-10" />
+          <Icon name="ph:files" class="w-10 h-10" />
         </div>
         <p class="text-noble-black text-[18px] font-bold mb-1">{{ emptyTitle }}</p>
         <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">{{ emptySubtitle }}</p>
@@ -511,7 +508,7 @@ onBeforeUnmount(() => {
           @click="loadMore"
         >
           <span v-if="isLoading" class="flex items-center gap-2">
-            <Icon name="ph:spinner-gap-light" class="animate-spin w-4 h-4" />
+            <Icon name="ph:spinner-gap" class="animate-spin w-4 h-4" />
             Loading…
           </span>
           <span v-else>Load More</span>

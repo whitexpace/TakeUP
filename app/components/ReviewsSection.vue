@@ -193,8 +193,9 @@ const initialsFor = (name: string) =>
           <Icon
             v-for="i in 5"
             :key="i"
-            :name="i <= Math.round(rating) ? 'ph:star-fill' : 'ph:star-light'"
-            class="w-6 h-6"
+            name="ph:star-fill"
+            class="w-6 h-6 -translate-y-[0.5px]"
+            :class="i <= Math.round(rating) ? 'opacity-100' : 'opacity-20'"
           />
         </div>
         <div class="text-sm text-noble-black/60 font-medium">
@@ -206,8 +207,13 @@ const initialsFor = (name: string) =>
       <div class="space-y-4">
         <div v-for="dist in ratingsDistribution" :key="dist.stars" class="flex items-center gap-4">
           <div class="flex items-center gap-1.5 w-10 shrink-0">
-            <span class="text-sm font-semibold text-noble-black">{{ dist.stars }}</span>
-            <Icon name="ph:star-fill" class="w-3.5 h-3.5 text-burning-orange" />
+            <span class="text-sm font-semibold text-noble-black leading-none">{{
+              dist.stars
+            }}</span>
+            <Icon
+              name="ph:star-fill"
+              class="w-3.5 h-3.5 text-burning-orange -translate-y-[0.5px] shrink-0"
+            />
           </div>
           <div class="flex-1 h-3 bg-cream rounded-full overflow-hidden">
             <div
@@ -237,7 +243,7 @@ const initialsFor = (name: string) =>
           @click="selectedFilter = filter.value"
         >
           <span class="flex items-center gap-1.5">
-            <Icon v-if="filter.value === 'visuals'" name="ph:camera-light" class="w-3.5 h-3.5" />
+            <Icon v-if="filter.value === 'visuals'" name="ph:camera" class="w-3.5 h-3.5" />
             {{ filter.label }}
             <Icon
               v-if="filter.isStar"
@@ -256,7 +262,7 @@ const initialsFor = (name: string) =>
         >
           <span class="text-burning-orange font-semibold">{{ sortBy }}</span>
           <Icon
-            name="ph:caret-down-light"
+            name="ph:caret-down"
             class="w-4.5 h-4.5 transition-transform text-noble-black/40"
             :class="{ 'rotate-180': isSortOpen }"
           />
@@ -335,8 +341,9 @@ const initialsFor = (name: string) =>
             <Icon
               v-for="i in 5"
               :key="i"
-              :name="i <= review.rating ? 'ph:star-fill' : 'ph:star-light'"
-              class="w-3 h-3"
+              name="ph:star-fill"
+              class="w-3 h-3 -translate-y-[0.5px]"
+              :class="i <= review.rating ? 'opacity-100' : 'opacity-20'"
             />
           </div>
         </div>
@@ -379,7 +386,7 @@ const initialsFor = (name: string) =>
         @click="loadMore"
       >
         View more reviews
-        <Icon name="ph:caret-down-light" class="w-4 h-4" />
+        <Icon name="ph:caret-down" class="w-4 h-4" />
       </button>
     </div>
 
@@ -401,7 +408,7 @@ const initialsFor = (name: string) =>
             class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors p-2 z-[3010]"
             @click.stop="closeLightbox"
           >
-            <Icon name="ph:x-light" class="w-8 h-8" />
+            <Icon name="ph:x" class="w-8 h-8" />
           </button>
 
           <button
@@ -409,7 +416,7 @@ const initialsFor = (name: string) =>
             class="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[3010]"
             @click.stop="prevLightboxImage"
           >
-            <Icon name="ph:caret-left-light" class="w-12 h-12" />
+            <Icon name="ph:caret-left" class="w-12 h-12" />
           </button>
 
           <button
@@ -417,7 +424,7 @@ const initialsFor = (name: string) =>
             class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[3010]"
             @click.stop="nextLightboxImage"
           >
-            <Icon name="ph:caret-right-light" class="w-12 h-12" />
+            <Icon name="ph:caret-right" class="w-12 h-12" />
           </button>
 
           <div class="relative w-full h-full flex items-center justify-center" @click.stop>

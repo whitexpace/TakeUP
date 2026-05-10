@@ -165,7 +165,7 @@ const rangeError = (range: AvailabilityRange): string | null => {
       class="flex items-center gap-2 text-burning-orange text-sm font-medium font-geist hover:text-orange-600 transition-colors"
       @click="addRange"
     >
-      <Icon name="ph:plus-light" class="text-lg leading-none" /> Add another availability period
+      <Icon name="ph:plus" class="text-lg leading-none" /> Add another availability period
     </button>
 
     <!-- Outer validation errors -->

@@ -79,37 +79,37 @@ const statCards = computed(() => {
       label: "Listings",
       value: formatNumber(listings.value.length),
       helper: "Total active listings",
-      icon: "ph:squares-four-light",
+      icon: "ph:squares-four",
     },
     {
       label: "Available days",
       value: formatNumber(current?.availabilityDays ?? 0),
       helper: "Total days available",
-      icon: "ph:calendar-blank-light",
+      icon: "ph:calendar-blank",
     },
     {
       label: "Booked days",
       value: formatNumber(current?.bookedDays ?? 0),
       helper: "Total days booked",
-      icon: "ph:calendar-check-light",
+      icon: "ph:calendar-check",
     },
     {
       label: "Total Views",
       value: formatNumber(current?.totalViews ?? 0),
       helper: "All-time listing views",
-      icon: "ph:eye-light",
+      icon: "ph:eye",
     },
     {
       label: "Revenue",
       value: formatPeso(current?.totalRevenue ?? 0),
       helper: `${formatNumber(current?.totalCompletedTransactions ?? 0)} completed bookings`,
-      icon: "ph:wallet-light",
+      icon: "ph:wallet",
     },
     {
       label: "Transactions",
       value: formatNumber(current?.totalCompletedTransactions ?? 0),
       helper: `${formatNumber(current?.totalBookings ?? 0)} accepted bookings`,
-      icon: "ph:receipt-light",
+      icon: "ph:receipt",
     },
   ]
 })
@@ -244,10 +244,12 @@ onMounted(() => {
     <header class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">My Listing Analytics</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+            My Listing Analytics
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Track your listing performance and insights.
         </p>
       </section>
@@ -286,7 +288,7 @@ onMounted(() => {
 
     <template v-else-if="error">
       <section class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 mb-8">
-        <h2 class="text-xl font-bold text-noble-black">Unable to load analytics</h2>
+        <h2 class="text-xl font-semibold text-noble-black">Unable to load analytics</h2>
         <p class="mt-2 text-sm text-noble-black/70">{{ error }}</p>
         <button
           class="mt-5 rounded-[12px] bg-burning-orange px-5 py-3 text-[14px] font-bold text-white transition hover:brightness-110 active:scale-95"
@@ -309,11 +311,13 @@ onMounted(() => {
             <Icon :name="card.icon" class="w-4 h-4 text-noble-black/40" />
           </div>
           <div>
-            <p class="text-[11px] font-bold tracking-widest text-noble-black/40 uppercase mb-1">
+            <p class="text-[11px] font-semibold tracking-widest text-noble-black/40 uppercase mb-1">
               {{ card.label }}
             </p>
-            <p class="text-[24px] font-bold text-noble-black leading-none mb-2">{{ card.value }}</p>
-            <p class="text-[12px] font-medium text-noble-black/40 leading-snug">
+            <p class="text-[24px] font-semibold text-noble-black leading-none mb-2">
+              {{ card.value }}
+            </p>
+            <p class="text-[12px] font-light text-noble-black/40 leading-snug">
               {{ card.helper }}
             </p>
           </div>
@@ -327,10 +331,10 @@ onMounted(() => {
         <div
           class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mx-auto mb-6 text-cinnamon-ice/40"
         >
-          <Icon name="ph:squares-four-light" class="w-10 h-10" />
+          <Icon name="ph:squares-four" class="w-10 h-10" />
         </div>
-        <p class="text-[18px] font-bold text-noble-black">No listings yet</p>
-        <p class="mt-2 text-[14px] font-medium text-noble-black/50 max-w-sm mx-auto">
+        <p class="text-[18px] font-semibold text-noble-black">No listings yet</p>
+        <p class="mt-2 text-[14px] font-light text-noble-black/50 max-w-sm mx-auto">
           Publish an item first, then analytics for views, bookings, and utilization will appear
           here.
         </p>
@@ -350,8 +354,8 @@ onMounted(() => {
             v-if="hasFetched && !hasActivity"
             class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6"
           >
-            <p class="text-[18px] font-bold text-noble-black">No data yet</p>
-            <p class="mt-1 text-[14px] font-medium text-noble-black/50">
+            <p class="text-[18px] font-semibold text-noble-black">No data yet</p>
+            <p class="mt-1 text-[13px] font-light text-noble-black/50">
               Your listings are ready, but they do not have views, bookings, or completed
               transactions yet.
             </p>
@@ -362,8 +366,8 @@ onMounted(() => {
           >
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[20px] font-bold text-noble-black">Views Snapshot</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/50">
+                <h2 class="text-[20px] font-semibold text-noble-black">Views Snapshot</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Current all-time view counts from your listing records.
                 </p>
               </div>
@@ -401,8 +405,8 @@ onMounted(() => {
             class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
           >
             <div class="border-l-[3px] border-burning-orange pl-4">
-              <h2 class="text-[20px] font-bold text-noble-black">Performance Metrics</h2>
-              <p class="mt-1 text-[13px] font-medium text-noble-black/50">
+              <h2 class="text-[20px] font-semibold text-noble-black">Performance Metrics</h2>
+              <p class="mt-1 text-[13px] font-light text-noble-black/50">
                 Revenue, bookings, completed transactions, and utilization use
                 {{ activeRangeLabel }}.
               </p>
@@ -446,7 +450,7 @@ onMounted(() => {
           >
             <div class="flex items-center justify-between gap-4 mb-4">
               <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[18px] font-bold text-noble-black">Top Items</h2>
+                <h2 class="text-[18px] font-semibold text-noble-black">Top Items</h2>
               </div>
               <NuxtLink
                 class="text-[12px] font-bold text-burning-orange hover:underline"
@@ -502,7 +506,7 @@ onMounted(() => {
           >
             <div class="flex items-center justify-between gap-4 mb-4">
               <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[18px] font-bold text-noble-black">Items by Category</h2>
+                <h2 class="text-[18px] font-semibold text-noble-black">Items by Category</h2>
               </div>
               <button
                 v-if="categoryBreakdown.length > 5"
@@ -546,8 +550,8 @@ onMounted(() => {
       >
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div class="border-l-[3px] border-burning-orange pl-4">
-            <h2 class="text-[20px] font-bold text-noble-black">Listing Details</h2>
-            <p class="mt-1 text-[13px] font-medium text-noble-black/50">
+            <h2 class="text-[20px] font-semibold text-noble-black">Listing Details</h2>
+            <p class="mt-1 text-[13px] font-light text-noble-black/50">
               Per-listing views, bookings, revenue, and availability utilization.
             </p>
           </div>

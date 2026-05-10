@@ -25,9 +25,11 @@
 
           <div class="flex-1 min-w-0 flex flex-col gap-8">
             <div class="flex flex-col">
-              <h1 class="text-[28px] font-bold text-gray-900 leading-tight">Community Feed</h1>
+              <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+                Community Feed
+              </h1>
               <div class="h-[2px] w-10 bg-burning-orange rounded-full mt-2"></div>
-              <p class="mt-2 text-[14px] text-gray-400">
+              <p class="mt-2 text-[14px] font-light text-noble-black/50">
                 Post what you need and receive offers directly from the UPC community
               </p>
             </div>
@@ -97,10 +99,14 @@
               <div
                 class="mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-cream text-burning-orange/30"
               >
-                <Icon name="ph:chat-centered-text-light" class="w-8 h-8" />
+                <Icon name="ph:chat-centered-text" class="w-8 h-8" />
               </div>
-              <h3 class="text-[22px] font-bold text-noble-black mb-2">No live requests yet</h3>
-              <p class="text-[15px] text-noble-black/40 max-w-[360px] leading-relaxed mb-8">
+              <h3 class="font-montravia text-[24px] font-medium text-noble-black mb-2">
+                No live requests yet
+              </h3>
+              <p
+                class="text-[15px] font-normal text-noble-black/40 max-w-[360px] leading-relaxed mb-8"
+              >
                 The feed is now reading directly from the database. Create the first request to get
                 it started.
               </p>
@@ -163,7 +169,7 @@
                 aria-label="Close new listing form"
                 @click="closeNewItemComposer"
               >
-                <Icon name="ph:x-light" class="w-[18px] h-[18px]" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 

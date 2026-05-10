@@ -230,8 +230,8 @@ const handleOpenChat = async () => {
               @click.stop.prevent="handleOpenChat"
             >
               <Icon
-                name="ph:chat-centered-text-light"
-                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110"
+                name="ph:chat-centered-text"
+                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110 shrink-0"
               />
             </button>
           </div>
@@ -252,7 +252,7 @@ const handleOpenChat = async () => {
             v-else
             class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
           >
-            <Icon name="ph:image-light" class="w-6 h-6 text-cinnamon-ice/40" />
+            <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40 shrink-0" />
           </div>
         </div>
 
@@ -363,8 +363,8 @@ const handleOpenChat = async () => {
               @click.stop.prevent="handleOpenChat"
             >
               <Icon
-                name="ph:chat-centered-text-light"
-                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110"
+                name="ph:chat-centered-text"
+                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110 shrink-0"
               />
             </button>
           </div>
@@ -385,7 +385,7 @@ const handleOpenChat = async () => {
             v-else
             class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
           >
-            <Icon name="ph:image-light" class="w-6 h-6 text-cinnamon-ice/40" />
+            <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40 shrink-0" />
           </div>
         </div>
 

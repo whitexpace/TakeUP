@@ -30,8 +30,8 @@
           Listing Types
         </h3>
         <Icon
-          name="ph:caret-down-light"
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.listingTypes }"
         />
       </div>
@@ -71,8 +71,8 @@
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Categories</h3>
         <Icon
-          name="ph:caret-down-light"
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.categories }"
         />
       </div>
@@ -94,8 +94,8 @@
                 @click="toggleCategoryDropdown"
               >
                 <Icon
-                  name="ph:caret-down-light"
-                  class="w-3.5 h-3.5 transition-transform duration-200"
+                  name="ph:caret-down"
+                  class="w-3.5 h-3.5 transition-transform duration-200 shrink-0"
                   :class="{ 'rotate-180': isCategoryDropdownOpen }"
                 />
               </button>
@@ -140,7 +140,7 @@
                 class="shrink-0 text-noble-black/30 hover:text-burning-orange transition-colors"
                 @click="removeCategory(cat.name)"
               >
-                <Icon name="ph:x-light" class="w-3 h-3" />
+                <Icon name="ph:x" class="w-3 h-3 shrink-0" />
               </button>
             </div>
           </div>
@@ -157,8 +157,8 @@
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Price Range</h3>
         <Icon
-          name="ph:caret-down-light"
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.priceRange }"
         />
       </div>
@@ -222,8 +222,8 @@
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Rating</h3>
         <Icon
-          name="ph:caret-down-light"
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.rating }"
         />
       </div>
@@ -252,7 +252,7 @@
                   v-for="i in 5"
                   :key="i"
                   name="ph:star-fill"
-                  class="w-3 h-3 transition-colors duration-300"
+                  class="w-3 h-3 transition-colors duration-300 shrink-0"
                   :class="i <= rate.stars ? 'text-burning-orange' : 'text-noble-black/10'"
                 />
                 <span
@@ -277,8 +277,8 @@
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Condition</h3>
         <Icon
-          name="ph:caret-down-light"
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.condition }"
         />
       </div>
@@ -298,8 +298,8 @@
                   class="peer appearance-none w-4 h-4 border-[1.5px] border-cinnamon-ice/40 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
                 />
                 <Icon
-                  name="ph:check-light"
-                  class="absolute w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
+                  name="ph:check"
+                  class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
                 />
               </div>
               <span class="ml-3 filter-option-label group-hover:text-noble-black">
@@ -322,8 +322,8 @@
           Availability Date
         </h3>
         <Icon
-          name="ph:caret-down-light"
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.availabilityDate }"
         />
       </div>

@@ -7,7 +7,7 @@
     <!-- Search Icon (Visible when query is empty) -->
     <Icon
       v-if="!query"
-      name="ph:magnifying-glass-light"
+      name="ph:magnifying-glass"
       class="w-6 h-6 text-noble-black opacity-70 flex-shrink-0"
     />
 
@@ -18,7 +18,7 @@
       class="text-noble-black opacity-70 flex-shrink-0 hover:opacity-100 transition-opacity"
       @click="clearSearch"
     >
-      <Icon name="ph:x-light" class="w-6 h-6" />
+      <Icon name="ph:x" class="w-6 h-6" />
     </button>
 
     <input

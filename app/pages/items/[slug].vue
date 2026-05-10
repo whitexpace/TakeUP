@@ -1133,7 +1133,7 @@ onUnmounted(() => {
         class="flex items-center gap-2 text-noble-black/70 hover:text-burning-orange transition-colors mb-6 group"
       >
         <Icon
-          name="ph:caret-left-light"
+          name="ph:caret-left"
           size="20"
           class="transition-transform group-hover:-translate-x-1"
         />
@@ -1202,7 +1202,7 @@ onUnmounted(() => {
               @click="shareItem"
             >
               <Icon
-                name="ph:share-network-light"
+                name="ph:share-network"
                 size="22"
                 class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
               />
@@ -1216,7 +1216,7 @@ onUnmounted(() => {
               @click="toggleSaved"
             >
               <Icon
-                name="ph:heart-light"
+                name="ph:heart"
                 size="22"
                 class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
                 :class="{ 'fill-burning-orange/20': isSaved }"
@@ -1228,10 +1228,10 @@ onUnmounted(() => {
         <!-- Rating Row -->
         <div class="flex items-center gap-2 mb-8 text-sm">
           <div class="flex items-center gap-1 text-burning-orange">
-            <Icon name="ph:star-light" size="16" />
-            <span class="font-bold">{{ ratingLabel }}</span>
+            <Icon name="ph:star-fill" size="16" class="-translate-y-[0.5px]" />
+            <span class="font-bold leading-none">{{ ratingLabel }}</span>
           </div>
-          <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+          <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
         </div>
 
         <!-- Main Grid -->
@@ -1263,14 +1263,14 @@ onUnmounted(() => {
                   class="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   @click="prevImage"
                 >
-                  <Icon name="ph:caret-left-light" size="24" />
+                  <Icon name="ph:caret-left" size="24" />
                 </button>
                 <button
                   v-if="imageGallery.length > 1"
                   class="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   @click="nextImage"
                 >
-                  <Icon name="ph:caret-right-light" size="24" />
+                  <Icon name="ph:caret-right" size="24" />
                 </button>
                 <div
                   class="absolute bottom-4 left-4 px-3 py-1.5 bg-white/80 backdrop-blur-sm text-noble-black text-[13px] font-medium rounded-full shadow-sm"
@@ -1281,7 +1281,7 @@ onUnmounted(() => {
                   class="absolute bottom-4 right-4 p-2 bg-white/80 backdrop-blur-sm text-noble-black rounded-full hover:bg-white transition-colors shadow-sm z-10"
                   @click="openLightbox"
                 >
-                  <Icon name="ph:arrows-out-light" size="18" />
+                  <Icon name="ph:arrows-out" size="18" />
                 </button>
               </div>
               <div
@@ -1294,7 +1294,7 @@ onUnmounted(() => {
                   @click="scrollOnce('left')"
                 >
                   <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
-                    <Icon name="ph:caret-left-light" size="20" />
+                    <Icon name="ph:caret-left" size="20" />
                   </div>
                 </div>
                 <div
@@ -1329,7 +1329,7 @@ onUnmounted(() => {
                   @click="scrollOnce('right')"
                 >
                   <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
-                    <Icon name="ph:caret-right-light" size="20" />
+                    <Icon name="ph:caret-right" size="20" />
                   </div>
                 </div>
               </div>
@@ -1364,14 +1364,14 @@ onUnmounted(() => {
                           :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(-1)"
                         >
-                          <Icon name="ph:caret-left-light" size="20" />
+                          <Icon name="ph:caret-left" size="20" />
                         </button>
                         <button
                           class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                           :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(1)"
                         >
-                          <Icon name="ph:caret-right-light" size="20" />
+                          <Icon name="ph:caret-right" size="20" />
                         </button>
                       </div>
                     </div>
@@ -1479,7 +1479,7 @@ onUnmounted(() => {
                         @click="toggleStartTime"
                       >
                         {{ startTime
-                        }}<Icon name="ph:caret-down-light" size="16" class="text-noble-black/30" />
+                        }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                       </button>
                       <div
                         v-if="isStartTimeOpen"
@@ -1514,7 +1514,7 @@ onUnmounted(() => {
                         @click="toggleEndTime"
                       >
                         {{ endTime
-                        }}<Icon name="ph:caret-down-light" size="16" class="text-noble-black/30" />
+                        }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                       </button>
                       <div
                         v-if="isEndTimeOpen"
@@ -1599,7 +1599,7 @@ onUnmounted(() => {
                       :disabled="!canAddToBag"
                       @click="handleAddToBag"
                     >
-                      <Icon v-if="isInBag" name="ph:check-light" size="18" class="stroke-[3]" />
+                      <Icon v-if="isInBag" name="ph:check" size="18" class="stroke-[3]" />
                       {{ addToBagButtonLabel }}
                     </button>
                     <p
@@ -1636,7 +1636,7 @@ onUnmounted(() => {
                     </div>
                     <div class="h-px bg-cinnamon-ice/15 mb-4" />
                     <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                      <Icon name="ph:shield-check-light" size="14" />
+                      <Icon name="ph:shield-check" size="14" />
                       <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
                     </div>
                   </div>
@@ -1676,7 +1676,7 @@ onUnmounted(() => {
                       }"
                     >
                       <Icon
-                        name="ph:caret-down-light"
+                        name="ph:caret-down"
                         size="20"
                         class="text-noble-black/40 transition-transform duration-300"
                         :class="{ 'rotate-180 !text-burning-orange': isCalendarExpanded }"
@@ -1715,14 +1715,14 @@ onUnmounted(() => {
                               :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(-1)"
                             >
-                              <Icon name="ph:caret-left-light" size="20" />
+                              <Icon name="ph:caret-left" size="20" />
                             </button>
                             <button
                               class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                               :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(1)"
                             >
-                              <Icon name="ph:caret-right-light" size="20" />
+                              <Icon name="ph:caret-right" size="20" />
                             </button>
                           </div>
                         </div>
@@ -1829,11 +1829,7 @@ onUnmounted(() => {
                             @click="toggleStartTime"
                           >
                             {{ startTime
-                            }}<Icon
-                              name="ph:caret-down-light"
-                              size="16"
-                              class="text-noble-black/30"
-                            />
+                            }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                           </button>
                           <div
                             v-if="isStartTimeOpen"
@@ -1868,11 +1864,7 @@ onUnmounted(() => {
                             @click="toggleEndTime"
                           >
                             {{ endTime
-                            }}<Icon
-                              name="ph:caret-down-light"
-                              size="16"
-                              class="text-noble-black/30"
-                            />
+                            }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                           </button>
                           <div
                             v-if="isEndTimeOpen"
@@ -1953,7 +1945,7 @@ onUnmounted(() => {
                     :disabled="!canAddToBag"
                     @click="handleAddToBag"
                   >
-                    <Icon v-if="isInBag" name="ph:check-light" size="16" class="stroke-[3]" />
+                    <Icon v-if="isInBag" name="ph:check" size="16" class="stroke-[3]" />
                     {{ addToBagButtonLabel }}
                   </button>
                   <p
@@ -1987,7 +1979,7 @@ onUnmounted(() => {
                   </div>
                   <div class="h-px bg-cinnamon-ice/15 mb-4" />
                   <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                    <Icon name="ph:shield-check-light" size="14" />
+                    <Icon name="ph:shield-check" size="14" />
                     <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
                   </div>
                 </div>
@@ -2129,7 +2121,7 @@ onUnmounted(() => {
                   class="flex items-center gap-2.5 px-3 py-2 bg-cream rounded-xl border border-cinnamon-ice/15"
                 >
                   <div class="text-burning-orange scale-90 shrink-0">
-                    <Icon name="ph:plus-light" size="18" />
+                    <Icon name="ph:plus" size="18" />
                   </div>
                   <span class="text-sm text-noble-black/90">{{ offer }}</span>
                 </div>
@@ -2143,7 +2135,7 @@ onUnmounted(() => {
                   :key="idx"
                   class="flex items-center gap-2.5"
                 >
-                  <Icon name="ph:check-circle-light" size="18" class="text-burning-orange" />
+                  <Icon name="ph:check-circle" size="18" class="text-burning-orange" />
                   <span class="text-noble-black/90 text-sm">{{ included }}</span>
                 </li>
               </ul>
@@ -2169,10 +2161,14 @@ onUnmounted(() => {
                   </h3>
                   <div class="flex items-center gap-1.5 text-sm">
                     <div class="flex items-center gap-1 text-burning-orange">
-                      <Icon name="ph:star-light" size="14" class="fill-current" />
-                      <span class="font-bold">{{ ratingLabel }}</span>
+                      <Icon
+                        name="ph:star-fill"
+                        size="14"
+                        class="fill-current -translate-y-[0.5px]"
+                      />
+                      <span class="font-bold leading-none">{{ ratingLabel }}</span>
                     </div>
-                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                    <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
                   </div>
                   <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
                     Item owner on TakeUP • View Profile
@@ -2182,7 +2178,7 @@ onUnmounted(() => {
               <div
                 class="ml-auto text-noble-black/20 group-hover/seller:text-burning-orange transition-colors"
               >
-                <Icon name="ph:caret-right-light" size="24" />
+                <Icon name="ph:caret-right" size="24" />
               </div>
             </NuxtLink>
             <div
@@ -2201,10 +2197,14 @@ onUnmounted(() => {
                   </h3>
                   <div class="flex items-center gap-1.5 text-sm">
                     <div class="flex items-center gap-1 text-burning-orange">
-                      <Icon name="ph:star-light" size="14" class="fill-current" />
-                      <span class="font-bold">{{ ratingLabel }}</span>
+                      <Icon
+                        name="ph:star-fill"
+                        size="14"
+                        class="fill-current -translate-y-[0.5px]"
+                      />
+                      <span class="font-bold leading-none">{{ ratingLabel }}</span>
                     </div>
-                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                    <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
                   </div>
                   <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
                     Item owner on TakeUP
@@ -2237,14 +2237,14 @@ onUnmounted(() => {
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
-                    <Icon name="ph:caret-left-light" size="20" />
+                    <Icon name="ph:caret-left" size="20" />
                   </button>
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
-                    <Icon name="ph:caret-right-light" size="20" />
+                    <Icon name="ph:caret-right" size="20" />
                   </button>
                 </div>
               </div>
@@ -2350,8 +2350,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
-                  {{ startTime
-                  }}<Icon name="ph:caret-down-light" size="16" class="text-noble-black/30" />
+                  {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isStartTimeOpen"
@@ -2385,8 +2384,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
-                  {{ endTime
-                  }}<Icon name="ph:caret-down-light" size="16" class="text-noble-black/30" />
+                  {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isEndTimeOpen"
@@ -2458,7 +2456,7 @@ onUnmounted(() => {
                 :disabled="!canAddToBag"
                 @click="handleAddToBag"
               >
-                <Icon v-if="isInBag" name="ph:check-light" size="16" class="stroke-[3]" />
+                <Icon v-if="isInBag" name="ph:check" size="16" class="stroke-[3]" />
                 {{ addToBagButtonLabel }}
               </button>
               <p
@@ -2489,7 +2487,7 @@ onUnmounted(() => {
               </div>
               <div class="h-px bg-cinnamon-ice/15 mb-4" />
               <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                <Icon name="ph:shield-check-light" size="14" />
+                <Icon name="ph:shield-check" size="14" />
                 <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
               </div>
             </div>
@@ -2544,7 +2542,7 @@ onUnmounted(() => {
                 class="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
                 @click="showPaymentModal = false"
               >
-                <Icon name="ph:x-light" size="24" />
+                <Icon name="ph:x" size="24" />
               </button>
             </div>
 
@@ -2604,7 +2602,7 @@ onUnmounted(() => {
           :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
           @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
         >
-          <Icon v-if="isInBag" name="ph:check-light" size="14" class="stroke-[3]" />
+          <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
           {{
             isItemUnavailableForBooking
               ? `Currently ${unavailableItemLabel}`
@@ -2626,7 +2624,7 @@ onUnmounted(() => {
         :disabled="isItemUnavailableForBooking"
         @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
       >
-        <Icon v-if="isInBag" name="ph:check-light" size="14" class="stroke-[3]" />
+        <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
         {{ mobileBookingButtonLabel }}
       </button>
     </div>
@@ -2649,7 +2647,7 @@ onUnmounted(() => {
             class="sticky top-0 bg-white border-b border-cinnamon-ice/15 p-4 flex items-center justify-between z-10"
           >
             <button class="p-2 -ml-2" @click="closeBookingModal">
-              <Icon name="ph:x-light" size="24" />
+              <Icon name="ph:x" size="24" />
             </button>
             <h2 class="font-bold text-noble-black text-base">Booking Details</h2>
             <div class="w-10" />
@@ -2675,14 +2673,14 @@ onUnmounted(() => {
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
-                    <Icon name="ph:caret-left-light" size="20" />
+                    <Icon name="ph:caret-left" size="20" />
                   </button>
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
-                    <Icon name="ph:caret-right-light" size="20" />
+                    <Icon name="ph:caret-right" size="20" />
                   </button>
                 </div>
               </div>
@@ -2788,8 +2786,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
-                  {{ startTime
-                  }}<Icon name="ph:caret-down-light" size="16" class="text-noble-black/30" />
+                  {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isStartTimeOpen"
@@ -2823,8 +2820,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
-                  {{ endTime
-                  }}<Icon name="ph:caret-down-light" size="16" class="text-noble-black/30" />
+                  {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isEndTimeOpen"
@@ -2935,21 +2931,21 @@ onUnmounted(() => {
             class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors p-2 z-[2010]"
             @click="closeLightbox"
           >
-            <Icon name="ph:x-light" size="32" />
+            <Icon name="ph:x" size="32" />
           </button>
           <button
             v-if="imageGallery.length > 1"
             class="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[2010]"
             @click="prevImage"
           >
-            <Icon name="ph:caret-left-light" size="48" />
+            <Icon name="ph:caret-left" size="48" />
           </button>
           <button
             v-if="imageGallery.length > 1"
             class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[2010]"
             @click="nextImage"
           >
-            <Icon name="ph:caret-right-light" size="48" />
+            <Icon name="ph:caret-right" size="48" />
           </button>
           <div class="relative w-full h-full flex items-center justify-center">
             <img
