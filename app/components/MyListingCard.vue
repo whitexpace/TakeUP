@@ -77,6 +77,19 @@ const boostLabel = computed(() => {
 
   return "Boost 50 pts"
 })
+
+const statusActionTarget = computed<"AVAILABLE" | "DEACTIVATED" | null>(() => {
+  if (props.item.status === "AVAILABLE") return "DEACTIVATED"
+  if (props.item.status === "DEACTIVATED") return "AVAILABLE"
+  return null
+})
+const statusActionLabel = computed(() => {
+  if (props.isToggling) {
+    return statusActionTarget.value === "AVAILABLE" ? "Reactivating..." : "Deactivating..."
+  }
+
+  return statusActionTarget.value === "AVAILABLE" ? "Reactivate" : "Deactivate"
+})
 </script>
 
 <template>
@@ -101,6 +114,15 @@ const boostLabel = computed(() => {
           @click.stop="emit('boostListing', item.id)"
         >
           {{ boostLabel }}
+        </button>
+
+        <button
+          v-if="statusActionTarget"
+          :disabled="isToggling"
+          class="w-full h-10 flex items-center justify-center rounded-[10px] bg-white text-[13px] font-bold text-noble-black shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+          @click.stop="emit('toggleStatus', item.id, statusActionTarget)"
+        >
+          {{ statusActionLabel }}
         </button>
       </div>
 
