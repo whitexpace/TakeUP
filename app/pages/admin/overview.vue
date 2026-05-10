@@ -219,11 +219,7 @@ onMounted(() => {
                 v-else
                 class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[12px] border border-gray-100 bg-cinnamon-ice/10 text-cinnamon-ice/40"
               >
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
-                  <circle cx="8.5" cy="8.5" r="1.5" stroke-width="1.5" />
-                  <path d="m21 15-5-5L5 21" stroke-width="1.5" />
-                </svg>
+                <Icon name="ph:image" class="h-6 w-6" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-[15px] font-semibold text-noble-black">{{ item.name }}</p>
@@ -420,11 +416,7 @@ onMounted(() => {
                 v-else
                 class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[12px] border border-gray-100 bg-cinnamon-ice/10 text-cinnamon-ice/40"
               >
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
-                  <circle cx="8.5" cy="8.5" r="1.5" stroke-width="1.5" />
-                  <path d="m21 15-5-5L5 21" stroke-width="1.5" />
-                </svg>
+                <Icon name="ph:image" class="h-6 w-6" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-[15px] font-semibold text-noble-black">

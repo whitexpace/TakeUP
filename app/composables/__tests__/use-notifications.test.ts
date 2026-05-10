@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ref } from "vue"
 import { useNotifications } from "../use-notifications"
 
 const makeNotification = (overrides: Record<string, unknown> = {}) => ({
@@ -12,8 +13,17 @@ const makeNotification = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
+let stateStore: Record<string, unknown> = {}
+
 beforeEach(() => {
+  stateStore = {}
   vi.stubGlobal("$fetch", vi.fn())
+  vi.stubGlobal("useState", (key: string, init?: () => unknown) => {
+    if (!stateStore[key]) {
+      stateStore[key] = ref(init ? init() : undefined)
+    }
+    return stateStore[key]
+  })
 })
 
 afterEach(() => {

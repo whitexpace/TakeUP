@@ -121,30 +121,20 @@ const handleBookingDecision = async (
       to="/account/listings"
       class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="transition-transform group-hover:-translate-x-1"
-      >
-        <path d="m15 18-6-6 6-6" />
-      </svg>
+      <Icon
+        name="ph:caret-left"
+        class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1"
+      />
       <span class="text-[15px] font-bold">Back to My Listings</span>
     </NuxtLink>
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">{{ pageTitle }}</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">{{ pageTitle }}</h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           {{ pageSubtitle }}
         </p>
       </section>
@@ -155,8 +145,8 @@ const handleBookingDecision = async (
       class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
     >
       <div class="border-l-[3px] border-burning-orange pl-4 mb-6">
-        <h2 class="text-[20px] font-bold text-noble-black">Requests</h2>
-        <p class="text-[13px] font-medium text-noble-black/50">
+        <h2 class="text-[20px] font-semibold text-noble-black">Requests</h2>
+        <p class="text-[13px] font-light text-noble-black/50">
           Manage your incoming booking requests
         </p>
       </div>
@@ -198,14 +188,10 @@ const handleBookingDecision = async (
         <div
           class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
         >
-          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
-            <path d="M3 9h18" stroke-width="1.5" />
-            <path d="M9 21V9" stroke-width="1.5" />
-          </svg>
+          <Icon name="ph:layout" class="w-10 h-10" />
         </div>
-        <p class="text-noble-black text-[18px] font-bold mb-1">No booking requests found</p>
-        <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">
+        <p class="text-noble-black text-[18px] font-semibold mb-1">No booking requests found</p>
+        <p class="text-noble-black/40 text-[14px] font-light max-w-xs">
           Requests for your listings will appear here when borrowers submit them.
         </p>
       </div>
@@ -249,19 +235,7 @@ const handleBookingDecision = async (
                 v-else
                 class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
               >
-                <svg
-                  class="w-6 h-6 text-cinnamon-ice/40"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
+                <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40" />
               </div>
             </div>
 
@@ -333,17 +307,7 @@ const handleBookingDecision = async (
           @click="loadMore"
         >
           <span v-if="isLoading" class="flex items-center gap-2">
-            <svg
-              class="animate-spin"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-            >
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
+            <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
             Loading…
           </span>
           <span v-else>Load More</span>

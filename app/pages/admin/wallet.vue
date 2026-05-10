@@ -131,15 +131,7 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
         <div
           class="flex h-12 items-center gap-3 rounded-[12px] border-[1.5px] border-gray-200 bg-white px-5 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
         >
-          <svg
-            class="h-5 w-5 shrink-0 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <circle cx="11" cy="11" r="8" stroke-width="2" />
-            <path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" />
-          </svg>
+          <Icon name="ph:magnifying-glass" class="h-5 w-5 shrink-0 text-gray-400" />
           <input
             v-model="searchQuery"
             type="text"
@@ -153,19 +145,7 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
             aria-label="Clear search"
             @click="searchQuery = ''"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <Icon name="ph:x" class="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>
@@ -237,16 +217,7 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
         v-else-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 text-center sm:py-16"
       >
-        <svg
-          class="mb-4 h-12 w-12 text-cinnamon-ice"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <circle cx="12" cy="12" r="10" stroke-width="1.5" />
-          <line x1="12" y1="8" x2="12" y2="12" stroke-width="2" stroke-linecap="round" />
-          <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke-width="2" />
-        </svg>
+        <Icon name="ph:warning-circle" class="mb-4 h-12 w-12 text-cinnamon-ice" />
         <p class="mb-6 text-[15px] font-medium text-noble-black/50">{{ error }}</p>
         <button
           class="rounded-[12px] bg-burning-orange px-8 py-2.5 text-[15px] font-bold text-white shadow-lg shadow-burning-orange/20 transition-all hover:brightness-110"
@@ -263,9 +234,7 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
         <div
           class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-cinnamon-ice/10 text-cinnamon-ice/40"
         >
-          <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-          </svg>
+          <Icon name="ph:receipt" class="h-10 w-10" />
         </div>
         <p class="mb-1 text-[18px] font-bold text-noble-black">
           No commission records matched your filters

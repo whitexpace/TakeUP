@@ -953,23 +953,13 @@ const handleReviewSubmitted = async () => {
     <!-- Header with Back Button -->
     <NuxtLink
       :to="backToTransactionsPath"
-      class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
+      class="flex items-center gap-3 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="transition-transform group-hover:-translate-x-1"
-      >
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-      <span class="text-[15px] font-bold">Back to My Transactions</span>
+      <Icon
+        name="ph:caret-left"
+        class="w-[18px] h-[18px] shrink-0 transition-transform group-hover:-translate-x-1"
+      />
+      <span class="text-[15px] font-bold leading-none">Back to My Transactions</span>
     </NuxtLink>
 
     <template v-if="pending">
@@ -991,41 +981,34 @@ const handleReviewSubmitted = async () => {
       <!-- Redesigned Page Header Strip -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div class="space-y-1.5">
-          <h1 class="text-[24px] font-bold text-noble-black leading-tight">Order Details</h1>
-          <div class="flex flex-wrap items-center gap-2.5 text-[13px] text-gray-500 font-medium">
+          <div class="space-y-2 mb-2">
+            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+              Order Details
+            </h1>
+            <div class="w-10 h-0.5 bg-burning-orange"></div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-[13px] text-gray-500 font-medium">
             <div
-              class="flex items-center gap-1.5 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
+              class="flex items-center gap-2 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
             >
-              <span>ORDER ID. {{ orderIdForDisplay }}</span>
+              <span class="leading-none">ORDER ID. {{ orderIdForDisplay }}</span>
               <button
-                class="hover:text-burning-orange transition-colors"
+                class="hover:text-burning-orange transition-colors flex items-center justify-center shrink-0 -translate-y-[0.5px]"
                 title="Copy Order ID"
                 @click="copyOrderId"
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                </svg>
+                <Icon name="ph:copy" class="w-3 h-3 shrink-0" />
               </button>
             </div>
             <span class="opacity-30 select-none">·</span>
-            <span>Placed on {{ formatDateTime(booking.requestedAt) }}</span>
+            <span class="leading-none">Placed on {{ formatDateTime(booking.requestedAt) }}</span>
           </div>
         </div>
 
         <div class="shrink-0">
           <span
             v-if="isPendingRequest"
-            class="inline-flex items-center rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
+            class="inline-flex items-center gap-2 rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
           >
             Requested
           </span>
@@ -1046,21 +1029,7 @@ const handleReviewSubmitted = async () => {
             v-if="isPendingRequest"
             class="rounded-[20px] border border-burning-orange/10 bg-burning-orange/[0.03] px-5 py-4 text-[14px] font-bold text-noble-black flex items-start gap-3"
           >
-            <svg
-              class="text-burning-orange mt-0.5 shrink-0"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
+            <Icon name="ph:info" class="w-[18px] h-[18px] text-burning-orange mt-0.5 shrink-0" />
             {{ requestStageMessage }}
           </div>
 
@@ -1074,21 +1043,8 @@ const handleReviewSubmitted = async () => {
                 :to="itemDetailPath"
                 class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-burning-orange font-bold text-[13px] hover:bg-burning-orange/5 transition-all"
               >
-                View Full Listing
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
-                  />
-                </svg>
+                <span class="leading-none">View Full Listing</span>
+                <Icon name="ph:arrow-square-out" class="w-3.5 h-3.5 -translate-y-[0.5px]" />
               </NuxtLink>
             </div>
             <div class="flex flex-col sm:flex-row gap-6">
@@ -1103,19 +1059,7 @@ const handleReviewSubmitted = async () => {
                   v-else
                   class="w-24 h-24 bg-cinnamon-ice/10 rounded-[12px] border border-gray-100 flex items-center justify-center"
                 >
-                  <svg
-                    class="w-8 h-8 text-cinnamon-ice/40"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.5"
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
+                  <Icon name="ph:image" class="w-8 h-8 text-cinnamon-ice/40" />
                 </div>
               </div>
               <div class="flex flex-col justify-center min-w-0">
@@ -1134,23 +1078,11 @@ const handleReviewSubmitted = async () => {
                 <div
                   class="flex items-center gap-2.5 text-[12px] font-bold text-gray-600 bg-gray-100 w-fit px-4 py-2 rounded-full border border-gray-200/50 shadow-sm"
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-gray-400"
-                  >
-                    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                    <line x1="16" x2="16" y1="2" y2="6" />
-                    <line x1="8" x2="8" y1="2" y2="6" />
-                    <line x1="3" x2="21" y1="10" y2="10" />
-                  </svg>
-                  <span
+                  <Icon
+                    name="ph:calendar-blank"
+                    class="w-3.5 h-3.5 text-gray-400 -translate-y-[0.5px] shrink-0"
+                  />
+                  <span class="leading-none"
                     >{{ formatDateTime(booking.startDate) }} –
                     {{ formatDateTime(booking.endDate) }}</span
                   >
@@ -1171,40 +1103,19 @@ const handleReviewSubmitted = async () => {
               v-if="actionSuccessMessage"
               class="mb-6 flex items-center gap-3 text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-4 rounded-[14px]"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              {{ actionSuccessMessage }}
+              <Icon name="ph:check" class="w-[18px] h-[18px] shrink-0 -translate-y-[0.5px]" />
+              <span class="leading-none">{{ actionSuccessMessage }}</span>
             </div>
 
             <div
               v-if="actionErrorMessage"
               class="mb-6 flex items-center gap-3 text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-4 rounded-[14px]"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              {{ actionErrorMessage }}
+              <Icon
+                name="ph:warning-circle"
+                class="w-[18px] h-[18px] shrink-0 -translate-y-[0.5px]"
+              />
+              <span class="leading-none">{{ actionErrorMessage }}</span>
             </div>
 
             <div class="space-y-0 relative pl-1">
@@ -1226,18 +1137,7 @@ const handleReviewSubmitted = async () => {
                     v-if="step.status === 'completed'"
                     class="w-8 h-8 rounded-full bg-white border-2 border-success-green flex items-center justify-center shadow-sm"
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#22C55E"
-                      stroke-width="4"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    <Icon name="ph:check" class="w-4 h-4 text-[#22C55E]" />
                   </div>
                   <div
                     v-else-if="step.status === 'current'"
@@ -1274,21 +1174,11 @@ const handleReviewSubmitted = async () => {
                       class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
                       @click.stop="proofImageUrl = step.proofUrl"
                     >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <polyline points="21 15 16 10 5 21" />
-                      </svg>
-                      {{ step.proofLabel }}
+                      <Icon
+                        name="ph:image"
+                        class="w-[13px] h-[13px] shrink-0 -translate-y-[0.5px]"
+                      />
+                      <span class="leading-none">{{ step.proofLabel }}</span>
                     </button>
                   </div>
                   <span
@@ -1345,20 +1235,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-burning-orange/20 shadow-sm"
               >
-                <svg
-                  class="text-burning-orange"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="8" r="7" />
-                  <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                </svg>
+                <Icon name="ph:seal-check" class="w-6 h-6 text-burning-orange" />
               </div>
             </div>
           </section>
@@ -1456,18 +1333,7 @@ const handleReviewSubmitted = async () => {
                 class="rounded-[16px] border border-success-green/20 bg-success-green/[0.04] p-5"
               >
                 <div class="flex items-center gap-2 text-success-green mb-2">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  <Icon name="ph:check" class="w-[18px] h-[18px]" />
                   <p class="text-[14px] font-bold">
                     {{ finalDecisionLabel(latestDispute.finalDecision) }}
                   </p>
@@ -1517,22 +1383,7 @@ const handleReviewSubmitted = async () => {
                 class="flex-1 min-w-[160px] h-11 inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[14px] font-bold hover:bg-cinnabar-red hover:text-white transition-all"
                 @click="handleDispute"
               >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
-                  />
-                  <line x1="12" x2="12" y1="9" y2="13" />
-                  <line x1="12" x2="12.01" y1="17" y2="17" />
-                </svg>
+                <Icon name="ph:warning" class="w-[18px] h-[18px]" />
                 Report Issue
               </button>
             </div>
@@ -1589,18 +1440,11 @@ const handleReviewSubmitted = async () => {
               class="w-full h-12 flex items-center justify-center gap-2 bg-blue-estate text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
               @click="handleHandoffProof"
             >
-              <svg
+              <Icon
                 v-if="isSubmittingHandoffProof"
-                class="animate-spin"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-              >
-                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-              </svg>
+                name="ph:circle-notch"
+                class="animate-spin w-4 h-4"
+              />
               Upload Handoff Proof
             </button>
 
@@ -1610,18 +1454,7 @@ const handleReviewSubmitted = async () => {
               class="w-full h-12 flex items-center justify-center gap-2 bg-burning-orange text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
               @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
             >
-              <svg
-                v-if="isFetchingPreview"
-                class="animate-spin"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-              >
-                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-              </svg>
+              <Icon v-if="isFetchingPreview" name="ph:circle-notch" class="animate-spin w-4 h-4" />
               {{ isEarlyReturnEligible ? "Confirm Early Return" : "Return Item Now" }}
             </button>
 
@@ -1711,21 +1544,12 @@ const handleReviewSubmitted = async () => {
               <div
                 class="bg-blue-estate/[0.03] border border-blue-estate/10 rounded-[12px] p-4 flex gap-3 items-start"
               >
-                <div class="shrink-0 text-blue-estate">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
+                <div
+                  class="shrink-0 text-blue-estate flex items-center justify-center -translate-y-[0.5px]"
+                >
+                  <Icon name="ph:shield-check" class="w-[18px] h-[18px] shrink-0" />
                 </div>
-                <p class="text-[12px] text-blue-estate font-medium leading-relaxed">
+                <p class="text-[12px] text-blue-estate font-medium leading-snug">
                   <span class="font-bold">TakeUP Secure.</span> Funds are held safely until the
                   transaction is fully complete.
                 </p>
@@ -1761,16 +1585,12 @@ const handleReviewSubmitted = async () => {
                     <div
                       class="flex items-center gap-0.5 text-burning-orange font-bold text-[13px]"
                     >
-                      <span>{{
+                      <span class="leading-none">{{
                         isLender
                           ? booking.borrower.borrowerRating?.toFixed(1) || "5.0"
                           : booking.lender.lenderRating?.toFixed(1) || "5.0"
                       }}</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon
-                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                        />
-                      </svg>
+                      <Icon name="ph:star-fill" class="w-3 h-3 -translate-y-[0.5px]" />
                     </div>
                     <span class="text-noble-black/30 text-[12px] font-medium"
                       >•
@@ -1785,19 +1605,8 @@ const handleReviewSubmitted = async () => {
                 class="w-full h-10 flex items-center justify-center gap-2 rounded-[10px] bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.12] font-bold text-[13px] transition-all"
                 @click="openChat"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                Message {{ isLender ? "Borrower" : "Lender" }}
+                <Icon name="ph:chat-teardrop-text" class="w-4 h-4 shrink-0 -translate-y-[0.5px]" />
+                <span class="leading-none">Message {{ isLender ? "Borrower" : "Lender" }}</span>
               </button>
             </div>
           </section>
@@ -1809,19 +1618,7 @@ const handleReviewSubmitted = async () => {
       <div
         class="w-20 h-20 bg-cinnabar-red/10 rounded-full flex items-center justify-center mx-auto mb-6"
       >
-        <svg
-          class="text-cinnabar-red"
-          width="40"
-          height="40"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
+        <Icon name="ph:warning-circle" class="w-10 h-10 text-cinnabar-red" />
       </div>
       <h2 class="text-2xl font-bold text-noble-black mb-4">Transaction Not Found</h2>
       <p class="text-noble-black/50 mb-8 max-w-sm mx-auto">
@@ -1869,21 +1666,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#1f3a5f"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" x2="12" y1="3" y2="15" />
-                </svg>
+                <Icon name="ph:upload-simple" class="w-10 h-10" style="color: #1f3a5f" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
               <p class="text-noble-black/60 mb-6 leading-relaxed">
@@ -1911,21 +1694,11 @@ const handleReviewSubmitted = async () => {
                   class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-burning-orange transition-colors flex items-center justify-center disabled:opacity-50"
                   @click="confirmHandoffProof"
                 >
-                  <span v-if="isSubmittingHandoffProof" class="animate-spin mr-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                  </span>
+                  <Icon
+                    v-if="isSubmittingHandoffProof"
+                    name="ph:circle-notch"
+                    class="w-5 h-5 animate-spin mr-2"
+                  />
                   {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
                 </button>
                 <button
@@ -1967,20 +1740,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <svg
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#E8650A"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
+                <Icon name="ph:warning-circle" class="w-10 h-10" style="color: #e8650a" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Not Yet Time to Lend</h3>
               <p class="text-noble-black/60 mb-2 leading-relaxed">
@@ -2037,21 +1797,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#ff7124"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="m15 10-4 4 6 6" />
-                  <path d="M4 18V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v7" />
-                  <path d="M11 22a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-                </svg>
+                <Icon name="ph:package" class="w-10 h-10" style="color: #ff7124" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
               <p class="text-noble-black/60 mb-8 leading-relaxed">
@@ -2079,21 +1825,11 @@ const handleReviewSubmitted = async () => {
                   class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
                   @click="confirmReturn"
                 >
-                  <span v-if="isSubmittingReturn" class="animate-spin mr-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                  </span>
+                  <Icon
+                    v-if="isSubmittingReturn"
+                    name="ph:circle-notch"
+                    class="w-5 h-5 animate-spin mr-2"
+                  />
                   {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
                 </button>
                 <button
@@ -2136,20 +1872,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-5"
               >
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#E8650A"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" />
-                  <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9" />
-                  <path d="M12 3v6" />
-                </svg>
+                <Icon name="ph:package" class="w-8 h-8" style="color: #e8650a" />
               </div>
               <h3 class="text-[22px] font-bold text-noble-black text-center">
                 Confirm Early Return
@@ -2258,18 +1981,11 @@ const handleReviewSubmitted = async () => {
                 class="w-full h-12 bg-burning-orange text-white rounded-[14px] font-bold text-[14px] hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 @click="confirmEarlyReturn"
               >
-                <svg
+                <Icon
                   v-if="isSubmittingReturn"
-                  class="animate-spin"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                >
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
+                  name="ph:circle-notch"
+                  class="w-4 h-4 animate-spin"
+                />
                 {{ isSubmittingReturn ? "Submitting..." : "Confirm Early Return" }}
               </button>
               <button
@@ -2313,19 +2029,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-success-green/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#34A853"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Icon name="ph:check" class="w-10 h-10" style="color: #34a853" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Success!</h3>
               <p class="text-noble-black/60 mb-8 leading-relaxed">
@@ -2385,14 +2089,7 @@ const handleReviewSubmitted = async () => {
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeRebuttalModal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -2550,19 +2247,7 @@ const handleReviewSubmitted = async () => {
                           class="hidden"
                           @change="setRebuttalImageFile"
                         />
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          class="text-noble-black/30"
-                        >
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                          <circle cx="8.5" cy="8.5" r="1.5" />
-                          <polyline points="21 15 16 10 5 21" />
-                        </svg>
+                        <Icon name="ph:image" class="w-5 h-5 text-noble-black/30" />
                         <span
                           v-if="!rebuttalImageFile"
                           class="text-[12px] text-noble-black/40 font-medium"
@@ -2674,17 +2359,7 @@ const handleReviewSubmitted = async () => {
                 @click="rebuttalModalStep === 'form' ? continueRebuttalReview() : submitRebuttal()"
               >
                 <span v-if="isSubmittingRebuttal" class="flex items-center justify-center gap-2">
-                  <svg
-                    class="animate-spin"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
                   Processing...
                 </span>
                 <span v-else>
@@ -2720,18 +2395,7 @@ const handleReviewSubmitted = async () => {
               class="absolute -top-4 -right-4 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-noble-black/60 hover:text-noble-black transition-colors"
               @click="proofImageUrl = null"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
             <img
               :src="proofImageUrl"

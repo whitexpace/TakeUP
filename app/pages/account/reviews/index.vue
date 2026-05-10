@@ -369,10 +369,12 @@ onBeforeUnmount(() => {
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black leading-tight">My Reviews</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            My Reviews
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Keep track of what you still need to review, save drafts, and manage your review history.
         </p>
       </section>
@@ -434,15 +436,10 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="relative w-full sm:max-w-[280px] mb-4 z-20">
-        <svg
+        <Icon
+          name="ph:magnifying-glass"
           class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noble-black/30 pointer-events-none"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-        >
-          <circle cx="11" cy="11" r="7" stroke-width="2" />
-          <path d="m20 20-3.5-3.5" stroke-width="2" stroke-linecap="round" />
-        </svg>
+        />
         <input
           v-model="searchQuery"
           type="text"
@@ -455,18 +452,7 @@ onBeforeUnmount(() => {
           class="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-md text-noble-black/20 hover:text-noble-black/40 hover:bg-noble-black/5 transition-all"
           @click="searchQuery = ''"
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="3"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+          <Icon name="ph:x" class="w-3 h-3" />
         </button>
       </div>
     </div>
@@ -554,23 +540,7 @@ onBeforeUnmount(() => {
                       v-else
                       class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                     >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="m7.5 4.27 9 5.15" />
-                        <path
-                          d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-                        />
-                        <path d="m3.3 7 8.7 5 8.7-5" />
-                        <path d="M12 22V12" />
-                      </svg>
+                      <Icon name="ph:package" class="w-5 h-5" />
                     </div>
                   </div>
 
@@ -622,21 +592,7 @@ onBeforeUnmount(() => {
                     v-else
                     class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                   >
-                    <svg
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m7.5 4.27 9 5.15" />
-                      <path
-                        d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-                      />
-                      <path d="m3.3 7 8.7 5 8.7-5" />
-                      <path d="M12 22V12" />
-                    </svg>
+                    <Icon name="ph:package" class="w-6 h-6" />
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
@@ -687,21 +643,7 @@ onBeforeUnmount(() => {
                     v-else
                     class="w-12 h-12 rounded-[8px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m7.5 4.27 9 5.15" />
-                      <path
-                        d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-                      />
-                      <path d="m3.3 7 8.7 5 8.7-5" />
-                      <path d="M12 22V12" />
-                    </svg>
+                    <Icon name="ph:package" class="w-5 h-5" />
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between gap-2 mb-1">
@@ -709,21 +651,13 @@ onBeforeUnmount(() => {
                         {{ review.item?.name ?? review.revieweeName }}
                       </h4>
                       <div class="flex items-center gap-0.5 text-burning-orange">
-                        <svg
+                        <Icon
                           v-for="star in 5"
                           :key="star"
-                          class="h-3.5 w-3.5"
-                          viewBox="0 0 24 24"
-                          :fill="star <= review.rating ? 'currentColor' : 'none'"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
-                          />
-                        </svg>
+                          name="ph:star-fill"
+                          class="h-3.5 w-3.5 -translate-y-[0.5px]"
+                          :class="star <= review.rating ? 'opacity-100' : 'opacity-20'"
+                        />
                       </div>
                     </div>
                     <p class="text-[12px] text-noble-black/40 mb-3 uppercase tracking-widest">
@@ -748,21 +682,7 @@ onBeforeUnmount(() => {
         <!-- Checklist Card -->
         <article class="rounded-[16px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm">
           <div class="flex items-center gap-2 text-noble-black/80 mb-5">
-            <svg
-              class="text-burning-orange"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <path d="m9 11 3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
+            <Icon name="ph:check-square-offset" class="w-[18px] h-[18px] text-burning-orange" />
             <h2 class="text-[14px] font-bold">Your checklist</h2>
           </div>
           <div class="space-y-3.5">
@@ -779,16 +699,7 @@ onBeforeUnmount(() => {
               <div
                 class="w-4 h-4 rounded-full bg-success-green flex items-center justify-center text-white shrink-0 mt-0.5"
               >
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="4"
-                >
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
+                <Icon name="ph:check" class="w-2.5 h-2.5" />
               </div>
               <p class="text-[13px] font-medium text-noble-black/50 leading-tight">{{ item }}</p>
             </div>
@@ -799,21 +710,7 @@ onBeforeUnmount(() => {
         <div
           class="rounded-[12px] border border-blue-estate/20 bg-blue-estate/[0.04] p-4 flex gap-3"
         >
-          <svg
-            class="text-blue-estate shrink-0 mt-0.5"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-          >
-            <path
-              d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
-            />
-            <path d="M9 18h6" />
-            <path d="M10 22h4" />
-          </svg>
+          <Icon name="ph:lightbulb" class="text-blue-estate shrink-0 mt-0.5 w-[18px] h-[18px]" />
           <p class="text-[13px] leading-relaxed text-noble-black/60">
             <span class="text-[12px] font-black uppercase text-blue-estate mr-1">Tip</span>
             Save a draft if you’re busy, then come back when you’re ready to submit.
@@ -899,18 +796,14 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="flex items-center gap-1 font-bold text-[14px]">
-                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
-                <svg
+                <span class="text-burning-orange leading-none">{{
+                  entry.averageRating.toFixed(1)
+                }}</span>
+                <Icon
+                  name="ph:star-fill"
                   :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                  />
-                </svg>
+                  class="w-3 h-3 -translate-y-[0.5px]"
+                />
               </div>
             </div>
             <!-- Ghost Rows -->
@@ -991,18 +884,14 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="flex items-center gap-1 font-bold text-[14px]">
-                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
-                <svg
+                <span class="text-burning-orange leading-none">{{
+                  entry.averageRating.toFixed(1)
+                }}</span>
+                <Icon
+                  name="ph:star-fill"
                   :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                  />
-                </svg>
+                  class="w-3 h-3 -translate-y-[0.5px]"
+                />
               </div>
             </div>
             <!-- Ghost Rows -->

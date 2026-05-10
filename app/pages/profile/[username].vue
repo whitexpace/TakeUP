@@ -4,7 +4,7 @@
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-burning-orange"></div>
     </div>
 
-    <div v-else-if="profileData" class="max-w-[1200px] mx-auto px-6 py-6 flex flex-col gap-6">
+    <div v-else-if="profileData" class="max-w-[1200px] mx-auto py-6 flex flex-col gap-6">
       <!-- TOP HERO SECTION -->
       <header class="profile-hero shadow-xl">
         <div class="hero-deco-1"></div>
@@ -37,17 +37,7 @@
                   v-if="profileData.user.location"
                   class="flex items-center gap-1 text-white/60 text-sm font-medium"
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </svg>
+                  <Icon name="ph:map-pin" class="w-[14px] h-[14px]" />
                   {{ profileData.user.location }}
                 </span>
               </div>
@@ -484,11 +474,10 @@ const formatDate = (date: string | Date) => {
 
 .hero-name {
   font-size: 48px;
-  font-weight: 800;
-  font-family: "Rewon", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: -1px;
-  line-height: 1;
+  font-weight: 500;
+  font-family: "Nv Montravia", serif;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
   margin-bottom: 8px;
 }
 

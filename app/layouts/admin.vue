@@ -16,8 +16,7 @@ const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const showLogoutModal = ref(false)
 
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+const { notifications, loadNotifications } = useNotifications()
 
 const adminLinks: AdminLink[] = [
   {
@@ -113,8 +112,6 @@ onMounted(() => {
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-admin-main-scrollbar"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
       <template #left>
@@ -124,25 +121,13 @@ onMounted(() => {
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M4 6H20M4 12H20M4 18H20"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon
+              name="ph:list"
+              class="w-5.5 h-5.5 shrink-0 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
           </button>
           <div class="custom-tooltip">
-            Toggle Sidebar
+            Sidebar
             <div class="tooltip-arrow"></div>
           </div>
         </div>
@@ -191,122 +176,46 @@ onMounted(() => {
             @click="isMobile && (isSidebarOpen = false)"
           >
             <div
-              class="shrink-0 transition-colors"
+              class="shrink-0 transition-colors w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
               :class="isActive(link) ? 'text-white' : 'text-slate-600'"
             >
-              <svg
+              <Icon
                 v-if="link.key === 'overview'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 3v18h18" />
-                <path d="m7 14 4-4 3 3 5-6" />
-              </svg>
-              <svg
+                name="ph:chart-line-up"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'users'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              <svg
+                name="ph:users-three"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'transactions'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="m17 2 4 4-4 4" />
-                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                <path d="m7 22-4-4 4-4" />
-                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-              </svg>
-              <svg
+                name="ph:arrows-left-right"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'disputes'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
-                <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
-                <path d="M7 21h10" />
-                <path d="M12 3v18" />
-                <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
-              </svg>
-              <svg
+                name="ph:scales"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'listings'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <path d="M3 10h18" />
-                <path d="M9 20V10" />
-              </svg>
-              <svg
+                name="ph:squares-four"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'wallet'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
-                <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
-                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
-              </svg>
-              <svg
+                name="ph:wallet"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'logs'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M8 6h13" />
-                <path d="M8 12h13" />
-                <path d="M8 18h13" />
-                <path d="M3 6h.01" />
-                <path d="M3 12h.01" />
-                <path d="M3 18h.01" />
-              </svg>
+                name="ph:activity"
+                class="w-[22px] h-[22px] shrink-0"
+              />
             </div>
-            <span class="text-[14px] font-medium">
+            <span class="text-[14px] font-medium leading-none">
               {{ link.label }}
             </span>
           </NuxtLink>
@@ -318,22 +227,12 @@ onMounted(() => {
             class="group flex items-center gap-3 px-4 py-3 text-slate-400 transition-all duration-200 hover:bg-white/5 border-l-[3px] border-transparent"
             @click="isMobile && (isSidebarOpen = false)"
           >
-            <div class="shrink-0 text-slate-600 transition-colors">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="m12 19-7-7 7-7" />
-                <path d="M19 12H5" />
-              </svg>
+            <div
+              class="shrink-0 text-slate-600 transition-colors w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
+            >
+              <Icon name="ph:arrow-left" class="w-[22px] h-[22px] shrink-0" />
             </div>
-            <span class="text-[14px] font-medium">Personal Account</span>
+            <span class="text-[14px] font-medium leading-none">Personal Account</span>
           </NuxtLink>
         </nav>
 
@@ -343,23 +242,17 @@ onMounted(() => {
             class="flex w-full items-center gap-3 px-4 py-3 text-slate-400 group transition-all duration-200 hover:text-white"
             @click="openLogoutModal"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-colors duration-200 text-slate-600 group-hover:text-burning-orange"
+            <div
+              class="shrink-0 w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
             >
-              <path
-                d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <Icon
+                name="ph:sign-out"
+                class="w-[22px] h-[22px] shrink-0 transition-colors duration-200 text-slate-600 group-hover:text-burning-orange"
               />
-            </svg>
-            <span class="text-[14px] font-medium transition-colors duration-200"> Log Out </span>
+            </div>
+            <span class="text-[14px] font-medium leading-none transition-colors duration-200">
+              Log Out
+            </span>
           </button>
         </div>
       </aside>
@@ -390,21 +283,7 @@ onMounted(() => {
         >
           <div class="flex flex-col items-center p-8 text-center">
             <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-                  stroke="#1f2937"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+              <Icon name="ph:sign-out" class="w-8 h-8 text-noble-black" />
             </div>
             <h3 class="text-[24px] font-bold text-noble-black">Log out?</h3>
             <p class="mt-2 text-[15px] leading-relaxed text-noble-black/60">

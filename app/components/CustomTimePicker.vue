@@ -7,35 +7,22 @@
       @click="toggleDropdown"
     >
       <div class="flex items-center flex-1">
-        <svg
+        <Icon
+          name="ph:clock"
           class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors shrink-0"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
+        />
         <span
-          class="ml-2 font-geist text-[13px] transition-colors truncate"
+          class="ml-2 font-geist text-[13px] transition-colors"
           :class="modelValue ? 'text-noble-black' : 'text-noble-black/40'"
         >
           {{ selectedLabel || placeholder }}
         </span>
       </div>
-      <svg
+      <Icon
+        name="ph:caret-down"
         class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors ml-1"
         :class="{ 'rotate-180': isOpen }"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-      </svg>
+      />
     </div>
 
     <!-- Time Dropdown -->

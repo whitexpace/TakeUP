@@ -64,15 +64,7 @@ const resetFilters = async () => {
         <div
           class="flex h-12 items-center gap-3 rounded-[12px] border-[1.5px] border-gray-200 bg-white px-5 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
         >
-          <svg
-            class="h-5 w-5 shrink-0 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <circle cx="11" cy="11" r="8" stroke-width="2" />
-            <path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" />
-          </svg>
+          <Icon name="ph:magnifying-glass" class="h-5 w-5 shrink-0 text-gray-400" />
           <input
             v-model="searchQuery"
             type="text"

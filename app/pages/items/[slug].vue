@@ -1132,20 +1132,11 @@ onUnmounted(() => {
         :to="backNavigationPath"
         class="flex items-center gap-2 text-noble-black/70 hover:text-burning-orange transition-colors mb-6 group"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <Icon
+          name="ph:caret-left"
+          size="20"
           class="transition-transform group-hover:-translate-x-1"
-        >
-          <path d="m15 18-6-6 6-6" />
-        </svg>
+        />
         <span class="font-normal">{{ backNavigationLabel }}</span>
       </NuxtLink>
 
@@ -1210,24 +1201,11 @@ onUnmounted(() => {
               title="Share"
               @click="shareItem"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <Icon
+                name="ph:share-network"
+                size="22"
                 class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
-              >
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
-                <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
-              </svg>
+              />
             </button>
             <button
               class="p-2 transition-all duration-300 ease-in-out group"
@@ -1237,23 +1215,12 @@ onUnmounted(() => {
               title="Save"
               @click="toggleSaved"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <Icon
+                name="ph:heart"
+                size="22"
                 class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
                 :class="{ 'fill-burning-orange/20': isSaved }"
-              >
-                <path
-                  d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
-                />
-              </svg>
+              />
             </button>
           </div>
         </div>
@@ -1261,14 +1228,10 @@ onUnmounted(() => {
         <!-- Rating Row -->
         <div class="flex items-center gap-2 mb-8 text-sm">
           <div class="flex items-center gap-1 text-burning-orange">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              />
-            </svg>
-            <span class="font-bold">{{ ratingLabel }}</span>
+            <Icon name="ph:star-fill" size="16" class="-translate-y-[0.5px]" />
+            <span class="font-bold leading-none">{{ ratingLabel }}</span>
           </div>
-          <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+          <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
         </div>
 
         <!-- Main Grid -->
@@ -1300,36 +1263,14 @@ onUnmounted(() => {
                   class="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   @click="prevImage"
                 >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="m15 18-6-6 6-6" />
-                  </svg>
+                  <Icon name="ph:caret-left" size="24" />
                 </button>
                 <button
                   v-if="imageGallery.length > 1"
                   class="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   @click="nextImage"
                 >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
+                  <Icon name="ph:caret-right" size="24" />
                 </button>
                 <div
                   class="absolute bottom-4 left-4 px-3 py-1.5 bg-white/80 backdrop-blur-sm text-noble-black text-[13px] font-medium rounded-full shadow-sm"
@@ -1340,22 +1281,7 @@ onUnmounted(() => {
                   class="absolute bottom-4 right-4 p-2 bg-white/80 backdrop-blur-sm text-noble-black rounded-full hover:bg-white transition-colors shadow-sm z-10"
                   @click="openLightbox"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M15 3h6v6" />
-                    <path d="M9 21H3v-6" />
-                    <path d="M21 3l-7 7" />
-                    <path d="M3 21l7-7" />
-                  </svg>
+                  <Icon name="ph:arrows-out" size="18" />
                 </button>
               </div>
               <div
@@ -1368,19 +1294,7 @@ onUnmounted(() => {
                   @click="scrollOnce('left')"
                 >
                   <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
+                    <Icon name="ph:caret-left" size="20" />
                   </div>
                 </div>
                 <div
@@ -1415,19 +1329,7 @@ onUnmounted(() => {
                   @click="scrollOnce('right')"
                 >
                   <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
+                    <Icon name="ph:caret-right" size="20" />
                   </div>
                 </div>
               </div>
@@ -1462,36 +1364,14 @@ onUnmounted(() => {
                           :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(-1)"
                         >
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          >
-                            <path d="m15 18-6-6 6-6" />
-                          </svg>
+                          <Icon name="ph:caret-left" size="20" />
                         </button>
                         <button
                           class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                           :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(1)"
                         >
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          >
-                            <path d="m9 18 6-6-6-6" />
-                          </svg>
+                          <Icon name="ph:caret-right" size="20" />
                         </button>
                       </div>
                     </div>
@@ -1599,20 +1479,7 @@ onUnmounted(() => {
                         @click="toggleStartTime"
                       >
                         {{ startTime
-                        }}<svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="text-noble-black/30"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                       </button>
                       <div
                         v-if="isStartTimeOpen"
@@ -1647,20 +1514,7 @@ onUnmounted(() => {
                         @click="toggleEndTime"
                       >
                         {{ endTime
-                        }}<svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="text-noble-black/30"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                       </button>
                       <div
                         v-if="isEndTimeOpen"
@@ -1745,20 +1599,7 @@ onUnmounted(() => {
                       :disabled="!canAddToBag"
                       @click="handleAddToBag"
                     >
-                      <svg
-                        v-if="isInBag"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <Icon v-if="isInBag" name="ph:check" size="18" class="stroke-[3]" />
                       {{ addToBagButtonLabel }}
                     </button>
                     <p
@@ -1795,18 +1636,8 @@ onUnmounted(() => {
                     </div>
                     <div class="h-px bg-cinnamon-ice/15 mb-4" />
                     <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
-                      ><span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
+                      <Icon name="ph:shield-check" size="14" />
+                      <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
                     </div>
                   </div>
                 </div>
@@ -1844,20 +1675,12 @@ onUnmounted(() => {
                           isCalendarExpanded,
                       }"
                     >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="text-noble-black/40"
-                        :class="{ '!text-burning-orange': isCalendarExpanded }"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
+                      <Icon
+                        name="ph:caret-down"
+                        size="20"
+                        class="text-noble-black/40 transition-transform duration-300"
+                        :class="{ 'rotate-180 !text-burning-orange': isCalendarExpanded }"
+                      />
                     </div>
                   </button>
                   <Transition
@@ -1892,36 +1715,14 @@ onUnmounted(() => {
                               :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(-1)"
                             >
-                              <svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                              >
-                                <path d="m15 18-6-6 6-6" />
-                              </svg>
+                              <Icon name="ph:caret-left" size="20" />
                             </button>
                             <button
                               class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                               :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(1)"
                             >
-                              <svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                              >
-                                <path d="m9 18 6-6-6-6" />
-                              </svg>
+                              <Icon name="ph:caret-right" size="20" />
                             </button>
                           </div>
                         </div>
@@ -2028,20 +1829,7 @@ onUnmounted(() => {
                             @click="toggleStartTime"
                           >
                             {{ startTime
-                            }}<svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="text-noble-black/30"
-                            >
-                              <path d="m6 9 6 6 6-6" />
-                            </svg>
+                            }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                           </button>
                           <div
                             v-if="isStartTimeOpen"
@@ -2076,20 +1864,7 @@ onUnmounted(() => {
                             @click="toggleEndTime"
                           >
                             {{ endTime
-                            }}<svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="text-noble-black/30"
-                            >
-                              <path d="m6 9 6 6 6-6" />
-                            </svg>
+                            }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                           </button>
                           <div
                             v-if="isEndTimeOpen"
@@ -2170,20 +1945,7 @@ onUnmounted(() => {
                     :disabled="!canAddToBag"
                     @click="handleAddToBag"
                   >
-                    <svg
-                      v-if="isInBag"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    <Icon v-if="isInBag" name="ph:check" size="16" class="stroke-[3]" />
                     {{ addToBagButtonLabel }}
                   </button>
                   <p
@@ -2217,18 +1979,8 @@ onUnmounted(() => {
                   </div>
                   <div class="h-px bg-cinnamon-ice/15 mb-4" />
                   <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
-                    ><span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
+                    <Icon name="ph:shield-check" size="14" />
+                    <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
                   </div>
                 </div>
               </div>
@@ -2369,19 +2121,7 @@ onUnmounted(() => {
                   class="flex items-center gap-2.5 px-3 py-2 bg-cream rounded-xl border border-cinnamon-ice/15"
                 >
                   <div class="text-burning-orange scale-90 shrink-0">
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="M12 5v14" />
-                    </svg>
+                    <Icon name="ph:plus" size="18" />
                   </div>
                   <span class="text-sm text-noble-black/90">{{ offer }}</span>
                 </div>
@@ -2395,20 +2135,7 @@ onUnmounted(() => {
                   :key="idx"
                   class="flex items-center gap-2.5"
                 >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-burning-orange"
-                  >
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
+                  <Icon name="ph:check-circle" size="18" class="text-burning-orange" />
                   <span class="text-noble-black/90 text-sm">{{ included }}</span>
                 </li>
               </ul>
@@ -2434,14 +2161,14 @@ onUnmounted(() => {
                   </h3>
                   <div class="flex items-center gap-1.5 text-sm">
                     <div class="flex items-center gap-1 text-burning-orange">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon
-                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                        />
-                      </svg>
-                      <span class="font-bold">{{ ratingLabel }}</span>
+                      <Icon
+                        name="ph:star-fill"
+                        size="14"
+                        class="fill-current -translate-y-[0.5px]"
+                      />
+                      <span class="font-bold leading-none">{{ ratingLabel }}</span>
                     </div>
-                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                    <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
                   </div>
                   <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
                     Item owner on TakeUP • View Profile
@@ -2451,19 +2178,7 @@ onUnmounted(() => {
               <div
                 class="ml-auto text-noble-black/20 group-hover/seller:text-burning-orange transition-colors"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+                <Icon name="ph:caret-right" size="24" />
               </div>
             </NuxtLink>
             <div
@@ -2482,14 +2197,14 @@ onUnmounted(() => {
                   </h3>
                   <div class="flex items-center gap-1.5 text-sm">
                     <div class="flex items-center gap-1 text-burning-orange">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon
-                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                        />
-                      </svg>
-                      <span class="font-bold">{{ ratingLabel }}</span>
+                      <Icon
+                        name="ph:star-fill"
+                        size="14"
+                        class="fill-current -translate-y-[0.5px]"
+                      />
+                      <span class="font-bold leading-none">{{ ratingLabel }}</span>
                     </div>
-                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                    <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
                   </div>
                   <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
                     Item owner on TakeUP
@@ -2522,36 +2237,14 @@ onUnmounted(() => {
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
+                    <Icon name="ph:caret-left" size="20" />
                   </button>
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
+                    <Icon name="ph:caret-right" size="20" />
                   </button>
                 </div>
               </div>
@@ -2657,21 +2350,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
-                  {{ startTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isStartTimeOpen"
@@ -2705,21 +2384,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
-                  {{ endTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isEndTimeOpen"
@@ -2791,20 +2456,7 @@ onUnmounted(() => {
                 :disabled="!canAddToBag"
                 @click="handleAddToBag"
               >
-                <svg
-                  v-if="isInBag"
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Icon v-if="isInBag" name="ph:check" size="16" class="stroke-[3]" />
                 {{ addToBagButtonLabel }}
               </button>
               <p
@@ -2835,18 +2487,8 @@ onUnmounted(() => {
               </div>
               <div class="h-px bg-cinnamon-ice/15 mb-4" />
               <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
-                ><span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
+                <Icon name="ph:shield-check" size="14" />
+                <span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
               </div>
             </div>
           </div>
@@ -2900,17 +2542,7 @@ onUnmounted(() => {
                 class="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
                 @click="showPaymentModal = false"
               >
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <Icon name="ph:x" size="24" />
               </button>
             </div>
 
@@ -2970,20 +2602,7 @@ onUnmounted(() => {
           :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
           @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
         >
-          <svg
-            v-if="isInBag"
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="3"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
           {{
             isItemUnavailableForBooking
               ? `Currently ${unavailableItemLabel}`
@@ -3005,20 +2624,7 @@ onUnmounted(() => {
         :disabled="isItemUnavailableForBooking"
         @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
       >
-        <svg
-          v-if="isInBag"
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
+        <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
         {{ mobileBookingButtonLabel }}
       </button>
     </div>
@@ -3041,18 +2647,7 @@ onUnmounted(() => {
             class="sticky top-0 bg-white border-b border-cinnamon-ice/15 p-4 flex items-center justify-between z-10"
           >
             <button class="p-2 -ml-2" @click="closeBookingModal">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x" size="24" />
             </button>
             <h2 class="font-bold text-noble-black text-base">Booking Details</h2>
             <div class="w-10" />
@@ -3078,36 +2673,14 @@ onUnmounted(() => {
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
+                    <Icon name="ph:caret-left" size="20" />
                   </button>
                   <button
                     class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
+                    <Icon name="ph:caret-right" size="20" />
                   </button>
                 </div>
               </div>
@@ -3213,21 +2786,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
-                  {{ startTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isStartTimeOpen"
@@ -3261,21 +2820,7 @@ onUnmounted(() => {
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
-                  {{ endTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-noble-black/30" />
                 </button>
                 <div
                   v-if="isEndTimeOpen"
@@ -3386,55 +2931,21 @@ onUnmounted(() => {
             class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors p-2 z-[2010]"
             @click="closeLightbox"
           >
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <Icon name="ph:x" size="32" />
           </button>
           <button
             v-if="imageGallery.length > 1"
             class="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[2010]"
             @click="prevImage"
           >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+            <Icon name="ph:caret-left" size="48" />
           </button>
           <button
             v-if="imageGallery.length > 1"
             class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[2010]"
             @click="nextImage"
           >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m9 18 6-6-6-6" />
-            </svg>
+            <Icon name="ph:caret-right" size="48" />
           </button>
           <div class="relative w-full h-full flex items-center justify-center">
             <img

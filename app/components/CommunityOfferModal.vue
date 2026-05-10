@@ -28,16 +28,7 @@
               aria-label="Close offer form"
               @click="closeModal"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
           </div>
 

@@ -11,8 +11,7 @@ const formatName = (u: { firstName: string; lastName: string }) => {
     return first.charAt(0).toUpperCase() + first.slice(1)
   }
 
-  const lastInitial = last.charAt(0).toUpperCase()
-  return `${first} ${lastInitial}.`
+  return `${first} ${last}`
 }
 
 export const userRouter = router({

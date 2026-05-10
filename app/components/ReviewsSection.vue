@@ -190,20 +190,13 @@ const initialsFor = (name: string) =>
           {{ rating.toFixed(1) }}
         </div>
         <div class="flex items-center gap-1 text-burning-orange mb-2">
-          <svg
+          <Icon
             v-for="i in 5"
             :key="i"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            :fill="i <= Math.round(rating) ? 'currentColor' : 'none'"
-            :stroke="i <= Math.round(rating) ? 'none' : 'currentColor'"
-            stroke-width="1.5"
-          >
-            <polygon
-              points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-            />
-          </svg>
+            name="ph:star-fill"
+            class="w-6 h-6 -translate-y-[0.5px]"
+            :class="i <= Math.round(rating) ? 'opacity-100' : 'opacity-20'"
+          />
         </div>
         <div class="text-sm text-noble-black/60 font-medium">
           Based on {{ reviewsCount }} reviews
@@ -214,18 +207,13 @@ const initialsFor = (name: string) =>
       <div class="space-y-4">
         <div v-for="dist in ratingsDistribution" :key="dist.stars" class="flex items-center gap-4">
           <div class="flex items-center gap-1.5 w-10 shrink-0">
-            <span class="text-sm font-semibold text-noble-black">{{ dist.stars }}</span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              class="text-burning-orange"
-            >
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              />
-            </svg>
+            <span class="text-sm font-semibold text-noble-black leading-none">{{
+              dist.stars
+            }}</span>
+            <Icon
+              name="ph:star-fill"
+              class="w-3.5 h-3.5 text-burning-orange -translate-y-[0.5px] shrink-0"
+            />
           </div>
           <div class="flex-1 h-3 bg-cream rounded-full overflow-hidden">
             <div
@@ -255,35 +243,14 @@ const initialsFor = (name: string) =>
           @click="selectedFilter = filter.value"
         >
           <span class="flex items-center gap-1.5">
-            <svg
-              v-if="filter.value === 'visuals'"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path
-                d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
-              />
-              <circle cx="12" cy="13" r="3" />
-            </svg>
+            <Icon v-if="filter.value === 'visuals'" name="ph:camera" class="w-3.5 h-3.5" />
             {{ filter.label }}
-            <svg
+            <Icon
               v-if="filter.isStar"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="currentColor"
+              name="ph:star-fill"
+              class="w-3.5 h-3.5"
               :class="selectedFilter === filter.value ? 'text-white' : 'text-burning-orange'"
-            >
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              />
-            </svg>
+            />
           </span>
         </button>
       </div>
@@ -294,20 +261,11 @@ const initialsFor = (name: string) =>
           @click="toggleSort"
         >
           <span class="text-burning-orange font-semibold">{{ sortBy }}</span>
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="transition-transform text-noble-black/40"
+          <Icon
+            name="ph:caret-down"
+            class="w-4.5 h-4.5 transition-transform text-noble-black/40"
             :class="{ 'rotate-180': isSortOpen }"
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+          />
         </button>
         <Transition
           enter-active-class="transition duration-100 ease-out"
@@ -380,20 +338,13 @@ const initialsFor = (name: string) =>
             </div>
           </div>
           <div class="flex items-center gap-0.5 text-burning-orange">
-            <svg
+            <Icon
               v-for="i in 5"
               :key="i"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              :fill="i <= review.rating ? 'currentColor' : 'none'"
-              :stroke="i <= review.rating ? 'none' : 'currentColor'"
-              stroke-width="2"
-            >
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              />
-            </svg>
+              name="ph:star-fill"
+              class="w-3 h-3 -translate-y-[0.5px]"
+              :class="i <= review.rating ? 'opacity-100' : 'opacity-20'"
+            />
           </div>
         </div>
 
@@ -435,18 +386,7 @@ const initialsFor = (name: string) =>
         @click="loadMore"
       >
         View more reviews
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <Icon name="ph:caret-down" class="w-4 h-4" />
       </button>
     </div>
 
@@ -468,19 +408,7 @@ const initialsFor = (name: string) =>
             class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors p-2 z-[3010]"
             @click.stop="closeLightbox"
           >
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <Icon name="ph:x" class="w-8 h-8" />
           </button>
 
           <button
@@ -488,18 +416,7 @@ const initialsFor = (name: string) =>
             class="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[3010]"
             @click.stop="prevLightboxImage"
           >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+            <Icon name="ph:caret-left" class="w-12 h-12" />
           </button>
 
           <button
@@ -507,18 +424,7 @@ const initialsFor = (name: string) =>
             class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[3010]"
             @click.stop="nextLightboxImage"
           >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m9 18 6-6-6-6" />
-            </svg>
+            <Icon name="ph:caret-right" class="w-12 h-12" />
           </button>
 
           <div class="relative w-full h-full flex items-center justify-center" @click.stop>

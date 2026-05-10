@@ -81,7 +81,7 @@ const earnActions = [
     desc: "Complete borrowing activity to steadily build points.",
     pts: "+10 pts",
     link: "/dashboard",
-    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16h6"/><path d="M19 13v6"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/><path d="m7.5 4.27 9 5.15"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+    icon: "ph:package",
   },
   {
     id: "review",
@@ -89,7 +89,7 @@ const earnActions = [
     desc: "Leave timely reviews after completed transactions.",
     pts: "+5 pts",
     link: "/account/transactions",
-    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+    icon: "ph:note-pencil",
   },
 ]
 
@@ -97,12 +97,12 @@ const redemptions = [
   {
     title: "5% Discount Coupon",
     cost: 200,
-    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9V5.2a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2V9a2 2 0 0 0 0 6v3.8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V15a2 2 0 0 0 0-6Z"/><path d="M15 3v18"/><path d="m8 10 2 2-2 2"/></svg>',
+    icon: "ph:ticket",
   },
   {
     title: "₱50 Wallet Credit",
     cost: 600,
-    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4Z"/></svg>',
+    icon: "ph:wallet",
   },
 ]
 
@@ -156,7 +156,9 @@ const formatDateTime = (value: string | Date) => {
       <section class="space-y-3">
         <div class="flex items-center gap-4">
           <div class="space-y-2">
-            <h1 class="text-[28px] font-semibold text-noble-black leading-tight">My Rewards</h1>
+            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+              My Rewards
+            </h1>
             <div class="w-10 h-0.5 bg-burning-orange"></div>
           </div>
           <div
@@ -167,7 +169,7 @@ const formatDateTime = (value: string | Date) => {
             >
           </div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Quality reviews earn you reward points you can redeem for perks.
         </p>
       </section>
@@ -194,9 +196,7 @@ const formatDateTime = (value: string | Date) => {
               {{ (summary?.availablePoints ?? 0).toLocaleString() }}
             </h2>
           </div>
-          <p class="text-[14px] font-semibold text-noble-black/50 mt-2">
-            points available to spend
-          </p>
+          <p class="text-[14px] font-light text-noble-black/50 mt-2">points available to spend</p>
         </div>
 
         <!-- Progress Ring -->
@@ -240,8 +240,8 @@ const formatDateTime = (value: string | Date) => {
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
-          <h2 class="text-[20px] font-bold text-noble-black">How to Earn</h2>
-          <p class="text-[13px] font-medium text-noble-black/50">
+          <h2 class="text-[20px] font-semibold text-noble-black">How to Earn</h2>
+          <p class="text-[13px] font-light text-noble-black/50">
             Ways to build your points balance
           </p>
         </div>
@@ -256,19 +256,13 @@ const formatDateTime = (value: string | Date) => {
             <div class="flex items-center justify-between">
               <div
                 class="w-10 h-10 rounded-full bg-burning-orange/[0.05] flex items-center justify-center text-burning-orange group-hover:bg-burning-orange group-hover:text-white transition-colors duration-300"
-                v-html="action.icon"
-              ></div>
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                class="text-noble-black/20 group-hover:text-burning-orange group-hover:translate-x-1 transition-all"
               >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
+                <Icon :name="action.icon" class="w-5 h-5" />
+              </div>
+              <Icon
+                name="ph:arrow-right"
+                class="w-5 h-5 text-noble-black/20 group-hover:text-burning-orange group-hover:translate-x-1 transition-all"
+              />
             </div>
             <div>
               <h3 class="text-[15px] font-bold text-noble-black mb-1">{{ action.title }}</h3>
@@ -292,8 +286,8 @@ const formatDateTime = (value: string | Date) => {
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
-          <h2 class="text-[20px] font-bold text-noble-black">Spend Your Points</h2>
-          <p class="text-[13px] font-medium text-noble-black/50">
+          <h2 class="text-[20px] font-semibold text-noble-black">Spend Your Points</h2>
+          <p class="text-[13px] font-light text-noble-black/50">
             Redeem your points for exclusive perks or listing visibility
           </p>
         </div>
@@ -309,8 +303,9 @@ const formatDateTime = (value: string | Date) => {
                   <div class="flex items-center gap-4">
                     <div
                       class="w-11 h-11 rounded-[12px] bg-noble-black/5 flex items-center justify-center text-blue-estate"
-                      v-html="reward.icon"
-                    ></div>
+                    >
+                      <Icon :name="reward.icon" class="w-6 h-6" />
+                    </div>
                     <div>
                       <p class="text-[14px] font-bold text-noble-black leading-tight">
                         {{ reward.title }}
@@ -331,20 +326,11 @@ const formatDateTime = (value: string | Date) => {
                     "
                     :disabled="!canAfford(reward.cost)"
                   >
-                    <svg
+                    <Icon
                       v-if="!canAfford(reward.cost)"
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
+                      name="ph:lock-simple"
+                      class="w-3.5 h-3.5"
+                    />
                     {{ canAfford(reward.cost) ? "Claim" : "Locked" }}
                   </button>
                 </div>
@@ -441,25 +427,7 @@ const formatDateTime = (value: string | Date) => {
           <div
             class="w-14 h-14 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/10 mb-4"
           >
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path
-                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
-              />
-              <path
-                d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 22 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22 0 0 1-4 2z"
-              />
-              <path d="M9 12H4s.5-1 1-4c2 1 3 2 4 4z" />
-              <path d="M12 15v5s1-.5 4-1c-2-1-3-2-4-4z" />
-            </svg>
+            <Icon name="ph:rocket-launch" class="w-8 h-8" />
           </div>
           <p class="text-[15px] font-bold text-noble-black/40">No active boosts</p>
           <p
@@ -508,19 +476,7 @@ const formatDateTime = (value: string | Date) => {
                   </div>
                 </div>
                 <div class="flex items-center gap-1.5 text-[12px] font-medium text-noble-black/40">
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
+                  <Icon name="ph:clock" class="w-3.5 h-3.5" />
                   <span
                     >{{ formatDateTime(boost.boostStartedAt) }} →
                     {{ formatDateTime(boost.boostExpiresAt) }}</span

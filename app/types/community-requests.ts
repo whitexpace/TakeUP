@@ -86,6 +86,8 @@ export interface Reply {
   user: Pick<CommunityMember, "name" | "avatar" | "username">
   text: string
   upvotes: number
+  isUpvoted?: boolean
+  createdAt: Date
   replies?: Reply[]
 }
 

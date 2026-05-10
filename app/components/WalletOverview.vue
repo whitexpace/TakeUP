@@ -112,10 +112,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
   <div class="space-y-6 font-geist">
     <section class="space-y-3">
       <div class="space-y-2">
-        <h1 class="text-[28px] font-semibold text-noble-black">{{ title }}</h1>
+        <h1 class="font-montravia text-[36px] font-medium text-noble-black">{{ title }}</h1>
         <div class="w-10 h-0.5 bg-burning-orange"></div>
       </div>
-      <p class="text-[16px] font-medium text-noble-black/50">
+      <p class="text-[16px] font-light text-noble-black/50">
         {{ subtitle }}
       </p>
     </section>
@@ -176,46 +176,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                 title="Toggle Balance Visibility"
                 @click="onToggleBalance"
               >
-                <svg
-                  v-if="isBalanceVisible"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                <svg
-                  v-else
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
-                  />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
+                <Icon v-if="isBalanceVisible" name="ph:eye" class="w-6 h-6 shrink-0" />
+                <Icon v-else name="ph:eye-slash" class="w-6 h-6 shrink-0" />
               </button>
-              <svg
-                v-if="isSystemWallet"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                class="text-white/40"
-              >
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
+              <Icon v-if="isSystemWallet" name="ph:lock-simple" class="w-5 h-5 text-white/40" />
             </div>
           </div>
         </div>
@@ -258,19 +222,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         class="flex items-center gap-3 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-3 w-full max-w-[760px]"
       >
         <div class="text-blue-700 shrink-0">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
+          <Icon name="ph:shield-check" class="w-[18px] h-[18px]" />
         </div>
         <p class="text-[13px] leading-relaxed">
           <span class="font-bold text-blue-900">{{ protectionTitle }}</span>
@@ -281,22 +233,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
 
       <div v-else class="inline-flex items-start sm:items-center gap-3 max-w-full">
         <div class="text-burning-orange shrink-0 mt-0.5 sm:mt-0">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
+          <Icon name="ph:shield-check" class="w-[18px] h-[18px]" />
         </div>
-        <p class="text-[13px] font-medium text-noble-black/70 leading-relaxed">
-          <span class="font-bold text-noble-black">{{ protectionTitle }}</span>
+        <p class="text-[13px] font-light text-noble-black/50 leading-relaxed">
+          <span class="font-semibold text-noble-black">{{ protectionTitle }}</span>
           <span class="mx-2 text-noble-black/20 select-none hidden sm:inline">·</span>
           <span class="opacity-90 block sm:inline">{{ protectionMessage }}</span>
         </p>
@@ -311,8 +251,8 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-8 space-y-8 flex flex-col h-full shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div class="border-l-[3px] border-burning-orange pl-4">
-          <h3 class="text-[20px] font-bold text-noble-black font-geist">Linked Accounts</h3>
-          <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">
+          <h3 class="text-[20px] font-semibold text-noble-black font-geist">Linked Accounts</h3>
+          <p class="mt-0.5 text-[13px] font-light text-noble-black/50">
             Manage your payment methods
           </p>
         </div>
@@ -335,37 +275,14 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             <button
               class="p-2 text-noble-black/30 hover:text-noble-black hover:bg-neutral-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="1" />
-                <circle cx="12" cy="5" r="1" />
-                <circle cx="12" cy="19" r="1" />
-              </svg>
+              <Icon name="ph:dots-three-vertical" class="w-5 h-5" />
             </button>
           </div>
         </div>
         <button
           class="w-full py-4 border-2 border-dashed border-burning-orange/30 text-burning-orange rounded-[14px] font-bold hover:bg-burning-orange/5 hover:border-burning-orange transition-all flex items-center justify-center gap-3 text-[16px] active:scale-[0.98]"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+          <Icon name="ph:plus" class="w-5 h-5" />
           Add Payment Method
         </button>
       </div>
@@ -380,8 +297,8 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         "
       >
         <div class="border-l-[3px] border-burning-orange pl-4">
-          <h3 class="text-[20px] font-bold text-noble-black font-geist">{{ activityTitle }}</h3>
-          <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">{{ activitySubtitle }}</p>
+          <h3 class="text-[20px] font-semibold text-noble-black font-geist">{{ activityTitle }}</h3>
+          <p class="mt-0.5 text-[13px] font-light text-noble-black/50">{{ activitySubtitle }}</p>
         </div>
 
         <div
@@ -389,17 +306,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
           class="flex-1 flex flex-col items-center justify-center py-12 text-center"
         >
           <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              class="text-gray-400"
-            >
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
+            <Icon name="ph:currency-circle-dollar" class="w-6 h-6 text-gray-400" />
           </div>
           <p class="text-[15px] font-semibold text-gray-400">
             {{ isSystemWallet ? "No commission activity yet" : "No transactions yet" }}
@@ -474,32 +381,12 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                       : 'bg-cinnabar-red/10 text-cinnabar-red'
                   "
                 >
-                  <svg
+                  <Icon
                     v-if="tx.direction === 'CREDIT'"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 19V5M5 12l7-7 7 7" />
-                  </svg>
-                  <svg
-                    v-else
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 5v14M5 12l7 7 7-7" />
-                  </svg>
+                    name="ph:arrow-up-right"
+                    class="w-[18px] h-[18px]"
+                  />
+                  <Icon v-else name="ph:arrow-down-left" class="w-[18px] h-[18px]" />
                 </div>
                 <div class="min-w-0">
                   <p class="font-semibold text-noble-black text-[15px] leading-tight">
@@ -559,14 +446,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
               class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="showTopUpModal = false"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M18 6L6 18M6 6L18 18"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-              </svg>
+              <Icon name="ph:x" class="w-5 h-5" />
             </button>
           </div>
 
@@ -574,21 +454,10 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
           <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
             <div class="py-6">
               <div class="bg-burning-orange/5 p-4 rounded-[16px] mb-8 flex items-start gap-3">
-                <svg
-                  class="text-burning-orange mt-0.5 shrink-0"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="16" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12.01" y2="8" />
-                </svg>
+                <Icon
+                  name="ph:info"
+                  class="text-burning-orange mt-0.5 shrink-0 w-[18px] h-[18px]"
+                />
                 <p class="text-[13px] font-medium text-burning-orange/80 leading-relaxed">
                   {{ topUpNotice }}
                 </p>

@@ -338,258 +338,213 @@ watch(
 </script>
 
 <template>
-  <main class="custom-main-scrollbar min-h-screen overflow-y-auto bg-white">
-    <div class="container mx-auto max-w-7xl px-4 py-8 pt-20 sm:pt-24">
-      <div class="mb-8">
-        <h1 class="font-geist text-[36px] font-bold leading-tight text-noble-black">Liked Items</h1>
-        <p class="mt-1 font-geist text-[20px] text-noble-black/70">
-          Review and manage items you like
-        </p>
+  <div class="mx-auto max-w-7xl py-8 pt-20 sm:pt-24">
+    <div class="mb-8">
+      <div class="space-y-2">
+        <h1 class="font-montravia text-[36px] font-medium leading-tight text-noble-black">
+          Liked Items
+        </h1>
+        <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
       </div>
+      <p class="mt-2 font-geist text-[16px] font-light text-noble-black/50">
+        Review and manage items you like
+      </p>
+    </div>
 
-      <!-- Search Bar Section (Modernized to match Dashboard) -->
-      <div class="mb-8 flex items-center w-full max-w-3xl">
-        <!-- Unified Search Container -->
-        <div
-          class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
-        >
-          <!-- Search Icon / Clear Button -->
-          <div class="flex items-center justify-center w-10 shrink-0">
-            <button
-              v-if="searchInput"
-              class="text-noble-black/30 hover:text-noble-black/60 transition-colors"
-              title="Clear search"
-              @click="clearSearch"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-            <svg
-              v-else
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-noble-black/30"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-          </div>
-
-          <!-- Search Input -->
-          <input
-            v-model="searchInput"
-            type="text"
-            placeholder="Search for your liked items..."
-            class="flex-1 bg-transparent px-2 font-geist font-medium text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
-            @focus="onSearchFocus"
-            @blur="onSearchBlur"
-            @keydown.down.prevent="moveSuggestionHighlight(1)"
-            @keydown.up.prevent="moveSuggestionHighlight(-1)"
-            @keydown.enter.prevent="applySuggestionOrSearch"
-          />
-
-          <!-- Integrated Search Button -->
+    <!-- Search Bar Section (Modernized to match Dashboard) -->
+    <div class="mb-8 flex items-center w-full max-w-3xl">
+      <!-- Unified Search Container -->
+      <div
+        class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
+      >
+        <!-- Search Icon / Clear Button -->
+        <div class="flex items-center justify-center w-10 shrink-0">
           <button
-            class="h-9 px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
-            @click="applySearch"
+            v-if="searchInput"
+            class="text-noble-black/30 hover:text-noble-black/60 transition-colors"
+            title="Clear search"
+            @click="clearSearch"
           >
-            Search
+            <Icon name="ph:x" class="w-[18px] h-[18px]" />
           </button>
-
-          <!-- Suggestions Dropdown -->
-          <div
-            v-if="showSuggestions"
-            class="absolute top-full left-0 right-0 mt-2 z-30 rounded-[14px] border border-cinnamon-ice/30 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] overflow-hidden"
-          >
-            <button
-              v-for="(suggestion, index) in searchSuggestions"
-              :key="`${suggestion.type}-${suggestion.value}-${index}`"
-              type="button"
-              class="w-full px-5 py-3 text-left font-geist text-[14px] text-noble-black hover:bg-cream/50 transition-colors flex items-center justify-between group"
-              :class="index === highlightedSuggestionIndex ? 'bg-cream' : ''"
-              @mousedown.prevent="selectSuggestion(suggestion.value)"
-            >
-              <div class="flex items-center gap-3">
-                <svg
-                  class="text-noble-black/20 group-hover:text-burning-orange transition-colors"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-                <span class="font-medium">{{ suggestion.label }}</span>
-              </div>
-              <span
-                class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-noble-black/5 px-2 py-0.5 rounded"
-                >{{ suggestion.type }}</span
-              >
-            </button>
-          </div>
+          <Icon v-else name="ph:magnifying-glass" class="w-[18px] h-[18px] text-noble-black/30" />
         </div>
-      </div>
 
-      <!-- Sophisticated Filter Pills (Two-pill layout) -->
-      <div class="flex items-center gap-3 mb-4">
-        <!-- All Pill -->
+        <!-- Search Input -->
+        <input
+          v-model="searchInput"
+          type="text"
+          placeholder="Search for your liked items..."
+          class="flex-1 bg-transparent px-2 font-geist font-medium text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
+          @focus="onSearchFocus"
+          @blur="onSearchBlur"
+          @keydown.down.prevent="moveSuggestionHighlight(1)"
+          @keydown.up.prevent="moveSuggestionHighlight(-1)"
+          @keydown.enter.prevent="applySuggestionOrSearch"
+        />
+
+        <!-- Integrated Search Button -->
         <button
-          class="px-5 py-2.5 rounded-full font-geist text-[13px] font-bold transition-all border-[1.5px] whitespace-nowrap"
-          :class="
-            selectedCategory === 'ALL'
-              ? 'bg-burning-orange border-burning-orange text-white shadow-sm'
-              : 'bg-white border-noble-black/10 text-noble-black/60 hover:border-burning-orange/30 hover:bg-burning-orange/5'
-          "
-          @click="clearFilters"
+          class="h-9 px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
+          @click="applySearch"
         >
-          All Items
+          Search
         </button>
 
-        <!-- Categories Dropdown Pill -->
-        <div class="relative">
-          <select
-            v-model="selectedCategory"
-            class="appearance-none px-5 pr-10 py-2.5 rounded-full font-geist text-[13px] font-bold transition-all border-[1.5px] bg-white cursor-pointer focus:outline-none min-w-[140px]"
-            :class="
-              selectedCategory !== 'ALL'
-                ? 'bg-burning-orange border-burning-orange text-white shadow-sm'
-                : 'border-noble-black/10 text-noble-black/60 hover:border-burning-orange/30 hover:bg-burning-orange/5'
-            "
-          >
-            <option value="ALL">All Categories</option>
-            <option
-              v-for="category in categoryOptions"
-              :key="category.value"
-              :value="category.value"
-              class="text-noble-black bg-white"
-            >
-              {{ category.label }}
-            </option>
-          </select>
-          <!-- Custom Chevron Icon -->
-          <div
-            class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
-            :class="selectedCategory !== 'ALL' ? 'text-white' : 'text-noble-black/40'"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- Results Count -->
-      <p class="font-geist text-[14px] text-noble-black/50 mb-6">
-        {{ likedItemsCount }} {{ likedItemsCount === 1 ? "liked item" : "liked items" }}
-      </p>
-
-      <div class="">
+        <!-- Suggestions Dropdown -->
         <div
-          v-if="cardItems.length > 0 || isLoading"
-          class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
+          v-if="showSuggestions"
+          class="absolute top-full left-0 right-0 mt-2 z-30 rounded-[14px] border border-cinnamon-ice/30 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] overflow-hidden"
         >
-          <ItemCard
-            v-for="item in cardItems"
-            :id="item.id"
-            :key="item.id"
-            from-page="likes"
-            :type="item.type"
-            :status="item.status"
-            :is-trending="item.isTrending"
-            :image="item.image"
-            :category="item.category"
-            :name="item.name"
-            :rating="item.rating"
-            :reviews="item.reviews"
-            :price="item.price"
-            :price-unit="item.priceUnit"
-            :owner="item.owner"
-            :owner-username="item.ownerUsername"
-            :is-liked="item.isLiked"
-            @like-changed="handleLikeChanged"
-          />
-
-          <template v-if="isLoading">
-            <ItemCardSkeleton v-for="i in 4" :key="`likes-skeleton-${i}`" />
-          </template>
-        </div>
-
-        <div
-          v-else-if="errorMessage"
-          class="mt-2 rounded-[20px] border border-cinnamon-ice/50 bg-cream px-4 py-20 text-center"
-        >
-          <h3 class="font-geist text-[26px] font-semibold text-noble-black">
-            Unable to load likes
-          </h3>
-          <p class="mx-auto mt-2 max-w-md font-geist text-[16px] text-noble-black/70">
-            {{ errorMessage }}
-          </p>
           <button
-            class="mt-6 h-[46px] rounded-[12px] bg-burning-orange px-7 font-geist text-[15px] font-medium text-white transition-colors hover:bg-blue-estate"
-            @click="reload"
+            v-for="(suggestion, index) in searchSuggestions"
+            :key="`${suggestion.type}-${suggestion.value}-${index}`"
+            type="button"
+            class="w-full px-5 py-3 text-left font-geist text-[14px] text-noble-black hover:bg-cream/50 transition-colors flex items-center justify-between group"
+            :class="index === highlightedSuggestionIndex ? 'bg-cream' : ''"
+            @mousedown.prevent="selectSuggestion(suggestion.value)"
           >
-            Retry
+            <div class="flex items-center gap-3">
+              <Icon
+                name="ph:magnifying-glass"
+                class="w-3.5 h-3.5 text-noble-black/20 group-hover:text-burning-orange transition-colors"
+              />
+              <span class="font-medium">{{ suggestion.label }}</span>
+            </div>
+            <span
+              class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30 bg-noble-black/5 px-2 py-0.5 rounded"
+              >{{ suggestion.type }}</span
+            >
           </button>
         </div>
-
-        <div
-          v-else
-          class="mt-2 rounded-[20px] border border-cinnamon-ice/50 bg-cream px-4 py-20 text-center"
-        >
-          <h3 class="font-geist text-[26px] font-semibold text-noble-black">
-            No available liked items
-          </h3>
-          <p class="mx-auto mt-2 max-w-md font-geist text-[16px] text-noble-black/70">
-            Your liked items may be inactive, fully booked, or outside their available dates.
-          </p>
-          <button
-            v-if="searchInput || selectedCategory !== 'ALL'"
-            class="mt-6 h-[46px] rounded-[12px] bg-burning-orange px-7 font-geist text-[15px] font-medium text-white transition-colors hover:bg-blue-estate"
-            @click="
-              () => {
-                clearSearch()
-                clearFilters()
-              }
-            "
-          >
-            Clear Search & Filters
-          </button>
-        </div>
-
-        <div ref="loadMoreTrigger" class="h-10 w-full" />
       </div>
     </div>
-  </main>
+
+    <!-- Sophisticated Filter Pills (Two-pill layout) -->
+    <div class="flex items-center gap-3 mb-4">
+      <!-- All Pill -->
+      <button
+        class="px-5 py-2.5 rounded-full font-geist text-[13px] font-bold transition-all border-[1.5px] whitespace-nowrap"
+        :class="
+          selectedCategory === 'ALL'
+            ? 'bg-burning-orange border-burning-orange text-white shadow-sm'
+            : 'bg-white border-noble-black/10 text-noble-black/60 hover:border-burning-orange/30 hover:bg-burning-orange/5'
+        "
+        @click="clearFilters"
+      >
+        All Items
+      </button>
+
+      <!-- Categories Dropdown Pill -->
+      <div class="relative">
+        <select
+          v-model="selectedCategory"
+          class="appearance-none px-5 pr-10 py-2.5 rounded-full font-geist text-[13px] font-bold transition-all border-[1.5px] bg-white cursor-pointer focus:outline-none min-w-[140px]"
+          :class="
+            selectedCategory !== 'ALL'
+              ? 'bg-burning-orange border-burning-orange text-white shadow-sm'
+              : 'border-noble-black/10 text-noble-black/60 hover:border-burning-orange/30 hover:bg-burning-orange/5'
+          "
+        >
+          <option value="ALL">All Categories</option>
+          <option
+            v-for="category in categoryOptions"
+            :key="category.value"
+            :value="category.value"
+            class="text-noble-black bg-white"
+          >
+            {{ category.label }}
+          </option>
+        </select>
+        <!-- Custom Chevron Icon -->
+        <div
+          class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+          :class="selectedCategory !== 'ALL' ? 'text-white' : 'text-noble-black/40'"
+        >
+          <Icon name="ph:caret-down" class="w-3.5 h-3.5" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Count -->
+    <p class="font-geist text-[14px] text-noble-black/50 mb-6">
+      {{ likedItemsCount }} {{ likedItemsCount === 1 ? "liked item" : "liked items" }}
+    </p>
+
+    <div class="">
+      <div
+        v-if="cardItems.length > 0 || isLoading"
+        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
+      >
+        <ItemCard
+          v-for="item in cardItems"
+          :id="item.id"
+          :key="item.id"
+          from-page="likes"
+          :type="item.type"
+          :status="item.status"
+          :is-trending="item.isTrending"
+          :image="item.image"
+          :category="item.category"
+          :name="item.name"
+          :rating="item.rating"
+          :reviews="item.reviews"
+          :price="item.price"
+          :price-unit="item.priceUnit"
+          :owner="item.owner"
+          :owner-username="item.ownerUsername"
+          :is-liked="item.isLiked"
+          @like-changed="handleLikeChanged"
+        />
+
+        <template v-if="isLoading">
+          <ItemCardSkeleton v-for="i in 4" :key="`likes-skeleton-${i}`" />
+        </template>
+      </div>
+
+      <div
+        v-else-if="errorMessage"
+        class="mt-2 rounded-[20px] border border-cinnamon-ice/50 bg-cream px-4 py-20 text-center"
+      >
+        <h3 class="font-geist text-[26px] font-semibold text-noble-black">Unable to load likes</h3>
+        <p class="mx-auto mt-2 max-w-md font-geist text-[16px] text-noble-black/70">
+          {{ errorMessage }}
+        </p>
+        <button
+          class="mt-6 h-[46px] rounded-[12px] bg-burning-orange px-7 font-geist text-[15px] font-medium text-white transition-colors hover:bg-blue-estate"
+          @click="reload"
+        >
+          Retry
+        </button>
+      </div>
+
+      <div
+        v-else
+        class="mt-2 rounded-[20px] border border-cinnamon-ice/50 bg-cream px-4 py-20 text-center"
+      >
+        <h3 class="font-geist text-[26px] font-semibold text-noble-black">
+          No available liked items
+        </h3>
+        <p class="mx-auto mt-2 max-w-md font-geist text-[16px] text-noble-black/70">
+          Your liked items may be inactive, fully booked, or outside their available dates.
+        </p>
+        <button
+          v-if="searchInput || selectedCategory !== 'ALL'"
+          class="mt-6 h-[46px] rounded-[12px] bg-burning-orange px-7 font-geist text-[15px] font-medium text-white transition-colors hover:bg-blue-estate"
+          @click="
+            () => {
+              clearSearch()
+              clearFilters()
+            }
+          "
+        >
+          Clear Search & Filters
+        </button>
+      </div>
+
+      <div ref="loadMoreTrigger" class="h-10 w-full" />
+    </div>
+  </div>
 </template>
 
 <style scoped>

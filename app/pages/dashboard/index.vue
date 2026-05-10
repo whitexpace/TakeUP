@@ -1,11 +1,13 @@
 <template>
-  <div class="mx-auto px-4 sm:px-8 lg:px-10 xl:px-12 py-8 pt-16 max-w-[1600px]">
+  <div class="mx-auto py-8 pt-16 max-w-[1600px]">
     <!-- Header Section -->
     <div class="mb-10">
-      <h1 class="font-rewon text-[40px] text-noble-black leading-tight mb-2">
+      <h1
+        class="font-montravia font-semibold text-[48px] text-noble-black leading-tight mb-2 italic"
+      >
         Good {{ greeting }}, {{ firstName }}!
       </h1>
-      <p class="font-geist font-normal text-[20px] text-noble-black/70">
+      <p class="font-geist font-light text-[20px] text-noble-black/50">
         Discover items to rent or borrow near you.
       </p>
 
@@ -23,34 +25,9 @@
               title="Clear search"
               @click="clearSearch"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
-            <svg
-              v-else
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-noble-black/30"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
+            <Icon name="ph:magnifying-glass" class="w-[18px] h-[18px] text-noble-black/30" />
           </div>
 
           <!-- Search Input -->
@@ -88,20 +65,10 @@
               @mousedown.prevent="selectSuggestion(suggestion.value)"
             >
               <div class="flex items-center gap-3">
-                <svg
-                  class="text-noble-black/20 group-hover:text-burning-orange transition-colors"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
+                <Icon
+                  name="ph:magnifying-glass"
+                  class="w-[14px] h-[14px] text-noble-black/20 group-hover:text-burning-orange transition-colors"
+                />
                 <span class="font-medium">{{ suggestion.label }}</span>
               </div>
               <span
@@ -207,22 +174,7 @@
       class="w-full flex flex-col items-center justify-center py-24 px-4 text-center bg-cream rounded-[20px] border border-cinnamon-ice/50 shadow-sm mt-4"
     >
       <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          class="stroke-cinnamon-ice"
-          stroke-width="1.5"
-        >
-          <path
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path d="M8 11h4m-4 0v-4" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <Icon name="ph:magnifying-glass" class="w-[48px] h-[48px] text-cinnamon-ice" />
       </div>
       <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">
         No available items

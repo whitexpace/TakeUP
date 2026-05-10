@@ -738,30 +738,20 @@ const availabilityRowErrors = computed(() =>
         to="/account/listings"
         class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="transition-transform group-hover:-translate-x-1"
-        >
-          <path d="m15 18-6-6 6-6" />
-        </svg>
+        <Icon
+          name="ph:caret-left"
+          class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1 shrink-0"
+        />
         <span class="text-[15px] font-bold">Back to My Listings</span>
       </NuxtLink>
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
             {{ props.mode === "new" ? "Add New Item" : "Edit Listing" }}
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           {{
             props.mode === "new"
               ? "Share your items with the community and earn rewards."
@@ -792,19 +782,11 @@ const availabilityRowErrors = computed(() =>
                     : 'bg-white border-cinnamon-ice/20 text-noble-black/40',
               ]"
             >
-              <svg
+              <Icon
                 v-if="isStepCompleted(step.id)"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+                name="ph:check"
+                class="w-[18px] h-[18px] shrink-0"
+              />
               <span v-else class="text-[13px] font-bold">{{ index + 1 }}</span>
             </div>
             <span
@@ -876,22 +858,10 @@ const availabilityRowErrors = computed(() =>
               <div
                 class="w-12 h-12 rounded-full bg-noble-black/5 flex items-center justify-center mb-4 group-hover:bg-burning-orange/10 transition-colors"
               >
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="text-noble-black/40 group-hover:text-burning-orange transition-colors"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                  <path d="M16 5h4M18 3v4" stroke-width="2.5" />
-                </svg>
+                <Icon
+                  name="ph:image"
+                  class="w-6 h-6 text-noble-black/40 group-hover:text-burning-orange transition-colors shrink-0"
+                />
               </div>
               <p
                 class="text-[15px] font-bold text-noble-black/60 group-hover:text-noble-black transition-colors"
@@ -936,18 +906,7 @@ const availabilityRowErrors = computed(() =>
                 class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-noble-black/60 text-white flex items-center justify-center shadow-lg backdrop-blur-sm opacity-0 group-hover/thumb:opacity-100 transition-all hover:bg-cinnabar-red active:scale-90"
                 @click.stop="removeGalleryImage(img.id)"
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+                <Icon name="ph:x" class="w-3 h-3 shrink-0" />
               </button>
             </div>
             <div
@@ -1010,16 +969,7 @@ const availabilityRowErrors = computed(() =>
                   >
                     <span>{{ CATEGORIES.find((c) => c.value === cat)?.label }}</span
                     ><button type="button" @click.stop="selectCategory(cat)">
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                      >
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
+                      <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                     </button>
                   </div>
                   <span
@@ -1114,16 +1064,7 @@ const availabilityRowErrors = computed(() =>
               >
                 <span>{{ offer }}</span
                 ><button type="button" @click="removeOffer(idx)">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
+                  <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                 </button>
               </div>
               <input
@@ -1152,16 +1093,7 @@ const availabilityRowErrors = computed(() =>
               >
                 <span>{{ includedItem }}</span
                 ><button type="button" @click="removeIncluded(idx)">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
+                  <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                 </button>
               </div>
               <input
@@ -1257,17 +1189,8 @@ const availabilityRowErrors = computed(() =>
                     class="h-11 flex items-center gap-2 px-4 bg-noble-black/5 border-l border-cinnamon-ice/10 text-[13px] font-bold text-noble-black/70 hover:bg-noble-black/10 transition-colors"
                     @click="toggleRateUnitDropdown"
                   >
-                    {{ form.rateOption === "PER_DAY" ? "Per Day" : "Per Hour"
-                    }}<svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
+                    {{ form.rateOption === "PER_DAY" ? "Per Day" : "Per Hour" }}
+                    <Icon name="ph:caret-down" class="w-[14px] h-[14px] shrink-0" />
                   </button>
                   <div
                     v-if="isRateUnitDropdownOpen"
@@ -1393,18 +1316,8 @@ const availabilityRowErrors = computed(() =>
               class="w-full flex items-center justify-center gap-2 p-3 rounded-[10px] border-[1.5px] border-dashed border-cinnamon-ice/20 bg-white text-[13px] font-bold text-noble-black/50 hover:border-burning-orange hover:text-burning-orange hover:bg-burning-orange/[0.02] transition-all"
               @click="addAvailabilityRow"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 5v14M5 12h14" /></svg
-              >Add another availability date
+              <Icon name="ph:plus" class="w-[18px] h-[18px] shrink-0" />Add another availability
+              date
             </button>
           </div>
         </section>
@@ -1426,18 +1339,9 @@ const availabilityRowErrors = computed(() =>
               :key="tag"
               class="flex items-center gap-1.5 rounded-full bg-burning-orange/[0.08] border border-burning-orange/20 px-2.5 py-0.5 text-[12px] font-bold text-burning-orange"
             >
-              <span>{{ tag }}</span
-              ><button type="button" @click="removeTag(tag)">
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+              <span>{{ tag }}</span>
+              <button type="button" @click="removeTag(tag)">
+                <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
               </button>
             </div>
             <input
@@ -1517,16 +1421,7 @@ const availabilityRowErrors = computed(() =>
           class="absolute right-6 top-6 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
           @click="closeLightbox"
         >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+          <Icon name="ph:x" class="w-6 h-6" />
         </button>
         <div class="flex flex-col items-center gap-4" @click.stop>
           <img :src="lightboxImage.url" class="max-h-[80vh] w-auto rounded-2xl shadow-2xl" />
@@ -1547,18 +1442,7 @@ const availabilityRowErrors = computed(() =>
           <div
             class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream mx-auto text-cinnabar-red shadow-inner"
           >
-            <svg
-              width="30"
-              height="30"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                d="M12 9V14M12 17.01L12.01 16.998M10.29 3.86L1.82 18C1.55 18.3 1.55 18.99 1.81 19.99C1.98 20.29 2.23 20.54 2.53 20.72L3.53 21H20.47L21.46 20.72C21.76 20.54 22.01 20.29 22.18 19.99C22.35 19.68 22.44 19.34 22.44 18.99C22.44 18.64 22.35 18.3 22.18 18L13.71 3.86C13.53 3.56 13.28 3.32 12.98 3.15C12.68 2.98 12.34 2.89 12 2.89C11.65 2.89 11.31 2.98 11.01 3.15C10.71 3.32 10.46 3.56 10.29 3.86Z"
-              />
-            </svg>
+            <Icon name="ph:warning" class="w-[30px] h-[30px] shrink-0" />
           </div>
           <h3 class="mb-3 text-[22px] font-bold text-noble-black">Discard changes?</h3>
           <p class="mb-10 text-[14px] text-noble-black/40">

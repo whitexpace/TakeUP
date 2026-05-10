@@ -37,8 +37,11 @@ onMounted(() => {
     </div>
 
     <div>
-      <h1 class="text-2xl font-bold text-noble-black">Item Ratings</h1>
-      <p class="text-lg text-noble-black tracking-wide">All your items ranked by rating.</p>
+      <h1 class="font-montravia text-[36px] font-medium text-noble-black">Item Ratings</h1>
+      <div class="mt-2 h-1 w-12 bg-burning-orange" />
+      <p class="mt-1 font-geist text-[16px] font-light text-noble-black/50">
+        All your items ranked by rating.
+      </p>
     </div>
 
     <div v-if="!hasFetched && !error" class="flex items-center justify-center py-16">
@@ -50,7 +53,7 @@ onMounted(() => {
     <div v-else-if="error" class="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
       <p class="text-lg font-semibold text-red-600">Failed to load analytics</p>
       <button
-        class="mt-4 rounded-lg bg-burning-orange px-6 py-2 text-sm font-semibold text-white"
+        class="mt-4 rounded-lg bg-burning-orange px-6 py-2 text-sm font-medium text-white"
         @click="fetchAnalytics()"
       >
         Retry
@@ -80,17 +83,17 @@ onMounted(() => {
         />
         <div
           v-else
-          class="flex h-10 w-14 items-center justify-center rounded-[3px] bg-cinnamon-ice text-xs font-bold text-white"
+          class="flex h-10 w-14 items-center justify-center rounded-[3px] bg-cinnamon-ice text-xs font-semibold text-white"
         >
           {{ getInitials(item.itemName) }}
         </div>
         <div class="min-w-0 flex-1">
           <p class="truncate text-xs font-semibold text-noble-black">{{ item.itemName }}</p>
-          <p class="text-xs font-normal text-noble-black/60">
+          <p class="text-xs font-light text-noble-black/60">
             {{ item.totalBookings }} bookings • {{ formatPrice(item.rentalFee, item.freeToBorrow) }}
           </p>
         </div>
-        <span class="text-xs font-normal text-noble-black/60">{{ item.rating.toFixed(1) }}</span>
+        <span class="text-xs font-light text-noble-black/60">{{ item.rating.toFixed(1) }}</span>
       </NuxtLink>
     </div>
   </div>

@@ -103,19 +103,10 @@ const clearFilters = () => {
           placeholder="Search by name, email, or username..."
           @input="handleSearch(($event.target as HTMLInputElement).value)"
         />
-        <svg
+        <Icon
+          name="ph:magnifying-glass"
           class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
+        />
       </div>
 
       <!-- Role Filter -->
@@ -157,21 +148,7 @@ const clearFilters = () => {
       <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div v-if="pending" class="p-12 text-center">
           <div class="inline-block animate-spin text-burning-orange">
-            <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24">
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              ></circle>
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
+            <Icon name="ph:circle-notch" class="h-8 w-8" />
           </div>
         </div>
 
@@ -181,19 +158,7 @@ const clearFilters = () => {
         </div>
 
         <div v-else-if="users.length === 0" class="p-12 text-center text-gray-500">
-          <svg
-            class="mx-auto h-12 w-12 text-gray-200 mb-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.5"
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
+          <Icon name="ph:users" class="mx-auto h-12 w-12 text-gray-200 mb-4" />
           <p class="text-[16px] font-semibold text-gray-400">No users found</p>
           <p class="mt-1 text-sm">Try adjusting your search or filters.</p>
         </div>
@@ -339,18 +304,7 @@ const clearFilters = () => {
                 <button
                   class="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-gray-900 transition-all"
                 >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <circle cx="12" cy="12" r="1" />
-                    <circle cx="19" cy="12" r="1" />
-                    <circle cx="5" cy="12" r="1" />
-                  </svg>
+                  <Icon name="ph:dots-three" class="w-[18px] h-[18px]" />
                 </button>
               </td>
             </tr>

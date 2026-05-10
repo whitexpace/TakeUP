@@ -35,7 +35,9 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@iconify-json/ph": "^1.2.2",
     "@nuxt/eslint": "^0.7.0",
+    "@nuxt/icon": "^2.2.2",
     "@nuxtjs/tailwindcss": "^6.14.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^9.1.0",

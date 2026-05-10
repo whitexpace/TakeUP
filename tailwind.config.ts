@@ -11,6 +11,15 @@ export default <Config>{
   ],
   theme: {
     extend: {
+      animation: {
+        "infinite-scroll": "infinite-scroll 25s linear infinite",
+      },
+      keyframes: {
+        "infinite-scroll": {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-50%)" },
+        },
+      },
       colors: {
         "pale-cashmere": "#e8dfd5",
         "cinnamon-ice": "#dbbba7",
@@ -23,8 +32,9 @@ export default <Config>{
         "success-green": "#34A853",
       },
       fontFamily: {
-        geist: ["Helvetica", "Arial", "sans-serif"],
+        geist: ["Geist", "Helvetica", "Arial", "sans-serif"],
         rewon: ["Rewon", "sans-serif"],
+        montravia: ["Nv Montravia", "serif"],
       },
     },
   },

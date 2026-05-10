@@ -295,34 +295,20 @@ const handleRequestBooking = async () => {
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12 pt-24">
       <div class="mb-10">
-        <div
-          class="text-noble-black mb-1"
-          style="font-size: 30px; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em"
-        >
-          My Bag
+        <div class="space-y-2">
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            My Bag
+          </h1>
+          <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
         </div>
-        <p class="text-base text-noble-black/40 font-medium tracking-tight">
+        <p class="mt-2 font-geist text-[16px] font-light text-noble-black/50">
           Review and manage items you want to book
         </p>
       </div>
 
       <div v-if="bagItems.length === 0" class="py-20 text-center">
         <div class="mb-6 flex justify-center text-noble-black/10">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="80"
-            height="80"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-            <path d="M3 6h18" />
-            <path d="M16 10a4 4 0 0 1-8 0" />
-          </svg>
+          <Icon name="ph:shopping-bag" class="w-20 h-20" />
         </div>
         <h2 class="text-xl font-bold text-noble-black mb-2">Your bag is empty</h2>
         <p class="text-noble-black/60 mb-8">Items you add to your bag will appear here.</p>
@@ -354,20 +340,7 @@ const handleRequestBooking = async () => {
                   "
                   @click="toggleSelectAll"
                 >
-                  <svg
-                    v-if="isAllSelected"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="white"
-                    stroke-width="4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  <Icon v-if="isAllSelected" name="ph:check" class="w-3 h-3 text-white" />
                 </button>
                 <span class="text-[13px] font-medium text-gray-500 tracking-tight">Select All</span>
               </div>
@@ -396,20 +369,11 @@ const handleRequestBooking = async () => {
                     "
                     @click="toggleLenderSelect(lenderId)"
                   >
-                    <svg
+                    <Icon
                       v-if="isLenderSelected(lenderId)"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="white"
-                      stroke-width="4"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                      name="ph:check"
+                      class="w-2.5 h-2.5 text-white"
+                    />
                   </button>
                   <div class="flex items-center gap-3">
                     <UserAvatar
@@ -445,20 +409,11 @@ const handleRequestBooking = async () => {
                       "
                       @click="toggleItemSelect(item.id)"
                     >
-                      <svg
+                      <Icon
                         v-if="selectedItemIds.has(item.id)"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="4"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                        name="ph:check"
+                        class="w-3 h-3 text-white"
+                      />
                     </button>
 
                     <div
@@ -507,21 +462,7 @@ const handleRequestBooking = async () => {
                         title="Remove from bag"
                         @click="handleDeleteItem(item.id)"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M3 6h18" />
-                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                        </svg>
+                        <Icon name="ph:trash" class="w-[18px] h-[18px]" />
                       </button>
                     </div>
                   </div>
@@ -616,18 +557,7 @@ const handleRequestBooking = async () => {
               <div
                 class="flex items-center gap-2 px-4 py-2 bg-blue-estate/5 border border-blue-estate/10 rounded-full justify-center"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#3b4883"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
+                <Icon name="ph:shield" class="w-3.5 h-3.5 text-blue-estate" />
                 <span class="text-[12px] font-semibold text-blue-estate"
                   >Protected by TakeUP Secure</span
                 >
@@ -664,20 +594,7 @@ const handleRequestBooking = async () => {
               <div
                 class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center text-burning-orange"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
+                <Icon name="ph:check-circle" class="w-10 h-10" />
               </div>
             </div>
             <h2 class="text-4xl font-extrabold text-noble-black mb-3 tracking-tight">
