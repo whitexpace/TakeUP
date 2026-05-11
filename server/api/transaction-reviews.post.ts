@@ -2,6 +2,7 @@ import { createError, readBody } from "h3"
 import { createTransactionReviewSchema } from "#shared/schemas/review"
 import { appRouter } from "../trpc/routers"
 import { createContext } from "../trpc/context"
+import { prisma } from "../utils/prisma"
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -14,11 +15,9 @@ export default defineEventHandler(async (event) => {
       data: result.error.flatten(),
     })
   }
-
-  const prisma = event.context.prisma
   const transaction = await prisma.rentalTransaction.findUnique({
     where: { id: result.data.transactionId },
-    select: { bookingId: true },
+    select: { id: true },
   })
 
   if (!transaction) {
@@ -31,10 +30,10 @@ export default defineEventHandler(async (event) => {
   const caller = appRouter.createCaller(await createContext(event))
 
   return await caller.transaction.createReview({
-    bookingId: transaction.bookingId,
+    transactionId: result.data.transactionId,
     rating: result.data.rating,
     reviewText: result.data.reviewText,
     isAnonymous: result.data.isAnonymous,
     reviewType: result.data.reviewType,
-  } as Parameters<typeof caller.transaction.createReview>[0])
+  })
 })

@@ -230,7 +230,6 @@ const selectedTransactionForReview = ref<TransactionListItem | null>(null)
 const selectedReviewType = ref<ReviewType | null>(null)
 const pageActionError = ref("")
 const showRewardPopup = ref(false)
-const rewardPopupPoints = ref(0)
 let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
 const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
 
@@ -291,7 +290,7 @@ const closeReviewModal = () => {
   selectedReviewType.value = null
 }
 
-const triggerRewardPopup = (points: number = 5) => {
+const triggerRewardPopup = () => {
   if (rewardPopupTimeout) {
     clearTimeout(rewardPopupTimeout)
   }
@@ -300,16 +299,18 @@ const triggerRewardPopup = (points: number = 5) => {
     window.sessionStorage.setItem(REVIEW_REWARD_POPUP_STORAGE_KEY, "1")
   }
 
-  rewardPopupPoints.value = points
   showRewardPopup.value = true
   rewardPopupTimeout = setTimeout(() => {
     showRewardPopup.value = false
-    rewardPopupPoints.value = 0
     rewardPopupTimeout = null
   }, 1800)
 }
 
-const calculateEarnedRewardPoints = (payload: SubmittedReviewPayload): number => {
+const shouldShowRewardPopup = (payload: SubmittedReviewPayload) => {
+  if (payload.currentUserRole === "LENDER") {
+    return true
+  }
+
   const actions = selectedTransactionForReview.value?.reviewState.actions ?? []
   const requiredTypes: ReviewType[] = ["LENDER_REVIEW"]
 
@@ -317,29 +318,18 @@ const calculateEarnedRewardPoints = (payload: SubmittedReviewPayload): number =>
     requiredTypes.push("ITEM_REVIEW")
   }
 
-  const allRequiredComplete = requiredTypes.every((reviewType) => {
+  return requiredTypes.every((reviewType) => {
     if (reviewType === payload.reviewType) {
       return true
     }
 
     return actions.find((action) => action.reviewType === reviewType)?.hasSubmitted ?? false
   })
-
-  if (!allRequiredComplete) {
-    return 0
-  }
-
-  if (payload.currentUserRole === "LENDER" && payload.reviewType === "BORROWER_REVIEW") {
-    return 10
-  }
-
-  return 5
 }
 
 const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
-  const earnedPoints = calculateEarnedRewardPoints(payload)
-  if (earnedPoints > 0) {
-    triggerRewardPopup(earnedPoints)
+  if (shouldShowRewardPopup(payload)) {
+    triggerRewardPopup()
   }
   await Promise.all([
     refreshTransactions(),
@@ -945,7 +935,7 @@ onBeforeUnmount(() => {
         class="pointer-events-none fixed inset-0 z-[140] flex items-center justify-center px-4"
       >
         <div class="rounded-full bg-emerald-500 px-7 py-4 text-center text-white shadow-2xl">
-          <p class="text-3xl font-black tracking-tight">+{{ rewardPopupPoints }} points</p>
+          <p class="text-3xl font-black tracking-tight">+5 points</p>
           <p class="text-sm font-medium text-white/90">Review bonus earned</p>
         </div>
       </div>

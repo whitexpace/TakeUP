@@ -659,7 +659,7 @@ export const processReviewRewards = async (prisma: RewardClient, reviewId: strin
     userId: review.reviewerUserId,
     transactionId: review.transactionId,
     reviewId: review.id,
-    idempotencyKey: `review:${review.transactionId}:${review.reviewerUserId}:submission`,
+    idempotencyKey: `review:${review.transactionId}:${review.reviewerUserId}:${review.reviewType}:submission`,
     sourceType: RewardSourceType.REVIEW_SUBMITTED,
     roleCategory,
     pointsDelta: decision.pointsDelta,
