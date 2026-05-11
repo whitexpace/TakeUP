@@ -15,12 +15,13 @@ const notFound = ref(false)
 const isSubmitting = ref(false)
 const submitError = ref<string | null>(null)
 const isDeleting = ref(false)
+const isUpdatingStatus = ref(false)
 const deleteError = ref<string | null>(null)
 const deleteSuccessMessage = ref<string | null>(null)
 const formRef = ref<{ isDirty: boolean; triggerCancel: () => void } | null>(null)
 
 onBeforeRouteLeave((to, from, next) => {
-  if (isSubmitting.value || isDeleting.value || !formRef.value?.isDirty) {
+  if (isSubmitting.value || isDeleting.value || isUpdatingStatus.value || !formRef.value?.isDirty) {
     next()
     return
   }
@@ -63,7 +64,7 @@ const handleSubmit = async (data: Record<string, unknown>) => {
 }
 
 const handleDelete = async () => {
-  if (!item.value || isDeleting.value) return
+  if (!item.value || isDeleting.value || isUpdatingStatus.value) return
 
   isDeleting.value = true
   deleteError.value = null
@@ -88,23 +89,27 @@ const handleDelete = async () => {
   }
 }
 
-const handleDeactivateInstead = async () => {
-  if (!item.value || item.value.status === "DEACTIVATED" || isDeleting.value) return
+const handleStatusAction = async () => {
+  if (!item.value || isDeleting.value || isUpdatingStatus.value) return
 
-  isDeleting.value = true
+  const nextStatus = item.value.status === "DEACTIVATED" ? "AVAILABLE" : "DEACTIVATED"
+  isUpdatingStatus.value = true
   deleteError.value = null
+  deleteSuccessMessage.value = null
 
   try {
-    const updatedItem = await toggleStatus(item.value.id, "DEACTIVATED")
+    const updatedItem = await toggleStatus(item.value.id, nextStatus)
     item.value = updatedItem
     deleteSuccessMessage.value =
-      "Listing deactivated successfully. Existing transaction records remain intact."
+      nextStatus === "AVAILABLE"
+        ? "Listing reactivated successfully."
+        : "Listing deactivated successfully. Existing transaction records remain intact."
   } catch (err: unknown) {
     deleteError.value =
       (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
-      "Unable to deactivate listing right now. Please try again."
+      `Unable to ${nextStatus === "AVAILABLE" ? "reactivate" : "deactivate"} listing right now. Please try again.`
   } finally {
-    isDeleting.value = false
+    isUpdatingStatus.value = false
   }
 }
 </script>
@@ -163,23 +168,37 @@ const handleDeactivateInstead = async () => {
               {{ deleteSuccessMessage }}
             </p>
 
-            <!-- Deactivate Listing -->
+            <!-- Listing Status -->
             <div
               class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
             >
               <div class="max-w-md space-y-1">
-                <h3 class="text-[16px] font-bold text-noble-black">Deactivate Listing</h3>
+                <h3 class="text-[16px] font-bold text-noble-black">
+                  {{ item.status === "DEACTIVATED" ? "Reactivate Listing" : "Deactivate Listing" }}
+                </h3>
                 <p class="text-[13px] font-medium text-noble-black/50">
-                  Hide this listing temporarily to keep system records consistent.
+                  {{
+                    item.status === "DEACTIVATED"
+                      ? "Make this listing available to borrowers again."
+                      : "Hide this listing temporarily to keep system records consistent."
+                  }}
                 </p>
               </div>
               <button
                 type="button"
                 class="inline-flex h-10 items-center justify-center rounded-[12px] border-[1.5px] border-cinnabar-red/30 bg-white px-5 text-[13px] font-semibold text-cinnabar-red transition hover:border-cinnabar-red hover:bg-cinnabar-red/5 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="isDeleting || item.status === 'DEACTIVATED'"
-                @click="handleDeactivateInstead"
+                :disabled="isDeleting || isUpdatingStatus"
+                @click="handleStatusAction"
               >
-                {{ item.status === "DEACTIVATED" ? "Already Deactivated" : "Deactivate Instead" }}
+                {{
+                  isUpdatingStatus
+                    ? item.status === "DEACTIVATED"
+                      ? "Reactivating..."
+                      : "Deactivating..."
+                    : item.status === "DEACTIVATED"
+                      ? "Reactivate Listing"
+                      : "Deactivate Instead"
+                }}
               </button>
             </div>
 
@@ -196,7 +215,7 @@ const handleDeactivateInstead = async () => {
               <button
                 type="button"
                 class="inline-flex h-10 items-center justify-center rounded-[12px] bg-cinnabar-red px-5 text-[13px] font-semibold text-white transition hover:bg-noble-black shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="isDeleting"
+                :disabled="isDeleting || isUpdatingStatus"
                 @click="handleDelete"
               >
                 {{ isDeleting ? "Processing..." : "Delete Listing" }}
