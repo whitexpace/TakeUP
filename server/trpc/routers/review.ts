@@ -279,15 +279,34 @@ export const reviewRouter = router({
         })
       }
 
-      const revieweeUserId =
-        transaction.borrowerId === ctx.user.id ? transaction.lenderId : transaction.borrowerId
-      const reviewType =
-        transaction.borrowerId === ctx.user.id ? "LENDER_REVIEW" : "BORROWER_REVIEW"
+      const isBorrower = transaction.borrowerId === ctx.user.id
+      const isLender = transaction.lenderId === ctx.user.id
 
-      if (!revieweeUserId) {
+      let reviewType = input.reviewType
+      if (!reviewType) {
+        reviewType = isBorrower ? "LENDER_REVIEW" : "BORROWER_REVIEW"
+      }
+
+      const revieweeUserId = input.reviewType === "ITEM_REVIEW" ? null : (isBorrower ? transaction.lenderId : transaction.borrowerId)
+
+      if (!revieweeUserId && reviewType !== "ITEM_REVIEW") {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "The review target for this transaction is invalid.",
+        })
+      }
+
+      if (reviewType === "ITEM_REVIEW" && !transaction.itemId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Item reviews can only be submitted for transactions with items.",
+        })
+      }
+
+      if (reviewType === "ITEM_REVIEW" && !isBorrower) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only borrowers can submit item reviews.",
         })
       }
 
@@ -315,7 +334,7 @@ export const reviewRouter = router({
           reviewerUserId: ctx.user.id,
           reviewType,
           revieweeUserId,
-          itemId: null,
+          itemId: reviewType === "ITEM_REVIEW" ? transaction.itemId : null,
           rating: input.rating,
           reviewText: input.reviewText?.trim() || "",
           images: [],
@@ -323,7 +342,13 @@ export const reviewRouter = router({
         },
       })
 
-      await syncRoleRatingForUser(tx as Prisma.TransactionClient, reviewType, revieweeUserId)
+      if (revieweeUserId && reviewType !== "ITEM_REVIEW") {
+        await syncRoleRatingForUser(
+          tx as Prisma.TransactionClient,
+          reviewType as "BORROWER_REVIEW" | "LENDER_REVIEW",
+          revieweeUserId,
+        )
+      }
 
       return {
         review,
