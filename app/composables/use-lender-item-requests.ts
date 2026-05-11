@@ -33,10 +33,7 @@ const sortByCreatedAtDesc = (left: LenderItemRequest, right: LenderItemRequest) 
   return right.id.localeCompare(left.id)
 }
 
-export const useLenderItemRequests = ({
-  enabled,
-  searchQuery,
-}: UseLenderItemRequestsOptions) => {
+export const useLenderItemRequests = ({ enabled, searchQuery }: UseLenderItemRequestsOptions) => {
   const requests = ref<LenderItemRequest[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)

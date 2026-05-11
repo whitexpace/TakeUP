@@ -10,7 +10,7 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-const router = useRouter()
+const _router = useRouter()
 
 const borrowerName = computed(() => {
   const user = props.request.borrower.user
@@ -65,9 +65,7 @@ const totalLabel = computed(() =>
 const actingBookingId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 
-const handleBookingDecision = async (
-  nextStatus: Extract<"CONFIRMED" | "CANCELLED", string>,
-) => {
+const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLED", string>) => {
   if (actingBookingId.value) return
 
   actingBookingId.value = props.request.id
@@ -100,7 +98,9 @@ const handleBookingDecision = async (
 </script>
 
 <template>
-  <div class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 cursor-pointer group/card">
+  <div
+    class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 cursor-pointer group/card"
+  >
     <!-- Header -->
     <div
       class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
@@ -146,12 +146,10 @@ const handleBookingDecision = async (
 
       <!-- Item Details -->
       <div class="flex-1 min-w-0">
-        <NuxtLink
-          :to="detailPath"
-          class="block"
-          @click.stop
-        >
-          <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1 group-hover/card:underline">
+        <NuxtLink :to="detailPath" class="block" @click.stop>
+          <h4
+            class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1 group-hover/card:underline"
+          >
             {{ request.item.name }}
           </h4>
         </NuxtLink>

@@ -19,7 +19,12 @@ definePageMeta({
 })
 
 type ActiveRole = "BORROWER" | "LENDER"
-type TransactionFilter = TransactionStatus | "TO_REVIEW" | "REQUESTED_ITEMS" | "LENDER_FOR_APPROVAL" | null
+type TransactionFilter =
+  | TransactionStatus
+  | "TO_REVIEW"
+  | "REQUESTED_ITEMS"
+  | "LENDER_FOR_APPROVAL"
+  | null
 type HistoryEntry =
   | { kind: "request"; id: string; date: Date | string; request: BorrowerItemRequest }
   | { kind: "lender-request"; id: string; date: Date | string; request: LenderItemRequest }
