@@ -3,7 +3,7 @@ import { TransactionStatus, UserStatus, type Prisma } from "@prisma/client"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import { bookingReviewLookupSchema, createReviewSchema } from "#shared/schemas/review"
-import { processTransactionRewards } from "../../utils/rewards"
+import { processReviewRewards } from "../../utils/rewards"
 import { ACTIVE_DISPUTE_STATUSES } from "../../utils/dispute-status"
 import { syncRoleRatingForUser, syncRoleRatingsFromReviews } from "../../utils/review-ratings"
 
@@ -280,14 +280,19 @@ export const reviewRouter = router({
       }
 
       const isBorrower = transaction.borrowerId === ctx.user.id
-      const isLender = transaction.lenderId === ctx.user.id
+      // const isLender = transaction.lenderId === ctx.user.id
 
       let reviewType = input.reviewType
       if (!reviewType) {
         reviewType = isBorrower ? "LENDER_REVIEW" : "BORROWER_REVIEW"
       }
 
-      const revieweeUserId = input.reviewType === "ITEM_REVIEW" ? null : (isBorrower ? transaction.lenderId : transaction.borrowerId)
+      const revieweeUserId =
+        input.reviewType === "ITEM_REVIEW"
+          ? null
+          : isBorrower
+            ? transaction.lenderId
+            : transaction.borrowerId
 
       if (!revieweeUserId && reviewType !== "ITEM_REVIEW") {
         throw new TRPCError({
@@ -359,12 +364,9 @@ export const reviewRouter = router({
     const rewardEventDelegate = (ctx.prisma as { rewardEvent?: { upsert?: unknown } }).rewardEvent
     if (rewardEventDelegate && typeof rewardEventDelegate.upsert === "function") {
       try {
-        await processTransactionRewards(
-          ctx.prisma as Prisma.TransactionClient,
-          result.transactionId,
-        )
+        await processReviewRewards(ctx.prisma as Prisma.TransactionClient, result.review.id)
       } catch (error) {
-        console.error("Failed to process transaction rewards after review submission", error)
+        console.error("Failed to process review rewards after review submission", error)
       }
     }
 

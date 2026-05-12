@@ -619,6 +619,9 @@ describe("rewards utility", () => {
       expect.objectContaining({
         pointsDelta: 0,
         status: RewardEventStatus.BLOCKED,
+        metadata: expect.objectContaining({
+          reason: "incomplete_required_reviews",
+        }),
       }),
     )
 
@@ -640,6 +643,9 @@ describe("rewards utility", () => {
       expect.objectContaining({
         pointsDelta: 5,
         status: RewardEventStatus.APPLIED,
+        metadata: expect.objectContaining({
+          reason: "eligible",
+        }),
       }),
     )
   })

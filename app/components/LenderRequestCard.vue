@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
-import type { LenderItemRequest } from "../composables/use-lender-item-requests"
+import type { BorrowerItemRequest as LenderItemRequest } from "../composables/use-borrower-item-requests"
 
 const props = defineProps<{
   request: LenderItemRequest

@@ -161,4 +161,50 @@ export const rewardsRouter = router({
       }
     })
   }),
+
+  activity: protectedProcedure.query(async ({ ctx }) => {
+    const events = await ctx.prisma.rewardEvent.findMany({
+      where: { userId: ctx.user.id },
+      orderBy: [{ createdAt: "desc" }],
+      take: 50,
+      include: {
+        itemBoost: {
+          include: {
+            item: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        transaction: {
+          select: {
+            id: true,
+            item: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        review: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    })
+
+    return {
+      events: events.map((event) => ({
+        id: event.id,
+        sourceType: event.sourceType,
+        roleCategory: event.roleCategory,
+        status: event.status,
+        pointsDelta: event.pointsDelta,
+        createdAt: event.createdAt,
+        appliedAt: event.appliedAt,
+        metadata: event.metadata,
+        item: event.itemBoost?.item ?? event.transaction?.item ?? null,
+        transactionId: event.transactionId,
+        reviewId: event.reviewId,
+      })),
+    }
+  }),
 })

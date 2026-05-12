@@ -45,6 +45,27 @@ const {
   $fetch<ActiveBoost[]>("/api/rewards/boosts/active"),
 )
 
+type RewardActivity = {
+  id: string
+  sourceType: string
+  roleCategory: string
+  status: string
+  pointsDelta: number
+  createdAt: string | Date
+  appliedAt: string | Date | null
+  metadata: Record<string, unknown>
+  item: { id: string; name: string } | null
+  transactionId: string | null
+  reviewId: string | null
+}
+
+const { data: activityResponse, pending: activityPending } = await useAsyncData(
+  "rewards:activity",
+  () => $fetch<{ events: RewardActivity[] }>("/api/rewards/activity"),
+)
+
+const recentActivity = computed(() => activityResponse.value?.events ?? [])
+
 const activeBoosts = computed(() =>
   (activeBoostsResponse.value ?? [])
     .map((boost) => {
@@ -147,6 +168,72 @@ const formatDateTime = (value: string | Date) => {
     month: "short",
     day: "numeric",
   })
+}
+
+const formatActivityDate = (date: string | Date) =>
+  new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(date))
+
+const getActivityLabel = (activity: RewardActivity) => {
+  switch (activity.sourceType) {
+    case "TRANSACTION_COMPLETED":
+      return activity.roleCategory === "BORROWER"
+        ? "Transaction Completed"
+        : "Transaction Completed"
+    case "REVIEW_SUBMITTED":
+      return "Review Submitted"
+    case "BOOST_REDEMPTION":
+      return "Listing Boost"
+    case "MANUAL_ADJUSTMENT":
+      return "Adjustment"
+    case "DISPUTE_RESOLUTION_ADJUSTMENT":
+      return "Dispute Adjustment"
+    default:
+      return "Activity"
+  }
+}
+
+const getActivityIcon = (activity: RewardActivity) => {
+  switch (activity.sourceType) {
+    case "TRANSACTION_COMPLETED":
+      return "ph:package"
+    case "REVIEW_SUBMITTED":
+      return "ph:note-pencil"
+    case "BOOST_REDEMPTION":
+      return "ph:rocket-launch"
+    case "MANUAL_ADJUSTMENT":
+    case "DISPUTE_RESOLUTION_ADJUSTMENT":
+      return "ph:gear-six"
+    default:
+      return "ph:star"
+  }
+}
+
+const getActivityDescription = (activity: RewardActivity) => {
+  if (activity.item) {
+    return activity.item.name
+  }
+  return "No item"
+}
+
+const getStatusBadgeClass = (status: string) => {
+  switch (status) {
+    case "APPLIED":
+      return "bg-success-green/10 text-success-green"
+    case "PENDING":
+      return "bg-amber-100 text-amber-700"
+    case "REVERSED":
+      return "bg-cinnabar-red/10 text-cinnabar-red"
+    case "BLOCKED":
+      return "bg-gray-100 text-gray-600"
+    default:
+      return "bg-gray-100 text-gray-600"
+  }
 }
 </script>
 
@@ -504,6 +591,92 @@ const formatDateTime = (value: string | Date) => {
               ></div>
             </div>
           </article>
+        </div>
+      </section>
+
+      <!-- Section 4: Recent Activity -->
+      <section
+        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+      >
+        <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
+          <h2 class="text-[20px] font-semibold text-noble-black">Recent Activity</h2>
+          <p class="mt-0.5 text-[13px] font-light text-noble-black/50">Track your points history</p>
+        </div>
+
+        <!-- Loading -->
+        <div v-if="activityPending" class="space-y-4">
+          <div
+            v-for="i in 3"
+            :key="i"
+            class="h-16 animate-pulse rounded-[14px] bg-white border border-cinnamon-ice/10"
+          />
+        </div>
+
+        <!-- Empty State -->
+        <div
+          v-else-if="recentActivity.length === 0"
+          class="flex flex-col items-center justify-center py-12 text-center"
+        >
+          <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <Icon name="ph:star" class="w-6 h-6 text-gray-400" />
+          </div>
+          <p class="text-[15px] font-semibold text-gray-400">No activity yet</p>
+          <p class="mt-1 text-[13px] text-gray-400 max-w-[280px]">
+            Your points activity will appear here as you earn and spend points.
+          </p>
+        </div>
+
+        <!-- Activity List -->
+        <div v-else class="space-y-0 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+          <div
+            v-for="activity in recentActivity"
+            :key="activity.id"
+            class="flex items-center justify-between py-4 border-b border-neutral-100 last:border-0"
+          >
+            <div class="flex items-center gap-4 min-w-0">
+              <div
+                class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                :class="
+                  activity.pointsDelta >= 0
+                    ? 'bg-success-green/10 text-success-green'
+                    : 'bg-cinnabar-red/10 text-cinnabar-red'
+                "
+              >
+                <Icon :name="getActivityIcon(activity)" class="w-[18px] h-[18px]" />
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold text-noble-black text-[15px] leading-tight">
+                    {{ getActivityLabel(activity) }}
+                  </p>
+                  <span
+                    v-if="activity.status !== 'APPLIED'"
+                    class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
+                    :class="getStatusBadgeClass(activity.status)"
+                  >
+                    {{ activity.status }}
+                  </span>
+                </div>
+                <div class="mt-1 flex flex-col gap-0.5">
+                  <p class="text-[13px] text-noble-black/60 font-medium">
+                    {{ getActivityDescription(activity) }}
+                  </p>
+                  <p class="text-[12px] text-noble-black/40 font-medium">
+                    {{ formatActivityDate(activity.createdAt) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <p
+                class="font-bold text-[16px]"
+                :class="activity.pointsDelta >= 0 ? 'text-success-green' : 'text-cinnabar-red'"
+              >
+                {{ activity.pointsDelta >= 0 ? "+" : "" }}{{ activity.pointsDelta }}
+              </p>
+              <p class="text-[11px] font-semibold text-noble-black/40 mt-0.5">points</p>
+            </div>
+          </div>
         </div>
       </section>
     </div>
