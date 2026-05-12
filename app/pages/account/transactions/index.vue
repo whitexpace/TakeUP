@@ -8,6 +8,10 @@ import {
   useBorrowerItemRequests,
   type BorrowerItemRequest,
 } from "../../../composables/use-borrower-item-requests"
+import {
+  useLenderItemRequests,
+  type LenderItemRequest,
+} from "../../../composables/use-lender-item-requests"
 
 definePageMeta({
   layout: "account",
@@ -15,9 +19,15 @@ definePageMeta({
 })
 
 type ActiveRole = "BORROWER" | "LENDER"
-type TransactionFilter = TransactionStatus | "TO_REVIEW" | "REQUESTED_ITEMS" | null
+type TransactionFilter =
+  | TransactionStatus
+  | "TO_REVIEW"
+  | "REQUESTED_ITEMS"
+  | "LENDER_FOR_APPROVAL"
+  | null
 type HistoryEntry =
   | { kind: "request"; id: string; date: Date | string; request: BorrowerItemRequest }
+  | { kind: "lender-request"; id: string; date: Date | string; request: LenderItemRequest }
   | { kind: "transaction"; id: string; date: Date | string; transaction: TransactionListItem }
 
 const route = useRoute()
@@ -29,11 +39,16 @@ const searchQuery = ref("")
 const { filteredTransactions, isLoading, error, hasMore, loadMore, refresh, fetchPage } =
   useTransactions({
     role: activeRole,
-    status: computed(() =>
-      activeStatus.value === "TO_REVIEW" || activeStatus.value === "REQUESTED_ITEMS"
-        ? null
-        : activeStatus.value,
-    ),
+    status: computed(() => {
+      if (
+        activeStatus.value === "TO_REVIEW" ||
+        activeStatus.value === "REQUESTED_ITEMS" ||
+        activeStatus.value === "LENDER_FOR_APPROVAL"
+      ) {
+        return null
+      }
+      return activeStatus.value as TransactionStatus | null
+    }),
     searchQuery,
   })
 
@@ -70,30 +85,64 @@ const {
   searchQuery,
 })
 
-const visibleTransactions = computed(() =>
-  activeStatus.value === "REQUESTED_ITEMS"
-    ? []
-    : activeStatus.value === "TO_REVIEW"
-      ? filteredTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny)
-      : filteredTransactions.value,
+const shouldShowLenderRequests = computed(
+  () =>
+    activeRole.value === "LENDER" &&
+    (activeStatus.value === null || activeStatus.value === "LENDER_FOR_APPROVAL"),
 )
+
+const {
+  filteredRequests: filteredLenderRequests,
+  isLoading: areLenderRequestsLoading,
+  error: lenderRequestsError,
+  fetchRequests: fetchLenderRequests,
+} = useLenderItemRequests({
+  enabled: shouldShowLenderRequests,
+  searchQuery,
+})
+
+const visibleTransactions = computed(() => {
+  if (activeStatus.value === "REQUESTED_ITEMS" || activeStatus.value === "LENDER_FOR_APPROVAL") {
+    return []
+  }
+  if (activeStatus.value === "TO_REVIEW") {
+    return filteredTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny)
+  }
+  return filteredTransactions.value
+})
 
 const visibleBorrowerRequests = computed(() =>
   shouldShowBorrowerRequests.value ? filteredBorrowerRequests.value : [],
 )
 
-const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
-  const requestIdSet = new Set(visibleBorrowerRequests.value.map((r) => r.id))
+const visibleLenderRequests = computed(() =>
+  shouldShowLenderRequests.value ? filteredLenderRequests.value : [],
+)
 
-  const requestEntries = visibleBorrowerRequests.value.map((request) => ({
+const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
+  const borrowerRequestIdSet = new Set(visibleBorrowerRequests.value.map((r) => r.id))
+  const lenderRequestIdSet = new Set(visibleLenderRequests.value.map((r) => r.id))
+
+  const borrowerRequestEntries = visibleBorrowerRequests.value.map((request) => ({
     kind: "request" as const,
     id: request.id,
     date: request.createdAt,
     request,
   }))
 
+  const lenderRequestEntries = visibleLenderRequests.value.map((request) => ({
+    kind: "lender-request" as const,
+    id: request.id,
+    date: request.createdAt,
+    request,
+  }))
+
   const transactionEntries = visibleTransactions.value
-    .filter((transaction) => !(transaction.bookingId && requestIdSet.has(transaction.bookingId)))
+    .filter(
+      (transaction) =>
+        !(transaction.bookingId && borrowerRequestIdSet.has(transaction.bookingId)) &&
+        !(transaction.bookingId && lenderRequestIdSet.has(transaction.bookingId)),
+    )
     .map((transaction) => ({
       kind: "transaction" as const,
       id: transaction.id,
@@ -101,13 +150,15 @@ const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
       transaction,
     }))
 
-  return [...requestEntries, ...transactionEntries].sort((left, right) => {
-    const rightTime = new Date(right.date).getTime()
-    const leftTime = new Date(left.date).getTime()
+  return [...borrowerRequestEntries, ...lenderRequestEntries, ...transactionEntries].sort(
+    (left, right) => {
+      const rightTime = new Date(right.date).getTime()
+      const leftTime = new Date(left.date).getTime()
 
-    if (rightTime !== leftTime) return rightTime - leftTime
-    return right.id.localeCompare(left.id)
-  })
+      if (rightTime !== leftTime) return rightTime - leftTime
+      return right.id.localeCompare(left.id)
+    },
+  )
 })
 
 const groupedHistoryEntries = computed(() => {
@@ -152,10 +203,14 @@ const hasVisibleEntries = computed(() => visibleHistoryEntries.value.length > 0)
 const isInitialLoading = computed(
   () =>
     !hasVisibleEntries.value &&
-    (isLoading.value || (shouldShowBorrowerRequests.value && areBorrowerRequestsLoading.value)),
+    (isLoading.value ||
+      (shouldShowBorrowerRequests.value && areBorrowerRequestsLoading.value) ||
+      (shouldShowLenderRequests.value && areLenderRequestsLoading.value)),
 )
 
-const combinedError = computed(() => error.value ?? borrowerRequestsError.value)
+const combinedError = computed(
+  () => error.value ?? borrowerRequestsError.value ?? lenderRequestsError.value,
+)
 
 const hasInitialError = computed(
   () => !hasVisibleEntries.value && !isInitialLoading.value && Boolean(combinedError.value),
@@ -182,6 +237,7 @@ type SubmittedReviewPayload = {
 onMounted(() => {
   void fetchPage()
   void fetchBorrowerRequests()
+  void fetchLenderRequests()
 })
 
 const setRole = (role: ActiveRole) => {
@@ -205,12 +261,11 @@ const statusChips = computed<StatusChip[]>(() => [
   { label: "All", value: null },
   ...(activeRole.value === "BORROWER"
     ? [{ label: "Requested Items", value: "REQUESTED_ITEMS" as TransactionFilter }]
-    : []),
+    : [{ label: "For Approval", value: "LENDER_FOR_APPROVAL" as TransactionFilter }]),
   {
-    label: activeRole.value === "BORROWER" ? "To Receive" : "For Approval",
-    value: "PENDING",
+    label: activeRole.value === "BORROWER" ? "To Receive" : "In Use",
+    value: "ACTIVE",
   },
-  { label: "In Use", value: "ACTIVE" },
   { label: "Returned", value: "RETURNED" },
   { label: "Completed", value: "COMPLETED" },
   { label: "To Review", value: "TO_REVIEW" },
@@ -220,6 +275,7 @@ const statusChips = computed<StatusChip[]>(() => [
 const emptyTitle = computed(() => {
   if (activeStatus.value === "TO_REVIEW") return "No transactions awaiting your review"
   if (activeStatus.value === "REQUESTED_ITEMS") return "No requested items yet"
+  if (activeStatus.value === "LENDER_FOR_APPROVAL") return "No pending requests"
   return activeRole.value === "BORROWER"
     ? "No borrowing transactions yet"
     : "No lending transactions yet"
@@ -234,13 +290,17 @@ const emptySubtitle = computed(() => {
     return "Items you request from lenders will appear here."
   }
 
+  if (activeStatus.value === "LENDER_FOR_APPROVAL") {
+    return "Incoming booking requests from borrowers will appear here."
+  }
+
   return activeRole.value === "BORROWER"
     ? "Items you borrow and request will appear here."
     : "Items you lend to others will appear here."
 })
 
 const refreshAll = async () => {
-  await Promise.all([refresh(), fetchBorrowerRequests()])
+  await Promise.all([refresh(), fetchBorrowerRequests(), fetchLenderRequests()])
 }
 
 const reviewContext = computed(() => {
@@ -486,6 +546,11 @@ onBeforeUnmount(() => {
           <div class="flex flex-col gap-4">
             <template v-for="entry in group.entries" :key="`${entry.kind}-${entry.id}`">
               <BorrowerRequestCard v-if="entry.kind === 'request'" :request="entry.request" />
+              <LenderRequestCard
+                v-else-if="entry.kind === 'lender-request'"
+                :request="entry.request"
+                @refresh="refreshAll"
+              />
               <TransactionCard
                 v-else
                 :transaction="entry.transaction"
