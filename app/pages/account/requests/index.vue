@@ -8,6 +8,8 @@ definePageMeta({
   middleware: "account-auth",
 })
 
+const router = useRouter()
+
 const activeStatus = ref<BookingStatus | null>("PENDING")
 const lenderRole = ref<"LENDER">("LENDER")
 const searchQuery = ref("")
@@ -117,16 +119,16 @@ const handleBookingDecision = async (
 <template>
   <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
-    <NuxtLink
-      to="/account/listings"
+    <button
+      @click="router.back()"
       class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
     >
       <Icon
         name="ph:caret-left"
         class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1"
       />
-      <span class="text-[15px] font-bold">Back to My Listings</span>
-    </NuxtLink>
+      <span class="text-[15px] font-bold">Go Back</span>
+    </button>
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
       <section class="space-y-3">
