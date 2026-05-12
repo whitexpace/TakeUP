@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client"
 import { createError } from "h3"
 import { createContext } from "../../trpc/context"
 
@@ -19,51 +18,56 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const userProfileRows = await ctx.prisma.$queryRaw<
-    Array<{
-      username: string
-      firstName: string
-      middleName: string | null
-      lastName: string
-      accountType: string | null
-      createdAt: Date | null
-      location: string | null
-      avatarUrl: string | null
-      bio: string | null
-      pronouns: string | null
-    }>
-  >(Prisma.sql`
-    SELECT
-      "username",
-      "firstName",
-      "middleName",
-      "lastName",
-      "accountType",
-      "createdAt",
-      "location",
-      "avatarUrl",
-      "bio",
-      "pronouns"
-    FROM "User"
-    WHERE "id" = ${user.id}
-    LIMIT 1
-  `)
+  const dbUser = await ctx.prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      username: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      accountType: true,
+      createdAt: true,
+      location: true,
+      avatarUrl: true,
+      bio: true,
+      pronouns: true,
+      lender: {
+        select: {
+          lenderRating: true,
+          userId: true,
+        },
+      },
+    },
+  })
 
-  const dbUser = userProfileRows[0]
+  if (!dbUser) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "User profile not found.",
+    })
+  }
+
+  const totalBookingsCount = await ctx.prisma.booking.count({
+    where: {
+      lenderId: user.id,
+    },
+  })
 
   return {
     user: {
       ...user,
-      username: dbUser?.username ?? user.name,
-      firstName: dbUser?.firstName ?? "",
-      middleName: dbUser?.middleName ?? null,
-      lastName: dbUser?.lastName ?? "",
-      accountType: dbUser?.accountType ?? null,
-      createdAt: dbUser?.createdAt ?? null,
-      location: dbUser?.location ?? null,
-      avatarUrl: dbUser?.avatarUrl ?? null,
-      bio: dbUser?.bio ?? null,
-      pronouns: dbUser?.pronouns ?? null,
+      username: dbUser.username ?? user.name,
+      firstName: dbUser.firstName ?? "",
+      middleName: dbUser.middleName ?? null,
+      lastName: dbUser.lastName ?? "",
+      accountType: dbUser.accountType ?? null,
+      createdAt: dbUser.createdAt ?? null,
+      location: dbUser.location ?? null,
+      avatarUrl: dbUser.avatarUrl ?? null,
+      bio: dbUser.bio ?? null,
+      pronouns: dbUser.pronouns ?? null,
+      lenderRating: dbUser.lender?.lenderRating ?? 0,
+      totalLenderBookings: totalBookingsCount,
     },
   }
 })

@@ -70,6 +70,7 @@ const makeItem = (id = ITEM_ID) =>
     lenderUsername: "test-lender",
     lenderFullName: "Test Lender",
     lenderRating: 0,
+    lenderBookingCount: 0,
     lenderAvatarUrl: null,
     isLiked: false,
     description: null,

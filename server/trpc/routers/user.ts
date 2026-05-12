@@ -63,7 +63,7 @@ export const userRouter = router({
             select: {
               lenderRating: true,
               _count: {
-                select: { listedItem: true },
+                select: { listedItem: true, bookings: true },
               },
               listedItem: {
                 where: { status: "AVAILABLE" },
@@ -130,6 +130,12 @@ export const userRouter = router({
         lastName: user.lastName,
       })
 
+      const totalBookingsCount = await ctx.prisma.booking.count({
+        where: {
+          lenderId: user.id,
+        },
+      })
+
       return {
         user: {
           id: user.id,
@@ -144,6 +150,7 @@ export const userRouter = router({
           borrowerRating: user.borrower?.borrowerRating ?? 0,
           itemsSold: user.lender?._count.listedItem ?? 0, // Simplified mapping
           activeListings: user.lender?._count.listedItem ?? 0,
+          totalLenderBookings: totalBookingsCount,
         },
         reviews: user.transactionReviewsReviewee.map((r) => ({
           id: r.id,
@@ -202,7 +209,7 @@ export const userRouter = router({
             select: {
               lenderRating: true,
               _count: {
-                select: { listedItem: true },
+                select: { listedItem: true, bookings: true },
               },
             },
           },

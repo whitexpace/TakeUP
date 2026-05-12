@@ -121,9 +121,9 @@ const CONDITIONS: { value: ItemCondition; label: string }[] = [
 
 const SUGGESTED_TAGS = [
   "Student-friendly",
-  "Brand new",
-  "Deposit required",
-  "ID required",
+  "Brand-new",
+  "Deposit-required",
+  "ID-required",
   "Popular",
 ]
 
@@ -641,7 +641,31 @@ const buildPayload = () => {
   }
 }
 
+const { authUser, refresh: refreshAuthUser } = useAuthUser()
+
+onMounted(async () => {
+  if (import.meta.client) {
+    // Always refresh on mount to ensure we have the latest lender stats
+    // and to bypass any old cached profile objects.
+    await refreshAuthUser()
+  }
+})
+
 const showPreview = ref(false)
+const lenderRating = computed(() => {
+  if (authUser.value && typeof authUser.value.lenderRating !== "undefined") {
+    return authUser.value.lenderRating
+  }
+  return props.item?.lenderRating ?? 0
+})
+
+const lenderBookingCount = computed(() => {
+  if (authUser.value && typeof authUser.value.totalLenderBookings !== "undefined") {
+    return authUser.value.totalLenderBookings
+  }
+  return props.item?.lenderBookingCount ?? 0
+})
+
 const previewData = computed(() => {
   const payload = buildPayload()
   return {
@@ -649,16 +673,12 @@ const previewData = computed(() => {
     images: payload.photos.map((p, i) => ({ path: p, isPrimary: i === 0 })),
     categories: form.categories,
     condition: form.condition || "GOOD",
-    lender: {
-      user: {
-        firstName: props.item?.ownerName?.split(" ")[0] ?? "You",
-        lastName: props.item?.ownerName?.split(" ").slice(1).join(" ") ?? "",
-        avatarUrl: null,
-      },
-      lenderRating: props.item?.rating ?? 5.0,
-    },
-    ownerName: props.item?.ownerName ?? "You",
-    rating: props.item?.rating ?? 5.0,
+    ownerName: authUser.value?.name ?? props.item?.ownerName ?? "You (Preview)",
+    ownerAvatarUrl: authUser.value?.avatarUrl ?? props.item?.lenderAvatarUrl ?? null,
+    rating: 0,
+    lenderRating: lenderRating.value,
+    bookingCount: 0,
+    lenderBookingCount: lenderBookingCount.value,
   }
 })
 
@@ -1350,6 +1370,7 @@ const availabilityRowErrors = computed(() =>
               placeholder="Add tags..."
               class="flex-1 bg-transparent px-1.5 text-[14px] font-medium outline-none"
               @keydown.enter.prevent="addTag"
+              @keydown.space.prevent="addTag"
               @keydown.,.prevent="addTag"
               @blur="addTag"
             />

@@ -336,6 +336,10 @@ const ownerInitials = computed(() => {
 
 const ratingLabel = computed(() => (item.value ? item.value.rating.toFixed(1) : "0.0"))
 const lenderRatingLabel = computed(() => (item.value ? item.value.lenderRating.toFixed(1) : "0.0"))
+const lenderBookingCountLabel = computed(() => {
+  const count = item.value?.lenderBookingCount ?? 0
+  return `${count.toLocaleString()} ${count === 1 ? "booking" : "bookings"}`
+})
 const bookingCountLabel = computed(() => {
   const count = item.value?.bookingCount ?? 0
   return `${count.toLocaleString()} ${count === 1 ? "booking" : "bookings"}`
@@ -2271,7 +2275,7 @@ onUnmounted(() => {
                       <span class="font-bold">{{ lenderRatingLabel }}</span>
                     </div>
                     <span class="text-noble-black/30">·</span>
-                    <span>{{ bookingCountLabel }}</span>
+                    <span>{{ lenderBookingCountLabel }}</span>
                   </div>
                   <p class="text-[12px] text-noble-black/40 mt-0.5">Item owner on TakeUP</p>
                 </div>
@@ -2307,7 +2311,7 @@ onUnmounted(() => {
                     <span class="font-bold">{{ lenderRatingLabel }}</span>
                   </div>
                   <span class="text-noble-black/30">·</span>
-                  <span>{{ bookingCountLabel }}</span>
+                  <span>{{ lenderBookingCountLabel }}</span>
                 </div>
                 <p class="text-[12px] text-noble-black/40 mt-0.5">Item owner on TakeUP</p>
               </div>

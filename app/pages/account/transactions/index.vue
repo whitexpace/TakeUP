@@ -58,13 +58,17 @@ const borrowerRequestStatuses = computed<BookingStatus[]>(() => {
   switch (activeStatus.value) {
     case null:
     case "REQUESTED_ITEMS":
-      return ["PENDING", "CONFIRMED", "CANCELLED"]
+      return ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "RETURNED", "IN_DISPUTE"]
     case "PENDING":
       return ["PENDING"]
     case "ACTIVE":
       return ["CONFIRMED"]
     case "CANCELLED":
       return ["CANCELLED"]
+    case "RETURNED":
+      return ["RETURNED"]
+    case "COMPLETED":
+      return ["COMPLETED"]
     default:
       return []
   }
@@ -85,10 +89,30 @@ const {
   searchQuery,
 })
 
+const lenderRequestStatuses = computed<BookingStatus[]>(() => {
+  if (activeRole.value !== "LENDER") return []
+
+  switch (activeStatus.value) {
+    case null:
+    case "LENDER_FOR_APPROVAL":
+      return ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "RETURNED", "IN_DISPUTE"]
+    case "PENDING":
+      return ["PENDING"]
+    case "ACTIVE":
+      return ["CONFIRMED"]
+    case "CANCELLED":
+      return ["CANCELLED"]
+    case "RETURNED":
+      return ["RETURNED"]
+    case "COMPLETED":
+      return ["COMPLETED"]
+    default:
+      return []
+  }
+})
+
 const shouldShowLenderRequests = computed(
-  () =>
-    activeRole.value === "LENDER" &&
-    (activeStatus.value === null || activeStatus.value === "LENDER_FOR_APPROVAL"),
+  () => activeRole.value === "LENDER" && lenderRequestStatuses.value.length > 0,
 )
 
 const {
@@ -98,6 +122,7 @@ const {
   fetchRequests: fetchLenderRequests,
 } = useLenderItemRequests({
   enabled: shouldShowLenderRequests,
+  statuses: lenderRequestStatuses,
   searchQuery,
 })
 
@@ -120,35 +145,34 @@ const visibleLenderRequests = computed(() =>
 )
 
 const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
-  const borrowerRequestIdSet = new Set(visibleBorrowerRequests.value.map((r) => r.id))
-  const lenderRequestIdSet = new Set(visibleLenderRequests.value.map((r) => r.id))
+  const transactionBookingIds = new Set(
+    visibleTransactions.value.map((tx) => tx.bookingId).filter(Boolean),
+  )
 
-  const borrowerRequestEntries = visibleBorrowerRequests.value.map((request) => ({
-    kind: "request" as const,
-    id: request.id,
-    date: request.createdAt,
-    request,
-  }))
-
-  const lenderRequestEntries = visibleLenderRequests.value.map((request) => ({
-    kind: "lender-request" as const,
-    id: request.id,
-    date: request.createdAt,
-    request,
-  }))
-
-  const transactionEntries = visibleTransactions.value
-    .filter(
-      (transaction) =>
-        !(transaction.bookingId && borrowerRequestIdSet.has(transaction.bookingId)) &&
-        !(transaction.bookingId && lenderRequestIdSet.has(transaction.bookingId)),
-    )
-    .map((transaction) => ({
-      kind: "transaction" as const,
-      id: transaction.id,
-      date: transaction.createdAt,
-      transaction,
+  const borrowerRequestEntries = visibleBorrowerRequests.value
+    .filter((request) => !transactionBookingIds.has(request.id))
+    .map((request) => ({
+      kind: "request" as const,
+      id: request.id,
+      date: request.createdAt,
+      request,
     }))
+
+  const lenderRequestEntries = visibleLenderRequests.value
+    .filter((request) => !transactionBookingIds.has(request.id))
+    .map((request) => ({
+      kind: "lender-request" as const,
+      id: request.id,
+      date: request.createdAt,
+      request,
+    }))
+
+  const transactionEntries = visibleTransactions.value.map((transaction) => ({
+    kind: "transaction" as const,
+    id: transaction.id,
+    date: transaction.createdAt,
+    transaction,
+  }))
 
   return [...borrowerRequestEntries, ...lenderRequestEntries, ...transactionEntries].sort(
     (left, right) => {

@@ -75,6 +75,9 @@ const itemWithTaxonomy = {
   lender: {
     select: {
       lenderRating: true,
+      _count: {
+        select: { bookings: true },
+      },
       user: {
         select: {
           username: true,
@@ -379,6 +382,7 @@ const mapItemTaxonomy = (
   } = item
   const lenderUser = lender?.user
   const lenderRating = lender?.lenderRating ?? 0
+  const lenderBookingCount = lender?._count?.bookings ?? 0
   const lenderFullName = lenderUser
     ? [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ")
     : null
@@ -401,6 +405,7 @@ const mapItemTaxonomy = (
     lenderUsername,
     lenderFullName,
     lenderRating,
+    lenderBookingCount,
     lenderAvatarUrl,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     images:
