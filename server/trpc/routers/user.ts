@@ -45,7 +45,12 @@ export const userRouter = router({
   }),
 
   getPublicProfile: publicProcedure
-    .input(z.object({ username: z.string() }))
+    .input(
+      z.object({
+        username: z.string(),
+        reviewsLimit: z.coerce.number().int().min(1).max(50).default(5),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const user = await ctx.prisma.user.findFirst({
         where: { username: input.username },
@@ -98,6 +103,7 @@ export const userRouter = router({
           },
           transactionReviewsReviewee: {
             orderBy: { createdAt: "desc" },
+            take: input.reviewsLimit,
             select: {
               id: true,
               rating: true,
@@ -114,6 +120,11 @@ export const userRouter = router({
                   avatarUrl: true,
                 },
               },
+            },
+          },
+          _count: {
+            select: {
+              transactionReviewsReviewee: true,
             },
           },
         },
@@ -153,6 +164,7 @@ export const userRouter = router({
           activeListings: user.lender?._count.listedItem ?? 0,
           totalLenderBookings: totalBookingsCount,
         },
+        reviewsCount: user._count.transactionReviewsReviewee,
         reviews: user.transactionReviewsReviewee.map((r) => ({
           id: r.id,
           rating: r.rating,

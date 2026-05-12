@@ -473,11 +473,14 @@ const refreshFeed = async () => {
       () =>
         Promise.all([
           $fetch<ApiCommunityRequest[]>("/api/item-requests", {
-            query: { includeCancelledOffers: true },
+            query: { includeCancelledOffers: true, offersLimit: 5 },
             ...(headers ? { headers } : {}),
           }),
           headers
-            ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", { headers })
+            ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", {
+                query: { limit: 20 },
+                headers,
+              })
             : Promise.resolve([]),
           headers
             ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })

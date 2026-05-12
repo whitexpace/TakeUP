@@ -10,6 +10,7 @@ import {
   itemRequestIdSchema,
   itemRequestStatusSchema,
   listItemRequestsSchema,
+  listRequestOfferNotificationsSchema,
   listRequestOffersSchema,
   markRequestOfferNotificationReadSchema,
   requestOfferIdSchema,
@@ -287,6 +288,9 @@ const fetchOfferRows = async (
     includeCancelled?: boolean
     sentOnly?: boolean
     receivedOnly?: boolean
+    limit?: number
+    skip?: number
+    perRequestLimit?: number
   },
 ) => {
   const clauses: Prisma.Sql[] = []
@@ -329,8 +333,11 @@ const fetchOfferRows = async (
 
   const whereSql =
     clauses.length > 0 ? Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}` : Prisma.empty
+  const paginationSql = options.limit
+    ? Prisma.sql`LIMIT ${options.limit} OFFSET ${options.skip ?? 0}`
+    : Prisma.empty
 
-  return prisma.$queryRaw<OfferRow[]>(Prisma.sql`
+  const offerRowsSql = Prisma.sql`
     SELECT
       o."id",
       o."lenderID",
@@ -357,6 +364,11 @@ const fetchOfferRows = async (
       r."borrowerID" AS "requestBorrowerID",
       rb."userId" AS "requestBorrowerUserId",
       r."itemNeeded" AS "requestItemNeeded"
+      ${
+        options.perRequestLimit
+          ? Prisma.sql`, ROW_NUMBER() OVER (PARTITION BY o."requestID" ORDER BY o."createdAt" DESC, o."id" DESC) AS "__offerRank"`
+          : Prisma.empty
+      }
     FROM "RequestOffer" o
     INNER JOIN "Item" i ON i."numericId" = o."itemID"
     LEFT JOIN LATERAL (
@@ -371,7 +383,21 @@ const fetchOfferRows = async (
     INNER JOIN "ItemRequest" r ON r."id" = o."requestID"
     INNER JOIN "Borrower" rb ON rb."id" = r."borrowerID"
     ${whereSql}
-    ORDER BY o."createdAt" DESC
+  `
+
+  if (options.perRequestLimit) {
+    return prisma.$queryRaw<OfferRow[]>(Prisma.sql`
+      SELECT *
+      FROM (${offerRowsSql}) ranked_offers
+      WHERE ranked_offers."__offerRank" <= ${options.perRequestLimit}
+      ORDER BY ranked_offers."createdAt" DESC, ranked_offers."id" DESC
+    `)
+  }
+
+  return prisma.$queryRaw<OfferRow[]>(Prisma.sql`
+    ${offerRowsSql}
+    ORDER BY o."createdAt" DESC, o."id" DESC
+    ${paginationSql}
   `)
 }
 
@@ -384,6 +410,7 @@ const fetchMappedRequests = async (
     status?: ItemRequestStatus
     borrowerOnly?: boolean
     includeCancelledOffers?: boolean
+    offersLimit?: number
   },
   viewerUserId: string | null,
 ) => {
@@ -395,6 +422,7 @@ const fetchMappedRequests = async (
           requestIds,
           viewerUserId,
           includeCancelled: options.includeCancelledOffers,
+          perRequestLimit: options.offersLimit,
         })
       : []
 
@@ -750,6 +778,8 @@ export const communityRouter = router({
       receivedOnly: input.receivedOnly,
       viewerUserId: ctx.user.id,
       includeCancelled: true,
+      limit: input.limit,
+      skip: input.skip,
     })
 
     return offers.map(mapOffer)
@@ -1010,31 +1040,34 @@ export const communityRouter = router({
       return rows[0] ?? { id: input.id }
     }),
 
-  notifications: protectedProcedure.query(async ({ ctx }) => {
-    const offers = await fetchOfferRows(ctx.prisma, {
-      viewerUserId: ctx.user.id,
-      receivedOnly: true,
-      includeCancelled: false,
-    })
+  notifications: protectedProcedure
+    .input(listRequestOfferNotificationsSchema)
+    .query(async ({ ctx, input }) => {
+      const offers = await fetchOfferRows(ctx.prisma, {
+        viewerUserId: ctx.user.id,
+        receivedOnly: true,
+        includeCancelled: false,
+        limit: input.limit,
+      })
 
-    return offers.map((offer) => ({
-      id: offer.id,
-      requestId: offer.requestID,
-      requestTitle: offer.requestItemNeeded,
-      recipientId: offer.requestBorrowerID,
-      actorName: formatUserName({
-        username: offer.lenderUsername,
-        firstName: offer.lenderFirstName,
-        middleName: offer.lenderMiddleName,
-        lastName: offer.lenderLastName,
-        email: offer.lenderEmail,
-      }),
-      itemName: offer.itemName,
-      fee: offer.rentalFee,
-      createdAt: toDate(offer.createdAt),
-      read: toDate(offer.borrowerReadAt) !== null,
-    }))
-  }),
+      return offers.map((offer) => ({
+        id: offer.id,
+        requestId: offer.requestID,
+        requestTitle: offer.requestItemNeeded,
+        recipientId: offer.requestBorrowerID,
+        actorName: formatUserName({
+          username: offer.lenderUsername,
+          firstName: offer.lenderFirstName,
+          middleName: offer.lenderMiddleName,
+          lastName: offer.lenderLastName,
+          email: offer.lenderEmail,
+        }),
+        itemName: offer.itemName,
+        fee: offer.rentalFee,
+        createdAt: toDate(offer.createdAt),
+        read: toDate(offer.borrowerReadAt) !== null,
+      }))
+    }),
 
   markNotificationRead: protectedProcedure
     .input(markRequestOfferNotificationReadSchema)

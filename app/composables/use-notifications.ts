@@ -1,6 +1,8 @@
 import { computed } from "vue"
 import type { AppHeaderNotification } from "../types/notifications"
 
+const NOTIFICATION_FETCH_LIMIT = 20
+
 type ApiNotification = {
   id: string
   type: AppHeaderNotification["type"]
@@ -30,7 +32,9 @@ export const useNotifications = () => {
     isLoading.value = true
 
     try {
-      const response = await $fetch<ApiNotification[]>("/api/notifications")
+      const response = await $fetch<ApiNotification[]>("/api/notifications", {
+        query: { limit: NOTIFICATION_FETCH_LIMIT },
+      })
       notifications.value = response.map(normalizeNotification)
     } catch {
       notifications.value = []

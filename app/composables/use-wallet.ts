@@ -4,6 +4,8 @@ import { useAccountPrefetch } from "./use-account-prefetch"
 import { useAuthUser } from "./use-auth-user"
 import { useViewerSession } from "./use-viewer-session"
 
+const WALLET_TRANSACTION_PAGE_SIZE = 10
+
 const DEFAULT_LINKED_ACCOUNTS: LinkedAccount[] = [
   { id: "la-1", type: "GCASH", accountName: "John Doe", accountNumber: "0912****567" },
   { id: "la-2", type: "LANDBANK", accountName: "John Doe", accountNumber: "1234********5678" },
@@ -11,7 +13,6 @@ const DEFAULT_LINKED_ACCOUNTS: LinkedAccount[] = [
 ]
 
 const WALLET_CACHE_TTL_MS = 30_000
-const WALLET_TRANSACTION_LIMIT = 20
 const ANONYMOUS_VIEWER_KEY = "anonymous"
 
 const pendingWalletRequests = new Map<string, Promise<Wallet | null>>()
@@ -112,7 +113,7 @@ export const useWallet = (options: UseWalletOptions = {}) => {
   const applyWalletPreview = (preview: WalletPreviewResponse, fallbackViewerKey: string) => {
     const now = Date.now()
     wallet.value = preview.wallet
-    transactions.value = preview.transactions.slice(0, WALLET_TRANSACTION_LIMIT)
+    transactions.value = preview.transactions.slice(0, WALLET_TRANSACTION_PAGE_SIZE)
     setWalletViewerKey(
       preview.viewerKey ??
         preview.wallet.userId ??
@@ -232,7 +233,7 @@ export const useWallet = (options: UseWalletOptions = {}) => {
     const request = (async () => {
       try {
         const data = await $fetch<WalletTransaction[]>(`${basePath}/transactions`, {
-          query: { take: WALLET_TRANSACTION_LIMIT },
+          query: { take: WALLET_TRANSACTION_PAGE_SIZE },
         })
         transactions.value = data
         setWalletViewerKey(data.find((transaction) => transaction.userId)?.userId ?? viewerKey)
@@ -282,7 +283,7 @@ export const useWallet = (options: UseWalletOptions = {}) => {
     const request = (async () => {
       try {
         const preview = await $fetch<WalletPreviewResponse>(`${basePath}/preview`, {
-          query: { take: WALLET_TRANSACTION_LIMIT },
+          query: { take: WALLET_TRANSACTION_PAGE_SIZE },
         })
         applyWalletPreview(preview, viewerKey)
         return preview
@@ -344,7 +345,7 @@ export const useWallet = (options: UseWalletOptions = {}) => {
     transactions.value = [
       result.transaction,
       ...transactions.value.filter((transaction) => transaction.id !== result.transaction.id),
-    ].slice(0, WALLET_TRANSACTION_LIMIT)
+    ].slice(0, WALLET_TRANSACTION_PAGE_SIZE)
     transactionsLastLoadedAt.value = Date.now()
   }
 

@@ -174,7 +174,7 @@
                     : 'bg-gray-100 text-gray-500'
                 "
               >
-                {{ profileData.reviews.length }}
+                {{ profileData.reviewsCount }}
               </span>
             </div>
             <!-- Active Underline -->
@@ -217,6 +217,14 @@
           <div v-if="activeTab === 'reviews'" class="flex flex-col lg:flex-row gap-8">
             <!-- Left Column: Reviews List (Scrollable) -->
             <div class="lg:w-[65%] max-h-[800px] overflow-y-auto pr-6 custom-scrollbar">
+              <div class="flex items-center gap-2 mb-6">
+                <h3 class="text-[15px] font-semibold text-gray-700">Feedback History</h3>
+                <span class="text-gray-400">·</span>
+                <p class="text-[13px] text-gray-400">
+                  {{ profileData.reviewsCount }} total reviews
+                </p>
+              </div>
+
               <!-- Filter Row -->
               <div class="flex flex-wrap gap-2 mb-8 sticky top-0 bg-white z-20 py-2">
                 <button
@@ -237,10 +245,10 @@
 
               <div v-if="filteredReviews.length > 0" class="space-y-0">
                 <div
-                  v-for="(review, index) in filteredReviews"
+                  v-for="(review, index) in visibleReviews"
                   :key="review.id"
                   class="py-6 flex flex-col gap-4"
-                  :class="{ 'border-b border-gray-50': index !== filteredReviews.length - 1 }"
+                  :class="{ 'border-b border-gray-50': index !== visibleReviews.length - 1 }"
                 >
                   <div class="flex items-start justify-between">
                     <!-- Link for non-anonymous reviewers -->
@@ -319,6 +327,38 @@
                     </div>
                   </div>
                   <p class="text-[14px] text-gray-700 leading-relaxed">{{ review.text }}</p>
+                </div>
+
+                <div
+                  v-if="filteredReviews.length > PROFILE_REVIEW_PAGE_SIZE"
+                  class="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <p class="text-[12px] font-medium text-gray-400">
+                    Showing {{ reviewRangeLabel }}
+                  </p>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="h-8 w-8 rounded-lg border border-gray-100 text-gray-400 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-100 disabled:hover:text-gray-400"
+                      :disabled="!hasPreviousReviewPage"
+                      aria-label="Previous reviews"
+                      @click="setReviewPage(reviewPage - 1)"
+                    >
+                      <Icon name="ph:caret-left" class="mx-auto h-4 w-4" />
+                    </button>
+                    <span class="text-[12px] font-semibold text-gray-400">
+                      {{ reviewPage }} / {{ reviewPageCount }}
+                    </span>
+                    <button
+                      type="button"
+                      class="h-8 w-8 rounded-lg border border-gray-100 text-gray-400 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-100 disabled:hover:text-gray-400"
+                      :disabled="!hasNextReviewPage"
+                      aria-label="Next reviews"
+                      @click="setReviewPage(reviewPage + 1)"
+                    >
+                      <Icon name="ph:caret-right" class="mx-auto h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
               <div
@@ -424,7 +464,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue"
+import { ref, computed, watch } from "vue"
 import {
   getCachedPublicProfile,
   prefetchPublicProfile,
@@ -439,15 +479,21 @@ const route = useRoute()
 const username = route.params.username as string
 const activeTab = ref("reviews")
 const reviewFilter = ref("All")
+const PROFILE_REVIEW_PAGE_SIZE = 5
+const reviewPage = ref(1)
 
 const {
   data: profileData,
   pending: isProfilePending,
   error,
-} = useAsyncData(`profile-${username}`, () => prefetchPublicProfile(username), {
+} = useAsyncData(
+  `profile-${username}`,
+  () => prefetchPublicProfile(username, { reviewsLimit: PROFILE_REVIEW_PAGE_SIZE }),
+  {
   default: () => getCachedPublicProfile(username),
   lazy: true,
-})
+  },
+)
 const isLoading = computed(() => isProfilePending.value && !profileData.value)
 
 const filteredReviews = computed(() => {
@@ -460,6 +506,38 @@ const filteredReviews = computed(() => {
   // Sort by most recent
   return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 })
+const reviewPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredReviews.value.length / PROFILE_REVIEW_PAGE_SIZE)),
+)
+const reviewPageStart = computed(() => (reviewPage.value - 1) * PROFILE_REVIEW_PAGE_SIZE)
+const reviewPageEnd = computed(() =>
+  Math.min(reviewPageStart.value + PROFILE_REVIEW_PAGE_SIZE, filteredReviews.value.length),
+)
+const visibleReviews = computed(() =>
+  filteredReviews.value.slice(reviewPageStart.value, reviewPageEnd.value),
+)
+const reviewRangeLabel = computed(() =>
+  filteredReviews.value.length === 0
+    ? ""
+    : `${reviewPageStart.value + 1}-${reviewPageEnd.value} of ${filteredReviews.value.length}`,
+)
+const hasPreviousReviewPage = computed(() => reviewPage.value > 1)
+const hasNextReviewPage = computed(() => reviewPage.value < reviewPageCount.value)
+
+const setReviewPage = (page: number) => {
+  reviewPage.value = Math.min(Math.max(1, page), reviewPageCount.value)
+}
+
+watch(reviewFilter, () => {
+  reviewPage.value = 1
+})
+
+watch(
+  () => filteredReviews.value.length,
+  () => {
+    setReviewPage(reviewPage.value)
+  },
+)
 
 const yearsOnPlatform = computed(() => {
   if (!profileData.value?.user.createdAt) return "< 1"

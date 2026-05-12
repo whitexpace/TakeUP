@@ -1,11 +1,15 @@
-import { createError, getRouterParam } from "h3"
-import { itemIdSchema } from "#shared/schemas/item"
+import { createError, getQuery, getRouterParam } from "h3"
+import { itemDetailSchema } from "#shared/schemas/item"
 import { createContext } from "../../trpc/context"
 import { appRouter } from "../../trpc/routers"
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, "id")
-  const parsed = itemIdSchema.safeParse({ id: rawId })
+  const query = getQuery(event)
+  const parsed = itemDetailSchema.safeParse({
+    id: rawId,
+    reviewsLimit: typeof query.reviewsLimit === "string" ? Number(query.reviewsLimit) : undefined,
+  })
 
   if (!parsed.success) {
     throw createError({

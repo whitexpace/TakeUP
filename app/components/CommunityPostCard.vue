@@ -236,7 +236,7 @@
 
       <div class="flex flex-col gap-3">
         <div
-          v-for="offer in sortedOffers"
+          v-for="offer in visibleOffers"
           :key="offer.id"
           class="rounded-xl border border-gray-100 bg-gray-50/50 p-4"
         >
@@ -300,13 +300,53 @@
           </div>
         </div>
       </div>
+
+      <div
+        v-if="request.offersCount > OFFERS_PAGE_SIZE"
+        class="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
+          <p class="text-[12px] font-medium text-gray-400">Showing {{ offerRangeLabel }}</p>
+          <p v-if="offerLoadError" class="mt-1 text-[12px] font-medium text-cinnabar-red">
+            {{ offerLoadError }}
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="h-8 w-8 rounded-lg border border-gray-100 text-gray-400 transition-colors hover:border-blue-estate hover:text-blue-estate disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-100 disabled:hover:text-gray-400"
+            :disabled="!hasPreviousOfferPage"
+            aria-label="Previous offers"
+            @click="goToOfferPage(offerPage - 1)"
+          >
+            <Icon name="ph:caret-left" class="mx-auto h-4 w-4" />
+          </button>
+          <span class="text-[12px] font-semibold text-gray-400">
+            {{ offerPage }} / {{ offerPageCount }}
+          </span>
+          <button
+            type="button"
+            class="h-8 w-8 rounded-lg border border-gray-100 text-gray-400 transition-colors hover:border-blue-estate hover:text-blue-estate disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-100 disabled:hover:text-gray-400"
+            :disabled="!hasNextOfferPage"
+            aria-label="Next offers"
+            @click="goToOfferPage(offerPage + 1)"
+          >
+            <Icon
+              :name="isLoadingOffers ? 'ph:spinner-gap' : 'ph:caret-right'"
+              class="mx-auto h-4 w-4"
+              :class="{ 'animate-spin': isLoadingOffers }"
+            />
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type {
+  CommunityOffer,
   CommunityOfferStatus,
   CommunityRequest,
   CommunityRequestStatus,
@@ -334,10 +374,16 @@ const emit = defineEmits<{
   ): void
 }>()
 
+const OFFERS_PAGE_SIZE = 5
+
 const showOffers = ref(false)
 const showComments = ref(false)
 const showMenu = ref(false)
 const isExpandedBody = ref(false)
+const offerPage = ref(1)
+const loadedOffers = ref<CommunityOffer[]>([])
+const isLoadingOffers = ref(false)
+const offerLoadError = ref("")
 const cardRef = ref<HTMLElement | null>(null)
 const replyInputRef = ref<HTMLInputElement | null>(null)
 
@@ -469,11 +515,96 @@ const currentUserOffer = computed(() => {
   return props.request.offers.find((offer) => offer.lender.userId === props.currentUserId) ?? null
 })
 
+const normalizeOffer = (offer: CommunityOffer): CommunityOffer => ({
+  ...offer,
+  borrowerReadAt: offer.borrowerReadAt ? new Date(offer.borrowerReadAt) : null,
+  createdAt: new Date(offer.createdAt),
+  updatedAt: new Date(offer.updatedAt),
+})
+
+watch(
+  () => [props.request.id, props.request.offers] as const,
+  () => {
+    loadedOffers.value = props.request.offers.map(normalizeOffer)
+    offerPage.value = 1
+    offerLoadError.value = ""
+  },
+  { immediate: true },
+)
+
 const sortedOffers = computed(() => {
-  return [...props.request.offers].sort(
+  return [...loadedOffers.value].sort(
     (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
   )
 })
+const offerPageCount = computed(() =>
+  Math.max(1, Math.ceil(props.request.offersCount / OFFERS_PAGE_SIZE)),
+)
+const offerPageStart = computed(() => (offerPage.value - 1) * OFFERS_PAGE_SIZE)
+const offerPageEnd = computed(() =>
+  Math.min(offerPageStart.value + OFFERS_PAGE_SIZE, props.request.offersCount),
+)
+const visibleOffers = computed(() =>
+  sortedOffers.value.slice(offerPageStart.value, offerPageEnd.value),
+)
+const offerRangeLabel = computed(() =>
+  props.request.offersCount === 0
+    ? ""
+    : `${offerPageStart.value + 1}-${offerPageEnd.value} of ${props.request.offersCount}`,
+)
+const hasPreviousOfferPage = computed(() => offerPage.value > 1)
+const hasNextOfferPage = computed(() => offerPage.value < offerPageCount.value)
+const canLoadMoreOffers = computed(() => loadedOffers.value.length < props.request.offersCount)
+
+const setOfferPage = (page: number) => {
+  offerPage.value = Math.min(Math.max(1, page), offerPageCount.value)
+}
+
+const loadNextOfferBatch = async () => {
+  if (isLoadingOffers.value || !canLoadMoreOffers.value) return
+  isLoadingOffers.value = true
+  offerLoadError.value = ""
+  try {
+    const offers = await $fetch<CommunityOffer[]>("/api/request-offers", {
+      query: {
+        requestID: props.request.id,
+        limit: OFFERS_PAGE_SIZE,
+        skip: loadedOffers.value.length,
+      },
+    })
+    const existingIds = new Set(loadedOffers.value.map((offer) => offer.id))
+    loadedOffers.value = [
+      ...loadedOffers.value,
+      ...offers.map(normalizeOffer).filter((offer) => !existingIds.has(offer.id)),
+    ]
+  } catch {
+    offerLoadError.value = "Unable to load more offers right now."
+  } finally {
+    isLoadingOffers.value = false
+  }
+}
+
+const goToOfferPage = async (page: number) => {
+  const nextPage = Math.min(Math.max(1, page), offerPageCount.value)
+  const requiredOfferCount = Math.min(nextPage * OFFERS_PAGE_SIZE, props.request.offersCount)
+
+  while (loadedOffers.value.length < requiredOfferCount && canLoadMoreOffers.value) {
+    const beforeCount = loadedOffers.value.length
+    await loadNextOfferBatch()
+    if (loadedOffers.value.length === beforeCount || offerLoadError.value) break
+  }
+
+  if (loadedOffers.value.length >= (nextPage - 1) * OFFERS_PAGE_SIZE + 1) {
+    offerPage.value = nextPage
+  }
+}
+
+watch(
+  () => props.request.offersCount,
+  () => {
+    setOfferPage(offerPage.value)
+  },
+)
 
 const requestStatusClass = computed(() => {
   if (props.request.status === "FULFILLED") {

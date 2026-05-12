@@ -51,6 +51,13 @@ const {
   markAllNotificationsRead: globalMarkAllRead,
 } = useNotifications()
 
+const NOTIFICATION_RENDER_LIMIT = 20
+
+const getNotificationKey = (n: CommunityOfferNotification | AppHeaderNotification) => {
+  if ("type" in n) return `app-${n.id}`
+  return `offer-${n.id}`
+}
+
 const displayNotifications = computed(() => {
   const propNotifs = props.notifications || []
   const globalNotifs = globalNotifications.value || []
@@ -60,19 +67,19 @@ const displayNotifications = computed(() => {
 
   const map = new Map<string | number, CommunityOfferNotification | AppHeaderNotification>()
 
-  // Deduplicate by using a composite key to handle potential ID collisions between different notification types
-  const getEntryKey = (n: CommunityOfferNotification | AppHeaderNotification) => {
-    if ("type" in n) return `app-${n.id}`
-    return `offer-${n.id}`
-  }
-
-  globalNotifs.forEach((n) => map.set(getEntryKey(n), n))
-  propNotifs.forEach((n) => map.set(getEntryKey(n), n))
+  globalNotifs.forEach((n) => map.set(getNotificationKey(n), n))
+  propNotifs.forEach((n) => map.set(getNotificationKey(n), n))
 
   return Array.from(map.values()).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 })
+const visibleNotifications = computed(() =>
+  displayNotifications.value.slice(0, NOTIFICATION_RENDER_LIMIT),
+)
+const hiddenNotificationCount = computed(() =>
+  Math.max(0, displayNotifications.value.length - visibleNotifications.value.length),
+)
 
 const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 const headerRef = ref<HTMLElement | null>(null)
@@ -457,8 +464,8 @@ onBeforeUnmount(() => {
               >
                 <div class="flex flex-col">
                   <button
-                    v-for="notification in displayNotifications"
-                    :key="notification.id"
+                    v-for="notification in visibleNotifications"
+                    :key="getNotificationKey(notification)"
                     class="relative flex gap-3 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
                     :class="[
                       !notification.read
@@ -515,6 +522,13 @@ onBeforeUnmount(() => {
                       </div>
                     </div>
                   </button>
+                  <div
+                    v-if="hiddenNotificationCount > 0"
+                    class="px-4 py-3 text-center text-[12px] font-medium text-gray-400"
+                  >
+                    Showing latest {{ NOTIFICATION_RENDER_LIMIT }} of
+                    {{ displayNotifications.length }} notifications
+                  </div>
                 </div>
               </div>
 

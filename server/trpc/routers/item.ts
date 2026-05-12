@@ -6,7 +6,7 @@ import { protectedProcedure, publicProcedure } from "../procedures"
 import {
   createItemSchema,
   deleteItemSchema,
-  itemIdSchema,
+  itemDetailSchema,
   listItemsSchema,
   myListingsSchema,
   paginatedItemsSchema,
@@ -1329,7 +1329,7 @@ export const itemRouter = router({
       .then((item) => mapItemTaxonomy(item as ItemWithUserLike))
   }),
 
-  byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
+  byId: publicProcedure.input(itemDetailSchema).query(async ({ ctx, input }) => {
     await expireActiveBoostsThrottled(ctx.prisma)
     const now = new Date()
     const viewer = ctx.user
@@ -1348,6 +1348,7 @@ export const itemRouter = router({
         orderBy: {
           createdAt: "desc",
         },
+        take: input.reviewsLimit,
         select: transactionReviewSelect,
       },
     } satisfies Prisma.ItemInclude
@@ -1385,16 +1386,21 @@ export const itemRouter = router({
     updateItem?.({ where: { id: item.id }, data: { viewCount: { increment: 1 } } }).catch(() => {})
 
     const reviews = item.transactionReviews.map(mapTransactionReview)
-    const averageRating =
-      reviews.length > 0
-        ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length
-        : 0
+    const reviewStats = await ctx.prisma.transactionReview.aggregate({
+      where: {
+        itemId: item.id,
+        reviewType: "ITEM_REVIEW",
+      },
+      _avg: { rating: true },
+      _count: { _all: true },
+    })
+    const averageRating = reviewStats._avg.rating ?? 0
 
     return {
       ...mapItemTaxonomy(item),
       rating: averageRating,
       reviews,
-      reviewsCount: reviews.length,
+      reviewsCount: reviewStats._count._all,
       bookingBlocks: item.bookings.map((booking) => ({
         id: booking.id,
         startDate: booking.startDate,
