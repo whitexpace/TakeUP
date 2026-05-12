@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { MAX_REVIEW_IMAGES, MAX_REVIEW_IMAGE_BYTES, type ReviewType } from "#shared/schemas/review"
 import { convertImageFileToWebP } from "~/utils/image-upload"
 import { normalizeReviewImageUrl } from "../utils/review-image"
@@ -102,6 +102,10 @@ const resetState = () => {
   draftMessage.value = ""
   persistedDraftImages.value = []
 }
+
+onBeforeUnmount(() => {
+  resetState()
+})
 
 const getSafeFileName = (fileName: string) =>
   fileName
