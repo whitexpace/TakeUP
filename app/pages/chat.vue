@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 import { useChat } from "../composables/use-chat"
 import type { ChatMessage } from "../composables/use-chat"
 import { useNotifications } from "../composables/use-notifications"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { insertTextAtSelection } from "../utils/chat-composer"
 import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
 import { getChatClosedPreviewLabel } from "#shared/chat-rules"
@@ -236,6 +237,7 @@ const handlePhotoSelected = (event: Event) => {
 }
 
 const uploadChatImage = async (file: File) => {
+  const uploadFile = await convertImageFileToWebP(file)
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -253,16 +255,16 @@ const uploadChatImage = async (file: File) => {
         Authorization: `Bearer ${accessToken}`,
       },
       body: {
-        fileName: file.name,
+        fileName: uploadFile.name,
       },
     },
   )
 
   const { error: uploadError } = await supabase.storage
     .from(runtimeConfig.public.chatImageBucket)
-    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
       upsert: true,
-      contentType: file.type || "application/octet-stream",
+      contentType: uploadFile.type || "application/octet-stream",
     })
 
   if (uploadError) {

@@ -4,6 +4,7 @@ import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
 import type { ReviewType } from "#shared/schemas/review"
 import { isChatAvailableForBookingStatus } from "#shared/chat-rules"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
 import {
   clearPrefetchedBookingDetail,
@@ -365,19 +366,20 @@ const clearEarlyReturnProof = () => {
 
 const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
   if (!booking.value) throw new Error("Booking data missing.")
+  const uploadFile = await convertImageFileToWebP(file)
   const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
     method: "POST",
     body: {
       bookingId: booking.value.id,
       proofType,
-      fileName: file.name,
+      fileName: uploadFile.name,
     },
   })
 
   const { error: uploadError } = await supabase.storage
     .from(signedUpload.bucket)
-    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
-      contentType: file.type || "image/jpeg",
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
+      contentType: uploadFile.type || "image/jpeg",
       upsert: false,
     })
 
@@ -858,19 +860,20 @@ const submitRebuttal = async () => {
     let rebuttalImageUrl: string | undefined
 
     if (rebuttalImageFile.value) {
+      const uploadFile = await convertImageFileToWebP(rebuttalImageFile.value)
       type UploadUrlResponse = { token: string; path: string; publicUrl: string; bucket: string }
       const uploadData = await $fetch<UploadUrlResponse>(
         `/api/disputes/${latestDispute.value.id}/rebuttal-upload-url`,
         {
           method: "POST",
-          body: { fileName: rebuttalImageFile.value.name },
+          body: { fileName: uploadFile.name },
         },
       )
 
       const { error: uploadError } = await supabase.storage
         .from(uploadData.bucket)
-        .uploadToSignedUrl(uploadData.path, uploadData.token, rebuttalImageFile.value, {
-          contentType: rebuttalImageFile.value.type || "image/jpeg",
+        .uploadToSignedUrl(uploadData.path, uploadData.token, uploadFile, {
+          contentType: uploadFile.type || "image/jpeg",
           upsert: false,
         })
 

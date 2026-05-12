@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from "vue"
 import type { MyListingItem } from "../composables/use-my-listings"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { mergeParsedTags } from "../utils/tag-input"
 
 const STEPS = [
@@ -500,11 +501,12 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
   if (!authUser) throw new Error("Not authenticated")
   const userId = authUser.id
+  const uploadFile = await convertImageFileToWebP(file)
   const datePrefix = new Date().toISOString().slice(0, 10)
   const uniqueId = crypto.randomUUID()
-  const storagePath = `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
+  const storagePath = `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(uploadFile.name)}`
   const uploadId = storagePath
-  pendingUploads.value.push({ id: uploadId, name: file.name, progress: 0 })
+  pendingUploads.value.push({ id: uploadId, name: uploadFile.name, progress: 0 })
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -517,8 +519,10 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
       `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${storagePath.split("/").map(encodeURIComponent).join("/")}`,
     )
     xhr.setRequestHeader("apikey", supabaseKey)
-    if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
-    xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+    if (accessToken) {
+      xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
+    }
+    xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
       const progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
@@ -542,9 +546,9 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
         .from(itemImageBucket)
         .getPublicUrl(storagePath)
       sessionUploadedImageUrls.add(publicUrlData.publicUrl)
-      resolve({ id: storagePath, url: publicUrlData.publicUrl, name: file.name })
+      resolve({ id: storagePath, url: publicUrlData.publicUrl, name: uploadFile.name })
     }
-    xhr.send(file)
+    xhr.send(uploadFile)
   })
 }
 

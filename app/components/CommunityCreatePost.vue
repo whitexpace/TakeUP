@@ -222,6 +222,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch, nextTick } from "vue"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import type { CommunityRequestComposerInput } from "~/types/community-requests"
 
 type UploadedReferenceImage = {
@@ -565,7 +566,8 @@ const uploadReferenceImage = async (file: File) => {
     throw new Error("Please sign in again before uploading an image.")
   }
 
-  const storagePath = createStoragePath(file, userId)
+  const uploadFile = await convertImageFileToWebP(file)
+  const storagePath = createStoragePath(uploadFile, userId)
 
   const {
     data: { session },
@@ -585,7 +587,7 @@ const uploadReferenceImage = async (file: File) => {
       xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
     }
     xhr.setRequestHeader("x-upsert", "false")
-    xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+    xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
@@ -621,11 +623,11 @@ const uploadReferenceImage = async (file: File) => {
       resolve({
         id: storagePath,
         url: publicUrlData.publicUrl,
-        name: file.name,
+        name: uploadFile.name,
       })
     }
 
-    xhr.send(file)
+    xhr.send(uploadFile)
   })
 }
 
