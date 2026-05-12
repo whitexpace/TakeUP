@@ -95,6 +95,10 @@ const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 
 const MAX_GALLERY_IMAGE_COUNT = 10
+const MAX_GALLERY_IMAGE_SIZE_MB = 10
+const MAX_GALLERY_IMAGE_BYTES = MAX_GALLERY_IMAGE_SIZE_MB * 1024 * 1024
+const GALLERY_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp"
+const ALLOWED_GALLERY_IMAGE_MIME_TYPES = new Set(GALLERY_IMAGE_ACCEPT.split(","))
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
   { value: "BOOKS", label: "Books" },
@@ -496,6 +500,79 @@ const getSafeFileName = (fileName: string) => {
   )
 }
 
+type GalleryUploadSkipCounts = {
+  invalidType: number
+  tooLarge: number
+  overLimit: number
+}
+
+const formatGalleryUploadSkipMessage = (skipped: GalleryUploadSkipCounts) => {
+  const totalSkipped = skipped.invalidType + skipped.tooLarge + skipped.overLimit
+  if (totalSkipped === 0) return null
+
+  const details: string[] = []
+  if (skipped.invalidType > 0) {
+    details.push(
+      `${skipped.invalidType} ${skipped.invalidType === 1 ? "is" : "are"} not JPEG, PNG, or WebP`,
+    )
+  }
+  if (skipped.tooLarge > 0) {
+    details.push(
+      `${skipped.tooLarge} ${skipped.tooLarge === 1 ? "exceeds" : "exceed"} ${MAX_GALLERY_IMAGE_SIZE_MB} MB`,
+    )
+  }
+  if (skipped.overLimit > 0) {
+    details.push(
+      `${skipped.overLimit} ${skipped.overLimit === 1 ? "exceeds" : "exceed"} the ${MAX_GALLERY_IMAGE_COUNT}-image limit`,
+    )
+  }
+
+  return `Skipped ${totalSkipped} ${totalSkipped === 1 ? "file" : "files"}: ${details.join("; ")}.`
+}
+
+const getUploadableGalleryFiles = (files: File[]) => {
+  const uploadableFiles: File[] = []
+  const skipped: GalleryUploadSkipCounts = {
+    invalidType: 0,
+    tooLarge: 0,
+    overLimit: 0,
+  }
+  const availableSlots = Math.max(
+    0,
+    MAX_GALLERY_IMAGE_COUNT - images.value.length - pendingUploads.value.length,
+  )
+
+  for (const file of files) {
+    if (!ALLOWED_GALLERY_IMAGE_MIME_TYPES.has(file.type)) {
+      skipped.invalidType += 1
+      continue
+    }
+
+    if (file.size > MAX_GALLERY_IMAGE_BYTES) {
+      skipped.tooLarge += 1
+      continue
+    }
+
+    if (uploadableFiles.length >= availableSlots) {
+      skipped.overLimit += 1
+      continue
+    }
+
+    uploadableFiles.push(file)
+  }
+
+  return {
+    uploadableFiles,
+    skippedMessage: formatGalleryUploadSkipMessage(skipped),
+  }
+}
+
+const resetGalleryInput = () => {
+  if (galleryInput.value) {
+    galleryInput.value.value = ""
+  }
+}
+
 const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
   const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
   const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
@@ -554,19 +631,36 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
 
 const uploadFiles = async (files: File[]) => {
   imageUploadError.value = null
-  if (files.length === 0) return
+  if (files.length === 0) {
+    resetGalleryInput()
+    return
+  }
+
+  if (isUploadingImages.value) {
+    imageUploadError.value = "Please wait for current image uploads to finish before adding more."
+    resetGalleryInput()
+    return
+  }
+
+  const { uploadableFiles, skippedMessage } = getUploadableGalleryFiles(files)
+  imageUploadError.value = skippedMessage
+  if (uploadableFiles.length === 0) {
+    resetGalleryInput()
+    return
+  }
+
   isUploadingImages.value = true
   try {
-    const uploaded = await Promise.all(files.map((f) => uploadFileWithProgress(f)))
+    const uploaded = await Promise.all(uploadableFiles.map((f) => uploadFileWithProgress(f)))
     images.value = [...images.value, ...uploaded]
     if (!primaryImageId.value) primaryImageId.value = uploaded[0]!.id
   } catch {
-    imageUploadError.value = "Failed to upload images."
+    imageUploadError.value = skippedMessage
+      ? `Failed to upload images. ${skippedMessage}`
+      : "Failed to upload images."
   } finally {
     isUploadingImages.value = false
-    if (galleryInput.value) {
-      galleryInput.value.value = ""
-    }
+    resetGalleryInput()
   }
 }
 
@@ -578,6 +672,7 @@ const handleGallerySelect = (event: Event) => {
 const removeGalleryImage = (id: string) => {
   images.value = images.value.filter((img) => img.id !== id)
   if (primaryImageId.value === id) primaryImageId.value = images.value[0]?.id ?? null
+  imageUploadError.value = null
 }
 
 const triggerGalleryUpload = () => galleryInput.value?.click()
@@ -877,7 +972,7 @@ const availabilityRowErrors = computed(() =>
             <input
               ref="galleryInput"
               type="file"
-              accept="image/*"
+              :accept="GALLERY_IMAGE_ACCEPT"
               multiple
               class="hidden"
               @change="handleGallerySelect"
@@ -898,10 +993,13 @@ const availabilityRowErrors = computed(() =>
                 Drag photos here or click to browse
               </p>
               <p class="mt-1 text-[13px] font-medium text-noble-black/40">
-                + Cover photo · PNG, JPG or WebP
+                + Cover photo · PNG, JPG or WebP · {{ MAX_GALLERY_IMAGE_SIZE_MB }} MB max
               </p>
             </div>
           </div>
+          <p v-if="imageUploadError" class="text-[13px] font-medium text-cinnabar-red">
+            {{ imageUploadError }}
+          </p>
           <div
             v-if="images.length > 0 || pendingUploads.length > 0"
             class="flex items-center gap-4 overflow-x-auto pt-5 pb-3 px-2 scrollbar-hide"
