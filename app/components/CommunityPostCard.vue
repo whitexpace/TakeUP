@@ -114,6 +114,8 @@
       >
         <img
           :src="request.referenceImageUrl"
+          loading="lazy"
+          decoding="async"
           class="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-105"
         />
       </div>

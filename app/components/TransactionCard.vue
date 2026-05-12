@@ -266,6 +266,8 @@ const handleOpenChat = async () => {
             v-if="transaction.item.thumbnailImage"
             :src="transaction.item.thumbnailImage"
             :alt="transaction.item.name"
+            loading="lazy"
+            decoding="async"
             class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
           />
           <div
@@ -399,6 +401,8 @@ const handleOpenChat = async () => {
             v-if="transaction.item.thumbnailImage"
             :src="transaction.item.thumbnailImage"
             :alt="transaction.item.name"
+            loading="lazy"
+            decoding="async"
             class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
           />
           <div

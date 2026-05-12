@@ -319,6 +319,8 @@ const initialsFor = (name: string) =>
                 v-if="review.reviewer.avatarUrl"
                 :src="review.reviewer.avatarUrl"
                 :alt="review.reviewer.displayName"
+                loading="lazy"
+                decoding="async"
                 class="w-full h-full object-cover"
               />
               <div
@@ -370,7 +372,12 @@ const initialsFor = (name: string) =>
             class="w-20 h-20 rounded-xl overflow-hidden shadow-sm cursor-pointer border border-cinnamon-ice/15"
             @click="openLightbox(review, idx)"
           >
-            <img :src="getReviewImageUrl(img)" class="w-full h-full object-cover" />
+            <img
+              :src="getReviewImageUrl(img)"
+              loading="lazy"
+              decoding="async"
+              class="w-full h-full object-cover"
+            />
           </div>
         </div>
       </div>
