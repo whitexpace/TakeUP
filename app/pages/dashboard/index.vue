@@ -21,13 +21,13 @@
           <div class="flex items-center justify-center w-10 shrink-0">
             <button
               v-if="searchInput"
-              class="text-noble-black/30 hover:text-noble-black/60 transition-colors"
+              class="text-noble-black/30 hover:text-noble-black/60 transition-colors flex items-center justify-center"
               title="Clear search"
               @click="clearSearch"
             >
               <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
-            <Icon name="ph:magnifying-glass" class="w-[18px] h-[18px] text-noble-black/30" />
+            <Icon v-else name="ph:magnifying-glass" class="w-[18px] h-[18px] text-noble-black/30" />
           </div>
 
           <!-- Search Input -->

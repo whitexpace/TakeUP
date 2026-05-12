@@ -399,17 +399,19 @@ onBeforeUnmount(() => {
             :aria-expanded="showNotifications"
             @click="toggleNotifications"
           >
-            <Icon
-              name="ph:bell"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
+            <div class="relative">
+              <Icon
+                name="ph:bell"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
 
-            <span
-              v-if="unreadNotificationCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ unreadNotificationCount }}
-            </span>
+              <span
+                v-if="unreadNotificationCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ unreadNotificationCount }}
+              </span>
+            </div>
           </button>
 
           <div class="custom-tooltip">
@@ -533,16 +535,18 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <Icon
-              name="ph:chat-centered-text"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
-            <span
-              v-if="chatUnreadCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ chatUnreadCount }}
-            </span>
+            <div class="relative">
+              <Icon
+                name="ph:chat-centered-text"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="chatUnreadCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ chatUnreadCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Chat
@@ -558,16 +562,18 @@ onBeforeUnmount(() => {
             active-class="active-nav-link"
             aria-label="Likes"
           >
-            <Icon
-              name="ph:heart"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
-            <span
-              v-if="likesCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ likesCount }}
-            </span>
+            <div class="relative">
+              <Icon
+                name="ph:heart"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="likesCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ likesCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Likes
@@ -582,16 +588,18 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <Icon
-              name="ph:handbag"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
-            <span
-              v-if="bagCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ bagCount }}
-            </span>
+            <div class="relative">
+              <Icon
+                name="ph:handbag"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="bagCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ bagCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Bag

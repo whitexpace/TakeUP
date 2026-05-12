@@ -74,6 +74,7 @@ const itemWithTaxonomy = {
   },
   lender: {
     select: {
+      lenderRating: true,
       user: {
         select: {
           username: true,
@@ -82,6 +83,7 @@ const itemWithTaxonomy = {
           lastName: true,
           email: true,
           status: true,
+          avatarUrl: true,
         },
       },
     },
@@ -163,6 +165,7 @@ const itemSearchSelect = {
   },
   lender: {
     select: {
+      lenderRating: true,
       user: {
         select: {
           username: true,
@@ -171,6 +174,7 @@ const itemSearchSelect = {
           lastName: true,
           email: true,
           status: true,
+          avatarUrl: true,
         },
       },
     },
@@ -374,10 +378,12 @@ const mapItemTaxonomy = (
     ...rest
   } = item
   const lenderUser = lender?.user
+  const lenderRating = lender?.lenderRating ?? 0
   const lenderFullName = lenderUser
     ? [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ")
     : null
   const lenderUsername = lenderUser?.username || null
+  const lenderAvatarUrl = lenderUser?.avatarUrl || null
   const ownerName = lenderUsername || lenderFullName || lenderUser?.email || item.lenderId
   const orderedPhotos =
     images?.map((entry) => entry.path) ??
@@ -394,6 +400,8 @@ const mapItemTaxonomy = (
     ownerName,
     lenderUsername,
     lenderFullName,
+    lenderRating,
+    lenderAvatarUrl,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     images:
       images?.map((entry, index) => ({

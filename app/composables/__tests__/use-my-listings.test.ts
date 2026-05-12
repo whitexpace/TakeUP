@@ -69,6 +69,8 @@ const makeItem = (id = ITEM_ID) =>
     ownerName: "Test Lender",
     lenderUsername: "test-lender",
     lenderFullName: "Test Lender",
+    lenderRating: 0,
+    lenderAvatarUrl: null,
     isLiked: false,
     description: null,
     condition: "GOOD",

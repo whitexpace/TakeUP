@@ -16,7 +16,11 @@ const {
   authUser: cachedAuthUser,
   hasFreshCache: hasFreshAuthUserCache,
   fetch: fetchAuthUser,
+  clear: clearAuthUser,
 } = useAuthUser()
+const { clear: clearSessionBridge } = useSessionBridge()
+const { clear: clearViewerSession } = useViewerSession()
+
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
 const { notifications, loadNotifications } = useNotifications()
@@ -44,6 +48,9 @@ const toggleSidebar = () => {
 
 const handleSignOut = async () => {
   await supabase.auth.signOut()
+  clearAuthUser()
+  clearSessionBridge()
+  clearViewerSession()
   navigateTo("/")
 }
 
