@@ -115,8 +115,13 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
+import type { ListedItem } from "../types/item-listing"
 import { buildItemDetailPath } from "../utils/item-detail-route"
-import { resetPaginatedItemsCache } from "../composables/use-paginated-items"
+import {
+  clearPaginatedItemsState,
+  resetPaginatedItemsCache,
+} from "../composables/use-paginated-items"
+import { clearPersistedSessionState } from "../composables/use-persisted-session-state"
 import { useLikes } from "../composables/use-likes"
 
 const props = defineProps<{
@@ -257,6 +262,24 @@ const toggleLike = async () => {
     if (typeof nextIsLiked === "boolean") {
       isLiked.value = nextIsLiked
       resetPaginatedItemsCache()
+
+      // Selective clearing/updating of session state
+      if (props.fromPage === "likes") {
+        clearPaginatedItemsState("dashboard-listed-items")
+        clearPersistedSessionState("dashboard-results-count")
+      } else {
+        clearPaginatedItemsState("likes-listed-items")
+
+        // Surgically update the dashboard list if we're on the dashboard
+        // This ensures the shaded icon persists after navigation without a flicker-inducing clear.
+        const dashboardItems = useState<ListedItem[]>("dashboard-listed-items")
+        if (dashboardItems.value) {
+          const itemIdx = dashboardItems.value.findIndex((i) => String(i.id) === String(props.id))
+          if (itemIdx !== -1 && dashboardItems.value[itemIdx]) {
+            dashboardItems.value[itemIdx].isLiked = nextIsLiked
+          }
+        }
+      }
 
       if (nextIsLiked) {
         incrementLikes()
