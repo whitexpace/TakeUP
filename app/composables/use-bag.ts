@@ -48,6 +48,7 @@ let pendingLoad: Promise<void> | null = null
 let bagMutationVersion = 0
 let activeLoadId = 0
 const BAG_CACHE_TTL_MS = 30_000
+const BAG_ACCOUNT_TYPES = new Set(["USER", "ADMIN"])
 
 const formatTimeLabel = (value: Date) =>
   value.toLocaleTimeString("en-US", {
@@ -128,7 +129,7 @@ export const useBag = () => {
     const viewer = await resolveActiveViewer()
     resetBagStateForUser(viewer?.id ?? null)
 
-    if (!viewer || viewer.accountType !== "USER") {
+    if (!viewer || !viewer.accountType || !BAG_ACCOUNT_TYPES.has(viewer.accountType)) {
       return
     }
 

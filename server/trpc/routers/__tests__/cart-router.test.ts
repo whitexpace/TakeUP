@@ -226,11 +226,18 @@ describe("cartRouter", () => {
     ).rejects.toMatchObject({ code: "CONFLICT" })
   })
 
-  it("rejects non-user accounts", async () => {
+  it("allows admin accounts to list bag entries", async () => {
     const context = makeContext({ accountType: "ADMIN" })
     const caller = cartRouter.createCaller(context)
 
-    await expect(caller.list()).rejects.toMatchObject({ code: "FORBIDDEN" })
+    await expect(caller.list()).resolves.toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: ENTRY_ID,
+          itemId: ITEM_ID,
+        }),
+      ]),
+    })
   })
 
   it("rejects adding your own listing", async () => {

@@ -126,7 +126,7 @@ describe("useBag", () => {
     ).toBe(true)
   })
 
-  it("skips loading the bag for admin accounts", async () => {
+  it("loads the bag for admin accounts", async () => {
     vi.doMock("../use-auth-user", () => ({
       useAuthUser: () => ({
         authUser: ref({ id: "admin-1", accountType: "ADMIN" }),
@@ -141,8 +141,11 @@ describe("useBag", () => {
     }))
     const { useBag } = await import("../use-bag")
 
-    useBag()
+    const { loadBag } = useBag()
+    await loadBag({ force: true })
 
-    expect($fetch).not.toHaveBeenCalledWith("/api/cart", expect.anything())
+    expect($fetch).toHaveBeenCalledWith("/api/cart", {
+      headers: undefined,
+    })
   })
 })
