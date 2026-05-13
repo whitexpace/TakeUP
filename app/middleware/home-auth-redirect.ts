@@ -16,34 +16,38 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
-  // --- Client-side: Failsafe to break infinite redirect loops ---
-  const supabase = useSupabaseClient()
+  const { authUser, refresh: refreshAuthUser, clear: clearAuthUser } = useAuthUser()
+  const { getSession, ensureBridgedSession, clear: clearViewerSession } = useViewerSession()
+  const { clear: clearBridge } = useSessionBridge()
 
-  // 1. Check if we actually have a valid Supabase session.
-  // We use getSession() instead of the reactive useSupabaseUser() because
-  // getSession() is the ground truth and doesn't flicker as much.
-  const { data } = await supabase.auth.getSession()
-  if (!data.session) {
-    // If no real Supabase session exists, definitely stay on the home page
-    // and ensure our local caches are cleared to prevent stale redirects.
-    const { clear: clearAuth } = useAuthUser()
-    const { clear: clearBridge } = useSessionBridge()
-    clearAuth()
+  const clearAuthCaches = () => {
+    clearAuthUser()
     clearBridge()
+    clearViewerSession()
+  }
+
+  const session = await getSession({ force: true })
+  if (!session) {
+    if (authUser.value) {
+      clearAuthCaches()
+    }
     return
   }
 
-  // 2. We have a Supabase session. Now check if we have our custom bridged session.
-  const { authUser, fetch: fetchAuthUser } = useAuthUser()
-  let user = authUser.value
-
-  // If no cached user profile, try to fetch it.
-  if (!user) {
-    user = await fetchAuthUser()
+  if (!(await ensureBridgedSession())) {
+    clearAuthCaches()
+    return
   }
 
-  // 3. If we have both a Supabase session AND a user profile, it's safe to redirect.
-  if (user) {
-    return navigateTo(destinationFor(user.accountType), { replace: true })
+  const fetchedUser = await refreshAuthUser()
+  if (!fetchedUser) {
+    clearAuthCaches()
+    return
   }
+
+  if (authUser.value?.id && authUser.value.id !== fetchedUser.id) {
+    clearAuthCaches()
+  }
+
+  return navigateTo(destinationFor(fetchedUser.accountType), { replace: true })
 })

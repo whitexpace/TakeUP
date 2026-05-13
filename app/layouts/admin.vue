@@ -17,6 +17,9 @@ const isHeaderVisible = ref(true)
 const showLogoutModal = ref(false)
 
 const { notifications, loadNotifications } = useNotifications()
+const { clear: clearAuthUser } = useAuthUser()
+const { clear: clearBridge } = useSessionBridge()
+const { clear: clearViewerSession } = useViewerSession()
 
 const adminLinks: AdminLink[] = [
   {
@@ -81,18 +84,18 @@ const cancelLogout = () => {
 
 const confirmLogout = async () => {
   showLogoutModal.value = false
-  await supabase.auth.signOut()
+  await Promise.allSettled([
+    supabase.auth.signOut(),
+    $fetch("/api/auth/logout", { method: "POST" }),
+  ])
+  clearAuthCaches()
+  await navigateTo("/", { replace: true })
+}
 
-  // Clear client-side auth caches
-  const { clear: clearAuthUser } = useAuthUser()
-  const { clear: clearSessionBridge } = useSessionBridge()
-  const { clear: clearViewerSession } = useViewerSession()
+const clearAuthCaches = () => {
   clearAuthUser()
-  clearSessionBridge()
+  clearBridge()
   clearViewerSession()
-
-  await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
-  await navigateTo("/")
 }
 
 const handleResize = () => {

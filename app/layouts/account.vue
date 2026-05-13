@@ -22,7 +22,7 @@ const {
   fetch: fetchAuthUser,
   clear: clearAuthUser,
 } = useAuthUser()
-const { clear: clearSessionBridge } = useSessionBridge()
+const { clear: clearBridge } = useSessionBridge()
 const { clear: clearViewerSession } = useViewerSession()
 const { warmAccountReviews } = useAccountReviewsPrefetch()
 const { warmListingAnalytics } = useListingAnalyticsPrefetch()
@@ -60,11 +60,18 @@ const toggleSidebar = () => {
 }
 
 const handleSignOut = async () => {
-  await supabase.auth.signOut()
+  await Promise.allSettled([
+    supabase.auth.signOut(),
+    $fetch("/api/auth/logout", { method: "POST" }),
+  ])
+  clearAuthCaches()
+  await navigateTo("/", { replace: true })
+}
+
+const clearAuthCaches = () => {
   clearAuthUser()
-  clearSessionBridge()
+  clearBridge()
   clearViewerSession()
-  navigateTo("/")
 }
 
 const isActive = (path: string) => {
