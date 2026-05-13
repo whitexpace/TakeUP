@@ -98,10 +98,10 @@ export const requestRouter = router({
       })
     }
 
-    if (existingUser.accountType !== "USER") {
+    if (existingUser.accountType !== "USER" && existingUser.accountType !== "ADMIN") {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "Only user accounts can post requests.",
+        message: "Only user or admin accounts can post requests.",
       })
     }
 

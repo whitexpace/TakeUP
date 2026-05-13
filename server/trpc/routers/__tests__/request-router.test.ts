@@ -110,7 +110,7 @@ describe("requestRouter", () => {
     expect(result.requester.username).toBe("borrower1")
   })
 
-  it("rejects request creation for non-user accounts", async () => {
+  it("allows request creation for admin accounts", async () => {
     const caller = requestRouter.createCaller({
       event: { context: {} } as never,
       prisma: {
@@ -127,18 +127,15 @@ describe("requestRouter", () => {
       user: { id: "user-2", email: "admin1@up.edu.ph", name: "admin1" },
     })
 
-    await expect(
-      caller.create({
-        itemNeeded: "DSLR camera",
-        description: "Need this for a campus event.",
-        requestedFrom: new Date("2026-03-29T00:00:00.000Z"),
-        requestedTo: new Date("2026-03-30T00:00:00.000Z"),
-        minTargetPrice: 300,
-        maxTargetPrice: 600,
-      }),
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "Only user accounts can post requests.",
+    const result = await caller.create({
+      itemNeeded: "DSLR camera",
+      description: "Need this for a campus event.",
+      requestedFrom: new Date("2026-03-29T00:00:00.000Z"),
+      requestedTo: new Date("2026-03-30T00:00:00.000Z"),
+      minTargetPrice: 300,
+      maxTargetPrice: 600,
     })
+
+    expect(result).toBeDefined()
   })
 })

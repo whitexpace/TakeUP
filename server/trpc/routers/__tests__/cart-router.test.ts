@@ -226,11 +226,12 @@ describe("cartRouter", () => {
     ).rejects.toMatchObject({ code: "CONFLICT" })
   })
 
-  it("rejects non-user accounts", async () => {
+  it("allows admin accounts to use the bag", async () => {
     const context = makeContext({ accountType: "ADMIN" })
     const caller = cartRouter.createCaller(context)
 
-    await expect(caller.list()).rejects.toMatchObject({ code: "FORBIDDEN" })
+    const result = await caller.list()
+    expect(result.items).toBeDefined()
   })
 
   it("rejects adding your own listing", async () => {

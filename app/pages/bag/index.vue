@@ -2,10 +2,11 @@
 import { computed, ref } from "vue"
 import { useBag, type BagItem } from "../../composables/use-bag"
 import UserAvatar from "../../components/UserAvatar.vue"
-import Header from "../../components/Header.vue"
 
 definePageMeta({
   auth: true,
+  layout: "dashboard",
+  hideDashboardSidebar: true,
 })
 
 const { bagItems, removeFromBag } = useBag()
@@ -157,7 +158,6 @@ const totalAmount = computed(() => {
 })
 
 const isSubmitting = ref(false)
-const bookingStatusMessage = ref("")
 const failedBookingDetails = ref<Array<{ name: string; reason: string }>>([])
 
 // Confirmation Modal State
@@ -206,38 +206,49 @@ const resolveBookingErrorMessage = (error: unknown) => {
   )
 }
 
-const handleRequestBooking = async () => {
-  if (selectedItems.value.length === 0 || isSubmitting.value) return
+// Sequential Request Logic
+const lendersToProcess = ref<string[]>([])
+const currentLenderIdx = ref(0)
+const showCompleteRequestModal = ref(false)
+const walletPaymentRef = ref<{
+  handlePayment: () => Promise<void>
+  isLoading: boolean
+  canAfford: boolean
+} | null>(null)
 
-  isSubmitting.value = true
-  bookingStatusMessage.value = "Requesting bookings..."
-  failedBookingDetails.value = []
+const currentProcessingLenderId = computed(() => lendersToProcess.value[currentLenderIdx.value])
+const currentLenderItems = computed(() => {
+  if (!currentProcessingLenderId.value) return []
+  return selectedItems.value.filter((item) => item.lenderId === currentProcessingLenderId.value)
+})
 
-  const itemsToBook = [...selectedItems.value]
-  const successfulBookings: Array<{ name: string; dates: string; price: number }> = []
-  const successfulLenders = new Set<string>()
-  let totalBookedAmount = 0
+const currentLenderTotal = computed(() =>
+  currentLenderItems.value.reduce((sum, item) => sum + calculateItemTotal(item), 0),
+)
+
+const currentLenderName = computed(() => {
+  return currentLenderItems.value[0]?.lenderName || "Lender"
+})
+
+const handleRequestBooking = () => {
+  if (selectedItems.value.length === 0) return
+
+  const lenderIds = [...new Set(selectedItems.value.map((item) => item.lenderId))]
+  lendersToProcess.value = lenderIds
+  currentLenderIdx.value = 0
+  showCompleteRequestModal.value = true
+}
+
+const handlePaymentSuccess = async () => {
+  const itemsToBook = currentLenderItems.value
+  const successfulBookingsForThisLender: Array<{ name: string; dates: string; price: number }> = []
 
   for (const item of itemsToBook) {
     const bookingRange = getBookingRange(item)
-    if (!bookingRange) {
-      failedBookingDetails.value.push({
-        name: item.name,
-        reason: "This item is missing a valid date and time range.",
-      })
-      continue
-    }
+    if (!bookingRange) continue
 
     const start = createDateTime(bookingRange.startDate, item.startTime)
     const end = createDateTime(bookingRange.endDate, item.endTime)
-
-    if (end <= start) {
-      failedBookingDetails.value.push({
-        name: item.name,
-        reason: "End time must be later than the start time.",
-      })
-      continue
-    }
 
     try {
       await $fetch("/api/bookings", {
@@ -246,16 +257,17 @@ const handleRequestBooking = async () => {
           itemId: item.itemId,
           startDate: start.toISOString(),
           endDate: end.toISOString(),
+          paymentMethod: item.listingType === "Borrow" ? "CASH" : "WALLET",
         },
       })
+
       const itemTotal = calculateItemTotal(item)
-      successfulBookings.push({
+      successfulBookingsForThisLender.push({
         name: item.name,
         dates: formatDateRange(item),
         price: itemTotal,
       })
-      successfulLenders.add(item.lenderName)
-      totalBookedAmount += itemTotal
+
       removeFromBag(item.id)
       selectedItemIds.value.delete(item.id)
     } catch (err) {
@@ -267,45 +279,61 @@ const handleRequestBooking = async () => {
     }
   }
 
-  if (successfulBookings.length > 0) {
+  // Update confirmation data with accumulated successes
+  if (successfulBookingsForThisLender.length > 0) {
+    const prevLenders = confirmationData.value.lenders
+      ? confirmationData.value.lenders.split(", ")
+      : []
+    prevLenders.push(currentLenderName.value)
+
     confirmationData.value = {
-      items: successfulBookings,
-      lenders: Array.from(successfulLenders).join(", "),
-      total: totalBookedAmount,
+      items: [...confirmationData.value.items, ...successfulBookingsForThisLender],
+      lenders: [...new Set(prevLenders)].join(", "),
+      total:
+        confirmationData.value.total +
+        successfulBookingsForThisLender.reduce((s, i) => s + i.price, 0),
     }
-    isConfirmationModalOpen.value = true
-    bookingStatusMessage.value =
-      failedBookingDetails.value.length > 0
-        ? `${failedBookingDetails.value.length} booking request(s) could not be submitted.`
-        : ""
-  } else {
-    bookingStatusMessage.value =
-      failedBookingDetails.value.length > 0
-        ? `Failed to send ${failedBookingDetails.value.length} booking request(s).`
-        : "No booking requests were sent."
   }
 
-  isSubmitting.value = false
+  // Move to next lender or finish
+  if (currentLenderIdx.value < lendersToProcess.value.length - 1) {
+    currentLenderIdx.value++
+  } else {
+    showCompleteRequestModal.value = false
+    if (confirmationData.value.items.length > 0) {
+      isConfirmationModalOpen.value = true
+    }
+  }
+}
+
+const handleCancelRequest = () => {
+  showCompleteRequestModal.value = false
+  lendersToProcess.value = []
+  currentLenderIdx.value = 0
+  // Reset confirmation data on explicit cancel if needed, or keep partial progress?
+  // Let's reset to be safe.
+  confirmationData.value = { items: [], lenders: "", total: 0 }
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-white font-geist">
-    <Header />
-
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12 pt-24">
-      <div class="mb-10">
-        <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
-            My Bag
-          </h1>
-          <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
-        </div>
-        <p class="mt-2 font-geist text-[16px] font-light text-noble-black/50">
-          Review and manage items you want to book
-        </p>
+  <div class="mx-auto max-w-7xl py-8 pt-16 sm:pt-20">
+    <!-- Header Section -->
+    <div class="mb-10">
+      <div class="space-y-2">
+        <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+          My Bag
+        </h1>
+        <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
       </div>
+      <p class="mt-2 font-geist text-[16px] font-light text-noble-black/50">
+        Review and manage items you want to book
+      </p>
+    </div>
 
+    <!-- Main Content Area -->
+    <div>
+      <!-- Empty State -->
       <div v-if="bagItems.length === 0" class="py-20 text-center">
         <div class="mb-6 flex justify-center text-noble-black/10">
           <Icon name="ph:shopping-bag" class="w-20 h-20" />
@@ -320,6 +348,7 @@ const handleRequestBooking = async () => {
         </NuxtLink>
       </div>
 
+      <!-- Bag Content Table -->
       <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Side: Items -->
         <div
@@ -432,8 +461,8 @@ const handleRequestBooking = async () => {
                             class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-[6px] uppercase"
                             :class="
                               item.listingType === 'Rent'
-                                ? 'bg-blue-estate text-white'
-                                : 'bg-gray-100 text-gray-600'
+                                ? 'bg-cinnamon-ice text-black'
+                                : 'bg-blue-estate text-white'
                             "
                           >
                             {{ item.listingType }}
@@ -518,18 +547,6 @@ const handleRequestBooking = async () => {
               </NuxtLink>
             </div>
 
-            <p
-              v-if="bookingStatusMessage"
-              class="mt-4 text-center text-[12px] font-semibold"
-              :class="
-                bookingStatusMessage.includes('failed')
-                  ? 'text-cinnabar-red'
-                  : 'text-burning-orange'
-              "
-            >
-              {{ bookingStatusMessage }}
-            </p>
-
             <div
               v-if="failedBookingDetails.length > 0"
               class="mt-4 rounded-[12px] border border-cinnabar-red/10 bg-cinnabar-red/5 p-4"
@@ -552,23 +569,124 @@ const handleRequestBooking = async () => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-            <div class="mt-8">
+    <!-- Complete Request Sequential Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0 scale-95"
+      enter-to-class="opacity-100 scale-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="showCompleteRequestModal"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
+      >
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="handleCancelRequest"
+        ></div>
+
+        <div
+          class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
+        >
+          <!-- Header -->
+          <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+            <div>
+              <h2 class="text-[24px] font-semibold text-noble-black">Complete Request</h2>
+              <p class="mt-1 text-[13px] font-light text-noble-black/50">
+                Lender: <span class="font-bold text-noble-black">{{ currentLenderName }}</span> ({{
+                  currentLenderIdx + 1
+                }}/{{ lendersToProcess.length }})
+              </p>
+            </div>
+            <button
+              type="button"
+              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              @click="handleCancelRequest"
+            >
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
+            </button>
+          </div>
+
+          <!-- Scrollable Content -->
+          <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+            <div class="space-y-4 py-4">
               <div
-                class="flex items-center gap-2 px-4 py-2 bg-blue-estate/5 border border-blue-estate/10 rounded-full justify-center"
+                v-for="item in currentLenderItems"
+                :key="item.id"
+                class="flex items-center gap-4 py-4 border-b border-gray-50 last:border-0"
               >
-                <Icon name="ph:shield" class="w-3.5 h-3.5 text-blue-estate" />
-                <span class="text-[12px] font-semibold text-blue-estate"
-                  >Protected by TakeUP Secure</span
+                <div
+                  class="w-12 h-12 rounded-[10px] overflow-hidden bg-gray-50 shrink-0 border border-gray-100"
                 >
+                  <img :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="font-bold text-noble-black truncate text-[14px]">{{ item.name }}</p>
+                  <p class="text-[11px] text-noble-black/50 font-medium mt-0.5">
+                    {{ calculateDuration(item) }} · {{ formatDateRange(item) }}
+                  </p>
+                </div>
+                <span class="font-bold text-burning-orange text-[14px] shrink-0">{{
+                  formatPesoAmount(calculateItemTotal(item))
+                }}</span>
               </div>
+            </div>
+
+            <!-- Payment Component -->
+            <div class="py-6">
+              <WalletPayment
+                ref="walletPaymentRef"
+                :amount="currentLenderTotal"
+                related-entity-type="BOOKING_PENDING"
+                related-entity-id="bulk-bag"
+                no-padding
+                @success="handlePaymentSuccess"
+                @cancel="handleCancelRequest"
+              />
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div
+            class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+          >
+            <div class="flex justify-between items-center mb-6 px-2">
+              <span class="text-[15px] font-bold text-noble-black/60">Total</span>
+              <span class="text-[20px] font-black text-noble-black">{{
+                formatPesoAmount(currentLenderTotal)
+              }}</span>
+            </div>
+
+            <div class="flex gap-3 w-full">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-semibold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                @click="handleCancelRequest"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                :disabled="!walletPaymentRef?.canAfford || walletPaymentRef?.isLoading"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 active:translate-y-0"
+                @click="walletPaymentRef?.handlePayment()"
+              >
+                {{ walletPaymentRef?.isLoading ? "Processing..." : "Pay with Wallet" }}
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </main>
+    </Transition>
 
-    <!-- Booking Confirmation Modal -->
+    <!-- Final Success Confirmation Modal -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0 scale-95"
@@ -579,71 +697,101 @@ const handleRequestBooking = async () => {
     >
       <div
         v-if="isConfirmationModalOpen"
-        class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
       >
         <div
-          class="absolute inset-0 bg-noble-black/40 backdrop-blur-sm"
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
           @click="isConfirmationModalOpen = false"
         ></div>
 
         <div
-          class="relative w-full max-w-lg bg-white rounded-[40px] p-10 shadow-2xl border border-cinnamon-ice/30"
+          class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
         >
-          <div class="text-center mb-10">
-            <div class="mb-6 flex justify-center">
-              <div
-                class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center text-burning-orange"
-              >
-                <Icon name="ph:check-circle" class="w-10 h-10" />
-              </div>
+          <!-- Header -->
+          <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+            <div>
+              <h2 class="text-[24px] font-semibold text-noble-black">Bookings Sent!</h2>
+              <p class="mt-1 text-[13px] font-light text-noble-black/50">
+                Your requests have been successfully delivered.
+              </p>
             </div>
-            <h2 class="text-4xl font-extrabold text-noble-black mb-3 tracking-tight">
-              Booking Request Sent!
-            </h2>
-            <p class="text-lg text-noble-black/60 leading-relaxed">
-              Waiting for
-              <span class="text-noble-black font-bold">{{ confirmationData.lenders }}</span> to
-              confirm your request.
-            </p>
+            <button
+              type="button"
+              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              @click="isConfirmationModalOpen = false"
+            >
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
+            </button>
           </div>
 
-          <div
-            class="bg-cream rounded-3xl p-6 mb-8 max-h-60 overflow-y-auto border border-cinnamon-ice/20"
-          >
-            <div class="space-y-4">
+          <!-- Scrollable Content -->
+          <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+            <div class="flex flex-col items-center gap-2 py-6">
+              <div
+                class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center text-burning-orange mb-2"
+              >
+                <Icon name="ph:check-circle" class="w-8 h-8" />
+              </div>
+              <p class="text-center text-noble-black/60 leading-relaxed px-4 text-[14px]">
+                Waiting for
+                <span class="text-noble-black font-bold">{{ confirmationData.lenders }}</span> to
+                confirm your request.
+              </p>
+            </div>
+
+            <div class="w-full h-[1px] bg-cinnamon-ice/10 mb-6"></div>
+
+            <div class="space-y-5 pb-6">
               <div
                 v-for="(item, idx) in confirmationData.items"
                 :key="idx"
-                class="flex justify-between items-start border-b border-cinnamon-ice/20 pb-4 last:border-0 last:pb-0"
+                class="flex justify-between items-start border-b border-gray-50 pb-5 last:border-0 last:pb-0"
               >
                 <div class="flex flex-col gap-1 pr-4">
-                  <span class="font-bold text-noble-black leading-tight">{{ item.name }}</span>
-                  <span class="text-xs text-noble-black/50 font-medium">{{ item.dates }}</span>
+                  <span class="font-bold text-noble-black leading-tight text-[14px]">{{
+                    item.name
+                  }}</span>
+                  <span class="text-[12px] text-noble-black/50 font-medium">{{ item.dates }}</span>
                 </div>
-                <span class="font-bold text-noble-black text-sm shrink-0">{{
+                <span class="font-bold text-burning-orange text-[14px] shrink-0">{{
                   formatPesoAmount(item.price)
                 }}</span>
               </div>
             </div>
           </div>
 
-          <div class="flex justify-between items-center mb-10 px-2">
-            <span class="text-lg font-bold text-noble-black/60">Total</span>
-            <span class="text-2xl font-black text-noble-black">{{
-              formatPesoAmount(confirmationData.total)
-            }}</span>
-          </div>
+          <!-- Footer -->
+          <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0">
+            <div class="flex justify-between items-center mb-6 px-2">
+              <span class="text-[15px] font-bold text-noble-black/60">Total</span>
+              <span class="text-[20px] font-black text-noble-black">{{
+                formatPesoAmount(confirmationData.total)
+              }}</span>
+            </div>
 
-          <button
-            class="w-full py-4 bg-burning-orange text-white rounded-2xl font-bold text-lg hover:bg-blue-estate transition-all duration-300 shadow-xl shadow-burning-orange/20 active:scale-95"
-            @click="isConfirmationModalOpen = false"
-          >
-            Got It
-          </button>
+            <button
+              class="w-full h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0"
+              @click="isConfirmationModalOpen = false"
+            >
+              Got It
+            </button>
+          </div>
         </div>
       </div>
     </Transition>
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+/* Custom Premium Modal Scrollbar */
+.custom-modal-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice / 20%");
+  border-radius: 10px;
+}
+</style>

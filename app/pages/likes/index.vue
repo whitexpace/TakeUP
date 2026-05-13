@@ -338,8 +338,8 @@ watch(
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl py-8 pt-20 sm:pt-24">
-    <div class="mb-8">
+  <div class="mx-auto max-w-7xl py-8 pt-16 sm:pt-20">
+    <div class="mb-10">
       <div class="space-y-2">
         <h1 class="font-montravia text-[36px] font-medium leading-tight text-noble-black">
           Liked Items

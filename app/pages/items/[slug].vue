@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { inferRouterOutputs } from "@trpc/server"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
+import { useAuthUser } from "../../composables/use-auth-user"
 import { useBag } from "../../composables/use-bag"
 import { useLikes } from "../../composables/use-likes"
 import {
@@ -105,7 +106,13 @@ const {
   },
 )
 
+const { authUser, fetch: fetchAuthUser } = useAuthUser()
+
 const item = computed(() => data.value)
+const isOwner = computed(() => {
+  if (!item.value || !authUser.value) return false
+  return item.value.lenderId === authUser.value.id
+})
 const itemLoadErrorMessage = computed(
   () => error.value?.statusMessage ?? error.value?.message ?? "Unable to load item details.",
 )
@@ -136,6 +143,11 @@ watch(
 )
 const isSubmittingBooking = ref(false)
 const showPaymentModal = ref(false)
+const walletPaymentRef = ref<{
+  handlePayment: () => Promise<void>
+  isLoading: boolean
+  canAfford: boolean
+} | null>(null)
 const bookingErrorMessage = ref("")
 const bookingSuccessMessage = ref("")
 const hasRequestedBooking = ref(false)
@@ -611,6 +623,32 @@ const handleCalendarMouseLeave = () => {
   isDragging.value = false
 }
 
+// Automatically set earliest valid start time when date changes
+watch(startDate, (newDate) => {
+  if (!newDate) return
+
+  const earliestStart = timeOptions.find(
+    (t) => !isTimeDisabled(t, false) && !isTimeOnDayBooked(t, newDate),
+  )
+
+  if (earliestStart) {
+    startTime.value = earliestStart
+
+    // Ensure end time is also valid (at least 1 hour after start time on the same day)
+    const currentEndTimeMinutes = timeToMinutes(endTime.value)
+    const minEndTimeMinutes = timeToMinutes(earliestStart) + 60
+
+    if (isSameDay.value && currentEndTimeMinutes < minEndTimeMinutes) {
+      const nextValidEnd = timeOptions.find(
+        (t) => timeToMinutes(t) >= minEndTimeMinutes && !isTimeOnDayBooked(t, newDate),
+      )
+      if (nextValidEnd) {
+        endTime.value = nextValidEnd
+      }
+    }
+  }
+})
+
 const timeToMinutes = (timeValue: string) => {
   const [timePart, period] = timeValue.split(" ")
   if (!timePart) return 0
@@ -737,6 +775,7 @@ const selectedBookingWindow = computed(() => {
 const canSubmitBooking = computed(
   () =>
     !isItemUnavailableForBooking.value &&
+    !isOwner.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
     !hasRequestedBooking.value &&
@@ -748,13 +787,17 @@ const bookingFeedbackMessage = computed(() => {
     return bookingAvailabilityMessage.value
   }
 
+  if (isOwner.value) {
+    return "You cannot book your own listing."
+  }
+
   if (bookingErrorMessage.value) return bookingErrorMessage.value
   if (bookingSuccessMessage.value) return bookingSuccessMessage.value
   return "You won't be charged yet."
 })
 
 const bookingFeedbackClass = computed(() => {
-  if (isItemUnavailableForBooking.value) {
+  if (isItemUnavailableForBooking.value || isOwner.value) {
     return "text-noble-black/60"
   }
 
@@ -769,13 +812,15 @@ const bookingFeedbackClass = computed(() => {
   return "text-noble-black/40"
 })
 
-const requestBookingButtonLabel = computed(() =>
-  hasRequestedBooking.value
+const requestBookingButtonLabel = computed(() => {
+  if (isOwner.value) return "Your Listing"
+
+  return hasRequestedBooking.value
     ? "Booking Requested"
     : isSubmittingBooking.value
       ? "Requesting Booking..."
-      : "Request Booking",
-)
+      : "Request Booking"
+})
 
 const totalUnits = computed(() => {
   if (!item.value || !startDate.value || !displayEndDate.value) return 1
@@ -885,9 +930,11 @@ const isInBag = computed(() => {
 const canAddToBag = computed(
   () =>
     isItemAvailableForBooking.value &&
+    !isOwner.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
-    !isInBag.value,
+    !isInBag.value &&
+    !isAddingToBag.value,
 )
 
 const addToBagButtonLabel = computed(() => {
@@ -895,11 +942,21 @@ const addToBagButtonLabel = computed(() => {
     return `Currently ${unavailableItemLabel.value}`
   }
 
+  if (isOwner.value) {
+    return "Your Listing"
+  }
+
+  if (isAddingToBag.value) {
+    return "Adding..."
+  }
+
   return isInBag.value ? "Added to Bag" : "Add to Bag"
 })
 
 const mobileBookingButtonLabel = computed(() => {
   if (isInBag.value) return "Added to Bag"
+  if (isAddingToBag.value) return "Adding..."
+  if (isOwner.value) return "Your Listing"
   if (!isItemAvailableForBooking.value) return "Unavailable"
 
   return hasBookingSelection.value ? "Add to Bag" : "Check Availability"
@@ -1200,6 +1257,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 onMounted(() => {
+  void fetchAuthUser()
   updateScrollStatus()
   window.addEventListener("keydown", handleKeydown)
 })
@@ -1647,7 +1705,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div
-                  class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 shadow-sm flex flex-col h-full justify-between"
+                  class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 flex flex-col h-full justify-between"
                 >
                   <div>
                     <div class="flex items-baseline gap-1 mb-4">
@@ -2002,7 +2060,7 @@ onUnmounted(() => {
                     </div>
                   </Transition>
                 </div>
-                <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 shadow-sm">
+                <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6">
                   <div class="flex items-baseline gap-1 mb-4">
                     <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
                     ><span class="text-sm text-noble-black/60 font-medium">{{
@@ -2524,9 +2582,7 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div
-              class="bg-white border border-cinnamon-ice/30 rounded-[20px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
-            >
+            <div class="bg-white border border-cinnamon-ice/30 rounded-[20px] p-6">
               <div class="flex items-baseline gap-1 mb-6">
                 <span class="text-[32px] font-bold text-noble-black">{{ priceAmount }}</span>
                 <span class="text-[16px] text-noble-black/40 font-medium">{{
@@ -2627,58 +2683,87 @@ onUnmounted(() => {
         >
           <!-- Backdrop -->
           <div
-            class="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm"
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
             @click="showPaymentModal = false"
           ></div>
 
           <!-- Modal Content -->
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
             <!-- Header -->
-            <div class="px-8 pt-8 pb-4 flex items-center justify-between">
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h3 class="text-2xl font-bold text-neutral-800 font-geist">
-                  Complete Booking Request
-                </h3>
-                <p class="text-sm text-neutral-500 mt-1">
+                <h2 class="text-[24px] font-semibold text-noble-black">Complete Request</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Funds will be held securely until the rental is complete.
                 </p>
               </div>
               <button
-                class="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="showPaymentModal = false"
               >
-                <Icon name="ph:x" size="24" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
-            <!-- Booking Summary Snippet -->
-            <div class="px-8 pb-6">
-              <div class="bg-neutral-50 rounded-2xl p-4 flex gap-4 border border-neutral-100">
-                <img
-                  v-if="item?.thumbnailImage"
-                  :src="item.thumbnailImage"
-                  class="w-16 h-16 rounded-xl object-cover"
-                />
-                <div class="flex flex-col justify-center">
-                  <p class="font-bold text-neutral-800 leading-tight">{{ item?.name }}</p>
-                  <p class="text-xs text-neutral-500 mt-1">
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <!-- Item Snippet (Flat Style) -->
+              <div class="flex items-center gap-4 py-6 border-b border-gray-50">
+                <div
+                  class="w-16 h-16 rounded-[12px] overflow-hidden bg-gray-50 shrink-0 border border-gray-100"
+                >
+                  <img
+                    v-if="item?.thumbnailImage"
+                    :src="item.thumbnailImage"
+                    class="w-full h-full object-cover"
+                  />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="font-bold text-noble-black truncate text-[15px]">{{ item?.name }}</p>
+                  <p class="text-[12px] text-noble-black/50 font-medium mt-0.5">
                     {{ formatDate(startDate) }} - {{ formatDate(endDate || startDate) }}
                   </p>
                 </div>
               </div>
+
+              <!-- Payment Component -->
+              <div class="py-6">
+                <WalletPayment
+                  ref="walletPaymentRef"
+                  :amount="totalPrice"
+                  related-entity-type="BOOKING_PENDING"
+                  :related-entity-id="item?.id || 'pending'"
+                  no-padding
+                  @success="handlePaymentSuccess"
+                  @cancel="showPaymentModal = false"
+                />
+              </div>
             </div>
 
-            <!-- Payment Component -->
-            <div class="px-8 pb-8">
-              <WalletPayment
-                :amount="totalPrice"
-                related-entity-type="BOOKING_PENDING"
-                :related-entity-id="item?.id || 'pending'"
-                @success="handlePaymentSuccess"
-                @cancel="showPaymentModal = false"
-              />
+            <!-- Footer -->
+            <div
+              class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+            >
+              <div class="flex gap-3 w-full">
+                <button
+                  type="button"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-semibold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                  @click="showPaymentModal = false"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  :disabled="!walletPaymentRef?.canAfford || walletPaymentRef?.isLoading"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 active:translate-y-0"
+                  @click="walletPaymentRef?.handlePayment()"
+                >
+                  {{ walletPaymentRef?.isLoading ? "Processing..." : "Pay with Wallet" }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2963,7 +3048,7 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 shadow-sm">
+            <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6">
               <div class="flex items-baseline gap-1 mb-6">
                 <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span>
                 <span class="text-sm text-noble-black/40 font-medium">{{ priceUnitLabel }}</span>
