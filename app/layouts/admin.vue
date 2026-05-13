@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { onMounted, onUnmounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
@@ -95,16 +95,18 @@ const confirmLogout = async () => {
   await navigateTo("/")
 }
 
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024
+  if (!isMobile.value && !isSidebarOpen.value) {
+    isSidebarOpen.value = true
+  }
+}
+
 onMounted(() => {
   isMobile.value = window.innerWidth < 1024
   if (isMobile.value) isSidebarOpen.value = false
 
-  window.addEventListener("resize", () => {
-    isMobile.value = window.innerWidth < 1024
-    if (!isMobile.value && !isSidebarOpen.value) {
-      isSidebarOpen.value = true
-    }
-  })
+  window.addEventListener("resize", handleResize)
 
   void loadNotifications()
   scheduleIdleWarmup(() => {
@@ -113,6 +115,10 @@ onMounted(() => {
 
     void Promise.allSettled([fetchAuthUser(), fetchOverview()])
   })
+})
+
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize)
 })
 </script>
 

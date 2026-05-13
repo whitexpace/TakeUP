@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
 import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
@@ -32,6 +32,13 @@ const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.v
 
 const { notifications, loadNotifications } = useNotifications()
 
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024
+  if (!isMobile.value && !isSidebarOpen.value) {
+    isSidebarOpen.value = true
+  }
+}
+
 onMounted(() => {
   void loadNotifications()
   if (user.value && !hasFreshAuthUserCache.value && !cachedAuthUser.value) {
@@ -41,12 +48,7 @@ onMounted(() => {
   isMobile.value = window.innerWidth < 1024
   if (isMobile.value) isSidebarOpen.value = false
 
-  window.addEventListener("resize", () => {
-    isMobile.value = window.innerWidth < 1024
-    if (!isMobile.value && !isSidebarOpen.value) {
-      isSidebarOpen.value = true
-    }
-  })
+  window.addEventListener("resize", handleResize)
 })
 
 const markPointerInteraction = () => {
@@ -223,6 +225,10 @@ const navGroups = computed(() => {
     })
   }
   return groups
+})
+
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize)
 })
 </script>
 
