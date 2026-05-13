@@ -2,6 +2,7 @@ import { useRoute } from "#app"
 import { computed, onMounted } from "vue"
 import { usePersistedSessionState } from "./use-persisted-session-state"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
+import { useAuthUser } from "./use-auth-user"
 import { useViewerSession } from "./use-viewer-session"
 
 export interface BagItem {
@@ -79,6 +80,11 @@ const markBagMutation = () => {
 
 export const useBag = () => {
   const route = useRoute()
+  const {
+    authUser: cachedAuthUser,
+    hasFreshCache: hasFreshAuthUserCache,
+    fetch: fetchAuthUser,
+  } = useAuthUser()
   const bagItems = usePersistedSessionState<BagItem[]>("bag-items", () => [], {
     deserialize: (value) => JSON.parse(value).map(normalizeBagItem),
   })
@@ -86,9 +92,46 @@ export const useBag = () => {
   const hasLoaded = usePersistedSessionState<boolean>("bag-loaded", () => false)
   const errorMessage = usePersistedSessionState<string | null>("bag-error-message", () => null)
   const lastLoadedAt = usePersistedSessionState<number | null>("bag-last-loaded-at", () => null)
+  const bagOwnerUserId = useState<string | null>("bag-owner-user-id", () => null)
   const { getAuthHeaders } = useViewerSession()
 
+  const resetBagStateForUser = (userId: string | null) => {
+    if (bagOwnerUserId.value === userId) return
+
+    bagOwnerUserId.value = userId
+    markBagMutation()
+    pendingLoad = null
+    isLoading.value = false
+    bagItems.value = []
+    errorMessage.value = null
+    hasLoaded.value = false
+    lastLoadedAt.value = null
+  }
+
+  const resolveActiveViewer = async () => {
+    if (route.path.startsWith("/admin")) {
+      return null
+    }
+
+    if (cachedAuthUser.value) {
+      return cachedAuthUser.value
+    }
+
+    if (import.meta.client && !hasFreshAuthUserCache.value) {
+      return await fetchAuthUser()
+    }
+
+    return null
+  }
+
   const loadBag = async (options: { force?: boolean } = {}) => {
+    const viewer = await resolveActiveViewer()
+    resetBagStateForUser(viewer?.id ?? null)
+
+    if (!viewer || viewer.accountType !== "USER") {
+      return
+    }
+
     if (pendingLoad && !options.force) {
       await pendingLoad
       return
@@ -214,7 +257,6 @@ export const useBag = () => {
     )
 
   onMounted(() => {
-    if (route.path.startsWith("/admin")) return
     void loadBag()
   })
 

@@ -51,6 +51,13 @@ describe("useBag", () => {
   beforeEach(() => {
     vi.resetModules()
     vi.stubGlobal("useState", createStateMock())
+    vi.doMock("../use-auth-user", () => ({
+      useAuthUser: () => ({
+        authUser: ref({ id: "user-1", accountType: "USER" }),
+        hasFreshCache: ref(true),
+        fetch: vi.fn().mockResolvedValue({ id: "user-1", accountType: "USER" }),
+      }),
+    }))
     vi.stubGlobal("$fetch", vi.fn().mockResolvedValue({ items: [makeBagItem()] }))
   })
 
@@ -117,5 +124,25 @@ describe("useBag", () => {
         new Date("2026-04-03T09:00:00.000Z"),
       ),
     ).toBe(true)
+  })
+
+  it("skips loading the bag for admin accounts", async () => {
+    vi.doMock("../use-auth-user", () => ({
+      useAuthUser: () => ({
+        authUser: ref({ id: "admin-1", accountType: "ADMIN" }),
+        hasFreshCache: ref(true),
+        fetch: vi.fn().mockResolvedValue({ id: "admin-1", accountType: "ADMIN" }),
+      }),
+    }))
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn(),
+      }),
+    }))
+    const { useBag } = await import("../use-bag")
+
+    useBag()
+
+    expect($fetch).not.toHaveBeenCalledWith("/api/cart", expect.anything())
   })
 })
