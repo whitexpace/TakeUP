@@ -829,10 +829,11 @@ const changeMonth = (delta: number) => {
                         name="ph:star-fill"
                         class="w-6 h-6 -translate-y-[0.5px]"
                         :class="
-                          i <= Math.round(props.data.rating ?? 0) ? 'opacity-100' : 'opacity-20'
+                          i <= Math.floor(props.data.rating ?? 0) ? 'opacity-100' : 'opacity-20'
                         "
                       />
                     </div>
+
                     <div class="text-sm text-noble-black/60 font-medium">
                       Based on {{ bookingCountLabel }}
                     </div>

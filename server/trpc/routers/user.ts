@@ -107,6 +107,7 @@ export const userRouter = router({
               reviewType: true,
               reviewerUser: {
                 select: {
+                  id: true,
                   username: true,
                   firstName: true,
                   lastName: true,
@@ -159,11 +160,19 @@ export const userRouter = router({
           createdAt: r.createdAt,
           isAnonymous: r.isAnonymous,
           reviewType: r.reviewType,
-          reviewer: {
-            username: r.reviewerUser.username,
-            name: formatName(r.reviewerUser),
-            avatarUrl: r.reviewerUser.avatarUrl,
-          },
+          reviewer: r.isAnonymous
+            ? {
+                id: null,
+                username: null,
+                name: "Anonymous",
+                avatarUrl: null,
+              }
+            : {
+                id: r.reviewerUser.id,
+                username: r.reviewerUser.username,
+                name: formatName(r.reviewerUser),
+                avatarUrl: r.reviewerUser.avatarUrl,
+              },
         })),
         items: (user.lender?.listedItem ?? []).map((item) => ({
           id: item.id,
