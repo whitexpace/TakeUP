@@ -573,32 +573,37 @@ const resetGalleryInput = () => {
   }
 }
 
+const clearPendingUpload = (uploadId: string) => {
+  pendingUploadRequests.delete(uploadId)
+  pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+}
+
 const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
-  const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
-  const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
-  if (!authUser) throw new Error("Not authenticated")
-  const userId = authUser.id
   const uploadFile = await convertImageFileToWebP(file)
-  const datePrefix = new Date().toISOString().slice(0, 10)
-  const uniqueId = crypto.randomUUID()
-  const storagePath = `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(uploadFile.name)}`
-  const uploadId = storagePath
-  pendingUploads.value.push({ id: uploadId, name: uploadFile.name, progress: 0 })
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const accessToken = session?.access_token
+  const storageOwnerId = session?.user?.id
+  if (!accessToken) throw new Error("You must be signed in to upload item images.")
+  if (!storageOwnerId) throw new Error("Unable to identify your Supabase account for upload.")
+
+  const datePrefix = new Date().toISOString().slice(0, 10)
+  const storagePath = `items/${storageOwnerId}/${datePrefix}/${crypto.randomUUID()}-${getSafeFileName(uploadFile.name)}`
+  const uploadId = storagePath
+  pendingUploads.value.push({ id: uploadId, name: uploadFile.name, progress: 0 })
+
   return new Promise<ListingImage>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
+
     pendingUploadRequests.set(uploadId, xhr)
     xhr.open(
       "POST",
       `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${storagePath.split("/").map(encodeURIComponent).join("/")}`,
     )
     xhr.setRequestHeader("apikey", supabaseKey)
-    if (accessToken) {
-      xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
-    }
+    xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
+    xhr.setRequestHeader("x-upsert", "false")
     xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
@@ -608,13 +613,15 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
       )
     }
     xhr.onerror = () => {
-      pendingUploadRequests.delete(uploadId)
-      pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+      clearPendingUpload(uploadId)
       reject(new Error("Network error"))
     }
+    xhr.onabort = () => {
+      clearPendingUpload(uploadId)
+      reject(new Error("Upload cancelled"))
+    }
     xhr.onload = () => {
-      pendingUploadRequests.delete(uploadId)
-      pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+      clearPendingUpload(uploadId)
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error("Upload failed"))
         return
@@ -705,6 +712,8 @@ const confirmCancel = () => {
 
 const cleanupSessionUploadsOnExit = () => {
   for (const xhr of pendingUploadRequests.values()) xhr.abort()
+  pendingUploadRequests.clear()
+  pendingUploads.value = []
 }
 
 const buildPayload = () => {
