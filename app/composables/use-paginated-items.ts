@@ -1,10 +1,11 @@
+import { useState } from "#app"
 import { computed, ref, type Ref } from "vue"
 import type {
   ItemPaginationCursor,
   ListedItem,
   PaginatedItemsResponse,
 } from "../types/item-listing"
-import { usePersistedSessionState } from "./use-persisted-session-state"
+import { clearPersistedSessionState, usePersistedSessionState } from "./use-persisted-session-state"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 import { useViewerSession } from "./use-viewer-session"
 
@@ -92,6 +93,22 @@ export const resetPaginatedItemsCache = () => {
   pendingPaginatedItemsRequests.clear()
 }
 
+export const clearPaginatedItemsState = (stateKey: string) => {
+  clearPersistedSessionState(stateKey)
+  clearPersistedSessionState(`${stateKey}:cursor`)
+  clearPersistedSessionState(`${stateKey}:has-more`)
+
+  // Also clear reactive memory state if it exists
+  const items = useState(stateKey)
+  if (items.value) items.value = []
+
+  const cursor = useState(`${stateKey}:cursor`)
+  if (cursor.value !== undefined) cursor.value = null
+
+  const hasMore = useState(`${stateKey}:has-more`)
+  if (hasMore.value !== undefined) hasMore.value = true
+}
+
 export const usePaginatedItems = ({
   searchQuery,
   filterParams,
@@ -130,12 +147,16 @@ export const usePaginatedItems = ({
   const applyResponse = (response: PaginatedItemsResponse, version: number) => {
     if (version !== requestVersion.value) return
 
+    // Fresh fetch — replace items (keeps old items visible during load, then swaps)
+    if (isFreshFetch.value) {
+      loadedIds.clear()
+    }
+
     const uniqueItems = response.items.filter((item) => !loadedIds.has(item.id))
     for (const item of uniqueItems) {
       loadedIds.add(item.id)
     }
 
-    // Fresh fetch — replace items (keeps old items visible during load, then swaps)
     if (isFreshFetch.value) {
       items.value = uniqueItems
       isFreshFetch.value = false

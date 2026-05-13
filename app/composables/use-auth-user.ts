@@ -24,6 +24,8 @@ export type AuthMeUser = {
   avatarUrl: string | null
   bio: string | null
   pronouns: string | null
+  lenderRating: number
+  totalLenderBookings: number
 }
 
 // Client-only in-flight promise so concurrent callers share one network request

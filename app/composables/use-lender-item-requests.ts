@@ -1,29 +1,47 @@
 import { computed, ref, watch, type Ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
+import type { BookingStatus } from "#shared/schemas/booking"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type LenderItemRequestSource = RouterOutputs["booking"]["list"]["bookings"][number]
 type BookingListResponse = RouterOutputs["booking"]["list"]
 
+export type LenderItemRequestStatus = "PENDING" | "APPROVED" | "REJECTED"
+
 export type LenderItemRequest = LenderItemRequestSource & {
-  requestStatus: "PENDING"
-  requestStatusLabel: "Pending"
+  requestStatus: LenderItemRequestStatus
+  requestStatusLabel: "Pending" | "Approved" | "Cancelled" | "Completed"
 }
 
 type UseLenderItemRequestsOptions = {
   enabled: Ref<boolean>
+  statuses: Ref<BookingStatus[]>
   searchQuery: Ref<string>
+}
+
+const requestStatusByBookingStatus: Partial<
+  Record<BookingStatus, Pick<LenderItemRequest, "requestStatus" | "requestStatusLabel">>
+> = {
+  PENDING: { requestStatus: "PENDING", requestStatusLabel: "Pending" },
+  CONFIRMED: { requestStatus: "APPROVED", requestStatusLabel: "Approved" },
+  CANCELLED: { requestStatus: "REJECTED", requestStatusLabel: "Cancelled" },
+  COMPLETED: { requestStatus: "APPROVED", requestStatusLabel: "Completed" },
+  RETURNED: { requestStatus: "APPROVED", requestStatusLabel: "Approved" },
 }
 
 const formatUserName = (user: { firstName: string; middleName: string | null; lastName: string }) =>
   `${user.firstName} ${user.lastName[0]}.`
 
-const toLenderItemRequest = (booking: LenderItemRequestSource): LenderItemRequest => ({
-  ...booking,
-  requestStatus: "PENDING" as const,
-  requestStatusLabel: "Pending" as const,
-})
+const toLenderItemRequest = (booking: LenderItemRequestSource): LenderItemRequest | null => {
+  const requestStatus = requestStatusByBookingStatus[booking.status]
+  if (!requestStatus) return null
+
+  return {
+    ...booking,
+    ...requestStatus,
+  }
+}
 
 const sortByCreatedAtDesc = (left: LenderItemRequest, right: LenderItemRequest) => {
   const leftTime = new Date(left.createdAt).getTime()
@@ -33,7 +51,11 @@ const sortByCreatedAtDesc = (left: LenderItemRequest, right: LenderItemRequest) 
   return right.id.localeCompare(left.id)
 }
 
-export const useLenderItemRequests = ({ enabled, searchQuery }: UseLenderItemRequestsOptions) => {
+export const useLenderItemRequests = ({
+  enabled,
+  statuses,
+  searchQuery,
+}: UseLenderItemRequestsOptions) => {
   const requests = ref<LenderItemRequest[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -49,7 +71,7 @@ export const useLenderItemRequests = ({ enabled, searchQuery }: UseLenderItemReq
     requestVersion.value += 1
     const version = requestVersion.value
 
-    if (!enabled.value) {
+    if (!enabled.value || statuses.value.length === 0) {
       reset()
       return
     }
@@ -58,17 +80,27 @@ export const useLenderItemRequests = ({ enabled, searchQuery }: UseLenderItemReq
     error.value = null
 
     try {
-      const response = await $fetch<BookingListResponse>("/api/bookings", {
-        query: {
-          role: "LENDER",
-          status: "PENDING",
-          limit: 100,
-        },
-      })
+      const uniqueStatuses = [...new Set(statuses.value)]
+
+      const responses = await Promise.all(
+        uniqueStatuses.map((status) =>
+          $fetch<BookingListResponse>("/api/bookings", {
+            query: {
+              role: "LENDER",
+              status,
+              limit: 100,
+            },
+          }),
+        ),
+      )
 
       if (version !== requestVersion.value) return
 
-      requests.value = response.bookings.map(toLenderItemRequest).sort(sortByCreatedAtDesc)
+      requests.value = responses
+        .flatMap((response) => response.bookings)
+        .map(toLenderItemRequest)
+        .filter((request): request is LenderItemRequest => request !== null)
+        .sort(sortByCreatedAtDesc)
     } catch (err: unknown) {
       if (version !== requestVersion.value) return
 
@@ -86,7 +118,7 @@ export const useLenderItemRequests = ({ enabled, searchQuery }: UseLenderItemReq
     }
   }
 
-  watch([enabled], () => {
+  watch([enabled, () => statuses.value.join("|")], () => {
     void fetchRequests()
   })
 

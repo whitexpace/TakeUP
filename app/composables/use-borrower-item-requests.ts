@@ -11,7 +11,7 @@ export type BorrowerItemRequestStatus = "PENDING" | "APPROVED" | "REJECTED"
 
 export type BorrowerItemRequest = BorrowerItemRequestSource & {
   requestStatus: BorrowerItemRequestStatus
-  requestStatusLabel: "Pending" | "Approved" | "Rejected" | "Cancelled"
+  requestStatusLabel: "Pending" | "Approved" | "Rejected" | "Cancelled" | "Completed"
 }
 
 type UseBorrowerItemRequestsOptions = {
@@ -20,7 +20,14 @@ type UseBorrowerItemRequestsOptions = {
   searchQuery: Ref<string>
 }
 
-const REQUEST_BOOKING_STATUSES = ["PENDING", "CONFIRMED", "CANCELLED"] satisfies BookingStatus[]
+const REQUEST_BOOKING_STATUSES = [
+  "PENDING",
+  "CONFIRMED",
+  "CANCELLED",
+  "COMPLETED",
+  "RETURNED",
+  "IN_DISPUTE",
+] satisfies BookingStatus[]
 const REQUEST_BOOKING_STATUS_SET = new Set<BookingStatus>(REQUEST_BOOKING_STATUSES)
 
 const requestStatusByBookingStatus: Partial<
@@ -34,6 +41,8 @@ const requestStatusByBookingStatus: Partial<
   // keeping the internal requestStatus value so existing consumers/styles
   // remain compatible.
   CANCELLED: { requestStatus: "REJECTED", requestStatusLabel: "Cancelled" },
+  COMPLETED: { requestStatus: "APPROVED", requestStatusLabel: "Completed" },
+  RETURNED: { requestStatus: "APPROVED", requestStatusLabel: "Approved" },
 }
 
 const formatUserName = (user: { firstName: string; middleName: string | null; lastName: string }) =>

@@ -6,10 +6,60 @@
 
     <div v-else-if="profileData" class="max-w-[1200px] mx-auto py-6 flex flex-col gap-6">
       <!-- TOP HERO SECTION -->
-      <header class="profile-hero shadow-xl">
-        <div class="hero-deco-1"></div>
-        <div class="hero-deco-2"></div>
-        <div class="hero-deco-3"></div>
+      <header class="profile-hero shadow-xl group/hero">
+        <!-- Layered Background System -->
+        <div class="absolute inset-0 z-0 overflow-hidden">
+          <!-- Base Gradient Layers -->
+          <div class="absolute inset-0 bg-burning-orange"></div>
+          <!-- Base Gradient Layers (Scattered & Edge-to-Edge) -->
+          <div
+            class="absolute inset-0 opacity-60 bg-[radial-gradient(at_0%_20%,theme('colors.orange.300')_0%,transparent_40%),radial-gradient(at_80%_80%,theme('colors.orange.400')_0%,transparent_50%),radial-gradient(at_50%_10%,theme('colors.amber.300')_0%,transparent_35%),radial-gradient(at_0%_100%,theme('colors.orange.400')_0%,transparent_45%),radial-gradient(at_100%_0%,theme('colors.orange.300')_0%,transparent_40%)]"
+          ></div>
+
+          <!-- Organic Blobs (Scattered & Overlapping Edges) -->
+          <!-- Far Left Edge Blobs -->
+          <div
+            class="absolute top-[10%] -left-[15%] w-[55%] h-[65%] rounded-full bg-amber-200 opacity-35 blur-[120px] rotate-[-15deg] mix-blend-screen"
+          ></div>
+          <div
+            class="absolute top-[40%] -left-[10%] w-[40%] h-[50%] rounded-full bg-orange-400 opacity-25 blur-[100px] rotate-[10deg] mix-blend-screen"
+          ></div>
+
+          <!-- Scattered Distribution -->
+          <div
+            class="absolute bottom-[5%] right-[10%] w-[50%] h-[60%] rounded-full bg-amber-200 opacity-40 blur-[110px] rotate-[20deg] mix-blend-screen"
+          ></div>
+          <div
+            class="absolute top-[45%] left-[45%] w-[30%] h-[40%] rounded-full bg-orange-300 opacity-20 blur-[90px] rotate-[45deg] mix-blend-screen"
+          ></div>
+          <div
+            class="absolute top-[-10%] right-[30%] w-[40%] h-[50%] rounded-full bg-orange-400 opacity-35 blur-[100px] rotate-[-10deg] mix-blend-screen"
+          ></div>
+          <div
+            class="absolute bottom-[20%] left-[25%] w-[35%] h-[45%] rounded-full bg-orange-400 opacity-30 blur-[80px] rotate-[-25deg] mix-blend-screen"
+          ></div>
+
+          <!-- Diagonal Light Rake (Seamless Sheen) -->
+          <div
+            class="absolute inset-0 bg-[linear-gradient(162deg,rgba(255,255,255,0.08)_0%,transparent_60%)] pointer-events-none mix-blend-overlay"
+          ></div>
+
+          <!-- Dot Grid Pattern -->
+          <div class="absolute inset-0 opacity-[0.07] pointer-events-none">
+            <div
+              class="absolute top-0 right-0 w-1/2 h-1/2 bg-[radial-gradient(theme('colors.white')_1px,transparent_1px)] [background-size:20px_20px]"
+            ></div>
+            <div
+              class="absolute bottom-0 left-0 w-1/2 h-1/2 bg-[radial-gradient(theme('colors.white')_1px,transparent_1px)] [background-size:20px_20px]"
+            ></div>
+          </div>
+
+          <!-- Noise & Inner Vignette -->
+          <div class="absolute inset-0 noise-overlay opacity-[0.03] pointer-events-none"></div>
+          <div
+            class="absolute inset-0 ring-[40px] ring-white/[0.04] blur-2xl pointer-events-none"
+          ></div>
+        </div>
 
         <div class="hero-content">
           <!-- User Main Info -->
@@ -60,7 +110,7 @@
                     v-for="i in 5"
                     :key="i"
                     class="star"
-                    :class="i <= Math.round(profileData.user.rating) ? 'full' : ''"
+                    :class="i <= Math.floor(profileData.user.rating) ? 'full' : ''"
                     >★</span
                   >
                 </div>
@@ -78,7 +128,7 @@
                     v-for="i in 5"
                     :key="i"
                     class="star"
-                    :class="i <= Math.round(profileData.user.borrowerRating) ? 'full' : ''"
+                    :class="i <= Math.floor(profileData.user.borrowerRating) ? 'full' : ''"
                     >★</span
                   >
                 </div>
@@ -167,18 +217,10 @@
         <div class="tab-content min-h-[400px]">
           <!-- REVIEWS PANEL -->
           <div v-if="activeTab === 'reviews'" class="flex flex-col lg:flex-row gap-8">
-            <!-- Left Column: Reviews List -->
-            <div class="lg:w-[65%]">
-              <div class="flex items-center gap-2 mb-6">
-                <h3 class="text-[15px] font-semibold text-gray-700">Feedback History</h3>
-                <span class="text-gray-400">·</span>
-                <p class="text-[13px] text-gray-400">
-                  {{ profileData.reviews.length }} total reviews
-                </p>
-              </div>
-
+            <!-- Left Column: Reviews List (Scrollable) -->
+            <div class="lg:w-[65%] max-h-[800px] overflow-y-auto pr-6 custom-scrollbar">
               <!-- Filter Row -->
-              <div class="flex flex-wrap gap-2 mb-8">
+              <div class="flex flex-wrap gap-2 mb-8 sticky top-0 bg-white z-20 py-2">
                 <button
                   v-for="filter in ['All', 'As Lender', 'As Borrower']"
                   :key="filter"
@@ -203,9 +245,11 @@
                   :class="{ 'border-b border-gray-50': index !== filteredReviews.length - 1 }"
                 >
                   <div class="flex items-start justify-between">
+                    <!-- Link for non-anonymous reviewers -->
                     <NuxtLink
+                      v-if="review.reviewer.username"
                       :to="`/profile/${review.reviewer.username}`"
-                      class="flex items-center gap-3 group"
+                      class="flex items-center gap-3 group/reviewer"
                     >
                       <UserAvatar
                         :user-name="review.reviewer.name"
@@ -216,7 +260,7 @@
                       <div>
                         <div class="flex items-center gap-2">
                           <span
-                            class="text-[14px] font-semibold text-gray-900 group-hover:text-burning-orange transition-colors"
+                            class="text-[14px] font-semibold text-gray-900 group-hover/reviewer:text-burning-orange transition-colors"
                           >
                             {{ review.reviewer.name }}
                           </span>
@@ -235,6 +279,35 @@
                         }}</span>
                       </div>
                     </NuxtLink>
+
+                    <!-- Static div for anonymous reviewers -->
+                    <div v-else class="flex items-center gap-3">
+                      <UserAvatar
+                        :user-name="review.reviewer.name"
+                        :avatar-url="review.reviewer.avatarUrl"
+                        size="sm"
+                        class="h-9 w-9 rounded-full"
+                      />
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <span class="text-[14px] font-semibold text-gray-900">
+                            {{ review.reviewer.name }}
+                          </span>
+                          <div class="flex gap-0.5">
+                            <span
+                              v-for="i in 5"
+                              :key="i"
+                              class="text-[11px]"
+                              :class="i <= review.rating ? 'text-burning-orange' : 'text-gray-200'"
+                              >★</span
+                            >
+                          </div>
+                        </div>
+                        <span class="text-[12px] text-gray-400">{{
+                          formatDate(review.createdAt)
+                        }}</span>
+                      </div>
+                    </div>
 
                     <div
                       class="px-3 py-1 rounded-full text-[11px] font-bold"
@@ -296,8 +369,11 @@
           </div>
 
           <!-- LISTINGS PANEL -->
-          <div v-if="activeTab === 'listings'" class="tab-panel active">
-            <div class="mb-8">
+          <div
+            v-if="activeTab === 'listings'"
+            class="tab-panel active max-h-[800px] overflow-y-auto pr-6 custom-scrollbar"
+          >
+            <div class="mb-8 sticky top-0 bg-white z-20 py-2">
               <div class="text-[16px] text-gray-500 font-semibold">
                 {{ profileData.items.length }} active listings
               </div>
@@ -399,49 +475,36 @@ const formatDate = (date: string | Date) => {
 </script>
 
 <style scoped>
+/* Custom Premium Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice / 20%");
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.cinnamon-ice / 40%");
+}
+
 /* TOP HERO SECTION */
 .profile-hero {
-  background: theme("colors.burning-orange");
   border-radius: 40px;
   padding: 48px;
   position: relative;
   overflow: hidden;
   color: #fff;
-  min-height: 300px;
+  min-height: 320px;
   display: flex;
   align-items: center;
   animation: fadeUp 0.45s ease both;
 }
 
-.hero-deco-1 {
-  position: absolute;
-  top: -100px;
-  right: -50px;
-  width: 400px;
-  height: 400px;
-  border-radius: 50%;
-  background: theme("colors.cream / 20%");
-  pointer-events: none;
-}
-.hero-deco-2 {
-  position: absolute;
-  bottom: -150px;
-  left: 10%;
-  width: 350px;
-  height: 350px;
-  border-radius: 50%;
-  background: theme("colors.cinnamon-ice / 40%");
-  pointer-events: none;
-}
-.hero-deco-3 {
-  position: absolute;
-  top: 10%;
-  left: -100px;
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
-  background: theme("colors.noble-black / 5%");
-  pointer-events: none;
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 .hero-content {
@@ -504,12 +567,13 @@ const formatDate = (date: string | Date) => {
 }
 
 .hero-rating-box {
-  background: rgba(255, 255, 255, 0.13);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 24px;
   padding: 24px;
   text-align: center;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.1);
 }
 
 .hero-rating-val {
@@ -518,11 +582,12 @@ const formatDate = (date: string | Date) => {
   line-height: 1;
   margin-bottom: 4px;
   color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .rating-max {
   font-size: 20px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   margin-left: 2px;
 }
 
@@ -535,29 +600,32 @@ const formatDate = (date: string | Date) => {
 
 .hero-stars .star {
   font-size: 18px;
-  color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.25);
 }
 
 .hero-stars .star.full {
   color: #fff;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
 }
 
 .hero-rating-label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.8);
   font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .hero-stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  background: rgba(0, 0, 0, 0.18);
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.1);
 }
 
 .hstat {
@@ -566,7 +634,7 @@ const formatDate = (date: string | Date) => {
 }
 
 .hstat:not(:last-child) {
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .hstat-val {
@@ -575,13 +643,15 @@ const formatDate = (date: string | Date) => {
   line-height: 1;
   margin-bottom: 4px;
   color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .hstat-label {
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .tab-content {

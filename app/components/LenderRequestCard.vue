@@ -49,6 +49,19 @@ const computeDuration = (startDate: Date | string, endDate: Date | string): stri
 
 const duration = computed(() => computeDuration(props.request.startDate, props.request.endDate))
 
+const badgeClass = computed(() => {
+  switch (props.request.requestStatus) {
+    case "PENDING":
+      return "bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
+    case "APPROVED":
+      return "bg-blue-estate/[0.08] text-blue-estate border-blue-estate/20"
+    case "REJECTED":
+      return "bg-cinnabar-red/[0.08] text-cinnabar-red border-cinnabar-red/20"
+    default:
+      return "bg-gray-100 text-gray-500 border-gray-200"
+  }
+})
+
 const formatPeso = (value: number) =>
   `₱${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
 
@@ -108,7 +121,8 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
       <span class="text-noble-black text-[14px] font-semibold">{{ borrowerName }}</span>
 
       <span
-        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
+        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border"
+        :class="badgeClass"
       >
         {{ request.requestStatusLabel }}
       </span>

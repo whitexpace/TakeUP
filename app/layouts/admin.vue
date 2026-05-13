@@ -82,6 +82,15 @@ const cancelLogout = () => {
 const confirmLogout = async () => {
   showLogoutModal.value = false
   await supabase.auth.signOut()
+
+  // Clear client-side auth caches
+  const { clear: clearAuthUser } = useAuthUser()
+  const { clear: clearSessionBridge } = useSessionBridge()
+  const { clear: clearViewerSession } = useViewerSession()
+  clearAuthUser()
+  clearSessionBridge()
+  clearViewerSession()
+
   await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
   await navigateTo("/")
 }
