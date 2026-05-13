@@ -15,6 +15,7 @@ describe("home-auth-redirect", () => {
       "defineNuxtRouteMiddleware",
       (handler: (...args: unknown[]) => unknown) => handler,
     )
+    vi.stubGlobal("useViewerSession", () => useViewerSessionMock())
     vi.stubGlobal("navigateTo", vi.fn())
     useViewerSessionMock.mockReset()
   })
