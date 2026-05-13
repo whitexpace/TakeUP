@@ -116,6 +116,42 @@ describe("useChat", () => {
     ).toEqual([CONV_ID_1, CONV_ID_2])
   })
 
+  it("refreshes conversations in the background without showing the loading state", async () => {
+    let resolveConversations!: (value: ConversationSummary[]) => void
+    fetchMock.mockReturnValue(
+      new Promise<ConversationSummary[]>((resolve) => {
+        resolveConversations = resolve
+      }),
+    )
+
+    const chat = useChat()
+    const pendingRefresh = chat.loadConversations({ background: true })
+
+    expect(chat.isLoadingConversations.value).toBe(false)
+
+    resolveConversations([makeConversationSummary(CONV_ID_1)])
+    await pendingRefresh
+
+    expect(chat.conversations.value.map((conversation) => conversation.conversationId)).toEqual([
+      CONV_ID_1,
+    ])
+    expect(chat.isLoadingConversations.value).toBe(false)
+  })
+
+  it("keeps the current sidebar conversations when a background refresh fails", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("Network error"))
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+
+    await chat.loadConversations({ background: true })
+
+    expect(chat.error.value).toBeNull()
+    expect(chat.conversations.value.map((conversation) => conversation.conversationId)).toEqual([
+      CONV_ID_1,
+    ])
+  })
+
   it("opens a conversation, loads the first messages page, and marks it as read", async () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))

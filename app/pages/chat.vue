@@ -407,7 +407,7 @@ const startPolling = () => {
     if (!activeConversation.value) return
 
     try {
-      await loadConversations()
+      void loadConversations({ background: true })
       const data = await $fetch<{
         messages: ChatMessage[]
         nextCursor: string | null
@@ -461,7 +461,11 @@ onMounted(async () => {
   window.addEventListener("resize", checkMobile)
   document.addEventListener("click", handleDocumentClick)
 
-  await Promise.all([loadNotifications(), loadConversations(), loadUnreadCount()])
+  await Promise.all([
+    loadNotifications(),
+    loadConversations({ background: sortedConversations.value.length > 0 }),
+    loadUnreadCount(),
+  ])
 
   if (routeTransactionId.value) {
     await openConversationFromRoute(routeTransactionId.value)
@@ -520,7 +524,7 @@ onUnmounted(() => {
         </div>
 
         <div class="custom-chat-scrollbar flex-1 overflow-y-auto">
-          <div v-if="isLoadingConversations" class="space-y-4 p-4">
+          <div v-if="isLoadingConversations && !sortedConversations.length" class="space-y-4 p-4">
             <div v-for="index in 6" :key="index" class="flex animate-pulse gap-3">
               <div class="h-12 w-12 rounded-full bg-noble-black/10"></div>
               <div class="flex-1 space-y-2 py-1">
@@ -542,7 +546,7 @@ onUnmounted(() => {
             <p class="mb-4 text-sm font-medium text-noble-black/60">Failed to load conversations</p>
             <button
               class="text-xs font-bold uppercase tracking-wider text-blue-estate transition-colors hover:text-burning-orange"
-              @click="loadConversations"
+              @click="() => loadConversations()"
             >
               Retry
             </button>

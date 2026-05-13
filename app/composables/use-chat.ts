@@ -70,6 +70,10 @@ type FetchErrorData = {
   }
 }
 
+type LoadConversationsOptions = {
+  background?: boolean
+}
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (
     typeof error === "object" &&
@@ -105,6 +109,7 @@ export const useChat = () => {
   )
   const messages = useState<ChatMessage[]>("chat-messages", () => [])
   const isLoadingConversations = useState("chat-loading-conv", () => false)
+  const isRefreshingConversations = useState("chat-refreshing-conv", () => false)
   const isLoadingMessages = useState("chat-loading-msg", () => false)
   const isOpeningConversation = useState("chat-opening", () => false)
   const isSending = useState("chat-sending", () => false)
@@ -147,7 +152,7 @@ export const useChat = () => {
     )
 
     if (!conversation) {
-      void loadConversations()
+      void loadConversations({ background: true })
       return
     }
 
@@ -220,11 +225,16 @@ export const useChat = () => {
     }
   }
 
-  const loadConversations = async () => {
-    if (isLoadingConversations.value) return
+  const loadConversations = async (options: LoadConversationsOptions = {}) => {
+    const isBackgroundRefresh = options.background === true
+    if (isLoadingConversations.value || isRefreshingConversations.value) return
 
-    isLoadingConversations.value = true
-    error.value = null
+    if (isBackgroundRefresh) {
+      isRefreshingConversations.value = true
+    } else {
+      isLoadingConversations.value = true
+      error.value = null
+    }
 
     try {
       const data = await $fetch<ConversationSummary[]>("/api/chat")
@@ -247,10 +257,16 @@ export const useChat = () => {
         }
       }
     } catch (e: unknown) {
-      error.value = getErrorMessage(e, "Failed to load conversations")
-      conversations.value = []
+      if (!isBackgroundRefresh) {
+        error.value = getErrorMessage(e, "Failed to load conversations")
+        conversations.value = []
+      }
     } finally {
-      isLoadingConversations.value = false
+      if (isBackgroundRefresh) {
+        isRefreshingConversations.value = false
+      } else {
+        isLoadingConversations.value = false
+      }
     }
   }
 
