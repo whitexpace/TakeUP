@@ -1,3 +1,4 @@
+import { useRoute } from "#app"
 import { computed, onMounted } from "vue"
 import { usePersistedSessionState } from "./use-persisted-session-state"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
@@ -77,6 +78,7 @@ const markBagMutation = () => {
 }
 
 export const useBag = () => {
+  const route = useRoute()
   const bagItems = usePersistedSessionState<BagItem[]>("bag-items", () => [], {
     deserialize: (value) => JSON.parse(value).map(normalizeBagItem),
   })
@@ -212,6 +214,7 @@ export const useBag = () => {
     )
 
   onMounted(() => {
+    if (route.path.startsWith("/admin")) return
     void loadBag()
   })
 

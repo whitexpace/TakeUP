@@ -11,6 +11,17 @@ type AdminAuthCache = {
   checked: boolean
 }
 
+const reloadOnceAfterBridge = (accessToken: string, path: string) => {
+  if (!import.meta.client) return false
+
+  const reloadKey = `takeup:admin-bridge-reload:${accessToken.slice(-24)}`
+  if (window.sessionStorage.getItem(reloadKey) === "1") return false
+
+  window.sessionStorage.setItem(reloadKey, "1")
+  window.location.replace(path)
+  return true
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (!to.path.startsWith("/admin")) return
 
@@ -28,6 +39,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   // --- Client-side: bridge Supabase session and verify admin status ---
+  const nuxtApp = useNuxtApp()
+  const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
+  const serverRenderedAppSession = cookieAccountType.value !== null
   const authCache = useState<AdminAuthCache>("admin-auth-cache", () => ({
     accessToken: null,
     accountType: null,
@@ -48,6 +62,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (verifiedAccessToken.value === accessToken) return
 
   if (!(await ensureBridgedSession())) {
+    return navigateTo("/")
+  }
+
+  if (nuxtApp.isHydrating && !serverRenderedAppSession) {
+    if (reloadOnceAfterBridge(accessToken, to.fullPath)) {
+      return abortNavigation()
+    }
+
     return navigateTo("/")
   }
 

@@ -326,6 +326,35 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.custom-sidebar-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-admin-main-scrollbar {
+  overflow-anchor: none;
+}
+
+.custom-admin-main-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice");
+  border-radius: 10px;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.burning-orange");
+}
+
 .custom-tooltip {
   position: absolute;
   top: 100%;

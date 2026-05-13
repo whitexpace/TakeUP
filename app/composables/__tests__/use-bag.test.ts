@@ -8,6 +8,7 @@ vi.mock("#app", () => ({
         useState: (stateKey: string, stateInit: () => unknown) => ReturnType<typeof ref>
       }
     ).useState(key, init),
+  useRoute: () => ({ path: "/dashboard" }),
 }))
 
 vi.mock("vue", async () => {
