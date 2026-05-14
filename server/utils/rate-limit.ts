@@ -42,6 +42,7 @@ export const RATE_LIMIT_POLICIES: RateLimitPolicy[] = [
       "/api/items/count",
       "/api/items/filter-metadata",
       "/api/requests",
+      "/api/users",
     ],
     limit: 120,
     windowMs: 60_000,

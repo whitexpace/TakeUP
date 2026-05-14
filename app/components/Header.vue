@@ -661,6 +661,7 @@ onBeforeUnmount(() => {
           <div class="relative flex items-stretch group/tooltip">
             <NuxtLink
               to="/account"
+              :prefetch-on="{ interaction: true }"
               class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
               :class="{ 'active-nav-link': isAccountSectionActive }"
               active-class="active-nav-link"

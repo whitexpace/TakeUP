@@ -242,6 +242,7 @@ const navGroups = computed(() => {
         <NuxtLink
           v-if="authData?.user.username"
           :to="`/profile/${authData.user.username}`"
+          :prefetch-on="{ interaction: true }"
           class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30 shrink-0 flex items-center gap-4 hover:bg-pale-cashmere/30 transition-all duration-300 group/profile-link"
         >
           <div class="relative group shrink-0">
