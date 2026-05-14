@@ -8,19 +8,20 @@ export const useAccountPrefetch = () => {
   const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
   const { ensureBridgedSession } = useViewerSession()
 
-  const warmAccount = (targetPath = "/account") => {
-    if (!import.meta.client) return
+  const warmAccount = (targetPath = "/account"): Promise<void> => {
+    if (!import.meta.client) return Promise.resolve()
 
     void preloadRouteComponents(targetPath).catch(() => {})
 
-    if (!user.value) return
+    if (!user.value) return Promise.resolve()
 
     const now = Date.now()
-    if (
-      pendingAccountWarmup ||
-      (hasFreshAuthUserCache.value && now - lastAccountWarmupAt < ACCOUNT_PREFETCH_TTL_MS)
-    ) {
-      return
+    if (pendingAccountWarmup) {
+      return pendingAccountWarmup
+    }
+
+    if (hasFreshAuthUserCache.value && now - lastAccountWarmupAt < ACCOUNT_PREFETCH_TTL_MS) {
+      return Promise.resolve()
     }
 
     pendingAccountWarmup = (async () => {
@@ -36,6 +37,8 @@ export const useAccountPrefetch = () => {
       .finally(() => {
         pendingAccountWarmup = null
       })
+
+    return pendingAccountWarmup
   }
 
   return {

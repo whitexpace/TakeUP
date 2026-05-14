@@ -335,6 +335,7 @@ const navGroups = computed(() => {
                 v-for="link in group.links"
                 :key="link.label"
                 :to="link.to"
+                :prefetch-on="{ interaction: true }"
                 class="group flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200"
                 :class="
                   isActive(link.to)

@@ -1,9 +1,11 @@
 import { useAccountPrefetch } from "../composables/use-account-prefetch"
 import { usePublicProfilePrefetch } from "../composables/use-public-profile-prefetch"
+import { useWallet } from "../composables/use-wallet"
 
 export default defineNuxtPlugin(() => {
   const { warmAccount } = useAccountPrefetch()
   const { warmPublicProfilePath } = usePublicProfilePrefetch()
+  const { warmWallet } = useWallet({ immediate: false })
 
   const handleInteraction = (event: Event) => {
     const target = event.target
@@ -21,8 +23,13 @@ export default defineNuxtPlugin(() => {
 
     if (url.origin !== window.location.origin) return
 
+    if (url.pathname === "/account/wallet" || url.pathname.startsWith("/account/wallet/")) {
+      void warmWallet(url.pathname)
+      return
+    }
+
     if (url.pathname === "/account" || url.pathname.startsWith("/account/")) {
-      warmAccount(url.pathname)
+      void warmAccount(url.pathname)
       return
     }
 
