@@ -124,7 +124,7 @@
       class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
     >
       <ItemCard
-        v-for="item in cardItems"
+        v-for="(item, index) in cardItems"
         :id="item.id"
         :key="item.id"
         :type="item.type"
@@ -140,6 +140,11 @@
         :owner="item.owner"
         :owner-username="item.ownerUsername"
         :is-liked="item.isLiked"
+        :enable-destination-prefetch="true"
+        :image-loading="index === 0 ? 'eager' : 'lazy'"
+        :image-fetch-priority="index === 0 ? 'high' : 'low'"
+        :start-navigation-on-mouse-down="true"
+        :prefetch-item="getListedItemForCard(item.id)"
       />
 
       <template v-if="isLoading">
@@ -214,6 +219,7 @@ import { filterListedItemsBySearch } from "../../utils/item-search"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
 import { useFilteredResultsCount } from "../../composables/use-filtered-results-count"
 import type { useDashboardFilters } from "../../composables/use-dashboard-filters"
+import { buildItemDetailPath } from "../../utils/item-detail-route"
 
 definePageMeta({
   layout: "dashboard",
@@ -245,7 +251,12 @@ const highlightedSuggestionIndex = ref(-1)
 const serverSearchQuery = ref("")
 const searchTerm = computed(() => searchInput.value.trim())
 const INITIAL_DASHBOARD_PAGE_SIZE = 8
+const IDLE_CARD_DETAIL_PREFETCH_LIMIT = 4
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
+let idleCardDetailPrefetchId: number | null = null
+let fallbackCardDetailPrefetchTimeout: ReturnType<typeof setTimeout> | null = null
+const warmedDashboardCardPaths = new Set<string>()
+const { warmDestination } = useDestinationImagePrefetch()
 
 // User Search Logic
 const { data: topMatchingUsers, pending: isSearchingUsers } = await useAsyncData(
@@ -417,6 +428,10 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
     trendingItemIds: trendingItemIds.value,
   }),
 )
+const listedItemsById = computed(
+  () => new Map(locallyFilteredItems.value.map((item) => [item.id, item])),
+)
+const getListedItemForCard = (id: string) => listedItemsById.value.get(id) ?? null
 
 const {
   totalResultsCount,
@@ -439,6 +454,47 @@ const cancelPendingPrefetch = () => {
     clearTimeout(prefetchNextPageTimeout)
     prefetchNextPageTimeout = null
   }
+}
+
+const cancelIdleCardDetailPrefetch = () => {
+  if (idleCardDetailPrefetchId !== null && import.meta.client && "cancelIdleCallback" in window) {
+    window.cancelIdleCallback(idleCardDetailPrefetchId)
+  }
+
+  if (fallbackCardDetailPrefetchTimeout !== null) {
+    clearTimeout(fallbackCardDetailPrefetchTimeout)
+    fallbackCardDetailPrefetchTimeout = null
+  }
+
+  idleCardDetailPrefetchId = null
+}
+
+const prefetchVisibleCardDetails = () => {
+  cancelIdleCardDetailPrefetch()
+
+  if (!import.meta.client || !cardItems.value.length) {
+    return
+  }
+
+  const warmVisibleCards = () => {
+    idleCardDetailPrefetchId = null
+    fallbackCardDetailPrefetchTimeout = null
+
+    for (const item of locallyFilteredItems.value.slice(0, IDLE_CARD_DETAIL_PREFETCH_LIMIT)) {
+      const path = buildItemDetailPath({ id: item.id, name: item.name })
+      if (warmedDashboardCardPaths.has(path)) continue
+
+      warmedDashboardCardPaths.add(path)
+      warmDestination(path, item)
+    }
+  }
+
+  if ("requestIdleCallback" in window) {
+    idleCardDetailPrefetchId = window.requestIdleCallback(warmVisibleCards, { timeout: 1800 })
+    return
+  }
+
+  fallbackCardDetailPrefetchTimeout = setTimeout(warmVisibleCards, 700)
 }
 
 const scheduleNextPagePrefetch = () => {
@@ -513,6 +569,8 @@ onMounted(() => {
     void reload()
   }
 
+  prefetchVisibleCardDetails()
+
   if (loadMoreTrigger.value) {
     observer.observe(loadMoreTrigger.value)
   }
@@ -527,6 +585,7 @@ onUnmounted(() => {
     searchBlurTimeout = null
   }
   cancelPendingPrefetch()
+  cancelIdleCardDetailPrefetch()
   cancelPendingResultsCountRefresh()
 })
 
@@ -541,6 +600,14 @@ watch(
     scheduleReload()
   },
   { deep: true },
+)
+
+watch(
+  cardItems,
+  () => {
+    prefetchVisibleCardDetails()
+  },
+  { flush: "post" },
 )
 </script>
 

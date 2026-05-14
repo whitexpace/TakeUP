@@ -21,6 +21,7 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@nuxt/image": "^2.0.0",
     "@nuxtjs/supabase": "^2.0.3",
     "@prisma/client": "^5.19.0",
     "@supabase/supabase-js": "^2.103.0",

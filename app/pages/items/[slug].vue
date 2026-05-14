@@ -10,6 +10,10 @@ import {
 import { clearPersistedSessionState } from "../../composables/use-persisted-session-state"
 import type { ListedItem } from "../../types/item-listing"
 import { buildItemDetailPath, extractItemIdFromSlug } from "../../utils/item-detail-route"
+import {
+  getPrefetchedItemDetail,
+  hasPrefetchedItemDetail,
+} from "../../composables/use-destination-image-prefetch"
 import type { AppRouter } from "../../../server/trpc/routers"
 
 definePageMeta({
@@ -96,7 +100,11 @@ const {
       })
     }
 
-    return await $fetch<ItemDetail>(`/api/items/${itemId.value}`)
+    if (hasPrefetchedItemDetail(itemId.value)) {
+      return getPrefetchedItemDetail<ItemDetail>(itemId.value) ?? null
+    }
+
+    return await $fetch<ItemDetail>(`/api/items/${itemId.value}/prefetch`)
   },
   {
     watch: [itemId],
@@ -106,9 +114,31 @@ const {
 )
 
 const item = computed(() => data.value)
+const isLoadingFullItem = ref(false)
+let fullItemRequestVersion = 0
 const itemLoadErrorMessage = computed(
   () => error.value?.statusMessage ?? error.value?.message ?? "Unable to load item details.",
 )
+
+const loadFullItemDetails = async () => {
+  if (!import.meta.client || !itemId.value) return
+
+  const requestVersion = ++fullItemRequestVersion
+  isLoadingFullItem.value = true
+
+  try {
+    const fullItem = await $fetch<ItemDetail>(`/api/items/${itemId.value}`)
+    if (requestVersion === fullItemRequestVersion) {
+      data.value = fullItem
+    }
+  } catch {
+    // Keep the fast shell rendered. The retry button still refreshes the primary item request.
+  } finally {
+    if (requestVersion === fullItemRequestVersion) {
+      isLoadingFullItem.value = false
+    }
+  }
+}
 
 const currentDate = new Date()
 const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
@@ -823,6 +853,7 @@ watch(itemId, () => {
   hasRequestedBooking.value = false
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
+  void loadFullItemDetails()
 })
 
 const openLightbox = () => {
@@ -1200,6 +1231,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 onMounted(() => {
+  void loadFullItemDetails()
   updateScrollStatus()
   window.addEventListener("keydown", handleKeydown)
 })
@@ -1231,7 +1263,7 @@ onUnmounted(() => {
         <span class="font-normal">{{ backNavigationLabel }}</span>
       </NuxtLink>
 
-      <div v-if="pending" class="space-y-8 pb-28 lg:pb-6 animate-pulse">
+      <div v-if="pending && !item" class="space-y-8 pb-28 lg:pb-6 animate-pulse">
         <div class="flex flex-col gap-4">
           <div class="h-10 w-3/5 bg-noble-black/20 rounded-2xl"></div>
           <div class="h-5 w-48 bg-noble-black/10 rounded-2xl"></div>
@@ -1250,7 +1282,7 @@ onUnmounted(() => {
       </div>
 
       <div
-        v-else-if="error"
+        v-else-if="error && !item"
         class="rounded-[28px] border border-cinnamon-ice/30 bg-white px-6 py-16 text-center shadow-sm"
       >
         <h2 class="text-2xl font-bold text-noble-black">Unable to load item</h2>
@@ -1347,6 +1379,9 @@ onUnmounted(() => {
                   v-if="currentImage"
                   :src="currentImage"
                   :alt="item.name"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
                   class="w-full h-full object-cover"
                 />
                 <div
@@ -1413,6 +1448,9 @@ onUnmounted(() => {
                   >
                     <img
                       :src="img"
+                      loading="lazy"
+                      fetchpriority="low"
+                      decoding="async"
                       class="w-full h-full object-cover transition-all duration-300"
                       :class="
                         currentImageIndex === idx ? '' : 'blur-[1px] group-hover/thumb:blur-0'
