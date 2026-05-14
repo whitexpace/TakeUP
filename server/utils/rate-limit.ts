@@ -36,7 +36,13 @@ export const RATE_LIMIT_POLICIES: RateLimitPolicy[] = [
   {
     bucket: "public-read",
     methods: ["GET"],
-    pathPrefixes: ["/api/items", "/api/items/count", "/api/items/filter-metadata", "/api/requests"],
+    pathPrefixes: [
+      "/api/community-feed",
+      "/api/items",
+      "/api/items/count",
+      "/api/items/filter-metadata",
+      "/api/requests",
+    ],
     limit: 120,
     windowMs: 60_000,
   },
