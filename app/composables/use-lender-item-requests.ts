@@ -20,6 +20,64 @@ type UseLenderItemRequestsOptions = {
   searchQuery: Ref<string>
 }
 
+type LenderRequestCacheEntry = {
+  expiresAt: number
+  requests: LenderItemRequest[]
+}
+
+type FetchRequestsOptions = {
+  force?: boolean
+}
+
+const LENDER_REQUEST_CACHE_TTL_MS = 5 * 60_000
+const LENDER_BOOKING_STATUSES = [
+  "PENDING",
+  "CONFIRMED",
+  "CANCELLED",
+  "COMPLETED",
+  "RETURNED",
+  "IN_DISPUTE",
+] satisfies BookingStatus[]
+const LENDER_BOOKING_STATUS_SET = new Set<BookingStatus>(LENDER_BOOKING_STATUSES)
+const lenderRequestCache = new Map<string, LenderRequestCacheEntry>()
+const pendingLenderRequestFetches = new Map<string, Promise<LenderItemRequest[]>>()
+
+const cloneLenderRequests = (requests: LenderItemRequest[]) => structuredClone(requests)
+
+const getLenderRequestViewerKey = () => {
+  if (import.meta.server) {
+    return useRequestEvent()?.context.authUser?.id ?? "anonymous"
+  }
+
+  if (typeof useSupabaseUser === "function") {
+    return useSupabaseUser().value?.id ?? "anonymous"
+  }
+
+  return "anonymous"
+}
+
+const buildLenderRequestCacheKey = (statuses: BookingStatus[]) =>
+  `${getLenderRequestViewerKey()}:lender-requests:${[...statuses].sort().join("|")}`
+
+const getCachedLenderRequests = (cacheKey: string) => {
+  const cachedEntry = lenderRequestCache.get(cacheKey)
+  if (!cachedEntry) return null
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    lenderRequestCache.delete(cacheKey)
+    return null
+  }
+
+  return cloneLenderRequests(cachedEntry.requests)
+}
+
+const setCachedLenderRequests = (cacheKey: string, requests: LenderItemRequest[]) => {
+  lenderRequestCache.set(cacheKey, {
+    expiresAt: Date.now() + LENDER_REQUEST_CACHE_TTL_MS,
+    requests: cloneLenderRequests(requests),
+  })
+}
+
 const requestStatusByBookingStatus: Partial<
   Record<BookingStatus, Pick<LenderItemRequest, "requestStatus" | "requestStatusLabel">>
 > = {
@@ -67,7 +125,7 @@ export const useLenderItemRequests = ({
     isLoading.value = false
   }
 
-  const fetchRequests = async () => {
+  const fetchRequests = async (options: FetchRequestsOptions = {}) => {
     requestVersion.value += 1
     const version = requestVersion.value
 
@@ -76,13 +134,52 @@ export const useLenderItemRequests = ({
       return
     }
 
-    isLoading.value = true
-    error.value = null
+    const uniqueStatuses = [...new Set(statuses.value)].filter((status) =>
+      LENDER_BOOKING_STATUS_SET.has(status),
+    )
+
+    if (uniqueStatuses.length === 0) {
+      requests.value = []
+      return
+    }
+
+    const cacheKey = buildLenderRequestCacheKey(uniqueStatuses)
+
+    if (!options.force) {
+      const cachedRequests = getCachedLenderRequests(cacheKey)
+      if (cachedRequests) {
+        requests.value = cachedRequests
+        return
+      }
+
+      const pendingRequest = pendingLenderRequestFetches.get(cacheKey)
+      if (pendingRequest) {
+        isLoading.value = true
+        error.value = null
+
+        try {
+          const pendingRequests = await pendingRequest
+          if (version === requestVersion.value) {
+            requests.value = cloneLenderRequests(pendingRequests)
+          }
+        } catch {
+          if (version === requestVersion.value) {
+            error.value = "Unable to load booking requests. Please try again."
+          }
+        } finally {
+          if (version === requestVersion.value) {
+            isLoading.value = false
+          }
+        }
+        return
+      }
+    }
 
     try {
-      const uniqueStatuses = [...new Set(statuses.value)]
+      isLoading.value = true
+      error.value = null
 
-      const responses = await Promise.all(
+      const request = Promise.all(
         uniqueStatuses.map((status) =>
           $fetch<BookingListResponse>("/api/bookings", {
             query: {
@@ -93,14 +190,29 @@ export const useLenderItemRequests = ({
           }),
         ),
       )
+        .then((responses) =>
+          responses
+            .flatMap((response) => response.bookings)
+            .map(toLenderItemRequest)
+            .filter((request): request is LenderItemRequest => request !== null)
+            .sort(sortByCreatedAtDesc),
+        )
+        .then((nextRequests) => {
+          setCachedLenderRequests(cacheKey, nextRequests)
+          return nextRequests
+        })
+        .finally(() => {
+          if (pendingLenderRequestFetches.get(cacheKey) === request) {
+            pendingLenderRequestFetches.delete(cacheKey)
+          }
+        })
+
+      pendingLenderRequestFetches.set(cacheKey, request)
+      const nextRequests = await request
 
       if (version !== requestVersion.value) return
 
-      requests.value = responses
-        .flatMap((response) => response.bookings)
-        .map(toLenderItemRequest)
-        .filter((request): request is LenderItemRequest => request !== null)
-        .sort(sortByCreatedAtDesc)
+      requests.value = cloneLenderRequests(nextRequests)
     } catch (err: unknown) {
       if (version !== requestVersion.value) return
 

@@ -1,10 +1,14 @@
 import { useAccountPrefetch } from "../composables/use-account-prefetch"
+import { useBookingDetailPrefetch } from "../composables/use-booking-detail-prefetch"
 import { usePublicProfilePrefetch } from "../composables/use-public-profile-prefetch"
+import { useTransactionHistoryPrefetch } from "../composables/use-transactions"
 import { useWallet } from "../composables/use-wallet"
 
 export default defineNuxtPlugin(() => {
   const { warmAccount } = useAccountPrefetch()
+  const { warmBookingDetail } = useBookingDetailPrefetch()
   const { warmPublicProfilePath } = usePublicProfilePrefetch()
+  const { warmTransactionHistory } = useTransactionHistoryPrefetch()
   const { warmWallet } = useWallet({ immediate: false })
 
   const handleInteraction = (event: Event) => {
@@ -22,6 +26,21 @@ export default defineNuxtPlugin(() => {
     }
 
     if (url.origin !== window.location.origin) return
+
+    if (url.pathname.startsWith("/account/transactions/")) {
+      void warmBookingDetail(url.pathname, { priority: true }).catch(() => {})
+      return
+    }
+
+    if (url.pathname === "/account/transactions") {
+      const role = url.searchParams.get("role") === "LENDER" ? "LENDER" : "BORROWER"
+      void warmTransactionHistory(role, {
+        targetPath: `${url.pathname}${url.search}`,
+        priority: role === "LENDER",
+        prefetchNextPage: role === "BORROWER",
+      })
+      return
+    }
 
     if (url.pathname === "/account/wallet" || url.pathname.startsWith("/account/wallet/")) {
       void warmWallet(url.pathname)

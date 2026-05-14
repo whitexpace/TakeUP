@@ -1,6 +1,10 @@
 import { ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { useTransactions } from "../use-transactions"
+import {
+  prefetchTransactionHistory,
+  resetTransactionsCache,
+  useTransactions,
+} from "../use-transactions"
 import type { TransactionStatus } from "#shared/schemas/transaction"
 
 const BORROWER_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -40,12 +44,14 @@ const makeTx = (id: string, overrides = {}) => ({
 let fetchMock = vi.fn().mockResolvedValue({ transactions: [], nextCursor: null })
 
 beforeEach(() => {
+  resetTransactionsCache()
   fetchMock = vi.fn().mockResolvedValue({ transactions: [], nextCursor: null })
   vi.stubGlobal("$fetch", fetchMock)
   vi.stubGlobal("navigateTo", vi.fn())
 })
 
 afterEach(() => {
+  resetTransactionsCache()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -60,6 +66,25 @@ describe("useTransactions", () => {
       "/api/transactions",
       expect.objectContaining({ query: expect.objectContaining({ role: "BORROWER", limit: 20 }) }),
     )
+  })
+
+  it("reuses a prefetched borrower page", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ transactions: [makeTx(TX_ID_1)], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    await prefetchTransactionHistory("BORROWER", { prefetchNextPage: false })
+
+    const { transactions, fetchPage } = useTransactions({
+      role: ref("BORROWER"),
+      status: ref(null),
+      searchQuery: ref(""),
+    })
+
+    await fetchPage()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(transactions.value).toHaveLength(1)
+    expect(transactions.value[0]!.id).toBe(TX_ID_1)
   })
 
   it("stores returned transactions", async () => {
