@@ -1,25 +1,11 @@
 <script setup lang="ts">
 import { getRemainingBoostTime } from "../../../utils/rewards"
+import { useRewards } from "../../../composables/use-rewards"
 
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
-
-type RewardsSummary = {
-  availablePoints: number
-}
-
-type ActiveBoost = {
-  id: string
-  itemId: string
-  itemName: string
-  itemImage?: string | null
-  boostStatus: "ACTIVE" | "EXPIRED"
-  boostStartedAt: string | Date
-  boostExpiresAt: string | Date
-  remainingTime?: string | null
-}
 
 const BOOST_CONFIG = {
   pointsCost: 50,
@@ -32,23 +18,27 @@ const showRewardPopup = ref(false)
 let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
 const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
 
-const { data: summary } = await useAsyncData("rewards:summary", () =>
-  $fetch<RewardsSummary>("/api/rewards"),
-)
-
 const {
-  data: activeBoostsResponse,
-  pending: boostsPending,
-  error: boostsError,
-  refresh: refreshBoosts,
-} = await useAsyncData("rewards:active-boosts", () =>
-  $fetch<ActiveBoost[]>("/api/rewards/boosts/active"),
-)
+  summary,
+  activeBoostsResponse,
+  boostsPending,
+  boostsError,
+  hasFreshSummaryCache,
+  hasFreshBoostsCache,
+  fetchRewardsSummary,
+  fetchActiveBoosts,
+  refreshActiveBoosts,
+} = useRewards()
+
+if (import.meta.server || !hasFreshSummaryCache.value) {
+  await fetchRewardsSummary()
+}
 
 const activeBoosts = computed(() =>
   (activeBoostsResponse.value ?? [])
     .map((boost) => {
       const timing = getRemainingBoostTime(boost.boostExpiresAt, new Date(now.value))
+      const remainingTime = boost.remainingTime as string | null | undefined
 
       // Calculate percentage for progress bar (remaining / 24 hours)
       const expiration = new Date(boost.boostExpiresAt).getTime()
@@ -59,7 +49,10 @@ const activeBoosts = computed(() =>
 
       return {
         ...boost,
-        remainingLabel: boost.remainingTime?.trim() || timing.label,
+        remainingLabel:
+          typeof remainingTime === "string" && remainingTime.trim()
+            ? remainingTime.trim()
+            : timing.label,
         isExpired: boost.boostStatus !== "ACTIVE" || timing.expired,
         progress,
       }
@@ -125,6 +118,14 @@ onMounted(() => {
   countdownInterval = window.setInterval(() => {
     now.value = Date.now()
   }, 60_000)
+
+  if (!hasFreshSummaryCache.value) {
+    void fetchRewardsSummary()
+  }
+
+  if (!hasFreshBoostsCache.value) {
+    void fetchActiveBoosts()
+  }
 
   if (window.sessionStorage.getItem(REVIEW_REWARD_POPUP_STORAGE_KEY) === "1") {
     window.sessionStorage.removeItem(REVIEW_REWARD_POPUP_STORAGE_KEY)
@@ -404,7 +405,7 @@ const formatDateTime = (value: string | Date) => {
             v-if="boostsError"
             type="button"
             class="inline-flex h-8 items-center px-4 rounded-full border border-burning-orange text-[12px] font-bold text-burning-orange transition-all hover:bg-burning-orange hover:text-white"
-            @click="refreshBoosts()"
+            @click="refreshActiveBoosts()"
           >
             Retry
           </button>

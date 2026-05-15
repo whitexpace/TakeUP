@@ -4,6 +4,7 @@ import { useBookingDetailPrefetch } from "../composables/use-booking-detail-pref
 import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
 import { useMyListingsPrefetch } from "../composables/use-my-listings"
 import { usePublicProfilePrefetch } from "../composables/use-public-profile-prefetch"
+import { useRewardsPrefetch } from "../composables/use-rewards"
 import { useTransactionHistoryPrefetch } from "../composables/use-transactions"
 import { useWallet } from "../composables/use-wallet"
 
@@ -14,6 +15,7 @@ export default defineNuxtPlugin(() => {
   const { warmListingAnalytics } = useListingAnalyticsPrefetch()
   const { warmMyListings } = useMyListingsPrefetch()
   const { warmPublicProfilePath } = usePublicProfilePrefetch()
+  const { warmRewards } = useRewardsPrefetch()
   const { warmTransactionHistory } = useTransactionHistoryPrefetch()
   const { warmWallet } = useWallet({ immediate: false })
 
@@ -60,6 +62,11 @@ export default defineNuxtPlugin(() => {
 
     if (url.pathname === "/account/analytics") {
       void warmListingAnalytics(`${url.pathname}${url.search}`)
+      return
+    }
+
+    if (url.pathname === "/account/rewards") {
+      void warmRewards(`${url.pathname}${url.search}`)
       return
     }
 

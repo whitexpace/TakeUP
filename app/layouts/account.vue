@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
 import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
+import { useRewardsPrefetch } from "../composables/use-rewards"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
@@ -22,6 +23,7 @@ const {
 const { clear: clearSessionBridge } = useSessionBridge()
 const { clear: clearViewerSession } = useViewerSession()
 const { warmListingAnalytics } = useListingAnalyticsPrefetch()
+const { warmRewards } = useRewardsPrefetch()
 
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
@@ -66,6 +68,11 @@ const isActive = (path: string) => {
 const warmNavLink = (path: string) => {
   if (path === "/account/analytics") {
     void warmListingAnalytics(path)
+    return
+  }
+
+  if (path === "/account/rewards") {
+    void warmRewards(path)
   }
 }
 
