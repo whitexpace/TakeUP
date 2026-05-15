@@ -1,6 +1,7 @@
 import { useAccountPrefetch } from "../composables/use-account-prefetch"
 import { useAccountDisputesPrefetch } from "../composables/use-account-disputes-prefetch"
 import { useBookingDetailPrefetch } from "../composables/use-booking-detail-prefetch"
+import { useMyListingsPrefetch } from "../composables/use-my-listings"
 import { usePublicProfilePrefetch } from "../composables/use-public-profile-prefetch"
 import { useTransactionHistoryPrefetch } from "../composables/use-transactions"
 import { useWallet } from "../composables/use-wallet"
@@ -9,6 +10,7 @@ export default defineNuxtPlugin(() => {
   const { warmAccount } = useAccountPrefetch()
   const { warmAccountDisputes } = useAccountDisputesPrefetch()
   const { warmBookingDetail } = useBookingDetailPrefetch()
+  const { warmMyListings } = useMyListingsPrefetch()
   const { warmPublicProfilePath } = usePublicProfilePrefetch()
   const { warmTransactionHistory } = useTransactionHistoryPrefetch()
   const { warmWallet } = useWallet({ immediate: false })
@@ -46,6 +48,11 @@ export default defineNuxtPlugin(() => {
 
     if (url.pathname === "/account/disputes") {
       void warmAccountDisputes(`${url.pathname}${url.search}`)
+      return
+    }
+
+    if (url.pathname === "/account/listings") {
+      void warmMyListings(`${url.pathname}${url.search}`)
       return
     }
 
