@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
+import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
 import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
 import { useRewardsPrefetch } from "../composables/use-rewards"
 
@@ -9,6 +10,7 @@ const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const isHeaderVisible = ref(true)
+const hasObservedPointerMove = ref(false)
 
 const hideSidebar = computed(() => route.meta.hideAccountSidebar === true)
 
@@ -22,6 +24,7 @@ const {
 } = useAuthUser()
 const { clear: clearSessionBridge } = useSessionBridge()
 const { clear: clearViewerSession } = useViewerSession()
+const { warmAccountReviews } = useAccountReviewsPrefetch()
 const { warmListingAnalytics } = useListingAnalyticsPrefetch()
 const { warmRewards } = useRewardsPrefetch()
 
@@ -46,6 +49,10 @@ onMounted(() => {
   })
 })
 
+const markPointerInteraction = () => {
+  hasObservedPointerMove.value = true
+}
+
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value
 }
@@ -65,7 +72,15 @@ const isActive = (path: string) => {
   return route.path.startsWith(path)
 }
 
-const warmNavLink = (path: string) => {
+const warmNavLink = (path: string, event?: Event) => {
+  if (event?.type === "pointermove") {
+    markPointerInteraction()
+  }
+
+  if (event?.type === "pointerenter" && !hasObservedPointerMove.value) {
+    return
+  }
+
   if (path === "/account/analytics") {
     void warmListingAnalytics(path)
     return
@@ -73,6 +88,11 @@ const warmNavLink = (path: string) => {
 
   if (path === "/account/rewards") {
     void warmRewards(path)
+    return
+  }
+
+  if (path === "/account/reviews") {
+    void warmAccountReviews(path)
   }
 }
 
@@ -357,10 +377,11 @@ const navGroups = computed(() => {
                     ? 'bg-burning-orange/15 text-burning-orange font-semibold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
                     : 'text-noble-black/70 hover:bg-pale-cashmere/50 hover:text-noble-black border-l-4 border-transparent'
                 "
-                @pointerenter="warmNavLink(link.to)"
-                @focus="warmNavLink(link.to)"
-                @touchstart.passive="warmNavLink(link.to)"
-                @mousedown.left="warmNavLink(link.to)"
+                @pointerenter="warmNavLink(link.to, $event)"
+                @pointermove.passive="warmNavLink(link.to, $event)"
+                @focus="warmNavLink(link.to, $event)"
+                @touchstart.passive="warmNavLink(link.to, $event)"
+                @mousedown.left="warmNavLink(link.to, $event)"
                 @click="isMobile && (isSidebarOpen = false)"
               >
                 <!-- Icons -->

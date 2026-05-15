@@ -1,5 +1,6 @@
 import { useAccountPrefetch } from "../composables/use-account-prefetch"
 import { useAccountDisputesPrefetch } from "../composables/use-account-disputes-prefetch"
+import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
 import { useBookingDetailPrefetch } from "../composables/use-booking-detail-prefetch"
 import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
 import { useMyListingsPrefetch } from "../composables/use-my-listings"
@@ -11,6 +12,7 @@ import { useWallet } from "../composables/use-wallet"
 export default defineNuxtPlugin(() => {
   const { warmAccount } = useAccountPrefetch()
   const { warmAccountDisputes } = useAccountDisputesPrefetch()
+  const { warmAccountReviews } = useAccountReviewsPrefetch()
   const { warmBookingDetail } = useBookingDetailPrefetch()
   const { warmListingAnalytics } = useListingAnalyticsPrefetch()
   const { warmMyListings } = useMyListingsPrefetch()
@@ -18,8 +20,17 @@ export default defineNuxtPlugin(() => {
   const { warmRewards } = useRewardsPrefetch()
   const { warmTransactionHistory } = useTransactionHistoryPrefetch()
   const { warmWallet } = useWallet({ immediate: false })
+  let hasObservedPointerMove = false
 
   const handleInteraction = (event: Event) => {
+    if (event.type === "pointermove") {
+      hasObservedPointerMove = true
+    }
+
+    if (event.type === "pointerover" && !hasObservedPointerMove) {
+      return
+    }
+
     const target = event.target
     if (!(target instanceof Element)) return
 
@@ -70,6 +81,11 @@ export default defineNuxtPlugin(() => {
       return
     }
 
+    if (url.pathname === "/account/reviews") {
+      void warmAccountReviews(`${url.pathname}${url.search}`)
+      return
+    }
+
     if (url.pathname === "/account/wallet" || url.pathname.startsWith("/account/wallet/")) {
       void warmWallet(url.pathname)
       return
@@ -86,5 +102,6 @@ export default defineNuxtPlugin(() => {
   }
 
   document.addEventListener("pointerover", handleInteraction, { passive: true })
+  document.addEventListener("pointermove", handleInteraction, { passive: true })
   document.addEventListener("focusin", handleInteraction)
 })
