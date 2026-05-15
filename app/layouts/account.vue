@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
+import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
@@ -20,6 +21,7 @@ const {
 } = useAuthUser()
 const { clear: clearSessionBridge } = useSessionBridge()
 const { clear: clearViewerSession } = useViewerSession()
+const { warmListingAnalytics } = useListingAnalyticsPrefetch()
 
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
@@ -59,6 +61,12 @@ const isActive = (path: string) => {
     return route.path === "/account"
   }
   return route.path.startsWith(path)
+}
+
+const warmNavLink = (path: string) => {
+  if (path === "/account/analytics") {
+    void warmListingAnalytics(path)
+  }
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -342,6 +350,10 @@ const navGroups = computed(() => {
                     ? 'bg-burning-orange/15 text-burning-orange font-semibold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
                     : 'text-noble-black/70 hover:bg-pale-cashmere/50 hover:text-noble-black border-l-4 border-transparent'
                 "
+                @pointerenter="warmNavLink(link.to)"
+                @focus="warmNavLink(link.to)"
+                @touchstart.passive="warmNavLink(link.to)"
+                @mousedown.left="warmNavLink(link.to)"
                 @click="isMobile && (isSidebarOpen = false)"
               >
                 <!-- Icons -->
