@@ -2,8 +2,10 @@
 const errorMessage = ref("")
 const supabase = useSupabaseClient()
 const route = useRoute()
+const { startLoading, stopLoading } = useAppLoading()
 
 onMounted(async () => {
+  startLoading()
   try {
     const oauthError =
       (typeof route.query.error_description === "string" && route.query.error_description) ||
@@ -51,19 +53,17 @@ onMounted(async () => {
   } catch (error) {
     const msg =
       (error as { message?: string })?.message || "Google Sign-In failed. Please try again."
-    await navigateTo(`/?error=${encodeURIComponent(msg)}`)
+    errorMessage.value = msg
+    stopLoading()
   }
 })
 </script>
 
 <template>
   <main class="min-h-screen flex items-center justify-center px-6">
-    <div class="max-w-lg text-center">
-      <p v-if="!errorMessage" class="font-geist text-xl text-noble-black">Signing you in...</p>
-      <div v-else>
-        <p class="font-geist text-xl text-cinnabar-red mb-3">{{ errorMessage }}</p>
-        <NuxtLink to="/" class="font-geist text-burning-orange underline">Back to home</NuxtLink>
-      </div>
+    <div v-if="errorMessage" class="max-w-lg text-center">
+      <p class="font-geist text-xl text-cinnabar-red mb-3">{{ errorMessage }}</p>
+      <NuxtLink to="/" class="font-geist text-burning-orange underline">Back to home</NuxtLink>
     </div>
   </main>
 </template>
