@@ -47,7 +47,7 @@ export const useAdminListings = ({
     error.value = null
 
     try {
-      const query: Record<string, string | number | string[]> = { limit: 20 }
+      const query: Record<string, string | number | string[]> = { limit: 10 }
       const trimmedSearch = searchQuery.value.trim()
 
       if (statuses.value.length > 0) query.statuses = statuses.value

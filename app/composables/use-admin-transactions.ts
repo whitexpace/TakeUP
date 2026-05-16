@@ -15,6 +15,7 @@ type UseAdminTransactionsOptions = {
   searchQuery: Ref<string>
   createdAtFrom: Ref<string>
   createdAtTo: Ref<string>
+  limit?: number
 }
 
 export const useAdminTransactions = ({
@@ -22,6 +23,7 @@ export const useAdminTransactions = ({
   searchQuery,
   createdAtFrom,
   createdAtTo,
+  limit = 10,
 }: UseAdminTransactionsOptions) => {
   const transactions = ref<AdminTransactionListItem[]>([])
   const isLoading = ref(false)
@@ -44,7 +46,7 @@ export const useAdminTransactions = ({
     error.value = null
 
     try {
-      const query: Record<string, string | number> = { limit: 20 }
+      const query: Record<string, string | number> = { limit }
       const trimmedSearch = searchQuery.value.trim()
 
       if (status.value) query.status = status.value
