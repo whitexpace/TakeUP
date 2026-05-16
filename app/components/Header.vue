@@ -384,7 +384,7 @@ onBeforeUnmount(() => {
 
     <!-- Right Section: Icons -->
     <div
-      class="flex justify-end items-stretch gap-2 shrink-0 h-full"
+      class="flex justify-end items-stretch gap-1 sm:gap-2 shrink-0 h-full"
       :class="[showNav ? 'lg:w-80' : '', customPadding || 'px-4 sm:px-6']"
     >
       <slot name="right" />
@@ -400,7 +400,7 @@ onBeforeUnmount(() => {
             :aria-expanded="showNotifications"
             @click="toggleNotifications"
           >
-            <div class="relative">
+            <div class="relative flex items-center justify-center">
               <Icon
                 name="ph:bell"
                 class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
@@ -434,7 +434,7 @@ onBeforeUnmount(() => {
               <div
                 class="relative z-10 flex items-center justify-between px-4 py-4 border-b border-gray-100 shrink-0"
               >
-                <span class="font-montravia text-[20px] font-semibold text-noble-black italic">
+                <span class="font-montravia text-[20px] font-semibold text-noble-black">
                   Notifications
                 </span>
                 <button
@@ -447,7 +447,6 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Notifications List -->
-              <!-- Notification Items / Skeleton -->
               <div
                 v-if="isGlobalNotificationsLoading"
                 class="px-4 py-6 space-y-5 animate-pulse relative z-10"
@@ -550,7 +549,7 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <div class="relative">
+            <div class="relative flex items-center justify-center">
               <Icon
                 name="ph:chat-centered-text"
                 class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
@@ -577,7 +576,7 @@ onBeforeUnmount(() => {
             active-class="active-nav-link"
             aria-label="Likes"
           >
-            <div class="relative">
+            <div class="relative flex items-center justify-center">
               <Icon
                 name="ph:heart"
                 class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
@@ -603,7 +602,7 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <div class="relative">
+            <div class="relative flex items-center justify-center">
               <Icon
                 name="ph:handbag"
                 class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
@@ -622,47 +621,49 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Account Actions -->
-        <div class="flex items-stretch md:ml-1">
-          <div class="flex items-center px-2 md:px-4">
-            <div class="h-6 w-px bg-cinnamon-ice/30"></div>
-          </div>
-          <div
-            v-if="accountType === 'ADMIN'"
-            class="relative hidden md:flex items-stretch group/tooltip"
+        <!-- Vertical Divider -->
+        <div class="flex items-center px-2 sm:px-3">
+          <div class="h-6 w-px bg-cinnamon-ice/30"></div>
+        </div>
+
+        <!-- Admin Panel Icon -->
+        <div
+          v-if="accountType === 'ADMIN'"
+          class="relative hidden md:flex items-stretch group/tooltip"
+        >
+          <NuxtLink
+            to="/admin"
+            class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            :class="{ 'active-nav-link': isAdminSectionActive }"
+            active-class="active-nav-link"
           >
-            <NuxtLink
-              to="/admin"
-              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
-              :class="{ 'active-nav-link': isAdminSectionActive }"
-              active-class="active-nav-link"
-            >
-              <Icon
-                name="ph:shield-check"
-                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-              />
-            </NuxtLink>
-            <div class="custom-tooltip">
-              Admin Panel
-              <div class="tooltip-arrow"></div>
-            </div>
+            <Icon
+              name="ph:shield-check"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+            />
+          </NuxtLink>
+          <div class="custom-tooltip">
+            Admin Panel
+            <div class="tooltip-arrow"></div>
           </div>
-          <div class="relative flex items-stretch group/tooltip">
-            <NuxtLink
-              to="/account"
-              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
-              :class="{ 'active-nav-link': isAccountSectionActive }"
-              active-class="active-nav-link"
-            >
-              <Icon
-                name="ph:user"
-                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-              />
-            </NuxtLink>
-            <div class="custom-tooltip">
-              Account
-              <div class="tooltip-arrow"></div>
-            </div>
+        </div>
+
+        <!-- Account Icon -->
+        <div class="relative flex items-stretch group/tooltip">
+          <NuxtLink
+            to="/account"
+            class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            :class="{ 'active-nav-link': isAccountSectionActive }"
+            active-class="active-nav-link"
+          >
+            <Icon
+              name="ph:user"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+            />
+          </NuxtLink>
+          <div class="custom-tooltip">
+            Account
+            <div class="tooltip-arrow"></div>
           </div>
         </div>
       </template>
