@@ -304,12 +304,48 @@ onMounted(loadDispute)
     </header>
 
     <div v-if="isLoading" class="space-y-10 w-full py-10 animate-pulse">
-      <div class="h-10 w-1/3 rounded-xl bg-noble-black/10"></div>
-      <div class="grid grid-cols-2 gap-8">
-        <div class="h-64 rounded-[32px] bg-noble-black/5"></div>
-        <div class="h-64 rounded-[32px] bg-noble-black/5"></div>
+      <!-- Dossier Grid Skeleton -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div
+          v-for="i in 2"
+          :key="i"
+          class="bg-white rounded-[24px] border border-cinnamon-ice/20 p-8 shadow-sm"
+        >
+          <div class="flex items-center justify-between mb-8 pb-4 border-b border-gray-50">
+            <div class="h-6 w-32 bg-noble-black/20 rounded"></div>
+            <div class="h-5 w-16 bg-noble-black/10 rounded-full"></div>
+          </div>
+          <div class="flex items-center gap-6 mb-8">
+            <div class="w-16 h-16 rounded-full bg-noble-black/10"></div>
+            <div class="space-y-2">
+              <div class="h-6 w-40 bg-noble-black/20 rounded"></div>
+              <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
+            </div>
+          </div>
+          <div class="h-24 bg-gray-50/50 rounded-2xl border border-gray-50 mb-8"></div>
+          <div class="flex gap-3">
+            <div class="h-10 flex-1 bg-noble-black/5 rounded-xl"></div>
+            <div class="h-10 flex-1 bg-noble-black/10 rounded-xl"></div>
+          </div>
+        </div>
       </div>
-      <div class="h-80 rounded-[32px] bg-noble-black/5"></div>
+
+      <!-- Content Grid Skeleton -->
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
+        <div class="bg-white rounded-[24px] border border-cinnamon-ice/20 p-8 shadow-sm h-96">
+          <div class="h-6 w-48 bg-noble-black/20 rounded mb-6"></div>
+          <div class="h-12 w-3/4 bg-noble-black/10 rounded mb-8"></div>
+          <div class="h-40 bg-gray-50/50 rounded-2xl border border-gray-50"></div>
+        </div>
+        <div class="space-y-8">
+          <div
+            class="bg-white rounded-[24px] border border-cinnamon-ice/20 p-8 shadow-sm h-64"
+          ></div>
+          <div
+            class="bg-white rounded-[24px] border border-cinnamon-ice/20 p-8 shadow-sm h-48"
+          ></div>
+        </div>
+      </div>
     </div>
 
     <div v-else-if="selectedDispute" class="w-full space-y-8">

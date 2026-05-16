@@ -553,9 +553,11 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <PersonalAccountPageSkeleton v-if="!isHydrated || isAuthDataPending" />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <!-- Main Content Area -->
-    <template v-if="isHydrated && authData">
+    <template v-if="authData">
       <section class="space-y-3">
         <div class="space-y-2">
           <h1 class="font-montravia text-[36px] font-medium text-noble-black">
@@ -1227,31 +1229,5 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         </div>
       </Teleport>
     </template>
-
-    <!-- Skeleton Loader for SSR -->
-    <section v-else class="space-y-10 animate-pulse">
-      <div class="space-y-3">
-        <div class="h-10 w-48 bg-noble-black/20 rounded-xl"></div>
-        <div class="h-4 w-96 bg-noble-black/10 rounded-lg"></div>
-      </div>
-
-      <div
-        v-for="i in 2"
-        :key="i"
-        class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-8 shadow-sm"
-      >
-        <div class="flex items-center justify-between mb-8 pb-4 border-b border-cinnamon-ice/10">
-          <div class="h-8 w-32 bg-noble-black/20 rounded-lg"></div>
-          <div class="h-10 w-24 bg-noble-black/10 rounded-xl"></div>
-        </div>
-        <div class="flex items-center gap-6">
-          <div class="h-20 w-20 rounded-full bg-noble-black/10"></div>
-          <div class="space-y-3 flex-1">
-            <div class="h-4 w-1/3 bg-noble-black/20 rounded"></div>
-            <div class="h-3 w-1/2 bg-noble-black/10 rounded"></div>
-          </div>
-        </div>
-      </div>
-    </section>
   </div>
 </template>

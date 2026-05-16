@@ -98,7 +98,7 @@
         </div>
 
         <!-- Refined Rating -->
-        <div v-if="hasGoodRating" class="flex items-center gap-2 shrink-0">
+        <div v-if="hasGoodRating && !isManagement" class="flex items-center gap-2 shrink-0">
           <Icon
             name="ph:star-fill"
             class="w-3.5 h-3.5 text-burning-orange shrink-0 -translate-y-[0.5px]"

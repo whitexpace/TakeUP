@@ -6,16 +6,19 @@
       <div class="min-w-0 flex-1 space-y-5">
         <!-- Title Row Skeleton -->
         <div class="flex flex-wrap items-center gap-3">
-          <div class="h-5 w-48 bg-noble-black/20 rounded" />
-          <div class="h-4 w-24 bg-noble-black/10 rounded" />
-          <div class="h-4 w-16 bg-noble-black/10 rounded-full" />
+          <!-- Name -->
+          <div class="h-6 w-56 bg-noble-black/20 rounded" />
+          <!-- REF ID -->
+          <div class="h-4 w-32 bg-noble-black/10 rounded" />
+          <!-- Status -->
+          <div class="h-5 w-20 bg-noble-black/10 rounded-full" />
         </div>
 
         <!-- Meta Info Grid Skeleton -->
         <div class="flex flex-wrap items-center gap-y-4 gap-x-8">
           <div v-for="i in 4" :key="i" class="space-y-1">
-            <div class="h-2 w-16 bg-noble-black/10 rounded" />
-            <div class="h-4 w-24 bg-noble-black/10 rounded" />
+            <div class="h-3 w-20 bg-noble-black/10 rounded" />
+            <div class="h-4 w-32 bg-noble-black/10 rounded" />
           </div>
         </div>
       </div>
@@ -27,5 +30,5 @@
 </template>
 
 <script setup lang="ts">
-// Admin List Record Skeleton (for Listings, Wallet etc)
+// Updated Admin List Record Skeleton (matches Platform Listings)
 </script>

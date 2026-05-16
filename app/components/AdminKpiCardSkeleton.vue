@@ -4,17 +4,14 @@
   >
     <div class="relative z-10">
       <!-- Label Skeleton -->
-      <div class="h-3 w-24 bg-noble-black/10 rounded mb-4" />
+      <div class="h-4 w-28 bg-noble-black/10 rounded mb-4" />
 
       <!-- Value Skeleton -->
-      <div class="h-8 w-32 bg-noble-black/20 rounded mb-2" />
+      <div class="h-10 w-36 bg-noble-black/20 rounded mb-2" />
 
       <!-- Detail Skeleton -->
-      <div class="h-4 w-full bg-noble-black/10 rounded" />
+      <div class="h-4 w-3/4 bg-noble-black/10 rounded mt-2" />
     </div>
-
-    <!-- Decorative Circle (if any) -->
-    <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-noble-black/[0.02] rounded-full"></div>
   </div>
 </template>
 

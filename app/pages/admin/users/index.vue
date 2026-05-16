@@ -202,7 +202,7 @@ const clearFilters = () => {
         </div>
 
         <div v-if="pending && !users.length">
-          <TableSkeleton />
+          <UserTableSkeleton />
         </div>
 
         <div v-else-if="error" class="p-20 text-center">

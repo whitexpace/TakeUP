@@ -416,7 +416,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <PersonalAccountPageSkeleton v-if="isInitialLoading" has-filters />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <section class="space-y-3">
         <div class="space-y-2">
@@ -517,18 +519,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Loading skeletons -->
-      <template v-if="isInitialLoading">
-        <div class="flex flex-col gap-4">
-          <TransactionCardSkeleton />
-          <BorrowerRequestCardSkeleton />
-          <TransactionCardSkeleton />
-        </div>
-      </template>
-
       <!-- Error state -->
       <div
-        v-else-if="hasInitialError"
+        v-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
         <Icon name="ph:warning-circle" class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4" />
@@ -632,3 +625,19 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+</style>

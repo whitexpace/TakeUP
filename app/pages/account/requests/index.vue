@@ -115,7 +115,9 @@ const handleBookingDecision = async (
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
+  <PersonalAccountPageSkeleton v-if="isLoading && filteredBookings.length === 0" />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
     <NuxtLink
       to="/account/listings"
@@ -171,18 +173,9 @@ const handleBookingDecision = async (
         </div>
       </div>
 
-      <!-- Loading skeletons -->
-      <template v-if="isLoading && filteredBookings.length === 0">
-        <div
-          v-for="i in 3"
-          :key="i"
-          class="animate-pulse bg-cinnamon-ice/20 rounded-2xl h-32 mb-4"
-        />
-      </template>
-
       <!-- Empty state -->
       <div
-        v-else-if="!isLoading && filteredBookings.length === 0"
+        v-if="filteredBookings.length === 0"
         class="flex flex-col items-center justify-center py-16 sm:py-20 text-center"
       >
         <div

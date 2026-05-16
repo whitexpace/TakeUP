@@ -365,7 +365,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+  <PersonalAccountPageSkeleton
+    v-if="currentTabPending && !allTransactions.length && !allDrafts.length && !allHistory.length"
+    has-filters
+    has-sidebar
+    has-stats
+  />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">

@@ -240,7 +240,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+  <PersonalAccountPageSkeleton v-if="!hasFetched && !error" has-stats has-sidebar />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
@@ -275,25 +277,7 @@ onMounted(() => {
       </div>
     </header>
 
-    <!-- Tier 1: Top strip (KPI stat chips) -->
-    <template v-if="!hasFetched && !error">
-      <section class="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-8 animate-pulse">
-        <AdminKpiCardSkeleton v-for="index in 6" :key="index" class="!rounded-[14px]" />
-      </section>
-
-      <section class="flex flex-col lg:flex-row gap-6 mb-8 items-start animate-pulse">
-        <div class="w-full lg:w-[65%] space-y-6">
-          <div class="h-80 bg-noble-black/5 rounded-[24px]"></div>
-          <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
-        </div>
-        <aside class="w-full lg:w-[35%] space-y-6">
-          <div class="h-96 bg-noble-black/5 rounded-[24px]"></div>
-          <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
-        </aside>
-      </section>
-    </template>
-
-    <template v-else-if="error">
+    <template v-if="error">
       <section class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 mb-8">
         <h2 class="text-xl font-semibold text-noble-black">Unable to load analytics</h2>
         <p class="mt-2 text-sm text-noble-black/70">{{ error }}</p>

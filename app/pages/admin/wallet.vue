@@ -230,7 +230,7 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
 
       <template v-if="isInitialLoading">
         <div class="space-y-6">
-          <AdminListRecordSkeleton v-for="index in 4" :key="index" />
+          <AdminCommissionRecordSkeleton v-for="index in 4" :key="index" />
         </div>
       </template>
 
