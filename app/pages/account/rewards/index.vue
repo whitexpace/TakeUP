@@ -415,8 +415,14 @@ const formatDateTime = (value: string | Date) => {
           <div
             v-for="i in 2"
             :key="i"
-            class="h-24 animate-pulse rounded-[20px] bg-cream border border-cinnamon-ice/10"
-          />
+            class="h-28 animate-pulse rounded-[20px] bg-noble-black/5 border border-cinnamon-ice/10 p-5 flex items-center gap-4"
+          >
+            <div class="h-16 w-16 rounded-xl bg-noble-black/10 shrink-0"></div>
+            <div class="flex-1 space-y-2">
+              <div class="h-4 w-3/4 bg-noble-black/20 rounded"></div>
+              <div class="h-3 w-1/2 bg-noble-black/10 rounded"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Empty State -->

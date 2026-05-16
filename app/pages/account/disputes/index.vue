@@ -501,8 +501,7 @@ const prevStep = () => {
           <!-- Left Column: Form Steps (60%) -->
           <div class="lg:col-span-3 space-y-8 min-h-[400px]">
             <div v-if="reportablePending" class="space-y-6">
-              <div class="h-32 animate-pulse rounded-3xl bg-cream"></div>
-              <div class="h-64 animate-pulse rounded-3xl bg-cream"></div>
+              <AdminListRecordSkeleton v-for="i in 3" :key="i" />
             </div>
 
             <div
@@ -1031,12 +1030,8 @@ const prevStep = () => {
             </p>
           </div>
 
-          <div v-if="disputesPending" class="space-y-4">
-            <div
-              v-for="index in 3"
-              :key="index"
-              class="h-32 animate-pulse rounded-2xl bg-white/50 border border-gray-100"
-            ></div>
+          <div v-if="disputesPending" class="space-y-6">
+            <AdminListRecordSkeleton v-for="index in 3" :key="index" />
           </div>
 
           <div

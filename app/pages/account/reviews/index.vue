@@ -476,12 +476,8 @@ onBeforeUnmount(() => {
             {{ pageActionError }}
           </p>
 
-          <div v-if="currentTabPending" class="mt-6 space-y-4">
-            <div
-              v-for="i in 3"
-              :key="i"
-              class="h-[88px] animate-pulse rounded-[14px] border border-cinnamon-ice/30 bg-white/80"
-            />
+          <div v-if="currentTabPending" class="mt-6 space-y-6">
+            <AdminListRecordSkeleton v-for="i in 3" :key="i" />
           </div>
 
           <div

@@ -179,13 +179,25 @@ const performBanUser = async () => {
       <Icon name="ph:caret-left" class="w-6 h-6" />
     </button>
 
-    <div v-if="loadingDetail" class="flex flex-col items-center justify-center py-20">
-      <div class="inline-block animate-spin text-burning-orange">
-        <Icon name="ph:circle-notch" class="h-10 w-10" />
+    <div v-if="loadingDetail" class="space-y-10 animate-pulse">
+      <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+        <div class="flex items-center gap-6">
+          <div class="h-20 w-20 rounded-2xl bg-noble-black/10"></div>
+          <div class="space-y-3">
+            <div class="h-8 w-48 bg-noble-black/20 rounded"></div>
+            <div class="flex gap-2">
+              <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
+              <div class="h-4 w-12 bg-noble-black/10 rounded"></div>
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <div class="h-14 w-24 rounded-2xl bg-noble-black/10"></div>
+          <div class="h-14 w-24 rounded-2xl bg-noble-black/10"></div>
+        </div>
       </div>
-      <p class="mt-4 text-[14px] font-black text-noble-black/20 uppercase tracking-[3px]">
-        Retrieving Profile...
-      </p>
+      <div class="h-16 w-1/3 bg-noble-black/10 rounded-2xl"></div>
+      <div class="h-96 w-full bg-noble-black/5 rounded-[32px]"></div>
     </div>
 
     <div v-else-if="!user" class="flex flex-col items-center justify-center py-20 text-center">

@@ -1,8 +1,6 @@
 <template>
   <div class="min-h-screen bg-white font-geist pt-16">
-    <div v-if="isLoading" class="flex justify-center items-center py-40">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-burning-orange"></div>
-    </div>
+    <ProfileSkeleton v-if="isLoading" />
 
     <div v-else-if="profileData" class="max-w-[1200px] mx-auto py-6 flex flex-col gap-6">
       <!-- TOP HERO SECTION -->

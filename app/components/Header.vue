@@ -43,6 +43,7 @@ const route = useRoute()
 const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
 const {
   notifications: globalNotifications,
+  isLoading: isGlobalNotificationsLoading,
   loadNotifications: loadGlobalNotifications,
   markNotificationRead: globalMarkRead,
   markAllNotificationsRead: globalMarkAllRead,
@@ -446,8 +447,22 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Notifications List -->
+              <!-- Notification Items / Skeleton -->
               <div
-                v-if="displayNotifications.length > 0"
+                v-if="isGlobalNotificationsLoading"
+                class="px-4 py-6 space-y-5 animate-pulse relative z-10"
+              >
+                <div v-for="i in 3" :key="i" class="flex gap-4">
+                  <div class="h-10 w-10 rounded-full bg-noble-black/10 shrink-0"></div>
+                  <div class="flex-1 space-y-2 py-1">
+                    <div class="h-3 w-3/4 bg-noble-black/20 rounded"></div>
+                    <div class="h-2 w-1/2 bg-noble-black/10 rounded"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-else-if="displayNotifications.length > 0"
                 class="overflow-y-auto custom-scrollbar flex-1 relative z-10 rounded-b-[16px]"
               >
                 <div class="flex flex-col">

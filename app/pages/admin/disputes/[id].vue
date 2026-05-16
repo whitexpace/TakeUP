@@ -303,13 +303,13 @@ onMounted(loadDispute)
       </div>
     </header>
 
-    <div v-if="isLoading" class="space-y-10 w-full py-10">
-      <div class="h-10 w-1/3 animate-pulse rounded-xl bg-gray-50"></div>
+    <div v-if="isLoading" class="space-y-10 w-full py-10 animate-pulse">
+      <div class="h-10 w-1/3 rounded-xl bg-noble-black/10"></div>
       <div class="grid grid-cols-2 gap-8">
-        <div class="h-40 animate-pulse rounded-[32px] bg-gray-50"></div>
-        <div class="h-40 animate-pulse rounded-[32px] bg-gray-50"></div>
+        <div class="h-64 rounded-[32px] bg-noble-black/5"></div>
+        <div class="h-64 rounded-[32px] bg-noble-black/5"></div>
       </div>
-      <div class="h-64 animate-pulse rounded-[32px] bg-gray-50"></div>
+      <div class="h-80 rounded-[32px] bg-noble-black/5"></div>
     </div>
 
     <div v-else-if="selectedDispute" class="w-full space-y-8">

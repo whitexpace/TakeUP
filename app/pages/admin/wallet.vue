@@ -112,7 +112,10 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
     </header>
 
     <!-- Premium Summary Cards -->
-    <section class="grid gap-6 md:grid-cols-3">
+    <section v-if="isLoading && !records.length" class="grid gap-6 md:grid-cols-3">
+      <AdminKpiCardSkeleton v-for="i in 3" :key="i" />
+    </section>
+    <section v-else class="grid gap-6 md:grid-cols-3">
       <div
         v-for="item in summaryItems"
         :key="item.label"
@@ -226,12 +229,8 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
       </div>
 
       <template v-if="isInitialLoading">
-        <div class="space-y-4">
-          <div
-            v-for="index in 4"
-            :key="index"
-            class="h-32 animate-pulse rounded-[24px] bg-gray-50 border border-gray-100"
-          ></div>
+        <div class="space-y-6">
+          <AdminListRecordSkeleton v-for="index in 4" :key="index" />
         </div>
       </template>
 

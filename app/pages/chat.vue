@@ -511,10 +511,10 @@ onUnmounted(() => {
         <div class="custom-chat-scrollbar flex-1 overflow-y-auto">
           <div v-if="isLoadingConversations" class="space-y-4 p-4">
             <div v-for="index in 6" :key="index" class="flex animate-pulse gap-3">
-              <div class="h-12 w-12 rounded-full bg-cream"></div>
+              <div class="h-12 w-12 rounded-full bg-noble-black/10"></div>
               <div class="flex-1 space-y-2 py-1">
-                <div class="h-3 w-3/4 rounded bg-cream"></div>
-                <div class="h-2 w-1/2 rounded bg-cream"></div>
+                <div class="h-3 w-3/4 rounded bg-noble-black/20"></div>
+                <div class="h-2 w-1/2 rounded bg-noble-black/10"></div>
               </div>
             </div>
           </div>
@@ -623,27 +623,31 @@ onUnmounted(() => {
         ]"
       >
         <div
-          v-if="isOpeningConversation && !activeConversation"
-          class="flex flex-1 flex-col items-center justify-center space-y-4"
+          v-if="
+            (isOpeningConversation && !activeConversation) ||
+            (isLoadingMessages && !messages.length)
+          "
+          class="flex flex-1 flex-col p-6 gap-6 animate-pulse bg-cream"
         >
+          <div class="flex items-center gap-4 mb-4">
+            <div class="h-10 w-10 rounded-full bg-noble-black/10"></div>
+            <div class="space-y-2">
+              <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+              <div class="h-3 w-24 bg-noble-black/10 rounded"></div>
+            </div>
+          </div>
           <div
-            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
-          ></div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
-            Opening conversation...
-          </p>
-        </div>
-
-        <div
-          v-else-if="isLoadingMessages && !messages.length"
-          class="flex flex-1 flex-col items-center justify-center space-y-4"
-        >
-          <div
-            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
-          ></div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
-            Loading messages...
-          </p>
+            v-for="i in 4"
+            :key="i"
+            class="flex flex-col"
+            :class="i % 2 === 0 ? 'items-end' : 'items-start'"
+          >
+            <div
+              class="h-12 w-2/3 rounded-2xl bg-noble-black/10"
+              :class="i % 2 === 0 ? 'rounded-tr-none' : 'rounded-tl-none'"
+            ></div>
+            <div class="h-2 w-20 bg-noble-black/5 rounded mt-2"></div>
+          </div>
         </div>
 
         <template v-else-if="activeConversation">

@@ -201,13 +201,8 @@ const clearFilters = () => {
           </div>
         </div>
 
-        <div v-if="pending" class="p-20 text-center">
-          <div class="inline-block animate-spin text-burning-orange">
-            <Icon name="ph:circle-notch" class="h-10 w-10" />
-          </div>
-          <p class="mt-4 text-[14px] font-bold text-noble-black/20 uppercase tracking-widest">
-            Synchronizing...
-          </p>
+        <div v-if="pending && !users.length">
+          <TableSkeleton />
         </div>
 
         <div v-else-if="error" class="p-20 text-center">

@@ -1231,20 +1231,20 @@ onUnmounted(() => {
         <span class="font-normal">{{ backNavigationLabel }}</span>
       </NuxtLink>
 
-      <div v-if="pending" class="space-y-8 pb-28 lg:pb-6">
+      <div v-if="pending" class="space-y-8 pb-28 lg:pb-6 animate-pulse">
         <div class="flex flex-col gap-4">
-          <div class="h-10 w-3/5 animate-pulse rounded-2xl bg-cream"></div>
-          <div class="h-5 w-48 animate-pulse rounded-2xl bg-cream"></div>
+          <div class="h-10 w-3/5 bg-noble-black/20 rounded-2xl"></div>
+          <div class="h-5 w-48 bg-noble-black/10 rounded-2xl"></div>
         </div>
         <div class="grid gap-12 lg:grid-cols-3">
           <div class="space-y-6 lg:col-span-2">
-            <div class="aspect-video animate-pulse rounded-[28px] bg-cream"></div>
-            <div class="h-28 animate-pulse rounded-[28px] bg-cream"></div>
-            <div class="h-48 animate-pulse rounded-[28px] bg-cream"></div>
+            <div class="aspect-video bg-noble-black/10 rounded-[28px]"></div>
+            <div class="h-28 bg-noble-black/10 rounded-[28px]"></div>
+            <div class="h-48 bg-noble-black/10 rounded-[28px]"></div>
           </div>
           <div class="space-y-6">
-            <div class="h-80 animate-pulse rounded-[28px] bg-cream"></div>
-            <div class="h-72 animate-pulse rounded-[28px] bg-cream"></div>
+            <div class="h-80 bg-noble-black/10 rounded-[28px]"></div>
+            <div class="h-72 bg-noble-black/10 rounded-[28px]"></div>
           </div>
         </div>
       </div>
