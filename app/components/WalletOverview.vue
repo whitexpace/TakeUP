@@ -542,17 +542,4 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
   opacity: 0;
   transform: translateY(-8px);
 }
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 40%");
-  border-radius: 20px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.cinnamon-ice / 60%");
-}
 </style>

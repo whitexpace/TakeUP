@@ -318,18 +318,4 @@ const handleBookingDecision = async (
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%");
-  border-radius: 20px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
-}
 </style>
