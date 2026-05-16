@@ -1229,9 +1229,29 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
     </template>
 
     <!-- Skeleton Loader for SSR -->
-    <section v-else class="space-y-6 animate-pulse">
-      <div class="h-8 w-64 rounded-lg bg-cinnamon-ice/70" />
-      <div class="rounded-[20px] border border-cinnamon-ice bg-cream h-64 shadow-sm" />
+    <section v-else class="space-y-10 animate-pulse">
+      <div class="space-y-3">
+        <div class="h-10 w-48 bg-noble-black/20 rounded-xl"></div>
+        <div class="h-4 w-96 bg-noble-black/10 rounded-lg"></div>
+      </div>
+
+      <div
+        v-for="i in 2"
+        :key="i"
+        class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-8 shadow-sm"
+      >
+        <div class="flex items-center justify-between mb-8 pb-4 border-b border-cinnamon-ice/10">
+          <div class="h-8 w-32 bg-noble-black/20 rounded-lg"></div>
+          <div class="h-10 w-24 bg-noble-black/10 rounded-xl"></div>
+        </div>
+        <div class="flex items-center gap-6">
+          <div class="h-20 w-20 rounded-full bg-noble-black/10"></div>
+          <div class="space-y-3 flex-1">
+            <div class="h-4 w-1/3 bg-noble-black/20 rounded"></div>
+            <div class="h-3 w-1/2 bg-noble-black/10 rounded"></div>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
 </template>

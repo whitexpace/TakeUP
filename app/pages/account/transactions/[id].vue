@@ -964,14 +964,22 @@ const handleReviewSubmitted = async () => {
 
     <template v-if="pending">
       <div class="flex flex-col gap-8 animate-pulse">
-        <div class="h-10 w-48 bg-cream rounded-xl"></div>
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          <div class="lg:col-span-3 space-y-6">
-            <div class="h-64 bg-cream rounded-[24px]"></div>
-            <div class="h-96 bg-cream rounded-[24px]"></div>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="space-y-3">
+            <div class="h-10 w-64 bg-noble-black/20 rounded-xl"></div>
+            <div class="h-4 w-48 bg-noble-black/10 rounded-lg"></div>
           </div>
-          <div class="lg:col-span-2 space-y-6">
-            <div class="h-80 bg-cream rounded-[24px]"></div>
+          <div class="h-8 w-32 bg-noble-black/10 rounded-full"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div class="lg:col-span-3 space-y-8">
+            <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
+            <div class="h-96 bg-noble-black/5 rounded-[24px]"></div>
+          </div>
+          <div class="lg:col-span-2 space-y-8">
+            <div class="h-80 bg-noble-black/5 rounded-[24px]"></div>
+            <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
           </div>
         </div>
       </div>

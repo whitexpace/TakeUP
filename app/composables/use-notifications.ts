@@ -1,3 +1,4 @@
+import { computed } from "vue"
 import type { AppHeaderNotification } from "../types/notifications"
 
 type ApiNotification = {
@@ -71,6 +72,7 @@ export const useNotifications = () => {
 
   return {
     notifications,
+    isLoading: computed(() => isLoading.value),
     loadNotifications,
     markNotificationRead,
     markAllNotificationsRead,

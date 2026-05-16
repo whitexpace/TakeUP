@@ -15,7 +15,12 @@
         <div class="flex flex-col lg:flex-row gap-10">
           <aside class="hidden lg:block lg:w-[240px] xl:w-[280px] shrink-0">
             <div class="sticky top-6">
+              <div
+                v-if="isLoadingFeed"
+                class="h-64 w-full bg-noble-black/5 rounded-[24px] animate-pulse"
+              ></div>
               <CommunityActivitySidebar
+                v-else
                 :posts-made="userActivity.postsMade"
                 :offers-sent="userActivity.offersSent"
                 :offers-received="userActivity.offersReceived"
@@ -121,7 +126,11 @@
 
           <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
             <div class="sticky top-6">
-              <CommunityTrendingSidebar :trending-items="trendingItems" />
+              <div
+                v-if="isLoadingFeed"
+                class="h-96 w-full bg-noble-black/5 rounded-[24px] animate-pulse"
+              ></div>
+              <CommunityTrendingSidebar v-else :trending-items="trendingItems" />
             </div>
           </aside>
         </div>

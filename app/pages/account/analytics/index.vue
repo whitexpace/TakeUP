@@ -277,12 +277,19 @@ onMounted(() => {
 
     <!-- Tier 1: Top strip (KPI stat chips) -->
     <template v-if="!hasFetched && !error">
-      <section class="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-8">
-        <div
-          v-for="index in 6"
-          :key="index"
-          class="h-[120px] animate-pulse rounded-[14px] border border-cinnamon-ice/20 bg-white"
-        />
+      <section class="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-8 animate-pulse">
+        <AdminKpiCardSkeleton v-for="index in 6" :key="index" class="!rounded-[14px]" />
+      </section>
+
+      <section class="flex flex-col lg:flex-row gap-6 mb-8 items-start animate-pulse">
+        <div class="w-full lg:w-[65%] space-y-6">
+          <div class="h-80 bg-noble-black/5 rounded-[24px]"></div>
+          <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
+        </div>
+        <aside class="w-full lg:w-[35%] space-y-6">
+          <div class="h-96 bg-noble-black/5 rounded-[24px]"></div>
+          <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
+        </aside>
       </section>
     </template>
 

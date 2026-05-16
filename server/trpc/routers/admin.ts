@@ -108,7 +108,7 @@ const buildAdminListingsSummary = async (prisma: {
 }
 
 const getActiveListingTransactionWhere = () =>
-  Prisma.sql`status::text IN (${Prisma.join(NON_TERMINAL_TRANSACTION_STATUS_DB_VALUES)})`
+  Prisma.sql`tx."current_status"::text IN (${Prisma.join(NON_TERMINAL_TRANSACTION_STATUS_DB_VALUES)})`
 
 export const adminRouter = t.router({
   users: t.router({

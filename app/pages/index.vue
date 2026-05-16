@@ -493,9 +493,20 @@ const handleGoogleLogin = async () => {
         <!-- Skeleton Loading State -->
         <div
           v-if="isLoadingMetadata"
-          class="grid grid-cols-1 md:grid-cols-4 gap-4 h-auto md:h-[600px]"
+          class="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-auto md:h-[600px]"
         >
-          <div v-for="i in 5" :key="i" class="bg-gray-100 rounded-[24px] animate-pulse"></div>
+          <div
+            v-for="i in 5"
+            :key="i"
+            :class="[
+              i === 1 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 2 ? 'md:col-span-1 md:row-span-2' : '',
+              i === 3 ? 'md:col-span-1 md:row-span-1' : '',
+              i === 4 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 5 ? 'md:col-span-1 md:row-span-1' : '',
+              'bg-noble-black/5 rounded-[24px] animate-pulse border border-cinnamon-ice/10',
+            ]"
+          ></div>
         </div>
 
         <div

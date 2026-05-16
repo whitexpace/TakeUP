@@ -8,7 +8,7 @@ definePageMeta({
   auth: true,
 })
 
-const { bagItems, removeFromBag } = useBag()
+const { bagItems, isLoading, removeFromBag } = useBag()
 
 const selectedItemIds = ref<Set<string>>(new Set())
 
@@ -306,7 +306,43 @@ const handleRequestBooking = async () => {
         </p>
       </div>
 
-      <div v-if="bagItems.length === 0" class="py-20 text-center">
+      <div
+        v-if="isLoading && bagItems.length === 0"
+        class="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse"
+      >
+        <div class="lg:col-span-2 space-y-6">
+          <div class="h-14 w-full bg-noble-black/5 rounded-[16px]"></div>
+          <div
+            v-for="i in 2"
+            :key="i"
+            class="bg-white rounded-[16px] border border-gray-100 overflow-hidden"
+          >
+            <div
+              class="h-12 w-full bg-gray-50/50 border-b border-gray-100 p-8 flex items-center gap-4"
+            >
+              <div class="h-4 w-4 bg-noble-black/10 rounded"></div>
+              <div class="h-7 w-7 rounded-full bg-noble-black/10"></div>
+              <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+            </div>
+            <div
+              v-for="j in 2"
+              :key="j"
+              class="p-8 flex items-center gap-6 border-b border-gray-50 last:border-0"
+            >
+              <div class="h-5 w-5 bg-noble-black/10 rounded"></div>
+              <div class="h-[72px] w-[72px] bg-noble-black/10 rounded-[12px]"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-4 w-1/2 bg-noble-black/20 rounded"></div>
+                <div class="h-3 w-1/3 bg-noble-black/10 rounded"></div>
+              </div>
+              <div class="h-6 w-20 bg-noble-black/20 rounded"></div>
+            </div>
+          </div>
+        </div>
+        <div class="h-80 w-full bg-noble-black/5 rounded-[16px]"></div>
+      </div>
+
+      <div v-else-if="bagItems.length === 0" class="py-20 text-center">
         <div class="mb-6 flex justify-center text-noble-black/10">
           <Icon name="ph:shopping-bag" class="w-20 h-20" />
         </div>
