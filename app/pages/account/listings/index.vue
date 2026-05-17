@@ -265,24 +265,24 @@ onBeforeUnmount(() => {
     >
       <!-- Search Bar -->
       <div
-        class="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-[10px] border-[1.5px] border-noble-black/20 bg-white px-4 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
+        class="flex h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[10px] border-[1.5px] border-noble-black/20 bg-white px-2.5 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
       >
-        <Icon name="ph:magnifying-glass" class="shrink-0 text-noble-black/50 w-4 h-4" />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="flex h-8 w-8 items-center justify-center text-noble-black/30 hover:text-burning-orange transition-colors"
+          title="Clear search"
+          @click="searchQuery = ''"
+        >
+          <Icon name="ph:x" class="w-4 h-4" />
+        </button>
+        <Icon v-else name="ph:magnifying-glass" class="shrink-0 text-noble-black/50 w-4 h-4 ml-2" />
         <input
           v-model="searchQuery"
           type="text"
           placeholder="Search your listings..."
           class="flex-1 bg-transparent text-[14px] font-medium text-noble-black placeholder:text-noble-black/50 focus:outline-none"
         />
-        <!-- Clear Search Button -->
-        <button
-          v-if="searchQuery"
-          class="shrink-0 text-noble-black/30 hover:text-noble-black/60 transition-colors focus:outline-none"
-          title="Clear search"
-          @click="searchQuery = ''"
-        >
-          <Icon name="ph:x" class="w-4 h-4" />
-        </button>
       </div>
 
       <!-- Compact Toggle Chips + Category -->

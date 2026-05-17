@@ -154,25 +154,16 @@ const formatDateTime = (value: string | Date) => {
 </script>
 
 <template>
-  <PersonalAccountPageSkeleton v-if="boostsPending && !activeBoostsResponse" has-stats />
+  <RewardsSkeleton v-if="boostsPending && !activeBoostsResponse" />
 
   <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
-        <div class="flex items-center gap-4">
-          <div class="space-y-2">
-            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
-              My Rewards
-            </h1>
-            <div class="w-10 h-0.5 bg-burning-orange"></div>
-          </div>
-          <div
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-burning-orange/5 border border-burning-orange/20 mt-1"
-          >
-            <span class="text-[13px] font-bold text-burning-orange tracking-tight"
-              >{{ (summary?.availablePoints ?? 0).toLocaleString() }} pts</span
-            >
-          </div>
+        <div class="space-y-2">
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            My Rewards
+          </h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
         <p class="text-[16px] font-light text-noble-black/50">
           Quality reviews earn you reward points you can redeem for perks.
@@ -191,17 +182,18 @@ const formatDateTime = (value: string | Date) => {
 
       <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-10">
         <div class="text-center sm:text-left">
-          <p class="text-[12px] font-black uppercase tracking-[0.2em] text-noble-black/40 mb-2">
-            Your Points Balance
-          </p>
           <div class="flex items-baseline justify-center sm:justify-start gap-4">
             <h2
-              class="text-[64px] sm:text-[72px] font-black text-blue-estate leading-none tracking-tighter"
+              class="text-[64px] sm:text-[72px] font-black text-burning-orange leading-none tracking-tighter"
             >
               {{ (summary?.availablePoints ?? 0).toLocaleString() }}
             </h2>
           </div>
-          <p class="text-[14px] font-light text-noble-black/50 mt-2">points available to spend</p>
+          <p
+            class="text-[14px] font-light text-noble-black/50 mt-2 uppercase tracking-[0.1em] font-bold"
+          >
+            Points Available
+          </p>
         </div>
 
         <!-- Progress Ring -->

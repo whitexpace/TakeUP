@@ -260,11 +260,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <PersonalAccountPageSkeleton
-    v-if="(!hasTopFetched || !hasFetched) && !error"
-    has-stats
-    has-sidebar
-  />
+  <AnalyticsSkeleton v-if="(!hasTopFetched || !hasFetched) && !error" />
 
   <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">

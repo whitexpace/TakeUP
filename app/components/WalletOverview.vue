@@ -498,7 +498,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             </div>
             <button
               type="button"
-              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="showTopUpModal = false"
             >
               <Icon name="ph:x" class="w-5 h-5" />
@@ -603,7 +603,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             </div>
             <button
               type="button"
-              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="showWithdrawModal = false"
             >
               <Icon name="ph:x" class="w-5 h-5" />

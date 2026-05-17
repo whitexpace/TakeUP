@@ -657,7 +657,7 @@ const submitReview = async () => {
             </div>
 
             <button
-              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="closeModal"
             >
               <Icon name="ph:x" class="w-6 h-6" />
@@ -764,16 +764,14 @@ const submitReview = async () => {
                     :class="isAnonymous ? 'translate-x-5' : 'translate-x-1'"
                   />
                 </button>
-                <span class="text-[13px] font-medium text-gray-600">Submit anonymously</span>
-                <div class="relative group/tooltip">
-                  <Icon name="ph:question" class="w-4 h-4 text-gray-400 cursor-help" />
-                  <div
-                    class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-[11px] font-medium rounded-lg whitespace-nowrap opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all"
-                  >
-                    Your name won't be visible on the review
-                    <div
-                      class="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"
-                    ></div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[13px] font-medium text-gray-600">Submit anonymously</span>
+                  <div class="relative group/tooltip flex items-center">
+                    <Icon name="ph:question" class="w-4 h-4 text-gray-400 cursor-help" />
+                    <div class="custom-tooltip !text-[11px] !font-medium">
+                      Your name won't be visible on the review
+                      <div class="tooltip-arrow"></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -820,6 +818,61 @@ const submitReview = async () => {
 </template>
 
 <style scoped>
+/* Custom Tooltip Styling matching Header.vue */
+.custom-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  bottom: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-14px);
+}
+
 .custom-modal-scrollbar::-webkit-scrollbar {
   width: 5px;
 }

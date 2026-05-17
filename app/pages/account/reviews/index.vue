@@ -371,11 +371,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <PersonalAccountPageSkeleton
+  <MyReviewsSkeleton
     v-if="currentTabPending && !allTransactions.length && !allDrafts.length && !allHistory.length"
-    has-filters
-    has-sidebar
-    has-stats
   />
 
   <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
@@ -449,24 +446,30 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="relative w-full sm:max-w-[280px] mb-4 z-20">
-        <Icon
-          name="ph:magnifying-glass"
-          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noble-black/30 pointer-events-none"
-        />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search by item or person..."
-          class="w-full h-9 bg-white border border-cinnamon-ice/20 rounded-[10px] pl-9 pr-9 text-[13px] text-noble-black outline-none focus:border-burning-orange/40 focus:ring-4 focus:ring-burning-orange/5 shadow-sm transition-all placeholder:text-noble-black/30"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-md text-noble-black/20 hover:text-noble-black/40 hover:bg-noble-black/5 transition-all"
-          @click="searchQuery = ''"
+        <div
+          class="flex h-9 items-center gap-2 bg-white border border-cinnamon-ice/20 rounded-[10px] px-2.5 transition-all focus-within:border-burning-orange/40 focus-within:ring-4 focus-within:ring-burning-orange/5 shadow-sm"
         >
-          <Icon name="ph:x" class="w-3 h-3" />
-        </button>
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="flex h-7 w-7 items-center justify-center -ml-1 text-noble-black/30 hover:text-burning-orange transition-colors"
+            title="Clear search"
+            @click="searchQuery = ''"
+          >
+            <Icon name="ph:x" class="w-4 h-4" />
+          </button>
+          <Icon
+            v-else
+            name="ph:magnifying-glass"
+            class="shrink-0 text-noble-black/30 w-4 h-4 ml-1"
+          />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search by item or person..."
+            class="flex-1 bg-transparent text-[13px] text-noble-black outline-none placeholder:text-noble-black/30 min-w-0"
+          />
+        </div>
       </div>
     </div>
 
@@ -725,14 +728,6 @@ onBeforeUnmount(() => {
             Save a draft if you’re busy, then come back when you’re ready to submit.
           </p>
         </div>
-
-        <button
-          type="button"
-          class="w-full h-11 rounded-[12px] border-[1.5px] border-burning-orange text-burning-orange font-bold text-[14px] transition-all hover:bg-burning-orange/5 active:scale-95"
-          @click="activeTab = 'DRAFTS'"
-        >
-          View Drafts
-        </button>
       </aside>
     </div>
 

@@ -399,11 +399,7 @@ const prevStep = () => {
 </script>
 
 <template>
-  <PersonalAccountPageSkeleton
-    v-if="reportablePending || disputesPending"
-    has-filters
-    has-sidebar
-  />
+  <MyDisputesSkeleton v-if="reportablePending || disputesPending" :active-tab="activeTab" />
 
   <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <!-- Page Header -->
