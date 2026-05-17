@@ -35,14 +35,11 @@ const { authUser } = useAuthUser()
 const currentUserId = computed(() => authUser.value?.id ?? null)
 const shouldBypassPrefetchedBookingDetail = ref(false)
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = useLazyAsyncData(
   () => `booking:${bookingId.value || "missing"}`,
   async () => {
     if (!bookingId.value) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: "Booking request not found.",
-      })
+      return null
     }
 
     if (!shouldBypassPrefetchedBookingDetail.value) {
@@ -67,22 +64,10 @@ const { data, pending, error, refresh } = await useAsyncData(
 
     return bookingDetail
   },
-  { watch: [bookingId] },
+  { watch: [bookingId], default: () => null },
 )
 
-if (error.value) {
-  throw error.value
-}
-
-const booking = computed(() => {
-  if (!data.value) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: "Booking request not found.",
-    })
-  }
-  return data.value
-})
+const booking = computed(() => data.value)
 
 const isActing = ref(false)
 const isDisputeDescriptionExpanded = ref(false)
@@ -103,27 +88,29 @@ const refreshBookingDetail = async () => {
   }
 }
 
-const isLender = computed(() => booking.value.lenderId === currentUserId.value)
+const isLender = computed(() => booking.value?.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
-const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
-const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
+const canRespond = computed(() => isLender.value && booking.value?.status === "PENDING")
+const canConfirmReceipt = computed(() => isLender.value && booking.value?.status === "RETURNED")
 const canUploadHandoffProof = computed(
   () =>
     isLender.value &&
-    booking.value.status === "CONFIRMED" &&
-    !booking.value.lenderHandoffProofUploadedAt,
+    booking.value?.status === "CONFIRMED" &&
+    !booking.value?.lenderHandoffProofUploadedAt,
 )
 const canOpenChat = computed(
   () =>
-    Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
+    Boolean(booking.value?.transactionId) &&
+    booking.value &&
+    isChatAvailableForBookingStatus(booking.value.status),
 )
-const isPendingRequest = computed(() => booking.value.status === "PENDING")
-const canCancelRequest = computed(() => !isLender.value && booking.value.status === "PENDING")
+const isPendingRequest = computed(() => booking.value?.status === "PENDING")
+const canCancelRequest = computed(() => !isLender.value && booking.value?.status === "PENDING")
 const canBorrowerReturnItem = computed(
   () =>
     !isLender.value &&
-    booking.value.status === "CONFIRMED" &&
-    Boolean(booking.value.lenderHandoffProofUploadedAt),
+    booking.value?.status === "CONFIRMED" &&
+    Boolean(booking.value?.lenderHandoffProofUploadedAt),
 )
 const requestStageMessage = computed(() =>
   isLender.value
@@ -132,6 +119,7 @@ const requestStageMessage = computed(() =>
 )
 
 const mappedStatus = computed(() => {
+  if (!booking.value) return "PENDING"
   switch (booking.value.status) {
     case "PENDING":
       return "PENDING"
@@ -192,20 +180,25 @@ const computeDuration = (startDate: Date | string, endDate: Date | string): stri
   return `${weekPart} and ${dayPart}`
 }
 
-const duration = computed(() => computeDuration(booking.value.startDate, booking.value.endDate))
+const duration = computed(() => {
+  if (!booking.value) return ""
+  return computeDuration(booking.value.startDate, booking.value.endDate)
+})
 
-const itemDetailPath = computed(() =>
-  buildItemDetailPath({
+const itemDetailPath = computed(() => {
+  if (!booking.value) return ""
+  return buildItemDetailPath({
     id: booking.value.item.id,
     name: booking.value.item.name,
-  }),
-)
+  })
+})
 
 const backToTransactionsPath = computed(() => {
   return `/account/transactions?role=${userRole.value}`
 })
 
 const timeline = computed(() => {
+  if (!booking.value) return []
   const entries = booking.value.timeline ?? []
   return entries.map((entry, index) => {
     let description = entry.description
@@ -214,15 +207,15 @@ const timeline = computed(() => {
 
     if (entry.label === "In use") {
       description = "Item picked up by borrower"
-      if (booking.value.lenderHandoffProofUrl) {
+      if (booking.value?.lenderHandoffProofUrl) {
         proofUrl = booking.value.lenderHandoffProofUrl
         proofLabel = "View lending proof"
       }
     } else if (entry.label === "Returned") {
-      if (booking.value.refundAmount > 0) {
+      if (booking.value && booking.value.refundAmount > 0) {
         description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
       }
-      if (booking.value.borrowerReturnProofUrl) {
+      if (booking.value?.borrowerReturnProofUrl) {
         proofUrl = booking.value.borrowerReturnProofUrl
         proofLabel = "View return proof"
       }
@@ -341,6 +334,7 @@ const setReturnProofFile = (event: Event) => setProofFile(event, returnProofFile
 const setEarlyReturnProofFile = (event: Event) => setProofFile(event, earlyReturnProofFile)
 
 const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
+  if (!booking.value) throw new Error("Booking data missing.")
   const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
     method: "POST",
     body: {
@@ -383,6 +377,7 @@ const handleHandoffProof = () => {
 }
 
 const isRentalPeriodStarted = computed(() => {
+  if (!booking.value) return false
   const now = new Date()
   const start = new Date(booking.value.transactionStartDate ?? booking.value.startDate)
   return now >= start
@@ -391,7 +386,7 @@ const isRentalPeriodStarted = computed(() => {
 const isTooEarlyForHandoffOpen = ref(false)
 
 const isEarlyReturnEligible = computed(() => {
-  if (isLender.value || booking.value.status !== "CONFIRMED") return false
+  if (!booking.value || isLender.value || booking.value.status !== "CONFIRMED") return false
   const now = new Date()
   const end = new Date(booking.value.endDate)
   return now < end
@@ -421,6 +416,7 @@ const earlyReturnPreviewData = ref<EarlyReturnPreviewData | null>(null)
 const isFetchingPreview = ref(false)
 
 const handleEarlyReturn = async () => {
+  if (!booking.value) return
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
   earlyReturnProofFile.value = null
@@ -451,6 +447,7 @@ const handleEarlyReturn = async () => {
 }
 
 const confirmEarlyReturn = async () => {
+  if (!booking.value) return
   if (!earlyReturnProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of return before submitting."
     return
@@ -483,6 +480,7 @@ const confirmEarlyReturn = async () => {
 }
 
 const confirmReturn = async () => {
+  if (!booking.value) return
   if (!returnProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of return before submitting."
     return
@@ -513,6 +511,7 @@ const confirmReturn = async () => {
 }
 
 const confirmHandoffProof = async () => {
+  if (!booking.value) return
   if (!handoffProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of handoff before marking the item in use."
     return
@@ -543,6 +542,7 @@ const confirmHandoffProof = async () => {
 }
 
 const confirmReceipt = async () => {
+  if (!booking.value) return
   isActing.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
@@ -574,6 +574,7 @@ const confirmReceipt = async () => {
 }
 
 const cancelRequest = async () => {
+  if (!booking.value) return
   isActing.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
@@ -612,6 +613,7 @@ const copyOrderId = () => {
 }
 
 const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
+  if (!booking.value) return
   isActing.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
@@ -645,20 +647,20 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
   }
 }
 
-const latestDispute = computed(() => booking.value.latestDispute)
-const canRaiseDispute = computed(() => booking.value.canRaiseDispute)
+const latestDispute = computed(() => booking.value?.latestDispute ?? null)
+const canRaiseDispute = computed(() => booking.value?.canRaiseDispute ?? false)
 const canSubmitRebuttal = computed(() => Boolean(latestDispute.value?.canSubmitRebuttal))
 const isLatestDisputeRaisedByCurrentUser = computed(
   () => latestDispute.value?.raisedById === currentUserId.value,
 )
 const isReviewBlockedByDispute = computed(
-  () => booking.value.status === "COMPLETED" && !booking.value.reviewState.isCompleted,
+  () => booking.value?.status === "COMPLETED" && !booking.value?.reviewState.isCompleted,
 )
 const showReviewBonusSection = computed(
-  () => booking.value.status === "COMPLETED" && booking.value.reviewState.isCompleted,
+  () => booking.value?.status === "COMPLETED" && booking.value?.reviewState.isCompleted,
 )
 const disputeReportPath = computed(() =>
-  booking.value.transactionId
+  booking.value?.transactionId
     ? {
         path: "/account/disputes",
         query: {
@@ -733,13 +735,16 @@ const disputeStatusDescription = computed(() => {
   }
 })
 
+const disputeRaiser = computed(() => {
+  if (!latestDispute.value || !booking.value) return null
+  return latestDispute.value.raisedById === booking.value.borrowerId
+    ? booking.value.borrower.user
+    : booking.value.lender.user
+})
+
 const disputeRaisedByName = computed(() => {
-  if (!latestDispute.value) return null
-  const user =
-    latestDispute.value.raisedById === booking.value.borrowerId
-      ? booking.value.borrower.user
-      : booking.value.lender.user
-  return `${user.firstName} ${user.lastName[0]}.`
+  if (!disputeRaiser.value) return null
+  return `${disputeRaiser.value.firstName} ${disputeRaiser.value.lastName[0]}.`
 })
 
 const rebuttalSubmittedByName = computed(() => {
@@ -877,7 +882,7 @@ const submitRebuttal = async () => {
 }
 
 const openChat = async () => {
-  if (!booking.value.transactionId || !canOpenChat.value) return
+  if (!booking.value?.transactionId || !canOpenChat.value) return
 
   await router.push({
     path: "/chat",
@@ -886,12 +891,13 @@ const openChat = async () => {
 }
 
 const reviewCounterpartName = computed(() => {
+  if (!booking.value) return ""
   const user = isLender.value ? booking.value.borrower.user : booking.value.lender.user
   return `${user.firstName} ${user.lastName[0]}.`
 })
 
 const reviewContext = computed(() => {
-  if (!booking.value.transactionId || !selectedReviewType.value) return null
+  if (!booking.value?.transactionId || !selectedReviewType.value || !booking.value) return null
 
   return {
     transactionId: booking.value.transactionId,
@@ -911,7 +917,7 @@ const reviewContext = computed(() => {
 
 const openReviewModal = (reviewType: ReviewType) => {
   selectedReviewType.value = reviewType
-  const action = booking.value.reviewState.actions.find((entry) => entry.reviewType === reviewType)
+  const action = booking.value?.reviewState.actions.find((entry) => entry.reviewType === reviewType)
   if (!action?.canSubmit) return
   isReviewModalOpen.value = true
 }
@@ -977,7 +983,7 @@ const handleReviewSubmitted = async () => {
       <span class="text-[15px] font-bold leading-none">Back to My Transactions</span>
     </NuxtLink>
 
-    <template v-if="pending">
+    <template v-if="pending && !booking">
       <div class="flex flex-col gap-8 animate-pulse">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="space-y-3">
@@ -1073,7 +1079,7 @@ const handleReviewSubmitted = async () => {
             <div class="flex flex-col sm:flex-row gap-6">
               <div class="shrink-0 relative">
                 <img
-                  v-if="booking.item.thumbnailImage"
+                  v-if="booking.item?.thumbnailImage"
                   :src="booking.item.thumbnailImage"
                   :alt="booking.item.name"
                   class="w-24 h-24 object-cover rounded-[12px] border border-gray-100 shadow-sm"
@@ -1087,12 +1093,12 @@ const handleReviewSubmitted = async () => {
               </div>
               <div class="flex flex-col justify-center min-w-0">
                 <h3 class="text-[18px] font-semibold text-noble-black leading-tight mb-1 truncate">
-                  {{ booking.item.name }}
+                  {{ booking.item?.name }}
                 </h3>
                 <p class="text-[13px] text-gray-500 font-medium mb-4">
                   Condition:
                   {{
-                    booking.item.condition
+                    booking.item?.condition
                       ?.replace("_", " ")
                       .toLowerCase()
                       .replace(/\b\w/g, (l) => l.toUpperCase())
@@ -1769,7 +1775,7 @@ const handleReviewSubmitted = async () => {
               <p class="text-noble-black/60 mb-2 leading-relaxed">
                 You can only lend the item within the agreed rental period.
               </p>
-              <p class="text-[13px] text-noble-black/40 font-medium mb-8">
+              <p v-if="booking" class="text-[13px] text-noble-black/40 font-medium mb-8">
                 Rental period:
                 <span class="font-bold text-noble-black/60">{{
                   formatDateTime(booking.transactionStartDate ?? booking.startDate)

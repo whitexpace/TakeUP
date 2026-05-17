@@ -407,7 +407,7 @@ const {
   data: deactivationEligibility,
   refresh: loadDeactivationEligibility,
   pending: isLoadingDeactivationEligibility,
-} = useAsyncData(
+} = useLazyAsyncData(
   "account:deactivation-check",
   () => $fetch<DeactivationEligibilityResponse>("/api/account/deactivation-eligibility"),
   {
@@ -450,7 +450,11 @@ const deactivateAccount = async () => {
   }
 }
 
-const { data: deletionEligibility, refresh: loadDeletionEligibility } = useAsyncData(
+const {
+  data: deletionEligibility,
+  refresh: loadDeletionEligibility,
+  pending: _isDeletionPending,
+} = useLazyAsyncData(
   "account:deletion-check",
   () => $fetch<AccountDeletionEligibilityResponse>("/api/account/deletion"),
   {

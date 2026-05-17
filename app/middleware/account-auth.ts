@@ -16,8 +16,21 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
-  const { ensureBridgedSession } = useViewerSession()
+  const { getAccessToken, ensureBridgedSession } = useViewerSession()
+  const accessToken = await getAccessToken()
+
+  if (!accessToken) {
+    return navigateTo("/")
+  }
+
+  const verifiedAccessToken = useState<string | null>("account-verified-access-token", () => null)
+
+  // Skip bridge check if we already verified this token for this session
+  if (verifiedAccessToken.value === accessToken) return
+
   if (!(await ensureBridgedSession())) {
     return navigateTo("/")
   }
+
+  verifiedAccessToken.value = accessToken
 })

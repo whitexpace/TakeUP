@@ -29,23 +29,26 @@ export const useAdminCommissions = ({
 }: UseAdminCommissionsOptions) => {
   const summary = ref<AdminCommissionSummary>(emptySummary())
   const records = ref<AdminCommissionRecord[]>([])
-  const isLoading = ref(false)
+  const isLoading = ref(true)
   const error = ref<string | null>(null)
   const nextCursor = ref<AdminCommissionCursor>(null)
   const hasMore = computed(() => nextCursor.value !== null)
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+  let isInitialFetch = true
 
   const reset = () => {
     records.value = []
     nextCursor.value = null
     error.value = null
     isLoading.value = false
+    isInitialFetch = false
   }
 
   const fetchPage = async (cursor: AdminCommissionCursor = null) => {
-    if (isLoading.value) return
+    if (isLoading.value && !isInitialFetch) return
 
     isLoading.value = true
+    isInitialFetch = false
     error.value = null
 
     try {

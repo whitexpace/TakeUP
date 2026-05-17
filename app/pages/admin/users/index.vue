@@ -22,7 +22,7 @@ definePageMeta({
   middleware: "admin-auth",
 })
 
-const { data, pending, error, refresh } = await useAsyncData<UsersListResponse>(
+const { data, pending, error, refresh } = useLazyAsyncData<UsersListResponse>(
   () =>
     `admin:users:${searchQuery.value}:${selectedRole.value}:${selectedStatus.value}:${currentPage.value}`,
   async () => {

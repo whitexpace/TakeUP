@@ -271,7 +271,7 @@ const handleLikeChanged = async (payload: { itemId: string; isLiked: boolean }) 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
-const { data: initialLikesLoaded } = await useAsyncData(
+const { data: initialLikesLoaded } = useLazyAsyncData(
   "likes-initial-listed-items",
   async () => {
     if (hasCachedState.value && availableCategoryValues.value.length > 0) {

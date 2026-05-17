@@ -131,31 +131,17 @@ const statusClasses = (status: MyDispute["status"]) => {
       return "bg-success-green/[0.08] text-success-green border border-success-green/20"
   }
 }
-
 const {
   data: reportableData,
   pending: reportablePending,
-  error: reportableError,
   refresh: refreshReportableTransactions,
-} = await useAsyncData("dispute:reportable-transactions", () =>
-  fetchDisputeReportableTransactions(),
-)
-
-if (reportableError.value) {
-  throw reportableError.value
-}
+} = useLazyAsyncData("dispute:reportable-transactions", () => fetchDisputeReportableTransactions())
 
 const {
   data: disputesData,
   pending: disputesPending,
-  error: disputesError,
   refresh: refreshDisputes,
-} = await useAsyncData("dispute:mine", () => fetchMyDisputes())
-
-if (disputesError.value) {
-  throw disputesError.value
-}
-
+} = useLazyAsyncData("dispute:mine", () => fetchMyDisputes())
 const reportableTransactions = computed(() => reportableData.value?.transactions ?? [])
 const myDisputes = computed(() => disputesData.value?.disputes ?? [])
 const recentAppealableDisputes = computed(() =>

@@ -11,9 +11,9 @@ export const useAdminOverview = () => {
     "admin-overview:data",
     () => null,
   )
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
   const hasFetched = usePersistedSessionState<boolean>("admin-overview:fetched", () => false)
+  const isLoading = ref(!hasFetched.value)
+  const error = ref<string | null>(null)
   const lastFetchedAt = usePersistedSessionState<number | null>(
     "admin-overview:last-fetched-at",
     () => null,
@@ -26,9 +26,9 @@ export const useAdminOverview = () => {
   )
 
   const fetchOverview = async (options: { force?: boolean } = {}) => {
-    if (isLoading.value) return
     if (hasFreshCache.value && !options.force) {
       recordPerfEvent("admin-overview", "summary", "cache-hit")
+      isLoading.value = false
       return
     }
 

@@ -48,4 +48,10 @@ export default defineNuxtConfig({
     },
   },
   css: ["~/assets/css/main.css"],
+  app: {
+    head: {
+      title: "TakeUP",
+      link: [{ rel: "icon", type: "image/png", href: "/images/takeup-logo.png" }],
+    },
+  },
 })

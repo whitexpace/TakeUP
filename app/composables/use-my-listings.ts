@@ -191,7 +191,7 @@ export const prefetchMyListingEdit = (
 
 export const useMyListings = () => {
   const listings = usePersistedSessionState<MyListingItem[]>("my-listings:items", () => [])
-  const isLoading = ref(false)
+  const isLoading = ref(true)
   const error = ref<string | null>(null)
   const nextCursor = usePersistedSessionState<PaginationCursor>(
     "my-listings:next-cursor",
@@ -227,12 +227,14 @@ export const useMyListings = () => {
   )
 
   let refreshTimeout: ReturnType<typeof setTimeout> | null = null
+  let isInitialFetch = true
 
   const reset = () => {
     listings.value = []
     nextCursor.value = null
     error.value = null
     isLoading.value = false
+    isInitialFetch = false
   }
 
   const buildQuery = (cursor: PaginationCursor = null, limit?: number) =>
@@ -251,8 +253,9 @@ export const useMyListings = () => {
     append = false,
     version = requestVersion.value,
   ) => {
-    if (version !== requestVersion.value || isLoading.value) return
+    if (version !== requestVersion.value || (isLoading.value && !isInitialFetch)) return
     isLoading.value = true
+    isInitialFetch = false
     error.value = null
 
     if (!append && cursor === null) {

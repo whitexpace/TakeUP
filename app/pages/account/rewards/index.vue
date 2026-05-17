@@ -30,10 +30,6 @@ const {
   refreshActiveBoosts,
 } = useRewards()
 
-if (import.meta.server || !hasFreshSummaryCache.value) {
-  await fetchRewardsSummary()
-}
-
 const activeBoosts = computed(() =>
   (activeBoostsResponse.value ?? [])
     .map((boost) => {
@@ -114,6 +110,12 @@ const triggerRewardPopup = () => {
 }
 
 onMounted(() => {
+  if (!hasFreshSummaryCache.value) {
+    void fetchRewardsSummary()
+  }
+  if (!hasFreshBoostsCache.value) {
+    void fetchActiveBoosts()
+  }
   now.value = Date.now()
   countdownInterval = window.setInterval(() => {
     now.value = Date.now()

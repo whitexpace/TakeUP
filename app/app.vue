@@ -35,7 +35,7 @@ onMounted(async () => {
 
     <!-- Always render components to satisfy Nuxt, but only allow them to act when ready -->
     <NuxtLayout v-if="isAppReady">
-      <NuxtPage :page-key="(route) => route.fullPath" />
+      <NuxtPage />
     </NuxtLayout>
   </div>
 </template>

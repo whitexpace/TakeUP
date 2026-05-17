@@ -17,10 +17,10 @@ const loginStatus = ref<LoginStatus>("idle")
 const errorMessage = ref("")
 
 // 1. Fetch Dynamic Category Metadata using the same endpoint as the dashboard
-const { data: filterData, pending: isLoadingMetadata } = useFetch("/api/items/filter-metadata")
+const { data: filterData, pending: isLoadingMetadata } = useLazyFetch("/api/items/filter-metadata")
 
 // 2. Fetch Popular/Trending Items using standard API
-const { data: itemsResponse, pending: isLoadingPopular } = useFetch("/api/items?limit=8")
+const { data: itemsResponse, pending: isLoadingPopular } = useLazyFetch("/api/items?limit=8")
 
 const trendingIds = computed(() => {
   const items = itemsResponse.value?.items || []
