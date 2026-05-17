@@ -21,6 +21,10 @@ type RealtimeMessagePayload = {
   new: Record<string, unknown>
 }
 
+type BroadcastMessagePayload = {
+  payload: unknown
+}
+
 const createRealtimeChannelId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
@@ -533,9 +537,17 @@ const handleDocumentClick = (event: MouseEvent) => {
 
 let inboxRealtimeChannel: RealtimeChannel | null = null
 let activeRealtimeChannel: RealtimeChannel | null = null
+let inboxBroadcastChannel: RealtimeChannel | null = null
+let activeBroadcastChannel: RealtimeChannel | null = null
 let activeRealtimeGeneration = 0
+let activeBroadcastGeneration = 0
 let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
 let hasWarnedMissingRealtimeSession = false
+
+const getConversationBroadcastTopic = (conversationId: string) =>
+  `chat-conversation-${conversationId}`
+
+const getUserBroadcastTopic = (userId: string) => `chat-user-${userId}`
 
 const getRealtimeAccessToken = async () => {
   const {
@@ -615,8 +627,10 @@ const setupRealtimeAuthListener = () => {
   } = supabase.auth.onAuthStateChange((event, session) => {
     if (session?.access_token) {
       supabase.realtime.setAuth(session.access_token)
+      void setupInboxBroadcast()
       void setupInboxRealtime()
       if (activeConversationId.value) {
+        void setupActiveBroadcast(activeConversationId.value)
         void setupActiveRealtime(activeConversationId.value)
       }
       return
@@ -657,6 +671,48 @@ const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null =>
   }
 }
 
+const mapBroadcastMessage = (value: unknown): ChatMessage | null => {
+  if (typeof value !== "object" || value === null) {
+    return null
+  }
+
+  const payload = value as { message?: Record<string, unknown> }
+  const message = payload.message
+  if (!message) return null
+
+  if (
+    typeof message.id !== "string" ||
+    typeof message.conversationId !== "string" ||
+    typeof message.senderUserId !== "string" ||
+    typeof message.createdAt !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    senderUserId: message.senderUserId,
+    body: typeof message.body === "string" ? message.body : "",
+    imageUrl: typeof message.imageUrl === "string" ? message.imageUrl : null,
+    isRead: typeof message.isRead === "boolean" ? message.isRead : false,
+    readAt: typeof message.readAt === "string" ? message.readAt : null,
+    createdAt: message.createdAt,
+  }
+}
+
+const handleBroadcastMessage = (payload: BroadcastMessagePayload) => {
+  const message = mapBroadcastMessage(payload.payload)
+  if (!message) return
+
+  if (activeConversation.value?.conversationId === message.conversationId) {
+    onActiveRealtimeMessage(message, "INSERT")
+    return
+  }
+
+  onInboxRealtimeMessage(message, "INSERT")
+}
+
 const handleInboxRealtimeMessage = (
   payload: RealtimeMessagePayload,
   eventType: "INSERT" | "UPDATE",
@@ -689,6 +745,43 @@ const stopActiveRealtime = async () => {
   if (channel) {
     await supabase.removeChannel(channel)
   }
+}
+
+const stopActiveBroadcast = async () => {
+  const channel = activeBroadcastChannel
+  activeBroadcastChannel = null
+
+  if (channel) {
+    await supabase.removeChannel(channel)
+  }
+}
+
+const setupInboxBroadcast = async () => {
+  if (inboxBroadcastChannel) return
+
+  const { authUser, fetch: fetchAuthUser } = useAuthUser()
+  const currentUser = authUser.value ?? (await fetchAuthUser().catch(() => null))
+  if (!currentUser?.id) return
+
+  if (inboxBroadcastChannel) return
+  inboxBroadcastChannel = supabase
+    .channel(getUserBroadcastTopic(currentUser.id))
+    .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .subscribe((status, error) => logRealtimeStatus("inbox broadcast", status, error))
+}
+
+const setupActiveBroadcast = async (conversationId: string | null) => {
+  const generation = ++activeBroadcastGeneration
+  await stopActiveBroadcast()
+
+  if (generation !== activeBroadcastGeneration || !conversationId) {
+    return
+  }
+
+  activeBroadcastChannel = supabase
+    .channel(getConversationBroadcastTopic(conversationId))
+    .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .subscribe((status, error) => logRealtimeStatus("active broadcast", status, error))
 }
 
 const setupInboxRealtime = async () => {
@@ -748,11 +841,18 @@ const setupActiveRealtime = async (conversationId: string | null) => {
 
 const stopRealtime = () => {
   activeRealtimeGeneration += 1
+  activeBroadcastGeneration += 1
   void stopActiveRealtime()
+  void stopActiveBroadcast()
 
   if (inboxRealtimeChannel) {
     void supabase.removeChannel(inboxRealtimeChannel)
     inboxRealtimeChannel = null
+  }
+
+  if (inboxBroadcastChannel) {
+    void supabase.removeChannel(inboxBroadcastChannel)
+    inboxBroadcastChannel = null
   }
 }
 
@@ -806,6 +906,7 @@ watch(
       scrollToBottom()
     }
 
+    void setupActiveBroadcast(conversationId)
     void setupActiveRealtime(conversationId)
   },
   { immediate: true },
@@ -816,6 +917,7 @@ onMounted(async () => {
   window.addEventListener("resize", checkMobile)
   document.addEventListener("click", handleDocumentClick)
   setupRealtimeAuthListener()
+  void setupInboxBroadcast()
   void setupInboxRealtime()
 
   await loadConversations({ background: sortedConversations.value.length > 0 })
