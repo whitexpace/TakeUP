@@ -1,88 +1,103 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue"
-import type { inferRouterOutputs } from "@trpc/server"
-import type { AppRouter } from "~~/server/trpc/routers"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { ReviewType } from "~~/shared/schemas/review"
-import type { TransactionListItem } from "~/composables/use-transactions"
+import {
+  useAccountReviews,
+  type ReviewDraftListPage,
+  type ReviewDraftListItem,
+  type ReviewTransactionListPage,
+  type ReviewTransactionListItem,
+  type SubmittedReviewListPage,
+} from "../../../composables/use-account-reviews"
 
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
 
-type RouterOutputs = inferRouterOutputs<AppRouter>
-type ReviewDraftListItem = RouterOutputs["transaction"]["listReviewDrafts"][number]
-type SubmittedReviewListItem = RouterOutputs["transaction"]["listSubmittedReviews"][number]
-type ReviewLeaderboardEntry = RouterOutputs["review"]["borrowerLeaderboard"]["leaderboard"][number]
 type ReviewsTab = "PENDING" | "DRAFTS" | "HISTORY"
 
 const activeTab = ref<ReviewsTab>("PENDING")
 const searchQuery = ref("")
 const user = useSupabaseUser()
-
+const REVIEW_LIST_PAGE_SIZE = 10
+const reviewListPage = ref(1)
+const transactionsNextCursor = ref<ReviewTransactionListPage["nextCursor"]>(null)
+const draftsNextCursor = ref<ReviewDraftListPage["nextCursor"]>(null)
+const historyNextCursor = ref<SubmittedReviewListPage["nextCursor"]>(null)
+const isLoadingMoreCurrentTab = ref(false)
 const {
-  data: transactionsData,
-  pending: transactionsPending,
-  error: transactionsError,
-  refresh: refreshTransactions,
-} = await useAsyncData("account-my-review-transactions", async () => {
-  const transactionResponse = await $fetch<RouterOutputs["transaction"]["list"]>(
-    "/api/transactions",
-    {
-      query: {
-        status: "COMPLETED",
-        limit: 100,
-      },
-    },
-  )
+  transactionsData,
+  draftsData,
+  historyData,
+  leaderboardData,
+  transactionsPending,
+  draftsPending,
+  historyPending,
+  leaderboardPending,
+  transactionsError,
+  draftsError,
+  historyError,
+  hasFreshTransactionsCache,
+  hasFreshDraftsCache,
+  hasFreshHistoryCache,
+  hasFreshLeaderboardsCache,
+  fetchReviewTransactions,
+  fetchReviewDrafts,
+  fetchSubmittedReviews,
+  fetchSecondaryReviewsData,
+  refreshReviewTransactions,
+  refreshReviewDrafts,
+  refreshSubmittedReviews,
+  refreshReviewLeaderboards,
+} = useAccountReviews()
 
-  return transactionResponse.transactions
-})
+if (import.meta.client && !hasFreshTransactionsCache.value) {
+  void fetchReviewTransactions()
+}
 
-const {
-  data: draftsData,
-  pending: draftsPending,
-  error: draftsError,
-  refresh: refreshDrafts,
-} = await useAsyncData("account-my-review-drafts", async () => {
-  return await $fetch<ReviewDraftListItem[]>("/api/my-reviews/drafts")
-})
-
-const {
-  data: historyData,
-  pending: historyPending,
-  error: historyError,
-  refresh: refreshHistory,
-} = await useAsyncData("account-my-review-history", async () => {
-  return await $fetch<SubmittedReviewListItem[]>("/api/my-reviews/submitted")
-})
-
-const {
-  data: leaderboardData,
-  pending: leaderboardPending,
-  refresh: refreshLeaderboard,
-} = await useAsyncData("account-review-leaderboards", async () => {
-  const [borrowersResponse, lendersResponse] = await Promise.all([
-    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/borrowers"),
-    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/lenders"),
-  ])
-
-  return {
-    borrowers: borrowersResponse.leaderboard,
-    lenders: lendersResponse.leaderboard,
-  }
-})
-
-const allTransactions = computed(() => transactionsData.value ?? [])
-const allDrafts = computed(() => draftsData.value ?? [])
-const allHistory = computed(() => historyData.value ?? [])
+const allTransactions = computed(() => transactionsData.value?.transactions ?? [])
+const allDrafts = computed(() => draftsData.value?.items ?? [])
+const allHistory = computed(() => historyData.value?.items ?? [])
 const borrowerLeaderboard = computed(() => leaderboardData.value?.borrowers ?? [])
 const lenderLeaderboard = computed(() => leaderboardData.value?.lenders ?? [])
+const displayedBorrowerLeaderboard = computed(() => borrowerLeaderboard.value.slice(0, 5))
+const displayedLenderLeaderboard = computed(() => lenderLeaderboard.value.slice(0, 5))
+
+watch(
+  transactionsData,
+  (value) => {
+    transactionsNextCursor.value = value?.nextCursor ?? null
+  },
+  { immediate: true },
+)
+
+watch(
+  draftsData,
+  (value) => {
+    draftsNextCursor.value = value?.nextCursor ?? null
+  },
+  { immediate: true },
+)
+
+watch(
+  historyData,
+  (value) => {
+    historyNextCursor.value = value?.nextCursor ?? null
+  },
+  { immediate: true },
+)
 
 const currentTabPending = computed(() => {
-  if (activeTab.value === "DRAFTS") return draftsPending.value
-  if (activeTab.value === "HISTORY") return historyPending.value
-  return transactionsPending.value
+  if (activeTab.value === "DRAFTS") {
+    return draftsPending.value && draftsData.value === null
+  }
+
+  if (activeTab.value === "HISTORY") {
+    return historyPending.value && historyData.value === null
+  }
+
+  return transactionsPending.value && transactionsData.value === null
 })
 
 const currentTabErrorMessage = computed(() => {
@@ -167,6 +182,101 @@ const filteredHistory = computed(() =>
   ),
 )
 
+const activeReviewListLength = computed(() => {
+  if (activeTab.value === "DRAFTS") return filteredDrafts.value.length
+  if (activeTab.value === "HISTORY") return filteredHistory.value.length
+  return filteredPendingTransactions.value.length
+})
+const reviewListPageCount = computed(() =>
+  Math.max(1, Math.ceil(activeReviewListLength.value / REVIEW_LIST_PAGE_SIZE)),
+)
+const reviewListPageStart = computed(() => (reviewListPage.value - 1) * REVIEW_LIST_PAGE_SIZE)
+const reviewListPageEnd = computed(() =>
+  Math.min(reviewListPageStart.value + REVIEW_LIST_PAGE_SIZE, activeReviewListLength.value),
+)
+const reviewListRangeLabel = computed(() =>
+  activeReviewListLength.value === 0
+    ? ""
+    : `${reviewListPageStart.value + 1}-${reviewListPageEnd.value} of ${activeReviewListLength.value}`,
+)
+const visiblePendingTransactions = computed(() =>
+  filteredPendingTransactions.value.slice(reviewListPageStart.value, reviewListPageEnd.value),
+)
+const visibleDrafts = computed(() =>
+  filteredDrafts.value.slice(reviewListPageStart.value, reviewListPageEnd.value),
+)
+const visibleHistory = computed(() =>
+  filteredHistory.value.slice(reviewListPageStart.value, reviewListPageEnd.value),
+)
+const hasPreviousReviewListPage = computed(() => reviewListPage.value > 1)
+const hasNextReviewListPage = computed(() => reviewListPage.value < reviewListPageCount.value)
+const currentTabNextCursor = computed(() => {
+  if (activeTab.value === "DRAFTS") return draftsNextCursor.value
+  if (activeTab.value === "HISTORY") return historyNextCursor.value
+  return transactionsNextCursor.value
+})
+
+const setReviewListPage = (page: number) => {
+  reviewListPage.value = Math.min(Math.max(1, page), reviewListPageCount.value)
+}
+
+const loadMoreCurrentTab = async () => {
+  if (!currentTabNextCursor.value || isLoadingMoreCurrentTab.value) return
+
+  isLoadingMoreCurrentTab.value = true
+  try {
+    if (activeTab.value === "DRAFTS") {
+      const result = await $fetch<ReviewDraftListPage>("/api/my-reviews/drafts", {
+        query: {
+          limit: REVIEW_LIST_PAGE_SIZE,
+          cursor: JSON.stringify(draftsNextCursor.value),
+        },
+      })
+      draftsData.value = {
+        items: [...(draftsData.value?.items ?? []), ...result.items],
+        nextCursor: result.nextCursor,
+      }
+      return
+    }
+
+    if (activeTab.value === "HISTORY") {
+      const result = await $fetch<SubmittedReviewListPage>("/api/my-reviews/submitted", {
+        query: {
+          limit: REVIEW_LIST_PAGE_SIZE,
+          cursor: JSON.stringify(historyNextCursor.value),
+        },
+      })
+      historyData.value = {
+        items: [...(historyData.value?.items ?? []), ...result.items],
+        nextCursor: result.nextCursor,
+      }
+      return
+    }
+
+    const result = await $fetch<ReviewTransactionListPage>("/api/transactions", {
+      query: {
+        status: "COMPLETED",
+        limit: REVIEW_LIST_PAGE_SIZE,
+        cursor: JSON.stringify(transactionsNextCursor.value),
+      },
+    })
+    transactionsData.value = {
+      transactions: [...(transactionsData.value?.transactions ?? []), ...result.transactions],
+      nextCursor: result.nextCursor,
+    }
+  } finally {
+    isLoadingMoreCurrentTab.value = false
+  }
+}
+
+watch([activeTab, searchQuery], () => {
+  reviewListPage.value = 1
+})
+
+watch(activeReviewListLength, () => {
+  setReviewListPage(reviewListPage.value)
+})
+
 const sectionTitle = computed(() => {
   if (activeTab.value === "DRAFTS") return "Draft Reviews"
   if (activeTab.value === "HISTORY") return "Posted Reviews"
@@ -208,7 +318,7 @@ const formatRoleLabel = (role: string | null) => (role === "LENDER" ? "Lender" :
 const formatReviewCount = (value: number) => `${value} ${value === 1 ? "review" : "reviews"}`
 
 const getCurrentUserRoleForTransaction = (
-  transaction: TransactionListItem,
+  transaction: ReviewTransactionListItem,
 ): "BORROWER" | "LENDER" => {
   if (user.value?.id && transaction.lenderId === user.value.id) {
     return "LENDER"
@@ -217,7 +327,7 @@ const getCurrentUserRoleForTransaction = (
   return "BORROWER"
 }
 
-const getCounterpartNameForTransaction = (transaction: TransactionListItem) => {
+const getCounterpartNameForTransaction = (transaction: ReviewTransactionListItem) => {
   const currentUserRole = getCurrentUserRoleForTransaction(transaction)
   const counterpart =
     currentUserRole === "BORROWER" ? transaction.lender.user : transaction.borrower.user
@@ -226,10 +336,11 @@ const getCounterpartNameForTransaction = (transaction: TransactionListItem) => {
 }
 
 const isReviewModalOpen = ref(false)
-const selectedTransactionForReview = ref<TransactionListItem | null>(null)
+const selectedTransactionForReview = ref<ReviewTransactionListItem | null>(null)
 const selectedReviewType = ref<ReviewType | null>(null)
 const pageActionError = ref("")
 const showRewardPopup = ref(false)
+const rewardPopupPoints = ref(0)
 let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
 const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
 
@@ -265,7 +376,7 @@ const reviewContext = computed(() => {
   }
 })
 
-const openReviewModal = (transaction: TransactionListItem, reviewType: ReviewType) => {
+const openReviewModal = (transaction: ReviewTransactionListItem, reviewType: ReviewType) => {
   pageActionError.value = ""
   selectedTransactionForReview.value = transaction
   selectedReviewType.value = reviewType
@@ -290,7 +401,7 @@ const closeReviewModal = () => {
   selectedReviewType.value = null
 }
 
-const triggerRewardPopup = () => {
+const triggerRewardPopup = (points: number = 5) => {
   if (rewardPopupTimeout) {
     clearTimeout(rewardPopupTimeout)
   }
@@ -299,18 +410,16 @@ const triggerRewardPopup = () => {
     window.sessionStorage.setItem(REVIEW_REWARD_POPUP_STORAGE_KEY, "1")
   }
 
+  rewardPopupPoints.value = points
   showRewardPopup.value = true
   rewardPopupTimeout = setTimeout(() => {
     showRewardPopup.value = false
+    rewardPopupPoints.value = 0
     rewardPopupTimeout = null
   }, 1800)
 }
 
-const shouldShowRewardPopup = (payload: SubmittedReviewPayload) => {
-  if (payload.currentUserRole === "LENDER") {
-    return true
-  }
-
+const calculateEarnedRewardPoints = (payload: SubmittedReviewPayload): number => {
   const actions = selectedTransactionForReview.value?.reviewState.actions ?? []
   const requiredTypes: ReviewType[] = ["LENDER_REVIEW"]
 
@@ -318,43 +427,80 @@ const shouldShowRewardPopup = (payload: SubmittedReviewPayload) => {
     requiredTypes.push("ITEM_REVIEW")
   }
 
-  return requiredTypes.every((reviewType) => {
+  const allRequiredComplete = requiredTypes.every((reviewType) => {
     if (reviewType === payload.reviewType) {
       return true
     }
 
     return actions.find((action) => action.reviewType === reviewType)?.hasSubmitted ?? false
   })
+
+  if (!allRequiredComplete) {
+    return 0
+  }
+
+  if (payload.currentUserRole === "LENDER" && payload.reviewType === "BORROWER_REVIEW") {
+    return 10
+  }
+
+  return 5
 }
 
 const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
-  if (shouldShowRewardPopup(payload)) {
-    triggerRewardPopup()
+  const earnedPoints = calculateEarnedRewardPoints(payload)
+  if (earnedPoints > 0) {
+    triggerRewardPopup(earnedPoints)
   }
   await Promise.all([
-    refreshTransactions(),
-    refreshDrafts(),
-    refreshHistory(),
-    refreshLeaderboard(),
+    refreshReviewTransactions(),
+    refreshReviewDrafts(),
+    refreshSubmittedReviews(),
+    refreshReviewLeaderboards(),
   ])
 }
 
 const refreshCurrentTab = async () => {
   if (activeTab.value === "DRAFTS") {
-    await refreshDrafts()
+    await refreshReviewDrafts()
     return
   }
 
   if (activeTab.value === "HISTORY") {
-    await refreshHistory()
+    await refreshSubmittedReviews()
     return
   }
 
-  await refreshTransactions()
+  await refreshReviewTransactions()
 }
 
 watch(activeTab, async () => {
-  await refreshCurrentTab()
+  if (activeTab.value === "DRAFTS" && !hasFreshDraftsCache.value) {
+    await fetchReviewDrafts()
+    return
+  }
+
+  if (activeTab.value === "HISTORY" && !hasFreshHistoryCache.value) {
+    await fetchSubmittedReviews()
+    return
+  }
+
+  if (activeTab.value === "PENDING" && !hasFreshTransactionsCache.value) {
+    await fetchReviewTransactions()
+  }
+})
+
+onMounted(() => {
+  if (!hasFreshTransactionsCache.value) {
+    void fetchReviewTransactions()
+  }
+
+  if (
+    !hasFreshDraftsCache.value ||
+    !hasFreshHistoryCache.value ||
+    !hasFreshLeaderboardsCache.value
+  ) {
+    void fetchSecondaryReviewsData()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -365,14 +511,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+  <MyReviewsSkeleton
+    v-if="currentTabPending && !allTransactions.length && !allDrafts.length && !allHistory.length"
+  />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black leading-tight">My Reviews</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            My Reviews
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Keep track of what you still need to review, save drafts, and manage your review history.
         </p>
       </section>
@@ -434,40 +586,30 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="relative w-full sm:max-w-[280px] mb-4 z-20">
-        <svg
-          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noble-black/30 pointer-events-none"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
+        <div
+          class="flex h-9 items-center gap-2 bg-white border border-cinnamon-ice/20 rounded-[10px] px-2.5 transition-all focus-within:border-burning-orange/40 focus-within:ring-4 focus-within:ring-burning-orange/5 shadow-sm"
         >
-          <circle cx="11" cy="11" r="7" stroke-width="2" />
-          <path d="m20 20-3.5-3.5" stroke-width="2" stroke-linecap="round" />
-        </svg>
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search by item or person..."
-          class="w-full h-9 bg-white border border-cinnamon-ice/20 rounded-[10px] pl-9 pr-9 text-[13px] text-noble-black outline-none focus:border-burning-orange/40 focus:ring-4 focus:ring-burning-orange/5 shadow-sm transition-all placeholder:text-noble-black/30"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-md text-noble-black/20 hover:text-noble-black/40 hover:bg-noble-black/5 transition-all"
-          @click="searchQuery = ''"
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="3"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="flex h-7 w-7 items-center justify-center -ml-1 text-noble-black/30 hover:text-burning-orange transition-colors"
+            title="Clear search"
+            @click="searchQuery = ''"
           >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
+            <Icon name="ph:x" class="w-4 h-4" />
+          </button>
+          <Icon
+            v-else
+            name="ph:magnifying-glass"
+            class="shrink-0 text-noble-black/30 w-4 h-4 ml-1"
+          />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search by item or person..."
+            class="flex-1 bg-transparent text-[13px] text-noble-black outline-none placeholder:text-noble-black/30 min-w-0"
+          />
+        </div>
       </div>
     </div>
 
@@ -490,12 +632,8 @@ onBeforeUnmount(() => {
             {{ pageActionError }}
           </p>
 
-          <div v-if="currentTabPending" class="mt-6 space-y-4">
-            <div
-              v-for="i in 3"
-              :key="i"
-              class="h-[88px] animate-pulse rounded-[14px] border border-cinnamon-ice/30 bg-white/80"
-            />
+          <div v-if="currentTabPending" class="mt-6 space-y-6">
+            <AdminListRecordSkeleton v-for="i in 3" :key="i" />
           </div>
 
           <div
@@ -523,7 +661,7 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <article
-                v-for="transaction in filteredPendingTransactions"
+                v-for="transaction in visiblePendingTransactions"
                 :key="transaction.id"
                 class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 mb-4 last:mb-0"
               >
@@ -554,23 +692,7 @@ onBeforeUnmount(() => {
                       v-else
                       class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                     >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="m7.5 4.27 9 5.15" />
-                        <path
-                          d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-                        />
-                        <path d="m3.3 7 8.7 5 8.7-5" />
-                        <path d="M12 22V12" />
-                      </svg>
+                      <Icon name="ph:package" class="w-5 h-5" />
                     </div>
                   </div>
 
@@ -608,7 +730,7 @@ onBeforeUnmount(() => {
                 <p class="text-[14px] font-medium text-noble-black/30">No drafts saved.</p>
               </div>
               <article
-                v-for="draft in filteredDrafts"
+                v-for="draft in visibleDrafts"
                 :key="draft.id"
                 class="block bg-white rounded-[16px] border border-cinnamon-ice/20 p-5 shadow-sm hover:shadow-md transition-all duration-200 mb-4 last:mb-0"
               >
@@ -622,21 +744,7 @@ onBeforeUnmount(() => {
                     v-else
                     class="w-14 h-14 rounded-[10px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                   >
-                    <svg
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m7.5 4.27 9 5.15" />
-                      <path
-                        d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-                      />
-                      <path d="m3.3 7 8.7 5 8.7-5" />
-                      <path d="M12 22V12" />
-                    </svg>
+                    <Icon name="ph:package" class="w-6 h-6" />
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
@@ -673,7 +781,7 @@ onBeforeUnmount(() => {
                 <p class="text-[14px] font-medium text-noble-black/30">No history available yet.</p>
               </div>
               <article
-                v-for="review in filteredHistory"
+                v-for="review in visibleHistory"
                 :key="review.id"
                 class="block bg-white rounded-[16px] border border-cinnamon-ice/20 p-5 shadow-sm hover:shadow-md transition-all duration-200 mb-4 last:mb-0"
               >
@@ -687,21 +795,7 @@ onBeforeUnmount(() => {
                     v-else
                     class="w-12 h-12 rounded-[8px] bg-noble-black/5 flex items-center justify-center text-noble-black/20"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m7.5 4.27 9 5.15" />
-                      <path
-                        d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-                      />
-                      <path d="m3.3 7 8.7 5 8.7-5" />
-                      <path d="M12 22V12" />
-                    </svg>
+                    <Icon name="ph:package" class="w-5 h-5" />
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between gap-2 mb-1">
@@ -709,21 +803,13 @@ onBeforeUnmount(() => {
                         {{ review.item?.name ?? review.revieweeName }}
                       </h4>
                       <div class="flex items-center gap-0.5 text-burning-orange">
-                        <svg
+                        <Icon
                           v-for="star in 5"
                           :key="star"
-                          class="h-3.5 w-3.5"
-                          viewBox="0 0 24 24"
-                          :fill="star <= review.rating ? 'currentColor' : 'none'"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
-                          />
-                        </svg>
+                          name="ph:star-fill"
+                          class="h-3.5 w-3.5 -translate-y-[0.5px]"
+                          :class="star <= review.rating ? 'opacity-100' : 'opacity-20'"
+                        />
                       </div>
                     </div>
                     <p class="text-[12px] text-noble-black/40 mb-3 uppercase tracking-widest">
@@ -739,6 +825,47 @@ onBeforeUnmount(() => {
                 </div>
               </article>
             </div>
+
+            <div
+              v-if="activeReviewListLength > REVIEW_LIST_PAGE_SIZE || currentTabNextCursor"
+              class="flex flex-col gap-3 border-t border-cinnamon-ice/20 pt-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p class="text-[12px] font-medium text-noble-black/40">
+                Showing {{ reviewListRangeLabel }}
+              </p>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+                  :disabled="!hasPreviousReviewListPage"
+                  aria-label="Previous reviews page"
+                  @click="setReviewListPage(reviewListPage - 1)"
+                >
+                  <Icon name="ph:caret-left" class="mx-auto h-4 w-4" />
+                </button>
+                <span class="text-[12px] font-semibold text-noble-black/50">
+                  {{ reviewListPage }} / {{ reviewListPageCount }}
+                </span>
+                <button
+                  type="button"
+                  class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+                  :disabled="!hasNextReviewListPage"
+                  aria-label="Next reviews page"
+                  @click="setReviewListPage(reviewListPage + 1)"
+                >
+                  <Icon name="ph:caret-right" class="mx-auto h-4 w-4" />
+                </button>
+              </div>
+              <button
+                v-if="currentTabNextCursor"
+                type="button"
+                class="h-8 rounded-lg border border-burning-orange/20 px-4 text-[12px] font-bold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="isLoadingMoreCurrentTab"
+                @click="loadMoreCurrentTab"
+              >
+                {{ isLoadingMoreCurrentTab ? "Loading..." : "Load more" }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -748,21 +875,7 @@ onBeforeUnmount(() => {
         <!-- Checklist Card -->
         <article class="rounded-[16px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm">
           <div class="flex items-center gap-2 text-noble-black/80 mb-5">
-            <svg
-              class="text-burning-orange"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <path d="m9 11 3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
+            <Icon name="ph:check-square-offset" class="w-[18px] h-[18px] text-burning-orange" />
             <h2 class="text-[14px] font-bold">Your checklist</h2>
           </div>
           <div class="space-y-3.5">
@@ -779,16 +892,7 @@ onBeforeUnmount(() => {
               <div
                 class="w-4 h-4 rounded-full bg-success-green flex items-center justify-center text-white shrink-0 mt-0.5"
               >
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="4"
-                >
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
+                <Icon name="ph:check" class="w-2.5 h-2.5" />
               </div>
               <p class="text-[13px] font-medium text-noble-black/50 leading-tight">{{ item }}</p>
             </div>
@@ -799,34 +903,12 @@ onBeforeUnmount(() => {
         <div
           class="rounded-[12px] border border-blue-estate/20 bg-blue-estate/[0.04] p-4 flex gap-3"
         >
-          <svg
-            class="text-blue-estate shrink-0 mt-0.5"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-          >
-            <path
-              d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
-            />
-            <path d="M9 18h6" />
-            <path d="M10 22h4" />
-          </svg>
+          <Icon name="ph:lightbulb" class="text-blue-estate shrink-0 mt-0.5 w-[18px] h-[18px]" />
           <p class="text-[13px] leading-relaxed text-noble-black/60">
             <span class="text-[12px] font-black uppercase text-blue-estate mr-1">Tip</span>
             Save a draft if you’re busy, then come back when you’re ready to submit.
           </p>
         </div>
-
-        <button
-          type="button"
-          class="w-full h-11 rounded-[12px] border-[1.5px] border-burning-orange text-burning-orange font-bold text-[14px] transition-all hover:bg-burning-orange/5 active:scale-95"
-          @click="activeTab = 'DRAFTS'"
-        >
-          View Drafts
-        </button>
       </aside>
     </div>
 
@@ -853,7 +935,7 @@ onBeforeUnmount(() => {
           </div>
           <div v-else class="space-y-0.5">
             <div
-              v-for="entry in borrowerLeaderboard"
+              v-for="entry in displayedBorrowerLeaderboard"
               :key="entry.user.id"
               class="relative flex items-center gap-4 py-3.5 px-3 -mx-3 transition-all rounded-[14px]"
               :class="[
@@ -899,24 +981,20 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="flex items-center gap-1 font-bold text-[14px]">
-                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
-                <svg
+                <span class="text-burning-orange leading-none">{{
+                  entry.averageRating.toFixed(1)
+                }}</span>
+                <Icon
+                  name="ph:star-fill"
                   :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                  />
-                </svg>
+                  class="w-3 h-3 -translate-y-[0.5px]"
+                />
               </div>
             </div>
             <!-- Ghost Rows -->
-            <template v-if="borrowerLeaderboard.length < 5">
+            <template v-if="displayedBorrowerLeaderboard.length < 5">
               <div
-                v-for="i in 5 - borrowerLeaderboard.length"
+                v-for="i in 5 - displayedBorrowerLeaderboard.length"
                 :key="`ghost-borrower-${i}`"
                 class="flex items-center gap-4 py-3.5 px-3 -mx-3 opacity-[0.35]"
               >
@@ -945,7 +1023,7 @@ onBeforeUnmount(() => {
           </div>
           <div v-else class="space-y-0.5">
             <div
-              v-for="entry in lenderLeaderboard"
+              v-for="entry in displayedLenderLeaderboard"
               :key="entry.user.id"
               class="relative flex items-center gap-4 py-3.5 px-3 -mx-3 transition-all rounded-[14px]"
               :class="[
@@ -991,24 +1069,20 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="flex items-center gap-1 font-bold text-[14px]">
-                <span class="text-burning-orange">{{ entry.averageRating.toFixed(1) }}</span>
-                <svg
+                <span class="text-burning-orange leading-none">{{
+                  entry.averageRating.toFixed(1)
+                }}</span>
+                <Icon
+                  name="ph:star-fill"
                   :class="entry.rank === 1 ? 'text-amber-400' : 'text-burning-orange/40'"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                  />
-                </svg>
+                  class="w-3 h-3 -translate-y-[0.5px]"
+                />
               </div>
             </div>
             <!-- Ghost Rows -->
-            <template v-if="lenderLeaderboard.length < 5">
+            <template v-if="displayedLenderLeaderboard.length < 5">
               <div
-                v-for="i in 5 - lenderLeaderboard.length"
+                v-for="i in 5 - displayedLenderLeaderboard.length"
                 :key="`ghost-lender-${i}`"
                 class="flex items-center gap-4 py-3.5 px-3 -mx-3 opacity-[0.35]"
               >
@@ -1046,7 +1120,7 @@ onBeforeUnmount(() => {
         class="pointer-events-none fixed inset-0 z-[140] flex items-center justify-center px-4"
       >
         <div class="rounded-full bg-emerald-500 px-7 py-4 text-center text-white shadow-2xl">
-          <p class="text-3xl font-black tracking-tight">+5 points</p>
+          <p class="text-3xl font-black tracking-tight">+{{ rewardPopupPoints }} points</p>
           <p class="text-sm font-medium text-white/90">Review bonus earned</p>
         </div>
       </div>

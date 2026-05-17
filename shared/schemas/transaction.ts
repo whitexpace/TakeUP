@@ -16,6 +16,16 @@ const transactionListCursorSchema = z.object({
   createdAt: z.coerce.date(),
 })
 
+const reviewDraftListCursorSchema = z.object({
+  id: z.string().uuid(),
+  updatedAt: z.coerce.date(),
+})
+
+const submittedReviewListCursorSchema = z.object({
+  id: z.string().uuid(),
+  createdAt: z.coerce.date(),
+})
+
 export const listTransactionsSchema = z.object({
   role: transactionRoleSchema.optional(),
   status: transactionStatusSchema.optional(),
@@ -24,6 +34,20 @@ export const listTransactionsSchema = z.object({
   limit: z.number().int().min(1).max(100).default(20),
   cursor: transactionListCursorSchema.optional(),
 })
+
+export const listReviewDraftsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(50).default(10),
+    cursor: reviewDraftListCursorSchema.optional(),
+  })
+  .default({})
+
+export const listSubmittedReviewsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(50).default(10),
+    cursor: submittedReviewListCursorSchema.optional(),
+  })
+  .default({})
 
 export const listAdminTransactionsSchema = z.object({
   status: transactionStatusSchema.optional(),
@@ -38,3 +62,5 @@ export type TransactionStatus = z.infer<typeof transactionStatusSchema>
 export type TransactionRole = z.infer<typeof transactionRoleSchema>
 export type ListTransactionsInput = z.infer<typeof listTransactionsSchema>
 export type ListAdminTransactionsInput = z.infer<typeof listAdminTransactionsSchema>
+export type ListReviewDraftsInput = z.infer<typeof listReviewDraftsSchema>
+export type ListSubmittedReviewsInput = z.infer<typeof listSubmittedReviewsSchema>

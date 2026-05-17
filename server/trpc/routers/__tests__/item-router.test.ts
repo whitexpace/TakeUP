@@ -52,7 +52,6 @@ const makeFeedRecord = (id: string, overrides: Record<string, unknown> = {}) => 
   rating: 0,
   boostScore: 0,
   boostExpiresAt: null,
-  borrowerId: null,
   ...overrides,
 })
 
@@ -146,7 +145,6 @@ describe("itemRouter", () => {
       bookingCount: 0,
       likeCount: 0,
       rating: 0,
-      borrowerId: null,
     })
 
     const caller = itemRouter.createCaller({
@@ -235,7 +233,9 @@ describe("itemRouter", () => {
         where: expect.objectContaining({
           AND: expect.arrayContaining([
             expect.objectContaining({ status: { not: "DELETED" } }),
-            expect.objectContaining({ status: "AVAILABLE" }),
+            expect.objectContaining({
+              status: { in: expect.arrayContaining(["AVAILABLE", "RENTED"]) },
+            }),
           ]),
         }),
       }),
@@ -395,7 +395,6 @@ describe("itemRouter", () => {
       bookingCount: 0,
       likeCount: 0,
       rating: 0,
-      borrowerId: null,
       transactionReviews: [
         {
           id: "review-1",
@@ -429,6 +428,12 @@ describe("itemRouter", () => {
       prisma: {
         $queryRaw: vi.fn().mockResolvedValue([{ adminModerationState: null }]),
         item: { findUnique: findById, findFirst: findById, update: incrementViewCount },
+        transactionReview: {
+          aggregate: vi.fn().mockResolvedValue({
+            _avg: { rating: 5 },
+            _count: { _all: 1 },
+          }),
+        },
       } as never,
       user: null,
     })
@@ -735,7 +740,6 @@ describe("itemRouter", () => {
       whatIsIncluded: null,
       knownIssues: null,
       usageLimitations: null,
-      borrowerId: null,
       lenderId,
       lender: {
         user: {

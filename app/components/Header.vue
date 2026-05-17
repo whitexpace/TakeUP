@@ -2,7 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useBag } from "../composables/use-bag"
 import { useChat } from "../composables/use-chat"
+import { useCommunityFeedPrefetch } from "../composables/use-community-feed-cache"
 import { useLikes } from "../composables/use-likes"
+import { useViewerSession } from "../composables/use-viewer-session"
+import { useNotifications } from "../composables/use-notifications"
 import type { CommunityOfferNotification } from "~/types/community-requests"
 import type { AppHeaderNotification } from "../types/notifications"
 
@@ -19,7 +22,7 @@ const props = withDefaults(
     customPadding?: string
   }>(),
   {
-    notifications: () => [],
+    notifications: undefined,
     scrollContainerSelector: "",
     showNav: true,
     hideIcons: false,
@@ -29,17 +32,55 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (event: "mark-notification-read", notificationId: string | number): void
-  (event: "mark-all-notifications-read"): void
+  (event: "mark-all-notifications-read" | "sign-in"): void
   (event: "visibility-change", visible: boolean): void
 }>()
 
 const { bagCount } = useBag()
 const { likesCount, loadLikesCount } = useLikes()
 const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount } = useChat()
-const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const route = useRoute()
-const { authUser, fetch: fetchAuthUser } = useAuthUser()
+const { warmCommunityFeed } = useCommunityFeedPrefetch()
+const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
+const {
+  notifications: globalNotifications,
+  isLoading: isGlobalNotificationsLoading,
+  loadNotifications: loadGlobalNotifications,
+  markNotificationRead: globalMarkRead,
+  markAllNotificationsRead: globalMarkAllRead,
+} = useNotifications()
+
+const NOTIFICATION_RENDER_LIMIT = 20
+
+const getNotificationKey = (n: CommunityOfferNotification | AppHeaderNotification) => {
+  if ("type" in n) return `app-${n.id}`
+  return `offer-${n.id}`
+}
+
+const displayNotifications = computed(() => {
+  const propNotifs = props.notifications || []
+  const globalNotifs = globalNotifications.value || []
+
+  if (propNotifs.length === 0) return globalNotifs
+  if (globalNotifs.length === 0) return propNotifs
+
+  const map = new Map<string | number, CommunityOfferNotification | AppHeaderNotification>()
+
+  globalNotifs.forEach((n) => map.set(getNotificationKey(n), n))
+  propNotifs.forEach((n) => map.set(getNotificationKey(n), n))
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
+})
+const visibleNotifications = computed(() =>
+  displayNotifications.value.slice(0, NOTIFICATION_RENDER_LIMIT),
+)
+const hiddenNotificationCount = computed(() =>
+  Math.max(0, displayNotifications.value.length - visibleNotifications.value.length),
+)
+
 const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 const headerRef = ref<HTMLElement | null>(null)
 const showNotifications = ref(false)
@@ -51,6 +92,11 @@ const isAccountSectionActive = computed(
 const isAdminSectionActive = computed(
   () => route.path === "/admin" || route.path.startsWith("/admin/"),
 )
+
+const warmCommunityFeedNavigation = () => {
+  if (route.path === "/feed" || route.path.startsWith("/feed/")) return
+  warmCommunityFeed()
+}
 
 const bridgeAndLoadAccountType = async () => {
   if (!user.value) {
@@ -68,23 +114,17 @@ const bridgeAndLoadAccountType = async () => {
     return
   }
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (!session) {
+  const { ensureBridgedSession } = useViewerSession()
+  if (!(await ensureBridgedSession())) {
     accountType.value = null
     return
   }
 
-  const { ensureBridged } = useSessionBridge()
-  if (!(await ensureBridged(session.access_token))) {
-    accountType.value = null
+  if (!hasFreshAuthUserCache.value && !authUser.value) {
+    const fetchedUser = await fetchAuthUser()
+    accountType.value = fetchedUser?.accountType ?? null
     return
   }
-
-  const fetchedUser = await fetchAuthUser()
-  accountType.value = fetchedUser?.accountType ?? null
 }
 
 let accountTypeLoadTimeout: ReturnType<typeof setTimeout> | null = null
@@ -111,16 +151,14 @@ watch(isVisible, (val) => {
 
 const lastScrollY = ref(0)
 const scrollThreshold = 10 // Minimum scroll to trigger hide
+const isScrolled = ref(false)
+let activeScrollTarget: Window | Element | null = null
 
 const handleScroll = () => {
-  let currentScrollY = window.scrollY
+  const currentScrollY =
+    activeScrollTarget instanceof Element ? activeScrollTarget.scrollTop : window.scrollY
 
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    if (container) {
-      currentScrollY = container.scrollTop
-    }
-  }
+  isScrolled.value = currentScrollY > 20
 
   // Always show at the very top
   if (currentScrollY < 50) {
@@ -144,7 +182,7 @@ const handleScroll = () => {
 }
 
 const unreadNotificationCount = computed(() => {
-  return props.notifications.filter((notification) => !notification.read).length
+  return displayNotifications.value.filter((notification) => !notification.read).length
 })
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -232,6 +270,9 @@ const handleNotificationClick = async (
   notification: CommunityOfferNotification | AppHeaderNotification,
 ) => {
   emit("mark-notification-read", notification.id)
+  if (isAppHeaderNotification(notification)) {
+    void globalMarkRead(notification.id)
+  }
   const actionPath = getNotificationActionPath(notification)
   if (actionPath) {
     showNotifications.value = false
@@ -241,6 +282,9 @@ const handleNotificationClick = async (
 
 const markAllNotificationsRead = () => {
   emit("mark-all-notifications-read")
+  if (displayNotifications.value.some(isAppHeaderNotification)) {
+    void globalMarkAllRead()
+  }
 }
 
 const handlePointerDownOutside = (event: PointerEvent) => {
@@ -251,25 +295,13 @@ const handlePointerDownOutside = (event: PointerEvent) => {
 }
 
 const setupScrollListener = () => {
-  // Clean up previous listener if any
-  window.removeEventListener("scroll", handleScroll)
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    container?.removeEventListener("scroll", handleScroll)
-  }
+  activeScrollTarget?.removeEventListener("scroll", handleScroll)
 
-  // Set up new listener
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    if (container) {
-      container.addEventListener("scroll", handleScroll, { passive: true })
-    } else {
-      // If container not found yet, wait and retry or fallback
-      window.addEventListener("scroll", handleScroll, { passive: true })
-    }
-  } else {
-    window.addEventListener("scroll", handleScroll, { passive: true })
-  }
+  activeScrollTarget = props.scrollContainerSelector
+    ? (document.querySelector(props.scrollContainerSelector) ?? window)
+    : window
+
+  activeScrollTarget.addEventListener("scroll", handleScroll, { passive: true })
 }
 
 watch(() => props.scrollContainerSelector, setupScrollListener)
@@ -280,15 +312,13 @@ onMounted(() => {
   scheduleAccountTypeLoad()
   void loadLikesCount()
   void loadChatUnreadCount()
+  void loadGlobalNotifications()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", handlePointerDownOutside)
-  window.removeEventListener("scroll", handleScroll)
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    container?.removeEventListener("scroll", handleScroll)
-  }
+  activeScrollTarget?.removeEventListener("scroll", handleScroll)
+  activeScrollTarget = null
   if (accountTypeLoadTimeout !== null) {
     clearTimeout(accountTypeLoadTimeout)
     accountTypeLoadTimeout = null
@@ -299,8 +329,13 @@ onBeforeUnmount(() => {
 <template>
   <header
     ref="headerRef"
-    class="fixed top-0 left-0 w-full h-14 bg-white border-b border-cinnamon-ice/40 flex items-center z-[1000] shrink-0 transition-transform duration-500 ease-in-out"
-    :class="{ '-translate-y-full': !isVisible }"
+    class="fixed top-0 left-0 w-full h-16 border-b transition-all duration-300 ease-in-out z-[1000] shrink-0 flex items-center"
+    :class="[
+      !isVisible ? '-translate-y-full' : '',
+      isScrolled
+        ? 'bg-white/80 backdrop-blur-md border-cinnamon-ice/30'
+        : 'bg-white border-cinnamon-ice/30',
+    ]"
   >
     <!-- Left Section: Logo & App Name -->
     <div
@@ -309,7 +344,7 @@ onBeforeUnmount(() => {
     >
       <slot name="left" />
       <NuxtLink to="/dashboard" class="flex items-center gap-3">
-        <img src="/images/logo.svg" alt="TakeUP Logo" class="h-8 w-auto" />
+        <img src="/images/takeup-logo.png" alt="TakeUP Logo" class="h-8 w-auto" />
       </NuxtLink>
     </div>
 
@@ -325,8 +360,12 @@ onBeforeUnmount(() => {
         </NuxtLink>
         <NuxtLink
           to="/feed"
+          :prefetch-on="{ interaction: true }"
           class="nav-link flex items-center text-[15px] text-noble-black font-geist font-normal transition-colors duration-300 ease-in-out hover:text-burning-orange"
           active-class="active-nav-link"
+          @pointerenter="warmCommunityFeedNavigation"
+          @focus="warmCommunityFeedNavigation"
+          @touchstart.passive="warmCommunityFeedNavigation"
         >
           Community Feed
         </NuxtLink>
@@ -343,7 +382,7 @@ onBeforeUnmount(() => {
 
     <!-- Right Section: Icons -->
     <div
-      class="flex justify-end items-stretch gap-2 shrink-0 h-full"
+      class="flex justify-end items-stretch gap-1 sm:gap-2 shrink-0 h-full"
       :class="[showNav ? 'lg:w-80' : '', customPadding || 'px-4 sm:px-6']"
     >
       <slot name="right" />
@@ -359,28 +398,19 @@ onBeforeUnmount(() => {
             :aria-expanded="showNotifications"
             @click="toggleNotifications"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-            </svg>
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:bell"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
 
-            <span
-              v-if="unreadNotificationCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ unreadNotificationCount }}
-            </span>
+              <span
+                v-if="unreadNotificationCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ unreadNotificationCount }}
+              </span>
+            </div>
           </button>
 
           <div class="custom-tooltip">
@@ -402,7 +432,7 @@ onBeforeUnmount(() => {
               <div
                 class="relative z-10 flex items-center justify-between px-4 py-4 border-b border-gray-100 shrink-0"
               >
-                <span class="text-[13px] font-bold uppercase tracking-[1.5px] text-gray-400">
+                <span class="font-montravia text-[20px] font-semibold text-noble-black">
                   Notifications
                 </span>
                 <button
@@ -416,14 +446,27 @@ onBeforeUnmount(() => {
 
               <!-- Notifications List -->
               <div
-                v-if="notifications.length > 0"
+                v-if="isGlobalNotificationsLoading"
+                class="px-4 py-6 space-y-5 animate-pulse relative z-10"
+              >
+                <div v-for="i in 3" :key="i" class="flex gap-4">
+                  <div class="h-10 w-10 rounded-full bg-noble-black/10 shrink-0"></div>
+                  <div class="flex-1 space-y-2 py-1">
+                    <div class="h-3 w-3/4 bg-noble-black/20 rounded"></div>
+                    <div class="h-2 w-1/2 bg-noble-black/10 rounded"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-else-if="displayNotifications.length > 0"
                 class="overflow-y-auto custom-scrollbar flex-1 relative z-10 rounded-b-[16px]"
               >
                 <div class="flex flex-col">
                   <button
-                    v-for="notification in notifications"
-                    :key="notification.id"
-                    class="relative flex gap-4 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
+                    v-for="notification in visibleNotifications"
+                    :key="getNotificationKey(notification)"
+                    class="relative flex gap-3 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
                     :class="[
                       !notification.read
                         ? 'bg-burning-orange/[0.03] border-l-[3px] border-l-burning-orange'
@@ -443,85 +486,49 @@ onBeforeUnmount(() => {
                         v-if="isDisputeRebuttal(notification)"
                         class="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-estate"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                        </svg>
+                        <Icon name="ph:chat-centered-text" class="w-[18px] h-[18px] shrink-0" />
                       </div>
                       <div
                         v-else-if="isDispute(notification)"
                         class="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center text-cinnabar-red"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path
-                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                          />
-                          <line x1="12" y1="9" x2="12" y2="13" />
-                          <line x1="12" y1="17" x2="12.01" y2="17" />
-                        </svg>
+                        <Icon name="ph:warning" class="w-[18px] h-[18px] shrink-0" />
                       </div>
                       <div
                         v-else
                         class="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center text-success-green"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                          <line x1="16" y1="2" x2="16" y2="6" />
-                          <line x1="8" y1="2" x2="8" y2="6" />
-                          <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
+                        <Icon name="ph:calendar-blank" class="w-[18px] h-[18px] shrink-0" />
                       </div>
                     </div>
 
                     <!-- Content -->
                     <div class="flex-1 min-w-0">
-                      <h4 class="text-[14px] font-semibold text-noble-black truncate leading-tight">
+                      <h4 class="text-[14px] font-semibold text-noble-black truncate leading-none">
                         {{ getNotificationTitle(notification) }}
                       </h4>
-                      <p class="mt-1 text-[13px] text-gray-500 line-clamp-2 leading-snug">
+                      <p class="mt-1.5 text-[13px] text-gray-500 line-clamp-2 leading-snug">
                         {{ getNotificationBody(notification) }}
                       </p>
                       <div class="mt-2.5 flex items-center justify-between">
                         <span
-                          class="text-[12px] font-semibold text-burning-orange group-hover:underline"
+                          class="text-[12px] font-semibold text-burning-orange group-hover:underline leading-none"
                         >
                           {{ getNotificationAccent(notification) ?? "View Details" }} →
                         </span>
-                        <span class="text-[11px] text-gray-400">
+                        <span class="text-[11px] text-gray-400 leading-none">
                           {{ formatRelativeTime(notification.createdAt) }}
                         </span>
                       </div>
                     </div>
                   </button>
+                  <div
+                    v-if="hiddenNotificationCount > 0"
+                    class="px-4 py-3 text-center text-[12px] font-medium text-gray-400"
+                  >
+                    Showing latest {{ NOTIFICATION_RENDER_LIMIT }} of
+                    {{ displayNotifications.length }} notifications
+                  </div>
                 </div>
               </div>
 
@@ -530,21 +537,7 @@ onBeforeUnmount(() => {
                 <div
                   class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-gray-300"
-                  >
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                  </svg>
+                  <Icon name="ph:bell" class="w-6 h-6 text-gray-300 shrink-0" />
                 </div>
                 <p class="text-[13px] text-gray-400 leading-relaxed px-4">
                   {{ notificationEmptyState }}
@@ -561,26 +554,18 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span
-              v-if="chatUnreadCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ chatUnreadCount }}
-            </span>
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:chat-centered-text"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="chatUnreadCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ chatUnreadCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Chat
@@ -596,28 +581,18 @@ onBeforeUnmount(() => {
             active-class="active-nav-link"
             aria-label="Likes"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:heart"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
               />
-            </svg>
-            <span
-              v-if="likesCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ likesCount }}
-            </span>
+              <span
+                v-if="likesCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ likesCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Likes
@@ -632,28 +607,18 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-              <path d="M3 6h18" />
-              <path d="M16 10a4 4 0 0 1-8 0" />
-            </svg>
-            <span
-              v-if="bagCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ bagCount }}
-            </span>
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:handbag"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="bagCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ bagCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Bag
@@ -661,70 +626,64 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Account Actions -->
-        <div class="flex items-stretch md:ml-1">
-          <div class="flex items-center px-2 md:px-4">
-            <div class="h-6 w-px bg-cinnamon-ice/30"></div>
-          </div>
-          <div
-            v-if="accountType === 'ADMIN'"
-            class="relative hidden md:flex items-stretch group/tooltip"
+        <!-- Vertical Divider -->
+        <div class="flex items-center px-2 sm:px-3">
+          <div class="h-6 w-px bg-cinnamon-ice/30"></div>
+        </div>
+
+        <!-- Admin Panel Icon -->
+        <div
+          v-if="accountType === 'ADMIN'"
+          class="relative hidden md:flex items-stretch group/tooltip"
+        >
+          <NuxtLink
+            to="/admin"
+            class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            :class="{ 'active-nav-link': isAdminSectionActive }"
+            active-class="active-nav-link"
           >
-            <NuxtLink
-              to="/admin"
-              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
-              :class="{ 'active-nav-link': isAdminSectionActive }"
-              active-class="active-nav-link"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-              >
-                <path d="M12 3l7 4v5c0 5-3.5 7.74-7 9-3.5-1.26-7-4-7-9V7l7-4Z" />
-                <path d="M9.5 12 11 13.5l3.5-3.5" />
-              </svg>
-            </NuxtLink>
-            <div class="custom-tooltip">
-              Admin Panel
-              <div class="tooltip-arrow"></div>
-            </div>
+            <Icon
+              name="ph:shield-check"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+            />
+          </NuxtLink>
+          <div class="custom-tooltip">
+            Admin Panel
+            <div class="tooltip-arrow"></div>
           </div>
-          <div class="relative flex items-stretch group/tooltip">
-            <NuxtLink
-              to="/account"
-              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
-              :class="{ 'active-nav-link': isAccountSectionActive }"
-              active-class="active-nav-link"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-              >
-                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </NuxtLink>
-            <div class="custom-tooltip">
-              Profile
-              <div class="tooltip-arrow"></div>
-            </div>
+        </div>
+
+        <!-- Account Icon -->
+        <div class="relative flex items-stretch group/tooltip">
+          <NuxtLink
+            to="/account"
+            :prefetch-on="{ interaction: true }"
+            class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            :class="{ 'active-nav-link': isAccountSectionActive }"
+            active-class="active-nav-link"
+          >
+            <Icon
+              name="ph:user"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+            />
+          </NuxtLink>
+          <div class="custom-tooltip">
+            Account
+            <div class="tooltip-arrow"></div>
           </div>
+        </div>
+      </template>
+
+      <!-- Auth Action (Login Button for Landing/Guests) -->
+      <template v-else-if="!user">
+        <div class="flex items-center">
+          <button
+            type="button"
+            class="h-10 px-6 border-[1.5px] border-burning-orange text-burning-orange bg-white rounded-[10px] font-semibold text-[14px] hover:bg-burning-orange hover:text-white transition-all duration-300 active:scale-95 whitespace-nowrap"
+            @click="$emit('sign-in')"
+          >
+            Sign In
+          </button>
         </div>
       </template>
     </div>

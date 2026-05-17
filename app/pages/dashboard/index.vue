@@ -1,11 +1,13 @@
 <template>
-  <div class="mx-auto px-4 sm:px-8 lg:px-10 xl:px-12 py-8 pt-16 max-w-[1600px]">
+  <div class="mx-auto py-8 pt-16 max-w-[1600px]">
     <!-- Header Section -->
     <div class="mb-10">
-      <h1 class="font-rewon text-[40px] text-noble-black leading-tight mb-2">
+      <h1
+        class="font-montravia font-semibold text-[48px] text-noble-black leading-tight mb-2 italic"
+      >
         Good {{ greeting }}, {{ firstName }}!
       </h1>
-      <p class="font-geist font-normal text-[20px] text-noble-black/70">
+      <p class="font-geist font-light text-[20px] text-noble-black/50">
         Discover items to rent or borrow near you.
       </p>
 
@@ -19,38 +21,13 @@
           <div class="flex items-center justify-center w-10 shrink-0">
             <button
               v-if="searchInput"
-              class="text-noble-black/30 hover:text-noble-black/60 transition-colors"
+              class="text-noble-black/30 hover:text-noble-black/60 transition-colors flex items-center justify-center"
               title="Clear search"
               @click="clearSearch"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
-            <svg
-              v-else
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="text-noble-black/30"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
+            <Icon v-else name="ph:magnifying-glass" class="w-[18px] h-[18px] text-noble-black/30" />
           </div>
 
           <!-- Search Input -->
@@ -88,20 +65,10 @@
               @mousedown.prevent="selectSuggestion(suggestion.value)"
             >
               <div class="flex items-center gap-3">
-                <svg
-                  class="text-noble-black/20 group-hover:text-burning-orange transition-colors"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
+                <Icon
+                  name="ph:magnifying-glass"
+                  class="w-[14px] h-[14px] text-noble-black/20 group-hover:text-burning-orange transition-colors"
+                />
                 <span class="font-medium">{{ suggestion.label }}</span>
               </div>
               <span
@@ -157,7 +124,7 @@
       class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
     >
       <ItemCard
-        v-for="item in cardItems"
+        v-for="(item, index) in cardItems"
         :id="item.id"
         :key="item.id"
         :type="item.type"
@@ -173,6 +140,11 @@
         :owner="item.owner"
         :owner-username="item.ownerUsername"
         :is-liked="item.isLiked"
+        :enable-destination-prefetch="true"
+        :image-loading="index === 0 ? 'eager' : 'lazy'"
+        :image-fetch-priority="index === 0 ? 'high' : 'low'"
+        :start-navigation-on-mouse-down="true"
+        :prefetch-item="getListedItemForCard(item.id)"
       />
 
       <template v-if="isLoading">
@@ -207,22 +179,7 @@
       class="w-full flex flex-col items-center justify-center py-24 px-4 text-center bg-cream rounded-[20px] border border-cinnamon-ice/50 shadow-sm mt-4"
     >
       <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          class="stroke-cinnamon-ice"
-          stroke-width="1.5"
-        >
-          <path
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <path d="M8 11h4m-4 0v-4" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <Icon name="ph:magnifying-glass" class="w-[48px] h-[48px] text-cinnamon-ice" />
       </div>
       <h3 class="font-geist font-semibold text-[24px] sm:text-[28px] text-noble-black mb-3">
         No available items
@@ -262,6 +219,7 @@ import { filterListedItemsBySearch } from "../../utils/item-search"
 import { usePaginatedItems } from "../../composables/use-paginated-items"
 import { useFilteredResultsCount } from "../../composables/use-filtered-results-count"
 import type { useDashboardFilters } from "../../composables/use-dashboard-filters"
+import { buildItemDetailPath } from "../../utils/item-detail-route"
 
 definePageMeta({
   layout: "dashboard",
@@ -293,10 +251,15 @@ const highlightedSuggestionIndex = ref(-1)
 const serverSearchQuery = ref("")
 const searchTerm = computed(() => searchInput.value.trim())
 const INITIAL_DASHBOARD_PAGE_SIZE = 8
+const IDLE_CARD_DETAIL_PREFETCH_LIMIT = 4
 let prefetchNextPageTimeout: ReturnType<typeof setTimeout> | null = null
+let idleCardDetailPrefetchId: number | null = null
+let fallbackCardDetailPrefetchTimeout: ReturnType<typeof setTimeout> | null = null
+const warmedDashboardCardPaths = new Set<string>()
+const { warmDestination } = useDestinationImagePrefetch()
 
 // User Search Logic
-const { data: topMatchingUsers, pending: isSearchingUsers } = await useAsyncData(
+const { data: topMatchingUsers, pending: isSearchingUsers } = useLazyAsyncData(
   () => `user-search-${serverSearchQuery.value}`,
   async () => {
     if (!serverSearchQuery.value) return [] as UserSearchResult[]
@@ -442,6 +405,7 @@ const {
   isLoading,
   hasMore,
   errorMessage,
+  hasCachedState,
   fetchNextPage,
   refresh,
 } = usePaginatedItems({
@@ -464,15 +428,21 @@ const cardItems = computed<ItemCardViewModel[]>(() =>
     trendingItemIds: trendingItemIds.value,
   }),
 )
+const listedItemsById = computed(
+  () => new Map(locallyFilteredItems.value.map((item) => [item.id, item])),
+)
+const getListedItemForCard = (id: string) => listedItemsById.value.get(id) ?? null
 
 const {
   totalResultsCount,
+  hasCachedCount,
   refreshResultsCount,
   scheduleResultsCountRefresh,
   cancelPendingResultsCountRefresh,
 } = useFilteredResultsCount({
   searchQuery: serverSearchQuery,
   filterParams: filters.filterQueryParams,
+  stateKey: "dashboard-results-count",
 })
 
 const visibleResultsCount = computed(() =>
@@ -484,6 +454,47 @@ const cancelPendingPrefetch = () => {
     clearTimeout(prefetchNextPageTimeout)
     prefetchNextPageTimeout = null
   }
+}
+
+const cancelIdleCardDetailPrefetch = () => {
+  if (idleCardDetailPrefetchId !== null && import.meta.client && "cancelIdleCallback" in window) {
+    window.cancelIdleCallback(idleCardDetailPrefetchId)
+  }
+
+  if (fallbackCardDetailPrefetchTimeout !== null) {
+    clearTimeout(fallbackCardDetailPrefetchTimeout)
+    fallbackCardDetailPrefetchTimeout = null
+  }
+
+  idleCardDetailPrefetchId = null
+}
+
+const prefetchVisibleCardDetails = () => {
+  cancelIdleCardDetailPrefetch()
+
+  if (!import.meta.client || !cardItems.value.length) {
+    return
+  }
+
+  const warmVisibleCards = () => {
+    idleCardDetailPrefetchId = null
+    fallbackCardDetailPrefetchTimeout = null
+
+    for (const item of locallyFilteredItems.value.slice(0, IDLE_CARD_DETAIL_PREFETCH_LIMIT)) {
+      const path = buildItemDetailPath({ id: item.id, name: item.name })
+      if (warmedDashboardCardPaths.has(path)) continue
+
+      warmedDashboardCardPaths.add(path)
+      warmDestination(path, item)
+    }
+  }
+
+  if ("requestIdleCallback" in window) {
+    idleCardDetailPrefetchId = window.requestIdleCallback(warmVisibleCards, { timeout: 1800 })
+    return
+  }
+
+  fallbackCardDetailPrefetchTimeout = setTimeout(warmVisibleCards, 700)
 }
 
 const scheduleNextPagePrefetch = () => {
@@ -505,20 +516,27 @@ const scheduleNextPagePrefetch = () => {
 const reload = async () => {
   await refresh()
   scheduleNextPagePrefetch()
-  void refreshResultsCount()
+  await refreshResultsCount()
 }
 
 const scheduleReload = () => {
   void refresh().then(() => {
     scheduleNextPagePrefetch()
+    scheduleResultsCountRefresh()
   })
-  scheduleResultsCountRefresh()
 }
 
-const { data: initialDashboardItemsLoaded } = await useAsyncData(
+const { data: initialDashboardItemsLoaded } = useLazyAsyncData(
   "dashboard-initial-listed-items",
   async () => {
+    if (hasCachedState.value && hasCachedCount.value) {
+      return true
+    }
+
     await refresh()
+    if (!hasCachedCount.value) {
+      await refreshResultsCount()
+    }
     return true
   },
   {
@@ -543,12 +561,15 @@ onMounted(() => {
     },
   )
 
-  if (initialDashboardItemsLoaded.value) {
+  if (hasCachedState.value && hasCachedCount.value) {
     scheduleNextPagePrefetch()
-    void refreshResultsCount()
+  } else if (initialDashboardItemsLoaded.value) {
+    scheduleNextPagePrefetch()
   } else {
     void reload()
   }
+
+  prefetchVisibleCardDetails()
 
   if (loadMoreTrigger.value) {
     observer.observe(loadMoreTrigger.value)
@@ -564,6 +585,7 @@ onUnmounted(() => {
     searchBlurTimeout = null
   }
   cancelPendingPrefetch()
+  cancelIdleCardDetailPrefetch()
   cancelPendingResultsCountRefresh()
 })
 
@@ -578,6 +600,14 @@ watch(
     scheduleReload()
   },
   { deep: true },
+)
+
+watch(
+  cardItems,
+  () => {
+    prefetchVisibleCardDetails()
+  },
+  { flush: "post" },
 )
 </script>
 

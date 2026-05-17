@@ -15,17 +15,7 @@
             <h3 class="text-[13px] font-semibold text-gray-900 leading-snug truncate">
               {{ item.title }}
             </h3>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              class="text-burning-orange shrink-0"
-            >
-              <path d="M7 17l10-10M7 7h10v10" />
-            </svg>
+            <Icon name="ph:trend-up" class="w-3 h-3 text-burning-orange shrink-0" />
           </div>
           <span class="text-[11px] text-gray-400"
             >{{ item.offersCount }} {{ item.offersCount === 1 ? "offer" : "offers" }}</span

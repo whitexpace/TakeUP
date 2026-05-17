@@ -29,20 +29,11 @@
         <h3 class="section-title group-hover:text-burning-orange transition-colors">
           Listing Types
         </h3>
-        <svg
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+        <Icon
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.listingTypes }"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        />
       </div>
       <transition name="section">
         <div v-if="!collapsedSections.listingTypes" class="space-y-1.5 pb-5 pt-1">
@@ -79,20 +70,11 @@
         @click="toggleSection('categories')"
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Categories</h3>
-        <svg
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+        <Icon
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.categories }"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        />
       </div>
       <transition name="section">
         <div v-if="!collapsedSections.categories" class="space-y-3 pr-2 pb-5 pt-1">
@@ -111,20 +93,11 @@
                 class="absolute right-3 p-1 text-noble-black/30 hover:text-noble-black transition-colors"
                 @click="toggleCategoryDropdown"
               >
-                <svg
-                  class="w-3.5 h-3.5 transition-transform duration-200"
+                <Icon
+                  name="ph:caret-down"
+                  class="w-3.5 h-3.5 transition-transform duration-200 shrink-0"
                   :class="{ 'rotate-180': isCategoryDropdownOpen }"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2.5"
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                />
               </button>
             </div>
 
@@ -167,18 +140,7 @@
                 class="shrink-0 text-noble-black/30 hover:text-burning-orange transition-colors"
                 @click="removeCategory(cat.name)"
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
+                <Icon name="ph:x" class="w-3 h-3 shrink-0" />
               </button>
             </div>
           </div>
@@ -194,20 +156,11 @@
         @click="toggleSection('priceRange')"
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Price Range</h3>
-        <svg
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+        <Icon
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.priceRange }"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        />
       </div>
       <transition name="section">
         <div v-if="!collapsedSections.priceRange" class="pb-6 pt-2 px-1">
@@ -268,20 +221,11 @@
         @click="toggleSection('rating')"
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Rating</h3>
-        <svg
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+        <Icon
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.rating }"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        />
       </div>
       <transition name="section">
         <div v-if="!collapsedSections.rating" class="space-y-1.5 pb-5 pt-1">
@@ -304,23 +248,13 @@
                 ></div>
               </div>
               <div class="ml-3 flex items-center gap-0.5">
-                <svg
+                <Icon
                   v-for="i in 5"
                   :key="i"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  :class="[
-                    i <= rate.stars ? 'fill-burning-orange' : 'fill-noble-black/10',
-                    'transition-colors duration-300',
-                  ]"
-                >
-                  <path
-                    d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                  />
-                </svg>
+                  name="ph:star-fill"
+                  class="w-3 h-3 transition-colors duration-300 shrink-0"
+                  :class="i <= rate.stars ? 'text-burning-orange' : 'text-noble-black/10'"
+                />
                 <span
                   v-if="rate.stars < 5"
                   class="ml-1 text-[12px] font-medium text-noble-black/40"
@@ -342,20 +276,11 @@
         @click="toggleSection('condition')"
       >
         <h3 class="section-title group-hover:text-burning-orange transition-colors">Condition</h3>
-        <svg
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+        <Icon
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.condition }"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        />
       </div>
       <transition name="section">
         <div v-if="!collapsedSections.condition" class="space-y-1.5 pb-5 pt-1">
@@ -372,15 +297,10 @@
                   :value="cond.name"
                   class="peer appearance-none w-4 h-4 border-[1.5px] border-cinnamon-ice/40 rounded-md checked:bg-burning-orange checked:border-burning-orange transition-all duration-300 cursor-pointer"
                 />
-                <svg
-                  class="absolute w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="4"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
+                <Icon
+                  name="ph:check"
+                  class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-300 pointer-events-none"
+                />
               </div>
               <span class="ml-3 filter-option-label group-hover:text-noble-black">
                 {{ cond.name }}
@@ -401,20 +321,11 @@
         <h3 class="section-title group-hover:text-burning-orange transition-colors">
           Availability Date
         </h3>
-        <svg
-          class="w-4 h-4 text-noble-black/40 transition-transform duration-300"
+        <Icon
+          name="ph:caret-down"
+          class="w-4 h-4 text-noble-black/40 transition-transform duration-300 shrink-0"
           :class="{ 'rotate-180': !collapsedSections.availabilityDate }"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        />
       </div>
       <transition name="section">
         <div v-if="!collapsedSections.availabilityDate" class="space-y-4 pb-5 pt-1">
@@ -428,7 +339,7 @@
                 <CustomCalendar v-model="dateFrom" placeholder="Date" disable-past />
               </div>
               <div class="w-[115px]">
-                <CustomTimePicker v-model="timeFrom" placeholder="Time" />
+                <CustomTimePicker v-model="timeFrom" placeholder="Time" :min-time="minTimeFrom" />
               </div>
             </div>
           </div>
@@ -450,7 +361,8 @@
                 <CustomTimePicker
                   v-model="timeTo"
                   placeholder="Time"
-                  :min-time="dateFrom === dateTo ? timeFrom : ''"
+                  :min-time="minTimeTo"
+                  strict-min
                 />
               </div>
             </div>
@@ -517,6 +429,27 @@ const dateFrom = ref<string>(props.dateFrom ?? "")
 const timeFrom = ref<string>(props.timeFrom ?? "")
 const dateTo = ref<string>(props.dateTo ?? "")
 const timeTo = ref<string>(props.timeTo ?? "")
+
+const minTimeFrom = computed(() => {
+  if (!dateFrom.value) return ""
+  const todayStr = new Date().toLocaleDateString("en-CA") // YYYY-MM-DD
+  if (dateFrom.value !== todayStr) return ""
+
+  const now = new Date()
+  return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`
+})
+
+const minTimeTo = computed(() => {
+  if (!dateTo.value || !dateFrom.value || dateFrom.value !== dateTo.value || !timeFrom.value)
+    return ""
+
+  // Add 1 hour to timeFrom
+  const [h = 0, m = 0] = timeFrom.value.split(":").map(Number)
+  const date = new Date()
+  date.setHours(h + 1, m, 0, 0)
+  return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`
+})
+
 const categorySearch = ref("")
 const isCategoryDropdownOpen = ref(false)
 
@@ -761,19 +694,5 @@ const clearAll = () => {
 .section-leave-to {
   opacity: 0;
   transform: translateY(-8px);
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 50%");
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.burning-orange");
 }
 </style>

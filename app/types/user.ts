@@ -15,6 +15,7 @@ export interface PublicProfile {
     itemsSold: number
     activeListings: number
   }
+  reviewsCount: number
   reviews: Array<{
     id: string
     rating: number

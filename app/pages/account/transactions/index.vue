@@ -3,11 +3,19 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue"
 import type { TransactionStatus } from "#shared/schemas/transaction"
 import type { BookingStatus } from "#shared/schemas/booking"
 import type { ReviewType } from "#shared/schemas/review"
-import { useTransactions, type TransactionListItem } from "../../../composables/use-transactions"
+import {
+  useTransactionHistoryPrefetch,
+  useTransactions,
+  type TransactionListItem,
+} from "../../../composables/use-transactions"
 import {
   useBorrowerItemRequests,
   type BorrowerItemRequest,
 } from "../../../composables/use-borrower-item-requests"
+import {
+  useLenderItemRequests,
+  type LenderItemRequest,
+} from "../../../composables/use-lender-item-requests"
 
 definePageMeta({
   layout: "account",
@@ -15,9 +23,15 @@ definePageMeta({
 })
 
 type ActiveRole = "BORROWER" | "LENDER"
-type TransactionFilter = TransactionStatus | "TO_REVIEW" | "REQUESTED_ITEMS" | null
+type TransactionFilter =
+  | TransactionStatus
+  | "TO_REVIEW"
+  | "REQUESTED_ITEMS"
+  | "LENDER_FOR_APPROVAL"
+  | null
 type HistoryEntry =
   | { kind: "request"; id: string; date: Date | string; request: BorrowerItemRequest }
+  | { kind: "lender-request"; id: string; date: Date | string; request: LenderItemRequest }
   | { kind: "transaction"; id: string; date: Date | string; transaction: TransactionListItem }
 
 const route = useRoute()
@@ -25,15 +39,21 @@ const router = useRouter()
 const activeRole = ref<ActiveRole>((route.query.role as ActiveRole) || "BORROWER")
 const activeStatus = ref<TransactionFilter>(null)
 const searchQuery = ref("")
+const { warmTransactionHistory } = useTransactionHistoryPrefetch()
 
 const { filteredTransactions, isLoading, error, hasMore, loadMore, refresh, fetchPage } =
   useTransactions({
     role: activeRole,
-    status: computed(() =>
-      activeStatus.value === "TO_REVIEW" || activeStatus.value === "REQUESTED_ITEMS"
-        ? null
-        : activeStatus.value,
-    ),
+    status: computed(() => {
+      if (
+        activeStatus.value === "TO_REVIEW" ||
+        activeStatus.value === "REQUESTED_ITEMS" ||
+        activeStatus.value === "LENDER_FOR_APPROVAL"
+      ) {
+        return null
+      }
+      return activeStatus.value as TransactionStatus | null
+    }),
     searchQuery,
   })
 
@@ -43,13 +63,17 @@ const borrowerRequestStatuses = computed<BookingStatus[]>(() => {
   switch (activeStatus.value) {
     case null:
     case "REQUESTED_ITEMS":
-      return ["PENDING", "CONFIRMED", "CANCELLED"]
+      return ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "RETURNED", "IN_DISPUTE"]
     case "PENDING":
       return ["PENDING"]
     case "ACTIVE":
       return ["CONFIRMED"]
     case "CANCELLED":
       return ["CANCELLED"]
+    case "RETURNED":
+      return ["RETURNED"]
+    case "COMPLETED":
+      return ["COMPLETED"]
     default:
       return []
   }
@@ -70,44 +94,100 @@ const {
   searchQuery,
 })
 
-const visibleTransactions = computed(() =>
-  activeStatus.value === "REQUESTED_ITEMS"
-    ? []
-    : activeStatus.value === "TO_REVIEW"
-      ? filteredTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny)
-      : filteredTransactions.value,
+const lenderRequestStatuses = computed<BookingStatus[]>(() => {
+  if (activeRole.value !== "LENDER") return []
+
+  switch (activeStatus.value) {
+    case null:
+    case "LENDER_FOR_APPROVAL":
+      return ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "RETURNED", "IN_DISPUTE"]
+    case "PENDING":
+      return ["PENDING"]
+    case "ACTIVE":
+      return ["CONFIRMED"]
+    case "CANCELLED":
+      return ["CANCELLED"]
+    case "RETURNED":
+      return ["RETURNED"]
+    case "COMPLETED":
+      return ["COMPLETED"]
+    default:
+      return []
+  }
+})
+
+const shouldShowLenderRequests = computed(
+  () => activeRole.value === "LENDER" && lenderRequestStatuses.value.length > 0,
 )
+
+const {
+  filteredRequests: filteredLenderRequests,
+  isLoading: areLenderRequestsLoading,
+  error: lenderRequestsError,
+  fetchRequests: fetchLenderRequests,
+} = useLenderItemRequests({
+  enabled: shouldShowLenderRequests,
+  statuses: lenderRequestStatuses,
+  searchQuery,
+})
+
+const visibleTransactions = computed(() => {
+  if (activeStatus.value === "REQUESTED_ITEMS" || activeStatus.value === "LENDER_FOR_APPROVAL") {
+    return []
+  }
+  if (activeStatus.value === "TO_REVIEW") {
+    return filteredTransactions.value.filter((transaction) => transaction.reviewState.canSubmitAny)
+  }
+  return filteredTransactions.value
+})
 
 const visibleBorrowerRequests = computed(() =>
   shouldShowBorrowerRequests.value ? filteredBorrowerRequests.value : [],
 )
 
+const visibleLenderRequests = computed(() =>
+  shouldShowLenderRequests.value ? filteredLenderRequests.value : [],
+)
+
 const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
-  const requestIdSet = new Set(visibleBorrowerRequests.value.map((r) => r.id))
+  const transactionBookingIds = new Set(
+    visibleTransactions.value.map((tx) => tx.bookingId).filter(Boolean),
+  )
 
-  const requestEntries = visibleBorrowerRequests.value.map((request) => ({
-    kind: "request" as const,
-    id: request.id,
-    date: request.createdAt,
-    request,
-  }))
-
-  const transactionEntries = visibleTransactions.value
-    .filter((transaction) => !(transaction.bookingId && requestIdSet.has(transaction.bookingId)))
-    .map((transaction) => ({
-      kind: "transaction" as const,
-      id: transaction.id,
-      date: transaction.createdAt,
-      transaction,
+  const borrowerRequestEntries = visibleBorrowerRequests.value
+    .filter((request) => !transactionBookingIds.has(request.id))
+    .map((request) => ({
+      kind: "request" as const,
+      id: request.id,
+      date: request.createdAt,
+      request,
     }))
 
-  return [...requestEntries, ...transactionEntries].sort((left, right) => {
-    const rightTime = new Date(right.date).getTime()
-    const leftTime = new Date(left.date).getTime()
+  const lenderRequestEntries = visibleLenderRequests.value
+    .filter((request) => !transactionBookingIds.has(request.id))
+    .map((request) => ({
+      kind: "lender-request" as const,
+      id: request.id,
+      date: request.createdAt,
+      request,
+    }))
 
-    if (rightTime !== leftTime) return rightTime - leftTime
-    return right.id.localeCompare(left.id)
-  })
+  const transactionEntries = visibleTransactions.value.map((transaction) => ({
+    kind: "transaction" as const,
+    id: transaction.id,
+    date: transaction.createdAt,
+    transaction,
+  }))
+
+  return [...borrowerRequestEntries, ...lenderRequestEntries, ...transactionEntries].sort(
+    (left, right) => {
+      const rightTime = new Date(right.date).getTime()
+      const leftTime = new Date(left.date).getTime()
+
+      if (rightTime !== leftTime) return rightTime - leftTime
+      return right.id.localeCompare(left.id)
+    },
+  )
 })
 
 const groupedHistoryEntries = computed(() => {
@@ -152,10 +232,14 @@ const hasVisibleEntries = computed(() => visibleHistoryEntries.value.length > 0)
 const isInitialLoading = computed(
   () =>
     !hasVisibleEntries.value &&
-    (isLoading.value || (shouldShowBorrowerRequests.value && areBorrowerRequestsLoading.value)),
+    (isLoading.value ||
+      (shouldShowBorrowerRequests.value && areBorrowerRequestsLoading.value) ||
+      (shouldShowLenderRequests.value && areLenderRequestsLoading.value)),
 )
 
-const combinedError = computed(() => error.value ?? borrowerRequestsError.value)
+const combinedError = computed(
+  () => error.value ?? borrowerRequestsError.value ?? lenderRequestsError.value,
+)
 
 const hasInitialError = computed(
   () => !hasVisibleEntries.value && !isInitialLoading.value && Boolean(combinedError.value),
@@ -182,6 +266,7 @@ type SubmittedReviewPayload = {
 onMounted(() => {
   void fetchPage()
   void fetchBorrowerRequests()
+  void fetchLenderRequests()
 })
 
 const setRole = (role: ActiveRole) => {
@@ -190,6 +275,13 @@ const setRole = (role: ActiveRole) => {
   activeStatus.value = null
   searchQuery.value = ""
   router.replace({ query: { ...route.query, role } })
+}
+
+const warmRoleHistory = (role: ActiveRole) => {
+  void warmTransactionHistory(role, {
+    priority: role === "LENDER",
+    prefetchNextPage: role === "BORROWER",
+  })
 }
 
 const setStatus = (status: TransactionFilter) => {
@@ -205,12 +297,11 @@ const statusChips = computed<StatusChip[]>(() => [
   { label: "All", value: null },
   ...(activeRole.value === "BORROWER"
     ? [{ label: "Requested Items", value: "REQUESTED_ITEMS" as TransactionFilter }]
-    : []),
+    : [{ label: "For Approval", value: "LENDER_FOR_APPROVAL" as TransactionFilter }]),
   {
-    label: activeRole.value === "BORROWER" ? "To Receive" : "For Approval",
-    value: "PENDING",
+    label: activeRole.value === "BORROWER" ? "To Receive" : "In Use",
+    value: "ACTIVE",
   },
-  { label: "In Use", value: "ACTIVE" },
   { label: "Returned", value: "RETURNED" },
   { label: "Completed", value: "COMPLETED" },
   { label: "To Review", value: "TO_REVIEW" },
@@ -220,6 +311,7 @@ const statusChips = computed<StatusChip[]>(() => [
 const emptyTitle = computed(() => {
   if (activeStatus.value === "TO_REVIEW") return "No transactions awaiting your review"
   if (activeStatus.value === "REQUESTED_ITEMS") return "No requested items yet"
+  if (activeStatus.value === "LENDER_FOR_APPROVAL") return "No pending requests"
   return activeRole.value === "BORROWER"
     ? "No borrowing transactions yet"
     : "No lending transactions yet"
@@ -234,13 +326,33 @@ const emptySubtitle = computed(() => {
     return "Items you request from lenders will appear here."
   }
 
+  if (activeStatus.value === "LENDER_FOR_APPROVAL") {
+    return "Incoming booking requests from borrowers will appear here."
+  }
+
   return activeRole.value === "BORROWER"
     ? "Items you borrow and request will appear here."
     : "Items you lend to others will appear here."
 })
 
 const refreshAll = async () => {
-  await Promise.all([refresh(), fetchBorrowerRequests()])
+  await Promise.all([
+    refresh(),
+    fetchBorrowerRequests({ force: true }),
+    fetchLenderRequests({ force: true }),
+  ])
+}
+
+const loadMoreIfNearBottom = (event: Event) => {
+  const container = event.currentTarget as HTMLElement | null
+  if (!container || !hasMore.value || isLoading.value || visibleTransactions.value.length === 0) {
+    return
+  }
+
+  const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
+  if (remaining <= 180) {
+    void loadMore()
+  }
 }
 
 const reviewContext = computed(() => {
@@ -332,66 +444,45 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <TransactionHistorySkeleton v-if="isInitialLoading" />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">My Transactions</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">My Transactions</h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Review your borrowing and lending history
         </p>
       </section>
-
-      <NuxtLink
-        to="/account/requests"
-        class="inline-flex h-11 shrink-0 items-center gap-2 rounded-[12px] border-[1.5px] border-burning-orange px-6 text-[13px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
-      >
-        View Requests
-      </NuxtLink>
     </div>
 
     <!-- Search bar -->
     <div
       class="flex items-center gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-12 px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
     >
-      <svg
-        class="w-5 h-5 text-gray-400 shrink-0"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
+      <button
+        v-if="searchQuery"
+        type="button"
+        class="flex h-10 w-10 items-center justify-center -ml-2.5 text-noble-black/30 hover:text-burning-orange transition-colors"
+        title="Clear search"
+        @click="searchQuery = ''"
       >
-        <circle cx="11" cy="11" r="8" stroke-width="2" />
-        <path d="m21 21-4.35-4.35" stroke-width="2" stroke-linecap="round" />
-      </svg>
+        <Icon name="ph:x" class="w-5 h-5" />
+      </button>
+      <Icon
+        v-else
+        name="ph:magnifying-glass"
+        class="w-5 h-5 text-gray-400 shrink-0 transition-colors"
+      />
       <input
         v-model="searchQuery"
         type="text"
         placeholder="Search transactions..."
         class="flex-1 bg-transparent outline-none text-noble-black text-[15px] font-medium placeholder:text-gray-400 min-w-0"
       />
-      <!-- Clear Search Button -->
-      <button
-        v-if="searchQuery"
-        class="text-gray-400 hover:text-noble-black transition-colors"
-        title="Clear search"
-        @click="searchQuery = ''"
-      >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
     </div>
 
     <!-- Tab bar -->
@@ -403,6 +494,9 @@ onBeforeUnmount(() => {
             ? 'text-burning-orange'
             : 'text-noble-black/40 hover:text-noble-black/60'
         "
+        @pointerenter="warmRoleHistory('BORROWER')"
+        @focus="warmRoleHistory('BORROWER')"
+        @touchstart.passive="warmRoleHistory('BORROWER')"
         @click="setRole('BORROWER')"
       >
         Borrow History
@@ -419,6 +513,9 @@ onBeforeUnmount(() => {
             ? 'text-burning-orange'
             : 'text-noble-black/40 hover:text-noble-black/60'
         "
+        @pointerenter="warmRoleHistory('LENDER')"
+        @focus="warmRoleHistory('LENDER')"
+        @touchstart.passive="warmRoleHistory('LENDER')"
         @click="setRole('LENDER')"
       >
         Lend History
@@ -453,30 +550,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Loading skeletons -->
-      <template v-if="isInitialLoading">
-        <div class="flex flex-col gap-4">
-          <TransactionCardSkeleton />
-          <BorrowerRequestCardSkeleton />
-          <TransactionCardSkeleton />
-        </div>
-      </template>
-
       <!-- Error state -->
       <div
-        v-else-if="hasInitialError"
+        v-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
-        <svg
-          class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <circle cx="12" cy="12" r="10" stroke-width="1.5" />
-          <line x1="12" y1="8" x2="12" y2="12" stroke-width="2" stroke-linecap="round" />
-          <circle cx="12" cy="16" r="0.5" fill="currentColor" stroke-width="2" />
-        </svg>
+        <Icon name="ph:warning-circle" class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4" />
         <p class="text-noble-black/50 text-base mb-6 font-medium">{{ combinedError }}</p>
         <button
           class="bg-burning-orange text-white rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:brightness-110 transition-all shadow-lg shadow-burning-orange/20"
@@ -494,18 +573,18 @@ onBeforeUnmount(() => {
         <div
           class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
         >
-          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
-            <path d="M3 9h18" stroke-width="1.5" />
-            <path d="M9 21V9" stroke-width="1.5" />
-          </svg>
+          <Icon name="ph:files" class="w-10 h-10" />
         </div>
         <p class="text-noble-black text-[18px] font-bold mb-1">{{ emptyTitle }}</p>
         <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">{{ emptySubtitle }}</p>
       </div>
 
       <!-- Transaction list (Grouped & Internal Scroll) -->
-      <div v-else class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10">
+      <div
+        v-else
+        class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10"
+        @scroll.passive="loadMoreIfNearBottom"
+      >
         <div v-for="group in groupedHistoryEntries" :key="group.title" class="space-y-5">
           <div class="flex items-center gap-4 px-2 sticky top-0 bg-cream z-20 py-2">
             <span
@@ -519,6 +598,11 @@ onBeforeUnmount(() => {
           <div class="flex flex-col gap-4">
             <template v-for="entry in group.entries" :key="`${entry.kind}-${entry.id}`">
               <BorrowerRequestCard v-if="entry.kind === 'request'" :request="entry.request" />
+              <LenderRequestCard
+                v-else-if="entry.kind === 'lender-request'"
+                :request="entry.request"
+                @refresh="refreshAll"
+              />
               <TransactionCard
                 v-else
                 :transaction="entry.transaction"
@@ -541,17 +625,7 @@ onBeforeUnmount(() => {
           @click="loadMore"
         >
           <span v-if="isLoading" class="flex items-center gap-2">
-            <svg
-              class="animate-spin"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-            >
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
+            <Icon name="ph:spinner-gap" class="animate-spin w-4 h-4" />
             Loading…
           </span>
           <span v-else>Load More</span>
@@ -586,3 +660,19 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+</style>

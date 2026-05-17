@@ -10,10 +10,10 @@
       />
     </div>
     <div class="text-right flex flex-col items-end">
-      <div class="font-geist font-medium text-2xl text-noble-black leading-tight mb-1">
+      <div class="font-geist font-semibold text-2xl text-noble-black leading-tight mb-1">
         {{ title }}
       </div>
-      <div class="font-geist font-normal text-xl text-noble-black opacity-70">{{ subtitle }}</div>
+      <div class="font-geist font-light text-xl text-noble-black opacity-70">{{ subtitle }}</div>
     </div>
   </div>
 </template>

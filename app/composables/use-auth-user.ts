@@ -6,6 +6,9 @@
  *
  * Client-only — must not run during SSR (module-level dedup is not request-scoped).
  */
+import { computed } from "vue"
+import { usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 
 export type AuthMeUser = {
   id: string
@@ -21,28 +24,58 @@ export type AuthMeUser = {
   avatarUrl: string | null
   bio: string | null
   pronouns: string | null
+  lenderRating: number
+  totalLenderBookings: number
 }
 
 // Client-only in-flight promise so concurrent callers share one network request
 let inflightRequest: Promise<AuthMeUser | null> | null = null
+const AUTH_USER_CACHE_TTL_MS = 60_000
 
 export const useAuthUser = () => {
-  const authUser = useState<AuthMeUser | null>("auth-user-cache", () => null)
+  const authUser = usePersistedSessionState<AuthMeUser | null>("auth-user-cache", () => null)
+  const lastFetchedAt = usePersistedSessionState<number | null>(
+    "auth-user-cache:fetched-at",
+    () => null,
+  )
+  const hasFreshCache = computed(
+    () =>
+      Boolean(authUser.value) &&
+      lastFetchedAt.value !== null &&
+      Date.now() - lastFetchedAt.value < AUTH_USER_CACHE_TTL_MS,
+  )
 
   /** Seed the shared cache from another authenticated endpoint. */
   const setCached = (user: AuthMeUser | null) => {
     authUser.value = user
+    lastFetchedAt.value = user ? Date.now() : null
   }
 
   /** Fetch once; returns cached value on subsequent calls. */
   const fetch = async (): Promise<AuthMeUser | null> => {
     if (import.meta.server) return null
-    if (authUser.value) return authUser.value
-    if (inflightRequest) return inflightRequest
+    if (hasFreshCache.value) {
+      recordPerfEvent("auth-user", "me", "cache-hit")
+      return authUser.value
+    }
 
-    inflightRequest = $fetch<{ user: AuthMeUser }>("/api/auth/me")
+    if (authUser.value) {
+      recordPerfEvent("auth-user", "me", "cache-stale")
+    } else {
+      recordPerfEvent("auth-user", "me", "cache-miss")
+    }
+
+    if (inflightRequest) {
+      recordPerfEvent("auth-user", "me", "request-dedup-hit")
+      return inflightRequest
+    }
+
+    inflightRequest = withPerfTimer("auth-user", "me", () =>
+      $fetch<{ user: AuthMeUser }>("/api/auth/me"),
+    )
       .then((response) => {
         authUser.value = response.user
+        lastFetchedAt.value = Date.now()
         return response.user
       })
       .catch(() => {
@@ -59,12 +92,17 @@ export const useAuthUser = () => {
   const refresh = async (): Promise<AuthMeUser | null> => {
     if (import.meta.server) return null
     inflightRequest = null
+    recordPerfEvent("auth-user", "me", "cache-bypass")
     try {
-      const response = await $fetch<{ user: AuthMeUser }>("/api/auth/me")
+      const response = await withPerfTimer("auth-user", "me", () =>
+        $fetch<{ user: AuthMeUser }>("/api/auth/me"),
+      )
       authUser.value = response.user
+      lastFetchedAt.value = Date.now()
       return response.user
     } catch {
       authUser.value = null
+      lastFetchedAt.value = null
       return null
     }
   }
@@ -72,8 +110,9 @@ export const useAuthUser = () => {
   /** Clear cache (call on logout). */
   const clear = () => {
     authUser.value = null
+    lastFetchedAt.value = null
     inflightRequest = null
   }
 
-  return { authUser, fetch, refresh, clear, setCached }
+  return { authUser, hasFreshCache, fetch, refresh, clear, setCached }
 }

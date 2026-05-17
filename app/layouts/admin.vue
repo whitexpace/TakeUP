@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { onMounted, onUnmounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
+import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
 type AdminLink = {
   key: "overview" | "users" | "transactions" | "disputes" | "listings" | "wallet" | "logs"
@@ -15,8 +16,10 @@ const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const showLogoutModal = ref(false)
 
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+const { notifications, loadNotifications } = useNotifications()
+const { clear: clearAuthUser } = useAuthUser()
+const { clear: clearBridge } = useSessionBridge()
+const { clear: clearViewerSession } = useViewerSession()
 
 const adminLinks: AdminLink[] = [
   {
@@ -81,23 +84,44 @@ const cancelLogout = () => {
 
 const confirmLogout = async () => {
   showLogoutModal.value = false
-  await supabase.auth.signOut()
-  await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
-  await navigateTo("/")
+  await Promise.allSettled([
+    supabase.auth.signOut(),
+    $fetch("/api/auth/logout", { method: "POST" }),
+  ])
+  clearAuthCaches()
+  await navigateTo("/", { replace: true })
+}
+
+const clearAuthCaches = () => {
+  clearAuthUser()
+  clearBridge()
+  clearViewerSession()
+}
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024
+  if (!isMobile.value && !isSidebarOpen.value) {
+    isSidebarOpen.value = true
+  }
 }
 
 onMounted(() => {
   isMobile.value = window.innerWidth < 1024
   if (isMobile.value) isSidebarOpen.value = false
 
-  window.addEventListener("resize", () => {
-    isMobile.value = window.innerWidth < 1024
-    if (!isMobile.value && !isSidebarOpen.value) {
-      isSidebarOpen.value = true
-    }
-  })
+  window.addEventListener("resize", handleResize)
 
   void loadNotifications()
+  scheduleIdleWarmup(() => {
+    const { fetch: fetchAuthUser } = useAuthUser()
+    const { fetchOverview } = useAdminOverview()
+
+    void Promise.allSettled([fetchAuthUser(), fetchOverview()])
+  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize)
 })
 </script>
 
@@ -106,8 +130,6 @@ onMounted(() => {
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-admin-main-scrollbar"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
       <template #left>
@@ -117,25 +139,13 @@ onMounted(() => {
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M4 6H20M4 12H20M4 18H20"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon
+              name="ph:list"
+              class="w-5.5 h-5.5 shrink-0 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
           </button>
           <div class="custom-tooltip">
-            Toggle Sidebar
+            Sidebar
             <div class="tooltip-arrow"></div>
           </div>
         </div>
@@ -152,7 +162,7 @@ onMounted(() => {
 
       <!-- Left Sidebar -->
       <aside
-        class="bg-wahoo flex flex-col shrink-0 text-white border-r border-white/10 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0 overflow-hidden"
+        class="bg-noble-black flex flex-col shrink-0 text-white border-r border-white/5 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0 overflow-hidden"
         :class="[
           isSidebarOpen
             ? 'translate-x-0 w-[300px]'
@@ -160,209 +170,113 @@ onMounted(() => {
           isHeaderVisible ? 'pt-14' : 'pt-0',
         ]"
       >
-        <div class="px-6 pt-10 pb-6 shrink-0">
-          <p class="text-[10px] font-bold uppercase tracking-[2px] text-slate-500">
-            Platform Controls
-          </p>
-          <h2 class="mt-2 text-[20px] font-bold text-white">ADMIN PANEL</h2>
-          <p class="mt-2 max-w-[220px] text-[13px] leading-relaxed text-slate-400">
-            Centralized tools for shared operational workflows and platform revenue.
-          </p>
+        <div class="px-6 pt-10 pb-8 border-b border-white/5 shrink-0">
+          <h2 class="font-montravia text-[26px] font-bold text-white tracking-tight">
+            Admin Panel
+          </h2>
         </div>
 
-        <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-4 pt-6 pb-24">
+        <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-4 py-8 space-y-1">
           <NuxtLink
             v-for="link in adminLinks"
             :key="link.to"
             :to="link.to"
-            class="group flex items-center gap-3 px-4 py-3 transition-all duration-200"
+            class="group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300"
             :class="
               isActive(link)
-                ? 'bg-white/10 text-white border-l-[3px] border-orange-600 rounded-r-[8px]'
-                : 'text-slate-400 hover:bg-white/5 border-l-[3px] border-transparent'
+                ? 'bg-burning-orange/15 text-burning-orange font-semibold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
+                : 'text-white/50 hover:bg-white/5 hover:text-white border-l-4 border-transparent'
             "
             @click="isMobile && (isSidebarOpen = false)"
           >
             <div
-              class="shrink-0 transition-colors"
-              :class="isActive(link) ? 'text-white' : 'text-slate-600'"
+              class="shrink-0 transition-transform duration-300 w-[24px] h-[24px] flex items-center justify-center group-hover:scale-110"
+              :class="
+                isActive(link) ? 'text-burning-orange' : 'text-white/20 group-hover:text-white/60'
+              "
             >
-              <svg
+              <Icon
                 v-if="link.key === 'overview'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 3v18h18" />
-                <path d="m7 14 4-4 3 3 5-6" />
-              </svg>
-              <svg
+                name="ph:chart-line-up"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'users'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              <svg
+                name="ph:users-three"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'transactions'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="m17 2 4 4-4 4" />
-                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                <path d="m7 22-4-4 4-4" />
-                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-              </svg>
-              <svg
+                name="ph:arrows-left-right"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'disputes'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
-                <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
-                <path d="M7 21h10" />
-                <path d="M12 3v18" />
-                <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
-              </svg>
-              <svg
+                name="ph:scales"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'listings'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <path d="M3 10h18" />
-                <path d="M9 20V10" />
-              </svg>
-              <svg
+                name="ph:squares-four"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'wallet'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
-                <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
-                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
-              </svg>
-              <svg
+                name="ph:wallet"
+                class="w-[22px] h-[22px] shrink-0"
+              />
+              <Icon
                 v-else-if="link.key === 'logs'"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M8 6h13" />
-                <path d="M8 12h13" />
-                <path d="M8 18h13" />
-                <path d="M3 6h.01" />
-                <path d="M3 12h.01" />
-                <path d="M3 18h.01" />
-              </svg>
+                name="ph:activity"
+                class="w-[22px] h-[22px] shrink-0"
+              />
             </div>
-            <span class="text-[14px] font-medium">
+            <span class="text-[15px] leading-tight">
               {{ link.label }}
             </span>
           </NuxtLink>
 
-          <div class="mx-6 my-4 border-t border-white/10" />
+          <div class="mx-4 my-6 border-t border-white/5" />
 
           <NuxtLink
             to="/account"
-            class="group flex items-center gap-3 px-4 py-3 text-slate-400 transition-all duration-200 hover:bg-white/5 border-l-[3px] border-transparent"
+            class="group flex items-center gap-3 px-4 py-3 text-white/40 rounded-xl transition-all duration-300 hover:bg-white/5 hover:text-white border-l-4 border-transparent"
             @click="isMobile && (isSidebarOpen = false)"
           >
-            <div class="shrink-0 text-slate-600 transition-colors">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="m12 19-7-7 7-7" />
-                <path d="M19 12H5" />
-              </svg>
+            <div
+              class="shrink-0 text-white/20 transition-all duration-300 w-[24px] h-[24px] flex items-center justify-center group-hover:scale-110 group-hover:text-white/60"
+            >
+              <Icon name="ph:arrow-left" class="w-[22px] h-[22px] shrink-0" />
             </div>
-            <span class="text-[14px] font-medium">Personal Account</span>
+            <span class="text-[15px] leading-tight">Personal Account</span>
           </NuxtLink>
         </nav>
 
         <!-- Log Out Section -->
-        <div class="p-4 border-t border-white/10 shrink-0">
+        <div class="p-4 border-t border-white/5 shrink-0">
           <button
-            class="flex w-full items-center gap-3 px-4 py-3 text-slate-400 group transition-all duration-200 hover:text-white"
+            class="flex w-full items-center gap-3 px-4 py-3 text-white/40 rounded-xl group transition-all duration-300 hover:bg-cinnabar-red/10 hover:text-cinnabar-red font-bold"
             @click="openLogoutModal"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-colors duration-200 text-slate-600 group-hover:text-burning-orange"
+            <div
+              class="shrink-0 w-[24px] h-[24px] flex items-center justify-center group-hover:scale-110"
             >
-              <path
-                d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <Icon
+                name="ph:sign-out"
+                class="w-[22px] h-[22px] shrink-0 transition-all duration-300 text-white/20 group-hover:text-cinnabar-red group-hover:-translate-x-1"
               />
-            </svg>
-            <span class="text-[14px] font-medium transition-colors duration-200"> Log Out </span>
+            </div>
+            <span class="text-[15px] leading-tight"> Log Out </span>
           </button>
         </div>
       </aside>
 
       <main
-        class="custom-admin-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-white"
+        class="custom-admin-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-cream"
         :class="[isHeaderVisible ? 'pt-14' : 'pt-0']"
       >
-        <div class="py-8">
-          <div class="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
+        <div class="py-12">
+          <div class="mx-auto max-w-[1400px] px-4 sm:px-12 lg:px-16 xl:px-24">
             <slot />
           </div>
         </div>
@@ -383,21 +297,7 @@ onMounted(() => {
         >
           <div class="flex flex-col items-center p-8 text-center">
             <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.6569 11.6569 20 10 20H6C4.34315 20 3 18.6569 3 17V7C3 5.34315 4.34315 4 6 4H10C11.6569 4 13 5.34315 13 7V8"
-                  stroke="#1f2937"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+              <Icon name="ph:sign-out" class="w-8 h-8 text-noble-black" />
             </div>
             <h3 class="text-[24px] font-bold text-noble-black">Log out?</h3>
             <p class="mt-2 text-[15px] leading-relaxed text-noble-black/60">
@@ -435,6 +335,10 @@ onMounted(() => {
 .custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
+}
+
+.custom-admin-main-scrollbar {
+  overflow-anchor: none;
 }
 
 .custom-admin-main-scrollbar::-webkit-scrollbar {

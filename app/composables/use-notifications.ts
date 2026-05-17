@@ -1,5 +1,7 @@
-import { ref } from "vue"
+import { computed } from "vue"
 import type { AppHeaderNotification } from "../types/notifications"
+
+const NOTIFICATION_FETCH_LIMIT = 20
 
 type ApiNotification = {
   id: string
@@ -22,15 +24,17 @@ const normalizeNotification = (notification: ApiNotification): AppHeaderNotifica
 })
 
 export const useNotifications = () => {
-  const notifications = ref<AppHeaderNotification[]>([])
-  const isLoading = ref(false)
+  const notifications = useState<AppHeaderNotification[]>("app-notifications", () => [])
+  const isLoading = useState("app-notifications-loading", () => false)
 
   const loadNotifications = async () => {
     if (isLoading.value) return
     isLoading.value = true
 
     try {
-      const response = await $fetch<ApiNotification[]>("/api/notifications")
+      const response = await $fetch<ApiNotification[]>("/api/notifications", {
+        query: { limit: NOTIFICATION_FETCH_LIMIT },
+      })
       notifications.value = response.map(normalizeNotification)
     } catch {
       notifications.value = []
@@ -72,6 +76,7 @@ export const useNotifications = () => {
 
   return {
     notifications,
+    isLoading: computed(() => isLoading.value),
     loadNotifications,
     markNotificationRead,
     markAllNotificationsRead,

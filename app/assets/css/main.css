@@ -3,11 +3,81 @@
 @tailwind utilities;
 
 @font-face {
+  font-family: "Nv Montravia";
+  src:
+    url("/fonts/nvmontravia-thin.woff2") format("woff2"),
+    url("/fonts/nvmontravia-thin.woff") format("woff");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Nv Montravia";
+  src:
+    url("/fonts/nvmontravia-extralight.woff2") format("woff2"),
+    url("/fonts/nvmontravia-extralight.woff") format("woff");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Nv Montravia";
+  src:
+    url("/fonts/nvmontravia-light.woff2") format("woff2"),
+    url("/fonts/nvmontravia-light.woff") format("woff");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Nv Montravia";
+  src:
+    url("/fonts/nvmontravia-regular.woff2") format("woff2"),
+    url("/fonts/nvmontravia-regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Nv Montravia";
+  src:
+    url("/fonts/nvmontravia-medium.woff2") format("woff2"),
+    url("/fonts/nvmontravia-medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Nv Montravia";
+  src:
+    url("/fonts/nvmontravia-semibold.woff2") format("woff2"),
+    url("/fonts/nvmontravia-semibold.woff") format("woff");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Nv Montravia";
+  src:
+    url("/fonts/nvmontravia-bold.woff2") format("woff2"),
+    url("/fonts/nvmontravia-bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Geist";
   src:
     url("/fonts/geist.woff2") format("woff2"),
     url("/fonts/geist.woff") format("woff");
-  font-weight: 300 700;
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -25,7 +95,50 @@
 @layer base {
   html,
   body {
-    @apply font-geist bg-cream m-0;
+    @apply font-geist bg-white m-0;
+  }
+
+  /* Global Minimalist Luxury Scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme("colors.noble-black / 15%") transparent;
+  }
+
+  /* Webkit Browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: theme("colors.noble-black / 10%");
+    border-radius: 20px;
+    border: 1px solid transparent;
+    background-clip: content-box;
+    transition: background 0.3s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: theme("colors.noble-black / 25%");
+    background-clip: content-box;
+  }
+
+  /* Luxury touch: hide scrollbar arrows/buttons */
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  /* For Horizontal Scrollbars in cards/feeds */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 

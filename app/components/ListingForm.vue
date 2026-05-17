@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from "vue"
 import type { MyListingItem } from "../composables/use-my-listings"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { mergeParsedTags } from "../utils/tag-input"
 
 const STEPS = [
@@ -94,6 +95,10 @@ const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 
 const MAX_GALLERY_IMAGE_COUNT = 10
+const MAX_GALLERY_IMAGE_SIZE_MB = 10
+const MAX_GALLERY_IMAGE_BYTES = MAX_GALLERY_IMAGE_SIZE_MB * 1024 * 1024
+const GALLERY_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp"
+const ALLOWED_GALLERY_IMAGE_MIME_TYPES = new Set(GALLERY_IMAGE_ACCEPT.split(","))
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
   { value: "BOOKS", label: "Books" },
@@ -121,9 +126,9 @@ const CONDITIONS: { value: ItemCondition; label: string }[] = [
 
 const SUGGESTED_TAGS = [
   "Student-friendly",
-  "Brand new",
-  "Deposit required",
-  "ID required",
+  "Brand-new",
+  "Deposit-required",
+  "ID-required",
   "Popular",
 ]
 
@@ -495,30 +500,111 @@ const getSafeFileName = (fileName: string) => {
   )
 }
 
+type GalleryUploadSkipCounts = {
+  invalidType: number
+  tooLarge: number
+  overLimit: number
+}
+
+const formatGalleryUploadSkipMessage = (skipped: GalleryUploadSkipCounts) => {
+  const totalSkipped = skipped.invalidType + skipped.tooLarge + skipped.overLimit
+  if (totalSkipped === 0) return null
+
+  const details: string[] = []
+  if (skipped.invalidType > 0) {
+    details.push(
+      `${skipped.invalidType} ${skipped.invalidType === 1 ? "is" : "are"} not JPEG, PNG, or WebP`,
+    )
+  }
+  if (skipped.tooLarge > 0) {
+    details.push(
+      `${skipped.tooLarge} ${skipped.tooLarge === 1 ? "exceeds" : "exceed"} ${MAX_GALLERY_IMAGE_SIZE_MB} MB`,
+    )
+  }
+  if (skipped.overLimit > 0) {
+    details.push(
+      `${skipped.overLimit} ${skipped.overLimit === 1 ? "exceeds" : "exceed"} the ${MAX_GALLERY_IMAGE_COUNT}-image limit`,
+    )
+  }
+
+  return `Skipped ${totalSkipped} ${totalSkipped === 1 ? "file" : "files"}: ${details.join("; ")}.`
+}
+
+const getUploadableGalleryFiles = (files: File[]) => {
+  const uploadableFiles: File[] = []
+  const skipped: GalleryUploadSkipCounts = {
+    invalidType: 0,
+    tooLarge: 0,
+    overLimit: 0,
+  }
+  const availableSlots = Math.max(
+    0,
+    MAX_GALLERY_IMAGE_COUNT - images.value.length - pendingUploads.value.length,
+  )
+
+  for (const file of files) {
+    if (!ALLOWED_GALLERY_IMAGE_MIME_TYPES.has(file.type)) {
+      skipped.invalidType += 1
+      continue
+    }
+
+    if (file.size > MAX_GALLERY_IMAGE_BYTES) {
+      skipped.tooLarge += 1
+      continue
+    }
+
+    if (uploadableFiles.length >= availableSlots) {
+      skipped.overLimit += 1
+      continue
+    }
+
+    uploadableFiles.push(file)
+  }
+
+  return {
+    uploadableFiles,
+    skippedMessage: formatGalleryUploadSkipMessage(skipped),
+  }
+}
+
+const resetGalleryInput = () => {
+  if (galleryInput.value) {
+    galleryInput.value.value = ""
+  }
+}
+
+const clearPendingUpload = (uploadId: string) => {
+  pendingUploadRequests.delete(uploadId)
+  pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+}
+
 const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
-  const { fetch: fetchAuthUser } = useAuthUser()
-  const authUser = await fetchAuthUser()
-  if (!authUser) throw new Error("Not authenticated")
-  const userId = authUser.id
-  const datePrefix = new Date().toISOString().slice(0, 10)
-  const uniqueId = crypto.randomUUID()
-  const storagePath = `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
-  const uploadId = storagePath
-  pendingUploads.value.push({ id: uploadId, name: file.name, progress: 0 })
+  const uploadFile = await convertImageFileToWebP(file)
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const accessToken = session?.access_token
+  const storageOwnerId = session?.user?.id
+  if (!accessToken) throw new Error("You must be signed in to upload item images.")
+  if (!storageOwnerId) throw new Error("Unable to identify your Supabase account for upload.")
+
+  const datePrefix = new Date().toISOString().slice(0, 10)
+  const storagePath = `items/${storageOwnerId}/${datePrefix}/${crypto.randomUUID()}-${getSafeFileName(uploadFile.name)}`
+  const uploadId = storagePath
+  pendingUploads.value.push({ id: uploadId, name: uploadFile.name, progress: 0 })
+
   return new Promise<ListingImage>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
+
     pendingUploadRequests.set(uploadId, xhr)
     xhr.open(
       "POST",
       `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${storagePath.split("/").map(encodeURIComponent).join("/")}`,
     )
     xhr.setRequestHeader("apikey", supabaseKey)
-    if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
-    xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+    xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
+    xhr.setRequestHeader("x-upsert", "false")
+    xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
       const progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
@@ -527,13 +613,15 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
       )
     }
     xhr.onerror = () => {
-      pendingUploadRequests.delete(uploadId)
-      pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+      clearPendingUpload(uploadId)
       reject(new Error("Network error"))
     }
+    xhr.onabort = () => {
+      clearPendingUpload(uploadId)
+      reject(new Error("Upload cancelled"))
+    }
     xhr.onload = () => {
-      pendingUploadRequests.delete(uploadId)
-      pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+      clearPendingUpload(uploadId)
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error("Upload failed"))
         return
@@ -542,27 +630,44 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
         .from(itemImageBucket)
         .getPublicUrl(storagePath)
       sessionUploadedImageUrls.add(publicUrlData.publicUrl)
-      resolve({ id: storagePath, url: publicUrlData.publicUrl, name: file.name })
+      resolve({ id: storagePath, url: publicUrlData.publicUrl, name: uploadFile.name })
     }
-    xhr.send(file)
+    xhr.send(uploadFile)
   })
 }
 
 const uploadFiles = async (files: File[]) => {
   imageUploadError.value = null
-  if (files.length === 0) return
+  if (files.length === 0) {
+    resetGalleryInput()
+    return
+  }
+
+  if (isUploadingImages.value) {
+    imageUploadError.value = "Please wait for current image uploads to finish before adding more."
+    resetGalleryInput()
+    return
+  }
+
+  const { uploadableFiles, skippedMessage } = getUploadableGalleryFiles(files)
+  imageUploadError.value = skippedMessage
+  if (uploadableFiles.length === 0) {
+    resetGalleryInput()
+    return
+  }
+
   isUploadingImages.value = true
   try {
-    const uploaded = await Promise.all(files.map((f) => uploadFileWithProgress(f)))
+    const uploaded = await Promise.all(uploadableFiles.map((f) => uploadFileWithProgress(f)))
     images.value = [...images.value, ...uploaded]
     if (!primaryImageId.value) primaryImageId.value = uploaded[0]!.id
   } catch {
-    imageUploadError.value = "Failed to upload images."
+    imageUploadError.value = skippedMessage
+      ? `Failed to upload images. ${skippedMessage}`
+      : "Failed to upload images."
   } finally {
     isUploadingImages.value = false
-    if (galleryInput.value) {
-      galleryInput.value.value = ""
-    }
+    resetGalleryInput()
   }
 }
 
@@ -574,6 +679,7 @@ const handleGallerySelect = (event: Event) => {
 const removeGalleryImage = (id: string) => {
   images.value = images.value.filter((img) => img.id !== id)
   if (primaryImageId.value === id) primaryImageId.value = images.value[0]?.id ?? null
+  imageUploadError.value = null
 }
 
 const triggerGalleryUpload = () => galleryInput.value?.click()
@@ -606,6 +712,8 @@ const confirmCancel = () => {
 
 const cleanupSessionUploadsOnExit = () => {
   for (const xhr of pendingUploadRequests.values()) xhr.abort()
+  pendingUploadRequests.clear()
+  pendingUploads.value = []
 }
 
 const buildPayload = () => {
@@ -641,7 +749,31 @@ const buildPayload = () => {
   }
 }
 
+const { authUser, refresh: refreshAuthUser } = useAuthUser()
+
+onMounted(async () => {
+  if (import.meta.client) {
+    // Always refresh on mount to ensure we have the latest lender stats
+    // and to bypass any old cached profile objects.
+    await refreshAuthUser()
+  }
+})
+
 const showPreview = ref(false)
+const lenderRating = computed(() => {
+  if (authUser.value && typeof authUser.value.lenderRating !== "undefined") {
+    return authUser.value.lenderRating
+  }
+  return props.item?.lenderRating ?? 0
+})
+
+const lenderBookingCount = computed(() => {
+  if (authUser.value && typeof authUser.value.totalLenderBookings !== "undefined") {
+    return authUser.value.totalLenderBookings
+  }
+  return props.item?.lenderBookingCount ?? 0
+})
+
 const previewData = computed(() => {
   const payload = buildPayload()
   return {
@@ -649,16 +781,12 @@ const previewData = computed(() => {
     images: payload.photos.map((p, i) => ({ path: p, isPrimary: i === 0 })),
     categories: form.categories,
     condition: form.condition || "GOOD",
-    lender: {
-      user: {
-        firstName: props.item?.ownerName?.split(" ")[0] ?? "You",
-        lastName: props.item?.ownerName?.split(" ").slice(1).join(" ") ?? "",
-        avatarUrl: null,
-      },
-      lenderRating: props.item?.rating ?? 5.0,
-    },
-    ownerName: props.item?.ownerName ?? "You",
-    rating: props.item?.rating ?? 5.0,
+    ownerName: authUser.value?.name ?? props.item?.ownerName ?? "You (Preview)",
+    ownerAvatarUrl: authUser.value?.avatarUrl ?? props.item?.lenderAvatarUrl ?? null,
+    rating: 0,
+    lenderRating: lenderRating.value,
+    bookingCount: 0,
+    lenderBookingCount: lenderBookingCount.value,
   }
 })
 
@@ -734,34 +862,29 @@ const availabilityRowErrors = computed(() =>
 <template>
   <div class="mx-auto w-full max-w-[1100px] font-geist pb-20 lg:px-16 xl:px-24">
     <div v-if="!embedded" class="mb-10">
-      <NuxtLink
-        to="/account/listings"
-        class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="transition-transform group-hover:-translate-x-1"
+      <div class="relative group/tooltip w-fit mb-8">
+        <NuxtLink
+          to="/account/listings"
+          class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
         >
-          <path d="m15 18-6-6 6-6" />
-        </svg>
-        <span class="text-[15px] font-bold">Back to My Listings</span>
-      </NuxtLink>
+          <Icon
+            name="ph:caret-left"
+            class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+          />
+        </NuxtLink>
+        <div class="custom-tooltip">
+          Back to My Listings
+          <div class="tooltip-arrow"></div>
+        </div>
+      </div>
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
             {{ props.mode === "new" ? "Add New Item" : "Edit Listing" }}
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           {{
             props.mode === "new"
               ? "Share your items with the community and earn rewards."
@@ -792,19 +915,11 @@ const availabilityRowErrors = computed(() =>
                     : 'bg-white border-cinnamon-ice/20 text-noble-black/40',
               ]"
             >
-              <svg
+              <Icon
                 v-if="isStepCompleted(step.id)"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+                name="ph:check"
+                class="w-[18px] h-[18px] shrink-0"
+              />
               <span v-else class="text-[13px] font-bold">{{ index + 1 }}</span>
             </div>
             <span
@@ -866,7 +981,7 @@ const availabilityRowErrors = computed(() =>
             <input
               ref="galleryInput"
               type="file"
-              accept="image/*"
+              :accept="GALLERY_IMAGE_ACCEPT"
               multiple
               class="hidden"
               @change="handleGallerySelect"
@@ -876,22 +991,10 @@ const availabilityRowErrors = computed(() =>
               <div
                 class="w-12 h-12 rounded-full bg-noble-black/5 flex items-center justify-center mb-4 group-hover:bg-burning-orange/10 transition-colors"
               >
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="text-noble-black/40 group-hover:text-burning-orange transition-colors"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                  <path d="M16 5h4M18 3v4" stroke-width="2.5" />
-                </svg>
+                <Icon
+                  name="ph:image"
+                  class="w-6 h-6 text-noble-black/40 group-hover:text-burning-orange transition-colors shrink-0"
+                />
               </div>
               <p
                 class="text-[15px] font-bold text-noble-black/60 group-hover:text-noble-black transition-colors"
@@ -899,10 +1002,13 @@ const availabilityRowErrors = computed(() =>
                 Drag photos here or click to browse
               </p>
               <p class="mt-1 text-[13px] font-medium text-noble-black/40">
-                + Cover photo · PNG, JPG or WebP
+                + Cover photo · PNG, JPG or WebP · {{ MAX_GALLERY_IMAGE_SIZE_MB }} MB max
               </p>
             </div>
           </div>
+          <p v-if="imageUploadError" class="text-[13px] font-medium text-cinnabar-red">
+            {{ imageUploadError }}
+          </p>
           <div
             v-if="images.length > 0 || pendingUploads.length > 0"
             class="flex items-center gap-4 overflow-x-auto pt-5 pb-3 px-2 scrollbar-hide"
@@ -936,18 +1042,7 @@ const availabilityRowErrors = computed(() =>
                 class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-noble-black/60 text-white flex items-center justify-center shadow-lg backdrop-blur-sm opacity-0 group-hover/thumb:opacity-100 transition-all hover:bg-cinnabar-red active:scale-90"
                 @click.stop="removeGalleryImage(img.id)"
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+                <Icon name="ph:x" class="w-3 h-3 shrink-0" />
               </button>
             </div>
             <div
@@ -1010,16 +1105,7 @@ const availabilityRowErrors = computed(() =>
                   >
                     <span>{{ CATEGORIES.find((c) => c.value === cat)?.label }}</span
                     ><button type="button" @click.stop="selectCategory(cat)">
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                      >
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
+                      <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                     </button>
                   </div>
                   <span
@@ -1114,16 +1200,7 @@ const availabilityRowErrors = computed(() =>
               >
                 <span>{{ offer }}</span
                 ><button type="button" @click="removeOffer(idx)">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
+                  <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                 </button>
               </div>
               <input
@@ -1152,16 +1229,7 @@ const availabilityRowErrors = computed(() =>
               >
                 <span>{{ includedItem }}</span
                 ><button type="button" @click="removeIncluded(idx)">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
+                  <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
                 </button>
               </div>
               <input
@@ -1257,17 +1325,8 @@ const availabilityRowErrors = computed(() =>
                     class="h-11 flex items-center gap-2 px-4 bg-noble-black/5 border-l border-cinnamon-ice/10 text-[13px] font-bold text-noble-black/70 hover:bg-noble-black/10 transition-colors"
                     @click="toggleRateUnitDropdown"
                   >
-                    {{ form.rateOption === "PER_DAY" ? "Per Day" : "Per Hour"
-                    }}<svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
+                    {{ form.rateOption === "PER_DAY" ? "Per Day" : "Per Hour" }}
+                    <Icon name="ph:caret-down" class="w-[14px] h-[14px] shrink-0" />
                   </button>
                   <div
                     v-if="isRateUnitDropdownOpen"
@@ -1393,18 +1452,8 @@ const availabilityRowErrors = computed(() =>
               class="w-full flex items-center justify-center gap-2 p-3 rounded-[10px] border-[1.5px] border-dashed border-cinnamon-ice/20 bg-white text-[13px] font-bold text-noble-black/50 hover:border-burning-orange hover:text-burning-orange hover:bg-burning-orange/[0.02] transition-all"
               @click="addAvailabilityRow"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 5v14M5 12h14" /></svg
-              >Add another availability date
+              <Icon name="ph:plus" class="w-[18px] h-[18px] shrink-0" />Add another availability
+              date
             </button>
           </div>
         </section>
@@ -1426,18 +1475,9 @@ const availabilityRowErrors = computed(() =>
               :key="tag"
               class="flex items-center gap-1.5 rounded-full bg-burning-orange/[0.08] border border-burning-orange/20 px-2.5 py-0.5 text-[12px] font-bold text-burning-orange"
             >
-              <span>{{ tag }}</span
-              ><button type="button" @click="removeTag(tag)">
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+              <span>{{ tag }}</span>
+              <button type="button" @click="removeTag(tag)">
+                <Icon name="ph:x" class="w-[10px] h-[10px] shrink-0" />
               </button>
             </div>
             <input
@@ -1446,6 +1486,7 @@ const availabilityRowErrors = computed(() =>
               placeholder="Add tags..."
               class="flex-1 bg-transparent px-1.5 text-[14px] font-medium outline-none"
               @keydown.enter.prevent="addTag"
+              @keydown.space.prevent="addTag"
               @keydown.,.prevent="addTag"
               @blur="addTag"
             />
@@ -1517,16 +1558,7 @@ const availabilityRowErrors = computed(() =>
           class="absolute right-6 top-6 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
           @click="closeLightbox"
         >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+          <Icon name="ph:x" class="w-6 h-6" />
         </button>
         <div class="flex flex-col items-center gap-4" @click.stop>
           <img :src="lightboxImage.url" class="max-h-[80vh] w-auto rounded-2xl shadow-2xl" />
@@ -1547,18 +1579,7 @@ const availabilityRowErrors = computed(() =>
           <div
             class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream mx-auto text-cinnabar-red shadow-inner"
           >
-            <svg
-              width="30"
-              height="30"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                d="M12 9V14M12 17.01L12.01 16.998M10.29 3.86L1.82 18C1.55 18.3 1.55 18.99 1.81 19.99C1.98 20.29 2.23 20.54 2.53 20.72L3.53 21H20.47L21.46 20.72C21.76 20.54 22.01 20.29 22.18 19.99C22.35 19.68 22.44 19.34 22.44 18.99C22.44 18.64 22.35 18.3 22.18 18L13.71 3.86C13.53 3.56 13.28 3.32 12.98 3.15C12.68 2.98 12.34 2.89 12 2.89C11.65 2.89 11.31 2.98 11.01 3.15C10.71 3.32 10.46 3.56 10.29 3.86Z"
-              />
-            </svg>
+            <Icon name="ph:warning" class="w-[30px] h-[30px] shrink-0" />
           </div>
           <h3 class="mb-3 text-[22px] font-bold text-noble-black">Discard changes?</h3>
           <p class="mb-10 text-[14px] text-noble-black/40">
@@ -1596,6 +1617,62 @@ const availabilityRowErrors = computed(() =>
   transform: translateY(-2px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
+
+/* Custom Tooltip Styling matching Header.vue */
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+
 .section-header {
   border-left: 3px solid theme("colors.burning-orange");
   padding-left: 16px;

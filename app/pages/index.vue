@@ -1,73 +1,230 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue"
+import { ref, onMounted, computed } from "vue"
 import Header from "../components/Header.vue"
 
-const images = [
-  { src: "/images/landing-pic.jpg", position: "object-[50%_50%]" },
-  { src: "/images/landing-pic1.jpg", position: "object-[50%_35%]" },
-  { src: "/images/landing-pic2.jpg", position: "object-[50%_65%]" },
-  { src: "/images/landing-pic3.jpg", position: "object-[50%_50%]" },
-]
+import ItemCard from "../components/ItemCard.vue"
+import { getTrendingItemIds } from "../utils/item-trending"
 
-const currentImageIndex = ref(0)
-let slideshowInterval: NodeJS.Timeout | null = null
+definePageMeta({
+  middleware: "home-auth-redirect",
+})
+
 const supabase = useSupabaseClient()
 const route = useRoute()
 
 type LoginStatus = "idle" | "loading" | "success" | "error" | "blocked_domain"
 const loginStatus = ref<LoginStatus>("idle")
 const errorMessage = ref("")
-const currentUser = ref<{ id: string; email: string; name: string } | null>(null)
 
-const categories = [
+// 1. Fetch Dynamic Category Metadata using the same endpoint as the dashboard
+const { data: filterData, pending: isLoadingMetadata } = useLazyFetch("/api/items/filter-metadata")
+
+// 2. Fetch Popular/Trending Items using standard API
+const { data: itemsResponse, pending: isLoadingPopular } = useLazyFetch("/api/items?limit=8")
+
+const trendingIds = computed(() => {
+  const items = itemsResponse.value?.items || []
+  if (items.length === 0) return new Set<string>()
+  return getTrendingItemIds(items)
+})
+
+// Fallback Mock Data for Popular Section (if DB is empty)
+const MOCK_POPULAR_ITEMS: Array<{
+  id: string
+  type: "Rent" | "Borrow"
+  image: string | null
+  category: string
+  name: string
+  price: string | number
+  rating: number
+  reviews: number
+  owner: string
+  isTrending: boolean
+}> = [
   {
-    title: "Books & Academics",
-    subtitle: "342 items",
-    imageSrc: "/images/categories/book.png",
-    imageAlt: "Books",
+    id: "m1",
+    type: "Rent",
+    image: "/images/popular/macbook.jpg",
+    category: "Electronics",
+    name: "Macbook Air 13-inch M1",
+    price: "300",
+    rating: 4.9,
+    reviews: 67,
+    owner: "jslegaspo",
+    isTrending: true,
   },
   {
-    title: "Electronics",
-    subtitle: "256 items",
-    imageSrc: "/images/categories/phone.png",
-    imageAlt: "Electronics",
+    id: "m2",
+    type: "Borrow",
+    image: "/images/popular/scical.jpg",
+    category: "Electronics",
+    name: "Casio FX-991EX",
+    price: "Free",
+    rating: 4.8,
+    reviews: 8,
+    owner: "mchen",
+    isTrending: true,
   },
   {
-    title: "Arts & Craft Supplies",
-    subtitle: "189 items",
-    imageSrc: "/images/categories/palette.png",
-    imageAlt: "Arts",
+    id: "m3",
+    type: "Rent",
+    image: "/images/popular/camera.jpg",
+    category: "Photography",
+    name: "Sony A7 IV Kit",
+    price: "500",
+    rating: 5.0,
+    reviews: 35,
+    owner: "binicolete",
+    isTrending: true,
   },
   {
-    title: "Event & Party",
-    subtitle: "167 items",
-    imageSrc: "/images/categories/disco-ball.png",
-    imageAlt: "Party",
+    id: "m4",
+    type: "Rent",
+    image: "/images/popular/dress.jpg",
+    category: "Attire",
+    name: "Long Green Dress",
+    price: "100",
+    rating: 4.8,
+    reviews: 27,
+    owner: "sophia_l",
+    isTrending: true,
   },
-  {
-    title: "Sports Equipment",
-    subtitle: "145 items",
-    imageSrc: "/images/categories/ball.png",
-    imageAlt: "Sports",
-  },
-  {
-    title: "Dorm Essentials",
-    subtitle: "198 items",
-    imageSrc: "/images/categories/lamp.png",
-    imageAlt: "Dorm",
-  },
-  {
-    title: "Photography",
-    subtitle: "87 items",
-    imageSrc: "/images/categories/camera.png",
-    imageAlt: "Photo",
-  },
-  {
-    title: "Music & Audio",
-    subtitle: "116 items",
-    imageSrc: "/images/categories/headphones.png",
-    imageAlt: "Music",
-  },
+]
+
+const displayPopularItems = computed(() => {
+  const items = itemsResponse.value?.items || []
+  if (items.length > 0) {
+    return items.map((item) => ({
+      id: item.id,
+      type: (item.freeToBorrow ? "Borrow" : "Rent") as "Borrow" | "Rent",
+      image: item.thumbnailImage,
+      category: item.categories[0] || "Others",
+      name: item.name,
+      price: item.freeToBorrow ? "Free" : item.rentalFee,
+      rating: item.rating ?? 0,
+      reviews: item.bookingCount ?? 0,
+      isTrending: trendingIds.value.has(item.id),
+      owner: item.ownerName || "user",
+    }))
+  }
+  return MOCK_POPULAR_ITEMS
+})
+
+const CATEGORY_UI_MAP: Record<string, { label: string; image: string }> = {
+  BOOKS: { label: "Books & Academics", image: "/images/books.jpg" },
+  ELECTRONICS: { label: "Electronics", image: "/images/electronics.jpg" },
+  SPORTS_OUTDOORS: { label: "Sports Equipment", image: "/images/sports.jpg" },
+  SCHOOL_SUPPLIES: { label: "Dorm Essentials", image: "/images/dorm.jpg" },
+  MUSIC_AUDIO: { label: "Music & Audio", image: "/images/music.jpg" },
+  TOOLS: { label: "Tools", image: "/images/categories/camera.png" },
+  CLOTHING: { label: "Attire", image: "/images/attire.jpg" },
+  HOME_APPLIANCES: { label: "Home & Appliances", image: "/images/categories/lamp.png" },
+  TOYS_GAMES: { label: "Toys & Games", image: "/images/categories/disco-ball.png" },
+  PET_SUPPLIES: { label: "Pet Supplies", image: "/images/pet.jpg" },
+  OTHER: { label: "Others", image: "/images/categories/palette.png" },
+  OTHERS: { label: "Others", image: "/images/categories/palette.png" },
+}
+
+// Flexible Bento Span generator
+const getGridSpan = (index: number, total: number) => {
+  if (total === 1) return "md:col-span-4 md:row-span-2"
+  if (total === 2) return "md:col-span-2 md:row-span-2"
+  if (total === 3) {
+    if (index === 0) return "md:col-span-2 md:row-span-2"
+    return "md:col-span-2 md:row-span-1"
+  }
+  if (total === 4) return "md:col-span-2 md:row-span-1"
+
+  // 5 items (Standard Layout)
+  if (total === 5) {
+    if (index === 0) return "md:col-span-2 md:row-span-1"
+    if (index === 1) return "md:col-span-1 md:row-span-2"
+    if (index === 2) return "md:col-span-1 md:row-span-1"
+    if (index === 3) return "md:col-span-2 md:row-span-1"
+    return "md:col-span-1 md:row-span-1"
+  }
+
+  // 6 items (Full Fill Layout)
+  if (index === 0) return "md:col-span-2 md:row-span-1"
+  if (index === 1) return "md:col-span-1 md:row-span-1"
+  if (index === 2) return "md:col-span-1 md:row-span-1"
+  if (index === 3) return "md:col-span-1 md:row-span-1"
+  if (index === 4) return "md:col-span-1 md:row-span-1"
+  return "md:col-span-2 md:row-span-1"
+}
+
+const dynamicCategories = computed(() => {
+  const categoriesToUse = []
+
+  // Try to extract real categories with items
+  if (filterData.value?.categories) {
+    const sorted = Object.entries(filterData.value.categories)
+      .filter(([, count]) => (count as number) > 0)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+
+    if (sorted.length > 0) {
+      categoriesToUse.push(...sorted.slice(0, 6)) // Take up to 6 real categories
+    }
+  }
+
+  // If no items found, use curated static defaults
+  if (categoriesToUse.length === 0) {
+    return [
+      {
+        title: "Books & Academics",
+        subtitle: "Featured",
+        imageSrc: "/images/books.jpg",
+        class: "md:col-span-2 md:row-span-1",
+      },
+      {
+        title: "Electronics",
+        subtitle: "Trending",
+        imageSrc: "/images/electronics.jpg",
+        class: "md:col-span-1 md:row-span-2",
+      },
+      {
+        title: "Sports Equipment",
+        subtitle: "Active",
+        imageSrc: "/images/sports.jpg",
+        class: "md:col-span-1 md:row-span-1",
+      },
+      {
+        title: "Dorm Essentials",
+        subtitle: "Essential",
+        imageSrc: "/images/dorm.jpg",
+        class: "md:col-span-2 md:row-span-1",
+      },
+      {
+        title: "Attire",
+        subtitle: "Style",
+        imageSrc: "/images/attire.jpg",
+        class: "md:col-span-1 md:row-span-1",
+      },
+    ]
+  }
+
+  // Map to UI objects with dynamic grid spans
+  return categoriesToUse.map(([key, count], index) => {
+    const ui = CATEGORY_UI_MAP[key] || { label: key, image: "/images/landing-pic1.jpg" }
+    return {
+      title: ui.label,
+      subtitle: `${count} items`,
+      imageSrc: ui.image,
+      class: getGridSpan(index, categoriesToUse.length),
+    }
+  })
+})
+
+const stats = [
+  { value: "1,500+", label: "Items Available" },
+  { value: "500+", label: "Verified Iskos" },
+  { value: "4.9", label: "Average Rating" },
+]
+
+const trustBadges = [
+  "Verified UP Cebu Students only",
+  "Secure transactions",
+  "Campus-based meetups",
 ]
 
 onMounted(async () => {
@@ -76,16 +233,6 @@ onMounted(async () => {
     loginStatus.value = (route.query.status as LoginStatus) || "error"
     scrollToSignIn()
   }
-
-  slideshowInterval = setInterval(() => {
-    currentImageIndex.value = (currentImageIndex.value + 1) % images.length
-  }, 5000) // Change image every 5 seconds
-
-  await restoreSession()
-})
-
-onUnmounted(() => {
-  if (slideshowInterval) clearInterval(slideshowInterval)
 })
 
 const signInRef = ref<HTMLElement | null>(null)
@@ -107,80 +254,6 @@ const scrollToSignIn = () => {
   }, 1000)
 }
 
-const scrollToCategories = () => {
-  if (loginStatus.value === "success") {
-    scrollToSection(categoriesRef.value)
-  } else {
-    scrollToSignIn()
-  }
-}
-
-const scrollToPopularItems = () => {
-  if (loginStatus.value === "success") {
-    scrollToSection(popularItemsRef.value)
-  } else {
-    scrollToSignIn()
-  }
-}
-
-async function restoreSession() {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    const user = session?.user
-    const accessToken = session?.access_token
-    const email = user?.email?.toLowerCase() ?? ""
-
-    if (!user) {
-      currentUser.value = null
-      if (loginStatus.value !== "error" && loginStatus.value !== "blocked_domain") {
-        loginStatus.value = "idle"
-      }
-      return
-    }
-
-    if (!email.endsWith("@up.edu.ph")) {
-      await supabase.auth.signOut()
-      currentUser.value = null
-      loginStatus.value = "blocked_domain"
-      errorMessage.value = "Only up.edu.ph email addresses are allowed."
-      return
-    }
-
-    currentUser.value = {
-      id: user.id,
-      email: user.email ?? "",
-      name:
-        (user.user_metadata?.full_name as string | undefined) ||
-        (user.user_metadata?.name as string | undefined) ||
-        user.email ||
-        "UP User",
-    }
-    loginStatus.value = "success"
-
-    if (accessToken) {
-      const { ensureBridged } = useSessionBridge()
-      await ensureBridged(accessToken)
-    }
-
-    await navigateTo("/dashboard")
-  } catch {
-    currentUser.value = null
-    loginStatus.value = "idle"
-  }
-}
-
-async function handleLogout() {
-  try {
-    await supabase.auth.signOut()
-    await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
-  } finally {
-    currentUser.value = null
-    loginStatus.value = "idle"
-  }
-}
-
 const handleGoogleLogin = async () => {
   errorMessage.value = ""
   loginStatus.value = "loading"
@@ -190,7 +263,6 @@ const handleGoogleLogin = async () => {
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
       queryParams: {
-        hd: "up.edu.ph",
         prompt: "select_account",
       },
     },
@@ -204,427 +276,378 @@ const handleGoogleLogin = async () => {
 </script>
 
 <template>
-  <main class="min-h-screen font-sans">
-    <Header :show-nav="false" hide-icons custom-padding="px-4 lg:px-[60px] 2xl:px-[168px]">
-      <template #right>
-        <div class="flex items-center">
-          <button
-            v-if="currentUser"
-            type="button"
-            class="bg-burning-orange text-white px-6 py-2 rounded-full font-geist font-bold text-[14px] hover:bg-blue-estate transition-colors duration-300"
-            @click="handleLogout"
-          >
-            Log out
-          </button>
-          <button
-            v-else
-            type="button"
-            class="bg-burning-orange text-white px-6 py-2 rounded-full font-geist font-bold text-[14px] flex items-center gap-2 hover:bg-blue-estate transition-colors duration-300"
-            :disabled="loginStatus === 'loading'"
-            @click="handleGoogleLogin"
-          >
-            <img src="/images/login-button.svg" alt="" class="w-4 h-4 brightness-0 invert" />
-            <span>Sign in</span>
-          </button>
-        </div>
-      </template>
-    </Header>
+  <main
+    class="min-h-screen bg-white font-geist selection:bg-burning-orange/10 selection:text-burning-orange"
+  >
+    <!-- Redesigned Shared Header -->
+    <Header :show-nav="false" hide-icons @sign-in="scrollToSignIn" />
 
-    <!-- Main Content -->
-    <div class="px-4 lg:px-[60px] 2xl:px-[168px]">
-      <!-- Section One -->
-      <div
-        class="flex flex-col items-center pt-[120px] gap-12 xl:flex-row xl:items-start xl:justify-center xl:pt-[160px] xl:gap-24"
-      >
-        <!-- Left Column -->
-        <div
-          class="w-full flex flex-col items-center text-center xl:max-w-[600px] xl:items-start xl:text-left 2xl:max-w-[calc(100%-600px)]"
-        >
-          <h2
-            class="text-noble-black font-rewon m-0 mb-4 leading-[1.1] text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px] lg:mb-4"
-          >
-            SHARE WHAT YOU <span class="text-burning-orange">HAVE</span>.<br />GET WHAT YOU
-            <span class="text-blue-estate">NEED</span>.
-          </h2>
-          <p
-            class="text-noble-black opacity-80 font-geist m-0 mb-8 leading-[1.45] text-base md:text-xl lg:text-2xl lg:mb-8"
-          >
-            Borrow essential gear for free or rent items for your projects within a trusted campus
-            network.
-          </p>
-          <div class="flex flex-row flex-wrap justify-center gap-4 xl:justify-start">
-            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="1,500+" label="Items"></StatCard1>
-            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="500+" label="Iskos"></StatCard1>
-            <StatCard1 class="mb-4 lg:mr-4 lg:mb-0" value="4.9" label="Average Rating"></StatCard1>
-          </div>
-        </div>
+    <!-- 1. Immersive Hero Section (Dark) -->
+    <section class="relative min-h-screen flex items-center pt-20 overflow-hidden">
+      <div class="absolute inset-0 z-0">
+        <img src="/images/up.jpg" class="w-full h-full object-cover" alt="UP Cebu Campus" />
+        <div class="absolute inset-0 bg-noble-black/60 backdrop-brightness-75"></div>
+      </div>
 
-        <!-- Right Column -->
-        <div class="w-full flex flex-col items-center xl:w-fit xl:max-w-[600px] xl:items-end">
+      <div class="max-w-7xl mx-auto px-6 relative z-10 w-full">
+        <div class="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
           <div
-            ref="signInRef"
-            class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] w-full max-w-[600px] flex flex-col p-6 lg:p-10 transition-transform duration-500 ease-in-out"
-            :class="{ 'scale-105': isSignInHighlighted }"
+            class="w-full lg:w-[60%] flex flex-col items-center text-center lg:items-start lg:text-left"
           >
-            <h3 class="font-geist font-bold text-[30px] text-noble-black m-0 mb-4">
-              Get started today.
-            </h3>
-
-            <!-- Success State -->
-            <div
-              v-if="loginStatus === 'success'"
-              class="bg-success-green/10 border border-success-green text-success-green rounded-[10px] p-4 mb-4 flex items-center gap-3"
+            <h1
+              class="font-montravia italic text-[56px] md:text-[72px] text-white leading-[1.05] mb-8 drop-shadow-sm"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-6 w-6 flex-shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <span class="font-geist font-medium">
-                Authentication successful!
-                <template v-if="currentUser">
-                  Signed in as {{ currentUser.name }} ({{ currentUser.email }})
-                </template>
-              </span>
-            </div>
-
-            <!-- Blocked Domain State -->
-            <div
-              v-else-if="loginStatus === 'blocked_domain'"
-              class="bg-burning-orange/10 border border-burning-orange text-burning-orange rounded-[10px] p-4 mb-4 flex items-start gap-3"
+              Share what you <span class="text-burning-orange not-italic">have</span>.<br />
+              Get what you <span class="text-burning-orange not-italic">need</span>.
+            </h1>
+            <p
+              class="text-[18px] md:text-[22px] text-white/80 font-light max-w-[580px] leading-relaxed mb-12"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-6 w-6 flex-shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              <span class="font-geist font-medium"
-                >Access Denied: You must use a valid up.edu.ph email address to register.</span
-              >
-            </div>
-
-            <!-- Error State -->
-            <div
-              v-else-if="loginStatus === 'error'"
-              class="bg-cinnabar-red/10 border border-cinnabar-red text-cinnabar-red rounded-[10px] p-4 mb-4 flex items-center gap-3"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-6 w-6 flex-shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span class="font-geist font-medium">{{ errorMessage }}</span>
-            </div>
-
-            <p class="font-geist font-light text-[17px] text-noble-black m-0 mb-8 text-left">
-              Sign in with your UP mail to join the community.
+              The premier peer-to-peer sharing marketplace exclusively for the UP Cebu community.
+              Borrow gear for free or rent items for your projects.
             </p>
-            <button
-              class="bg-burning-orange rounded-[10px] border-none w-full h-[52px] flex items-center justify-center gap-3 cursor-pointer mb-4 text-white font-geist font-medium text-base hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              :disabled="loginStatus === 'loading' || loginStatus === 'success'"
-              @click="handleGoogleLogin"
+
+            <div class="flex items-center gap-10">
+              <div v-for="(stat, i) in stats" :key="stat.label" class="flex items-center">
+                <div class="flex flex-col">
+                  <span class="text-[32px] font-bold text-white leading-none mb-1">{{
+                    stat.value
+                  }}</span>
+                  <span class="text-[14px] text-white/60 font-medium tracking-wide uppercase">{{
+                    stat.label
+                  }}</span>
+                </div>
+                <div v-if="i < stats.length - 1" class="h-10 w-px bg-white/20 ml-10"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="w-full lg:w-[40%] flex justify-center lg:justify-end">
+            <div
+              ref="signInRef"
+              class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-[24px] shadow-2xl w-full max-w-[440px] p-10 lg:p-12 transition-all duration-500 overflow-hidden"
+              :class="{
+                'scale-[1.03] border-burning-orange/50 bg-white/20 shadow-[0_0_80px_rgba(255,113,36,0.15)] ring-4 ring-burning-orange/5':
+                  isSignInHighlighted,
+              }"
             >
-              <template v-if="loginStatus === 'loading'">
-                <svg
-                  class="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  ></circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <span>Signing in...</span>
-              </template>
-              <template v-else>
-                <img src="/images/google-icon.svg" alt="Google" class="w-6 h-6 block" />
-                <span>Sign in using your UP mail</span>
-              </template>
-            </button>
-            <p class="font-geist font-light text-[15px] text-noble-black m-0 text-center">
-              Only accounts ending with <span class="font-semibold">up.edu.ph</span> are accepted
-            </p>
-          </div>
-          <div class="mt-6 flex flex-wrap justify-center w-full max-w-[600px] gap-6">
-            <FeatureItem text="Verified UP Students only"></FeatureItem>
-            <FeatureItem text="Secure transactions"></FeatureItem>
-            <FeatureItem text="Campus-based meetups"></FeatureItem>
+              <h2 class="text-[24px] font-bold text-white mb-2">Get started today.</h2>
+              <p class="text-[14px] text-white/60 mb-10">
+                Sign in with your Google account to join the community.
+              </p>
+
+              <button
+                class="w-full h-14 bg-burning-orange rounded-[12px] flex items-center justify-center gap-3 hover:brightness-110 transition-all duration-300 disabled:opacity-50 group mb-6 active:scale-95 shadow-lg shadow-burning-orange/20"
+                :disabled="loginStatus === 'loading' || loginStatus === 'success'"
+                @click="handleGoogleLogin"
+              >
+                <div class="p-1 bg-white rounded-full">
+                  <img src="/images/google-icon.svg" alt="Google" class="w-5 h-5 block" />
+                </div>
+                <span class="text-white font-semibold text-[15px]">Continue with Google</span>
+              </button>
+
+              <div class="h-px bg-white/10 w-full mb-6"></div>
+              <p class="text-[12px] text-white/40 text-center leading-relaxed">
+                Accounts ending with <span class="text-white font-semibold">up.edu.ph</span> or
+                <span class="text-white font-semibold">gmail.com</span> are accepted
+              </p>
+            </div>
           </div>
         </div>
       </div>
+    </section>
 
-      <!-- Section Two -->
-      <div class="flex flex-col lg:flex-row items-center gap-12 py-20 lg:py-32">
-        <!-- Left: Image Slideshow with Floating Badges -->
-        <div class="relative w-full lg:w-1/2">
-          <div class="relative w-full h-auto rounded-[30px] shadow-lg overflow-hidden">
-            <!-- Ghost image to maintain aspect ratio/height -->
-            <img
-              src="/images/landing-pic.jpg"
-              alt=""
-              class="w-full h-auto invisible opacity-0 pointer-events-none relative z-0"
-            />
-
-            <!-- Slideshow Images -->
-            <img
-              v-for="(img, index) in images"
-              :key="img.src"
-              :src="img.src"
-              alt="Campus Sharing"
-              class="absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-[2000ms] ease-in-out"
-              :class="[
-                index === currentImageIndex ? 'opacity-100 z-10' : 'opacity-0 z-0',
-                img.position,
-              ]"
-            />
-          </div>
-          <!-- Top-Right Badge -->
-          <div
-            class="absolute -top-6 -right-4 md:-right-8 bg-cream border border-cinnamon-ice rounded-full px-6 py-3 shadow-md z-20"
-          >
-            <span class="font-geist text-[20px] text-noble-black font-normal whitespace-nowrap"
-              >500+ Iskos</span
-            >
-          </div>
-
-          <!-- Bottom-Left Badge -->
-          <div
-            class="absolute -bottom-6 -left-4 md:-left-8 bg-blue-estate rounded-full px-6 py-3 shadow-md z-20"
-          >
-            <span class="font-geist text-[20px] text-cream font-normal whitespace-nowrap"
-              >1,500+ Items</span
-            >
-          </div>
-        </div>
-
-        <!-- Right Content -->
-        <div
-          class="w-full lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left"
-        >
-          <div
-            class="font-rewon text-noble-black m-0 mb-6 leading-[1.1] uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]"
-          >
-            BORROW <span class="text-burning-orange">LOCALLY</span>. LEND
-            <span class="text-blue-estate">SAFELY</span>. SAVE
-            <span class="text-burning-orange">MONEY</span>.
-          </div>
-          <p
-            class="text-noble-black opacity-80 font-geist m-0 mb-10 leading-[1.45] text-base md:text-xl lg:text-2xl"
-          >
-            No “neighbors” — just students. Our campus-exclusive platform connects you with verified
-            UP students who have what you need or want what you have.
-          </p>
-          <div class="flex flex-col sm:flex-row gap-4">
-            <BorrowNowButton></BorrowNowButton>
-            <LendItemButton></LendItemButton>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section Three -->
-      <div class="py-20 lg:py-32 w-full flex justify-center px-4 lg:px-0">
-        <div
-          class="bg-white shadow-[6px_8px_50px_rgba(0,0,0,0.15)] rounded-[30px] p-8 lg:p-[60px] w-full max-w-[900px] flex flex-col items-center"
-        >
-          <h2 class="font-geist font-bold text-[30px] text-noble-black m-0 mb-8 text-center">
-            What are you looking for?
-          </h2>
-          <div class="w-full flex justify-center mb-6">
-            <SearchBar></SearchBar>
-          </div>
-          <div class="w-full max-w-[760px] grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-            <StatCard2 value="6" label="Borrowed Today"></StatCard2>
-            <StatCard2 value="4.9" label="Average Rating"></StatCard2>
-            <StatCard2 value="67" label="Active Items"></StatCard2>
-          </div>
-        </div>
-      </div>
-
-      <!-- Section Four -->
-      <div ref="categoriesRef" class="py-20 lg:py-32">
-        <div class="flex justify-between items-center mb-4 lg:mb-6">
-          <h2
-            class="font-rewon text-noble-black m-0 p-0 leading-none uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]"
-          >
-            BROWSE CATEGORIES
-          </h2>
-          <a
-            href="#"
-            class="text-burning-orange font-geist font-medium text-lg hover:underline leading-none"
-            @click.prevent="scrollToCategories"
-          >
-            View Categories
-          </a>
-        </div>
-        <p
-          class="text-noble-black opacity-80 font-geist m-0 mb-10 leading-[1.45] text-base md:text-xl lg:text-2xl"
-        >
-          Find exactly what you need across popular categories
-        </p>
-        <div
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[1px] bg-cinnamon-ice rounded-[30px] overflow-hidden shadow-[6px_8px_50px_rgba(0,0,0,0.15)]"
-        >
-          <CategoryCard
-            v-for="category in categories"
-            :key="category.title"
-            :title="category.title"
-            :subtitle="category.subtitle"
-            :image-src="category.imageSrc"
-            :image-alt="category.imageAlt"
-          ></CategoryCard>
-        </div>
-      </div>
-
-      <!-- Section Five -->
-      <div ref="popularItemsRef" class="py-20 lg:py-32">
-        <div class="flex justify-between items-center mb-4 lg:mb-6">
-          <h2
-            class="font-rewon text-noble-black m-0 p-0 leading-none uppercase text-[28px] sm:text-[34px] md:text-[42px] lg:text-[48px] xl:text-[55px]"
-          >
-            POPULAR ON CAMPUS
-          </h2>
-          <a
-            href="#"
-            class="text-burning-orange font-geist font-medium text-lg hover:underline leading-none"
-            @click.prevent="scrollToPopularItems"
-          >
-            View All Items
-          </a>
-        </div>
-        <p
-          class="text-noble-black opacity-80 font-geist m-0 mb-10 leading-[1.45] text-base md:text-xl lg:text-2xl"
-        >
-          Most borrowed items this week
-        </p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-8">
-          <ItemCard
-            id="1"
-            type="Rent"
-            image="/images/popular/macbook.jpg"
-            category="Electronics"
-            name='Macbook Air 13" M1'
-            rating="4.9"
-            reviews="67"
-            price="300"
-            owner="Paolo F."
-          ></ItemCard>
-          <ItemCard
-            id="2"
-            type="Borrow"
-            image="/images/popular/scical.jpg"
-            category="Electronics"
-            name="Casio FX-991EX ClassWiz"
-            rating="4.8"
-            reviews="8"
-            owner="Dave S."
-          ></ItemCard>
-          <ItemCard
-            id="3"
-            type="Rent"
-            image="/images/popular/camera.jpg"
-            category="Photography"
-            name="Sony A7 IV Camera Kit"
-            rating="5.0"
-            reviews="35"
-            price="500"
-            owner="Issa S."
-          ></ItemCard>
-          <ItemCard
-            id="4"
-            type="Rent"
-            image="/images/popular/dress.jpg"
-            category="Attire"
-            name="Long Green Dress"
-            rating="4.8"
-            reviews="27"
-            price="100"
-            owner="Issa S."
-          ></ItemCard>
-        </div>
-      </div>
-
-      <!-- Section Six -->
+    <!-- 2. Trust Badges Row (Infinite Scrolling Ticker) -->
+    <div class="bg-white py-8 border-b border-cinnamon-ice/10 relative overflow-hidden group">
       <div
-        class="w-full bg-[linear-gradient(90deg,theme(colors.noble-black)_0%,theme(colors.wahoo)_51%,theme(colors.blue-estate)_95%)] py-20 lg:py-32 flex flex-col items-center text-center px-4 mt-20 lg:mt-32 rounded-[30px] overflow-hidden"
+        class="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"
+      ></div>
+      <div
+        class="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none"
+      ></div>
+
+      <div
+        class="flex whitespace-nowrap animate-infinite-scroll hover:[animation-play-state:paused]"
       >
-        <div class="max-w-[1200px] flex flex-col items-center">
-          <h2
-            class="font-rewon text-[34px] sm:text-[42px] md:text-[50px] text-cream leading-tight mb-6 uppercase"
+        <div class="flex items-center gap-x-20 px-10">
+          <div
+            v-for="badge in trustBadges"
+            :key="`set1-${badge}`"
+            class="flex items-center gap-3 transition-all duration-300"
           >
-            READY TO START SHARING?
-          </h2>
-          <p
-            class="font-geist font-medium text-lg md:text-2xl text-cream mb-12 max-w-[800px] opacity-90"
+            <div
+              class="w-6 h-6 rounded-full bg-success-green/5 flex items-center justify-center border border-success-green/10 shrink-0"
+            >
+              <Icon name="ph:check" class="text-success-green w-3.5 h-3.5" />
+            </div>
+            <span class="text-[12px] text-noble-black/40 font-semibold tracking-widest uppercase">{{
+              badge
+            }}</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-x-20 px-10" aria-hidden="true">
+          <div
+            v-for="badge in trustBadges"
+            :key="`set2-${badge}`"
+            class="flex items-center gap-3 transition-all duration-300"
           >
-            Join hundreds of UP Cebu students already borrowing and lending on campus.
-          </p>
-          <div class="flex flex-col sm:flex-row gap-6">
-            <BorrowNowButton></BorrowNowButton>
-            <LendItemButton></LendItemButton>
+            <div
+              class="w-6 h-6 rounded-full bg-success-green/5 flex items-center justify-center border border-success-green/10 shrink-0"
+            >
+              <Icon name="ph:check" class="text-success-green w-3.5 h-3.5" />
+            </div>
+            <span class="text-[12px] text-noble-black/40 font-semibold tracking-widest uppercase">{{
+              badge
+            }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <footer
-      class="w-full mt-20 lg:mt-32 border-t border-cinnamon-ice border-[1px] py-6 flex items-center justify-center bg-cream"
-    >
-      <div
-        class="flex items-center justify-center gap-1 font-geist font-semibold text-xs text-noble-black opacity-60"
-      >
-        2026 &copy; TakeUP. Made with
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          class="inline-block mx-0.5 fill-cinnabar-red"
+    <!-- 3. Borrow Locally Branded Panel (Dark) -->
+    <section class="bg-noble-black py-24 lg:py-32 overflow-hidden">
+      <div class="max-w-7xl mx-auto px-6">
+        <div class="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
+          <div class="w-full lg:w-1/2">
+            <h2 class="font-montravia text-[42px] lg:text-[56px] text-white leading-[1.1] mb-8">
+              Borrow <span class="text-burning-orange">LOCALLY</span>. <br />
+              Lend <span class="text-white/60 font-light italic">SAFELY</span>. <br />
+              Save <span class="text-burning-orange">MONEY</span>.
+            </h2>
+            <p
+              class="text-[17px] lg:text-[19px] text-white/50 font-light leading-relaxed mb-12 max-w-[500px]"
+            >
+              Join 500+ verified UP Cebu students already sharing 1,500+ items on campus. No
+              “neighbors” — just students within your trusted community.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-5">
+              <button
+                type="button"
+                class="h-12 px-10 bg-burning-orange text-white rounded-[14px] font-bold text-[15px] flex items-center justify-center hover:brightness-110 transition-all active:scale-95 shadow-lg shadow-burning-orange/20"
+                @click="scrollToSignIn"
+              >
+                Borrow Now
+              </button>
+              <button
+                type="button"
+                class="h-12 px-10 border-[1.5px] border-white/15 text-white rounded-[14px] font-bold text-[15px] flex items-center justify-center hover:bg-white/5 transition-all active:scale-95"
+                @click="scrollToSignIn"
+              >
+                Lend an Item
+              </button>
+            </div>
+          </div>
+
+          <div class="w-full lg:w-1/2 grid grid-cols-2 gap-4 sm:gap-6">
+            <div class="space-y-4 sm:space-y-6 pt-16">
+              <div
+                class="rounded-[24px] overflow-hidden aspect-[4/5] border border-white/5 shadow-2xl transition-transform duration-700 hover:scale-[1.02]"
+              >
+                <img src="/images/popular/macbook.jpg" class="w-full h-full object-cover" />
+              </div>
+              <div
+                class="rounded-[24px] overflow-hidden aspect-square border border-white/5 shadow-2xl transition-transform duration-700 hover:scale-[1.02]"
+              >
+                <img src="/images/popular/camera.jpg" class="w-full h-full object-cover" />
+              </div>
+            </div>
+            <div class="space-y-4 sm:space-y-6">
+              <div
+                class="rounded-[24px] overflow-hidden aspect-square border border-white/5 shadow-2xl transition-transform duration-700 hover:scale-[1.02]"
+              >
+                <img src="/images/popular/scical.jpg" class="w-full h-full object-cover" />
+              </div>
+              <div
+                class="rounded-[24px] overflow-hidden aspect-[4/5] border border-white/5 shadow-2xl transition-transform duration-700 hover:scale-[1.02]"
+              >
+                <img src="/images/popular/dress.jpg" class="w-full h-full object-cover" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Browse Categories (Dynamic Editorial Bento Grid - Light) -->
+    <section ref="categoriesRef" class="py-24 lg:py-32 bg-white">
+      <div class="max-w-7xl mx-auto px-6">
+        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-12">
+          <div>
+            <h2 class="font-montravia text-[36px] text-noble-black mb-2 leading-none">
+              Browse Categories
+            </h2>
+            <p class="text-[14px] text-noble-black/40 font-light">
+              Find exactly what you need from verified UP Cebu students.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="text-burning-orange font-semibold text-[13px] flex items-center gap-1 hover:underline"
+            @click="scrollToSignIn"
+          >
+            View Categories <span class="text-[16px]">→</span>
+          </button>
+        </div>
+
+        <!-- Skeleton Loading State -->
+        <div
+          v-if="isLoadingMetadata"
+          class="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-auto md:h-[600px]"
         >
-          <path
-            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-          ></path>
-        </svg>
-        for the UP Cebu Community.
+          <div
+            v-for="i in 5"
+            :key="i"
+            :class="[
+              i === 1 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 2 ? 'md:col-span-1 md:row-span-2' : '',
+              i === 3 ? 'md:col-span-1 md:row-span-1' : '',
+              i === 4 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 5 ? 'md:col-span-1 md:row-span-1' : '',
+              'bg-noble-black/5 rounded-[24px] animate-pulse border border-cinnamon-ice/10',
+            ]"
+          ></div>
+        </div>
+
+        <div
+          v-else
+          class="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-auto md:h-[600px]"
+        >
+          <div
+            v-for="cat in dynamicCategories"
+            :key="cat.title"
+            :class="[
+              cat.class,
+              'relative rounded-[24px] overflow-hidden group cursor-pointer shadow-sm border border-cinnamon-ice/10 transition-all duration-500 hover:scale-[1.01] hover:shadow-2xl',
+            ]"
+          >
+            <img
+              :src="cat.imageSrc"
+              class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+            />
+            <div
+              class="absolute inset-0 bg-noble-black/45 group-hover:bg-noble-black/30 transition-colors duration-500"
+            ></div>
+
+            <div class="absolute inset-0 p-8 flex flex-col justify-between z-10">
+              <h3 class="text-white text-[20px] font-bold tracking-tight drop-shadow-md">
+                {{ cat.title }}
+              </h3>
+              <div class="flex justify-end">
+                <span
+                  class="bg-burning-orange text-white text-[11px] font-bold uppercase tracking-widest px-4 py-2 rounded-full shadow-lg"
+                >
+                  {{ cat.subtitle }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Popular on Campus (Dark Spotlight) -->
+    <section ref="popularItemsRef" class="py-32 bg-noble-black overflow-hidden relative">
+      <div
+        class="absolute top-0 right-0 w-[500px] h-[500px] bg-burning-orange/5 rounded-full blur-[100px] -mr-64 -mt-64"
+      ></div>
+
+      <div class="max-w-7xl mx-auto px-6 relative z-10">
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
+          <div>
+            <h2 class="font-montravia text-[48px] italic text-white mb-2 leading-none">
+              Popular on Campus
+            </h2>
+            <p class="text-[15px] text-white/40 font-light tracking-wide">
+              Most borrowed items this week across the UP Cebu community
+            </p>
+          </div>
+          <button
+            type="button"
+            class="text-white font-semibold text-[13px] flex items-center gap-3 group"
+            @click="scrollToSignIn"
+          >
+            <span
+              class="tracking-widest uppercase text-[11px] opacity-70 group-hover:opacity-100 transition-opacity"
+              >View All Items</span
+            >
+            <div
+              class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center transition-all group-hover:border-burning-orange group-hover:bg-burning-orange shadow-lg"
+            >
+              <Icon name="ph:arrow-right" class="w-4 h-4" />
+            </div>
+          </button>
+        </div>
+
+        <div v-if="isLoadingPopular" class="flex gap-8 overflow-x-auto pb-12 hide-scrollbar">
+          <div
+            v-for="i in 4"
+            :key="i"
+            class="flex-shrink-0 w-[300px] h-[360px] bg-white/5 rounded-[20px] animate-pulse"
+          ></div>
+        </div>
+
+        <div
+          v-else
+          class="flex gap-8 overflow-x-auto pb-12 hide-scrollbar snap-x cursor-grab active:cursor-grabbing"
+        >
+          <!-- Styled Item Cards with Ghost Rank Numbers -->
+          <div
+            v-for="(item, idx) in displayPopularItems"
+            :key="item.id"
+            class="flex-shrink-0 w-[280px] snap-start relative group/card-wrapper"
+            @click.capture.stop="scrollToSignIn"
+          >
+            <!-- Ghost Rank Number (Behind Card) -->
+            <span
+              class="absolute top-[-30px] left-[-10px] text-[120px] font-black text-white/5 leading-none select-none tracking-tighter italic z-0 pointer-events-none group-hover/card-wrapper:text-white/10 transition-colors duration-500"
+            >
+              {{ idx + 1 }}
+            </span>
+
+            <div class="relative z-10">
+              <ItemCard
+                :id="item.id"
+                :type="item.type"
+                :category="item.category"
+                :name="item.name"
+                :image="item.image"
+                :price="item.price"
+                :rating="item.rating"
+                :reviews="item.reviews"
+                :is-trending="item.isTrending"
+                :owner="item.owner"
+                class="!mx-0 shadow-[0_12px_40px_rgba(0,0,0,0.4)] group-hover/card-wrapper:-translate-y-2 transition-all duration-500"
+              />
+            </div>
+          </div>
+          <div class="flex-shrink-0 w-32"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Simple Footer -->
+    <footer class="bg-white border-t border-cinnamon-ice/10 h-auto md:h-16">
+      <div
+        class="max-w-7xl mx-auto h-full px-6 py-6 md:py-0 flex flex-col md:flex-row justify-between items-center gap-4 text-[11px] text-noble-black/40 uppercase tracking-widest font-bold"
+      >
+        <span>&copy; 2026 TakeUP Marketplace</span>
+        <div class="flex items-center gap-1">
+          Made with <Icon name="ph:heart-fill" class="text-cinnabar-red w-3.5 h-3.5" /> for the UP
+          Cebu Community
+        </div>
+        <span>UP Cebu Campus</span>
       </div>
     </footer>
   </main>
 </template>
+
+<style scoped>
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>

@@ -1,5 +1,37 @@
+import { ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { useListingAnalytics, type ListingAnalyticsResponse } from "../use-listing-analytics"
+import {
+  useListingAnalytics,
+  type ListingAnalyticsPreviewResponse,
+  type ListingAnalyticsResponse,
+} from "../use-listing-analytics"
+
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => ReturnType<typeof ref>
+      }
+    ).useState(key, init),
+}))
+
+vi.mock("../use-viewer-session", () => ({
+  useViewerSession: () => ({
+    getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+  }),
+}))
+
+const createStateMock = () => {
+  const store = new Map<string, ReturnType<typeof ref>>()
+
+  return (key: string, init: () => unknown) => {
+    if (!store.has(key)) {
+      store.set(key, ref(init()))
+    }
+
+    return store.get(key)!
+  }
+}
 
 const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
   summary: {
@@ -84,16 +116,36 @@ const makeAnalyticsResponse = (): ListingAnalyticsResponse => ({
   range: "all",
 })
 
+const makeAnalyticsPreviewResponse = (): ListingAnalyticsPreviewResponse => ({
+  summary: makeAnalyticsResponse().summary,
+  listingCount: 1,
+  chartItems: [
+    {
+      listingId: "item-1",
+      itemName: "Wireless Mouse",
+      thumbnailImage: null,
+      totalViews: 10,
+      totalBookings: 2,
+      totalRevenue: 250,
+    },
+  ],
+  topItems: [
+    {
+      listingId: "item-1",
+      itemName: "Wireless Mouse",
+      thumbnailImage: null,
+      totalViews: 10,
+      totalBookings: 2,
+      totalRevenue: 250,
+    },
+  ],
+  range: "all",
+})
+
 describe("useListingAnalytics", () => {
   beforeEach(() => {
+    vi.stubGlobal("useState", createStateMock())
     vi.stubGlobal("navigateTo", vi.fn())
-    vi.stubGlobal("useSupabaseClient", () => ({
-      auth: {
-        getSession: vi.fn().mockResolvedValue({
-          data: { session: { access_token: "token-123" } },
-        }),
-      },
-    }))
   })
 
   afterEach(() => {
@@ -121,7 +173,8 @@ describe("useListingAnalytics", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/account/listing-analytics", {
       query: { range: "all" },
-      headers: { authorization: "Bearer token-123" },
+      headers: { Authorization: "Bearer token-123" },
+      credentials: "same-origin",
     })
     expect(summary.value?.totalViews).toBe(10)
     expect(summary.value?.totalBookingRequests).toBe(5)
@@ -134,6 +187,34 @@ describe("useListingAnalytics", () => {
     expect(itemRatings.value).toHaveLength(1)
     expect(hasListings.value).toBe(true)
     expect(hasActivity.value).toBe(true)
+  })
+
+  it("fetches top analytics preview before the full listing analytics payload", async () => {
+    const response = makeAnalyticsPreviewResponse()
+    const fetchMock = vi.fn().mockResolvedValue(response)
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const {
+      fetchAnalyticsTop,
+      summary,
+      listingCount,
+      previewChartItems,
+      previewTopItems,
+      hasTopFetched,
+    } = useListingAnalytics()
+
+    await fetchAnalyticsTop()
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/account/listing-analytics/top", {
+      query: { range: "all" },
+      headers: { Authorization: "Bearer token-123" },
+      credentials: "same-origin",
+    })
+    expect(hasTopFetched.value).toBe(true)
+    expect(summary.value?.totalViews).toBe(10)
+    expect(listingCount.value).toBe(1)
+    expect(previewChartItems.value).toHaveLength(1)
+    expect(previewTopItems.value).toHaveLength(1)
   })
 
   it("refetches analytics when the selected date range changes", async () => {

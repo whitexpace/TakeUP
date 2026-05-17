@@ -1,63 +1,77 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
+import { useAuthUser } from "../composables/use-auth-user"
+import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
+import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
+import { useRewardsPrefetch } from "../composables/use-rewards"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const isHeaderVisible = ref(true)
+const hasObservedPointerMove = ref(false)
 
 const hideSidebar = computed(() => route.meta.hideAccountSidebar === true)
 
 const user = useSupabaseUser()
 const supabase = useSupabaseClient()
+const {
+  authUser: cachedAuthUser,
+  hasFreshCache: hasFreshAuthUserCache,
+  fetch: fetchAuthUser,
+  clear: clearAuthUser,
+} = useAuthUser()
+const { clear: clearBridge } = useSessionBridge()
+const { clear: clearViewerSession } = useViewerSession()
+const { warmAccountReviews } = useAccountReviewsPrefetch()
+const { warmListingAnalytics } = useListingAnalyticsPrefetch()
+const { warmRewards } = useRewardsPrefetch()
 
-type AuthMeResponse = {
-  user: {
-    id: string
-    email: string
-    name: string
-    username: string
-    firstName: string
-    middleName: string | null
-    lastName: string
-    accountType: string | null
-    createdAt: string | null
-    location: string | null
-    avatarUrl: string | null
-    bio: string | null
-    pronouns: string | null
+const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
+
+const { notifications, loadNotifications } = useNotifications()
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024
+  if (!isMobile.value && !isSidebarOpen.value) {
+    isSidebarOpen.value = true
   }
 }
 
-const { data: authData } = await useAsyncData("account:auth-me", async () => {
-  try {
-    return await $fetch<AuthMeResponse>("/api/auth/me")
-  } catch (err) {
-    console.error("Failed to fetch auth data in layout:", err)
-    return null
-  }
-})
-
 onMounted(() => {
+  void loadNotifications()
+  if (user.value && !hasFreshAuthUserCache.value && !cachedAuthUser.value) {
+    void fetchAuthUser()
+  }
+
   isMobile.value = window.innerWidth < 1024
   if (isMobile.value) isSidebarOpen.value = false
 
-  window.addEventListener("resize", () => {
-    isMobile.value = window.innerWidth < 1024
-    if (!isMobile.value && !isSidebarOpen.value) {
-      isSidebarOpen.value = true
-    }
-  })
+  window.addEventListener("resize", handleResize)
 })
+
+const markPointerInteraction = () => {
+  hasObservedPointerMove.value = true
+}
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value
 }
 
 const handleSignOut = async () => {
-  await supabase.auth.signOut()
-  navigateTo("/")
+  await Promise.allSettled([
+    supabase.auth.signOut(),
+    $fetch("/api/auth/logout", { method: "POST" }),
+  ])
+  clearAuthCaches()
+  await navigateTo("/", { replace: true })
+}
+
+const clearAuthCaches = () => {
+  clearAuthUser()
+  clearBridge()
+  clearViewerSession()
 }
 
 const isActive = (path: string) => {
@@ -65,6 +79,30 @@ const isActive = (path: string) => {
     return route.path === "/account"
   }
   return route.path.startsWith(path)
+}
+
+const warmNavLink = (path: string, event?: Event) => {
+  if (event?.type === "pointermove") {
+    markPointerInteraction()
+  }
+
+  if (event?.type === "pointerenter" && !hasObservedPointerMove.value) {
+    return
+  }
+
+  if (path === "/account/analytics") {
+    void warmListingAnalytics(path)
+    return
+  }
+
+  if (path === "/account/rewards") {
+    void warmRewards(path)
+    return
+  }
+
+  if (path === "/account/reviews") {
+    void warmAccountReviews(path)
+  }
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -107,14 +145,9 @@ const fullName = computed(() => {
   // 1. Try DB name first (Highest priority for local edits)
   const u = authData.value?.user
   if (u) {
-    const first = (u.firstName || "").trim()
-    const last = (u.lastName || "").trim()
-
-    if (last.toLowerCase() === "user" || !last) {
-      return first.charAt(0).toUpperCase() + first.slice(1)
-    }
-
-    const dbParts = [first, u.middleName, last].filter(Boolean)
+    const dbParts = [(u.firstName || "").trim(), u.middleName, (u.lastName || "").trim()].filter(
+      Boolean,
+    )
     if (dbParts.length > 0) return dbParts.join(" ")
     if (u.name && u.name !== u.username) return u.name
   }
@@ -168,7 +201,7 @@ const fallbackBgClass = computed(() => {
 const navGroups = computed(() => {
   const groups = [
     {
-      title: "Personal",
+      title: "Account",
       links: [
         { label: "Account Information", to: "/account", icon: "user" },
         { label: "My Wallet", to: "/account/wallet", icon: "wallet" },
@@ -201,7 +234,9 @@ const navGroups = computed(() => {
   return groups
 })
 
-const { notifications, markNotificationRead, markAllNotificationsRead } = useNotifications()
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize)
+})
 </script>
 
 <template>
@@ -209,8 +244,6 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-account-main-scrollbar"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
       <template #left>
@@ -221,25 +254,13 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M4 6H20M4 12H20M4 18H20"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon
+              name="ph:list"
+              class="w-5.5 h-5.5 shrink-0 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
           </button>
           <div class="custom-tooltip">
-            Toggle Sidebar
+            Sidebar
             <div class="tooltip-arrow"></div>
           </div>
         </div>
@@ -265,84 +286,89 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
           isHeaderVisible ? 'pt-14' : 'pt-0',
         ]"
       >
-        <!-- Profile Section -->
-        <div class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30 shrink-0">
-          <div class="flex items-center gap-4">
-            <div class="relative group shrink-0">
-              <!-- Branded Tri-color Border Container (Tight fit) -->
-              <div class="relative w-16 h-16 flex items-center justify-center rounded-full">
-                <!-- SVG Arcs for Border -->
-                <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 64 64">
-                  <!-- Cinnamon Ice Arc -->
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="31"
-                    fill="none"
-                    stroke="currentColor"
-                    class="text-cinnamon-ice"
-                    stroke-width="2"
-                    stroke-dasharray="64.9 129.8"
-                    stroke-linecap="round"
-                  />
-                  <!-- Burning Orange Arc -->
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="31"
-                    fill="none"
-                    stroke="currentColor"
-                    class="text-burning-orange"
-                    stroke-width="2"
-                    stroke-dasharray="64.9 129.8"
-                    stroke-dashoffset="-64.9"
-                    stroke-linecap="round"
-                  />
-                  <!-- Blue Estate Arc -->
-                  <circle
-                    cx="32"
-                    cy="32"
-                    r="31"
-                    fill="none"
-                    stroke="currentColor"
-                    class="text-blue-estate"
-                    stroke-width="2"
-                    stroke-dasharray="64.9 129.8"
-                    stroke-dashoffset="-129.8"
-                    stroke-linecap="round"
-                  />
-                </svg>
+        <!-- User Profile Container -->
+        <NuxtLink
+          v-if="authData?.user.username"
+          :to="`/profile/${authData.user.username}`"
+          :prefetch-on="{ interaction: true }"
+          class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30 shrink-0 flex items-center gap-4 hover:bg-pale-cashmere/30 transition-all duration-300 group/profile-link"
+        >
+          <div class="relative group shrink-0">
+            <!-- Branded Tri-color Border Container (Tight fit) -->
+            <div class="relative w-16 h-16 flex items-center justify-center rounded-full">
+              <!-- SVG Arcs for Border -->
+              <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 64 64">
+                <!-- Cinnamon Ice Arc -->
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="31"
+                  fill="none"
+                  stroke="currentColor"
+                  class="text-cinnamon-ice"
+                  stroke-width="2"
+                  stroke-dasharray="64.9 129.8"
+                  stroke-linecap="round"
+                />
+                <!-- Burning Orange Arc -->
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="31"
+                  fill="none"
+                  stroke="currentColor"
+                  class="text-burning-orange"
+                  stroke-width="2"
+                  stroke-dasharray="64.9 129.8"
+                  stroke-dashoffset="-64.9"
+                  stroke-linecap="round"
+                />
+                <!-- Blue Estate Arc -->
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="31"
+                  fill="none"
+                  stroke="currentColor"
+                  class="text-blue-estate"
+                  stroke-width="2"
+                  stroke-dasharray="64.9 129.8"
+                  stroke-dashoffset="-129.8"
+                  stroke-linecap="round"
+                />
+              </svg>
 
+              <div
+                class="w-[58px] h-[58px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover/profile-link:scale-105 z-10"
+              >
+                <!-- Direct Image Tag for maximum reliability -->
+                <img
+                  v-if="profileAvatar"
+                  :src="profileAvatar"
+                  class="w-full h-full object-cover"
+                  referrerpolicy="no-referrer"
+                />
                 <div
-                  class="w-[58px] h-[58px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
+                  v-else
+                  class="w-full h-full flex items-center justify-center text-white font-bold text-xl"
+                  :class="fallbackBgClass"
                 >
-                  <!-- Direct Image Tag for maximum reliability -->
-                  <img
-                    v-if="profileAvatar"
-                    :src="profileAvatar"
-                    class="w-full h-full object-cover"
-                    referrerpolicy="no-referrer"
-                  />
-                  <div
-                    v-else
-                    class="w-full h-full flex items-center justify-center text-white font-bold text-xl"
-                    :class="fallbackBgClass"
-                  >
-                    {{ firstInitial }}
-                  </div>
+                  {{ firstInitial }}
                 </div>
               </div>
             </div>
-            <div class="min-w-0 flex-1">
-              <h2 class="font-bold text-[16px] text-noble-black truncate leading-tight mb-0.5">
-                {{ fullName }}
-              </h2>
-              <p class="text-[13px] text-noble-black/50 font-medium truncate">
-                {{ authData?.user.email || "" }}
-              </p>
-            </div>
           </div>
-        </div>
+          <div class="min-w-0 flex-1">
+            <h2
+              class="font-semibold text-[16px] text-noble-black truncate leading-tight mb-0.5 group-hover/profile-link:text-burning-orange transition-colors"
+            >
+              {{ fullName }}
+            </h2>
+            <p class="text-[13px] text-noble-black/50 font-light truncate">
+              {{ authData?.user.email || "" }}
+            </p>
+          </div>
+        </NuxtLink>
 
         <!-- Navigation Groups (Tightened for non-scroll) -->
         <nav class="flex-1 overflow-hidden py-6 px-4 space-y-6">
@@ -357,155 +383,71 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
                 v-for="link in group.links"
                 :key="link.label"
                 :to="link.to"
+                :prefetch-on="{ interaction: true }"
                 class="group flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200"
                 :class="
                   isActive(link.to)
-                    ? 'bg-burning-orange/15 text-burning-orange font-bold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
+                    ? 'bg-burning-orange/15 text-burning-orange font-semibold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
                     : 'text-noble-black/70 hover:bg-pale-cashmere/50 hover:text-noble-black border-l-4 border-transparent'
                 "
+                @pointerenter="warmNavLink(link.to, $event)"
+                @pointermove.passive="warmNavLink(link.to, $event)"
+                @focus="warmNavLink(link.to, $event)"
+                @touchstart.passive="warmNavLink(link.to, $event)"
+                @mousedown.left="warmNavLink(link.to, $event)"
                 @click="isMobile && (isSidebarOpen = false)"
               >
                 <!-- Icons -->
-                <div class="shrink-0 transition-transform duration-200 group-hover:scale-110">
-                  <svg
+                <div
+                  class="w-[22px] h-[22px] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110 -translate-y-[0.5px]"
+                >
+                  <Icon
                     v-if="link.icon === 'user'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                  <svg
+                    name="ph:user"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'wallet'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"
-                    />
-                    <path d="M16 12h5" />
-                  </svg>
-                  <svg
+                    name="ph:wallet"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'transactions'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  <svg
+                    name="ph:receipt"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'dispute'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                    />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                  <svg
+                    name="ph:warning-circle"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'listings'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect x="3" y="3" width="7" height="7" />
-                    <rect x="14" y="3" width="7" height="7" />
-                    <rect x="14" y="14" width="7" height="7" />
-                    <rect x="3" y="14" width="7" height="7" />
-                  </svg>
-                  <svg
+                    name="ph:squares-four"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'analytics'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <line x1="18" y1="20" x2="18" y2="10" />
-                    <line x1="12" y1="20" x2="12" y2="4" />
-                    <line x1="6" y1="20" x2="6" y2="14" />
-                  </svg>
-                  <svg
+                    name="ph:chart-bar"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'rewards'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="8" r="7" />
-                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                  </svg>
-                  <svg
+                    name="ph:gift"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'reviews'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-                    />
-                  </svg>
-                  <svg
+                    name="ph:chat-centered-text"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
+                  <Icon
                     v-else-if="link.icon === 'admin-dispute'"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-                    />
-                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-                    <path d="m9 14 2 2 4-4" />
-                  </svg>
+                    name="ph:shield-warning"
+                    class="w-[22px] h-[22px] shrink-0"
+                  />
                 </div>
-                <span class="text-[15px] truncate">{{ link.label }}</span>
+                <span class="text-[15px] truncate leading-none">{{ link.label }}</span>
               </NuxtLink>
             </div>
           </div>
@@ -518,23 +460,15 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
             class="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-cinnabar-red hover:bg-cinnabar-red/5 transition-all font-bold group"
             @click="handleSignOut"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="transition-transform group-hover:-translate-x-1"
+            <div
+              class="w-[22px] h-[22px] flex items-center justify-center shrink-0 -translate-y-[0.5px]"
             >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            <span class="font-medium text-[15px]">Log Out</span>
+              <Icon
+                name="ph:sign-out"
+                class="w-[22px] h-[22px] transition-transform group-hover:-translate-x-1 shrink-0"
+              />
+            </div>
+            <span class="font-medium text-[15px] leading-none">Log Out</span>
           </button>
         </div>
       </aside>
@@ -553,31 +487,6 @@ const { notifications, markNotificationRead, markAllNotificationsRead } = useNot
 </template>
 
 <style scoped>
-.custom-sidebar-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-sidebar-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice");
-  border-radius: 10px;
-}
-
-.custom-account-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-account-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-account-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice");
-  border-radius: 10px;
-}
-.custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.burning-orange");
-}
-
 .custom-tooltip {
   position: absolute;
   top: 100%;

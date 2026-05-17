@@ -18,7 +18,7 @@ export const submitDisputeSchema = z.object({
 
 export const listDisputesSchema = z
   .object({
-    status: disputeStatusSchema.optional().default("SUBMITTED"),
+    status: disputeStatusSchema.optional(),
   })
   .default({})
 
@@ -32,6 +32,7 @@ export const disputeActionInputSchema = z
     type: disputeActionTypeSchema,
     targetUserId: z.string().uuid(),
     points: z.number().int().min(1).max(10_000).optional(),
+    durationDays: z.number().int().min(1).max(365).optional(),
     note: z.string().trim().max(500).optional(),
   })
   .superRefine((value, ctx) => {
@@ -48,6 +49,14 @@ export const disputeActionInputSchema = z
         code: z.ZodIssueCode.custom,
         message: "Only point deductions accept a points value.",
         path: ["points"],
+      })
+    }
+
+    if (value.type === "SUSPENSION" && typeof value.durationDays !== "number") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Suspensions require a duration in days.",
+        path: ["durationDays"],
       })
     }
   })
@@ -73,6 +82,7 @@ export const submitRebuttalSchema = z.object({
   id: z.string().uuid(),
   rebuttalText: z.string().trim().min(1, "A rebuttal statement is required.").max(2000),
   rebuttalNotes: z.string().trim().max(2000).optional(),
+  rebuttalImageUrl: z.string().url().optional(),
 })
 
 export type DisputeStatus = z.infer<typeof disputeStatusSchema>

@@ -122,7 +122,7 @@ const makeReportableBooking = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: string }) => {
+const makeContext = (options?: { accountType?: "ADMIN" | "USER"; userId?: string }) => {
   const rentalTransaction = {
     findUnique: vi.fn(),
     findMany: vi.fn().mockResolvedValue([]),
@@ -153,7 +153,7 @@ const makeContext = (options?: { accountType?: "ADMIN" | "BORROWER"; userId?: st
   const prisma = {
     $transaction: vi.fn(),
     user: {
-      findUnique: vi.fn().mockResolvedValue({ accountType: options?.accountType ?? "BORROWER" }),
+      findUnique: vi.fn().mockResolvedValue({ accountType: options?.accountType ?? "USER" }),
       findMany: vi.fn().mockResolvedValue([
         { id: USER_ID, status: "ACTIVE", points: 40 },
         { id: OTHER_USER_ID, status: "ACTIVE", points: 25 },
@@ -388,7 +388,7 @@ describe("disputeRouter", () => {
     ctx.prisma.transactionDispute.findMany.mockResolvedValue([makeDisputeRecord()])
 
     const caller = disputeRouter.createCaller(ctx as never)
-    const result = await caller.list({})
+    const result = await caller.list({ status: "SUBMITTED" })
 
     expect(ctx.prisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: ADMIN_ID },
@@ -582,6 +582,7 @@ describe("disputeRouter", () => {
         {
           type: "SUSPENSION",
           targetUserId: OTHER_USER_ID,
+          durationDays: 7,
           note: "Repeat policy violations.",
         },
       ],

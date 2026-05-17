@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 import { useChat } from "../composables/use-chat"
 import type { ChatMessage } from "../composables/use-chat"
-import { useNotifications } from "../composables/use-notifications"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { insertTextAtSelection } from "../utils/chat-composer"
 import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
 import { getChatClosedPreviewLabel } from "#shared/chat-rules"
@@ -14,9 +15,18 @@ definePageMeta({
 
 const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
+const REALTIME_SESSION_WAIT_MS = 5_000
 
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+type RealtimeMessagePayload = {
+  new: Record<string, unknown>
+}
+
+type BroadcastMessagePayload = {
+  payload: unknown
+}
+
+const createRealtimeChannelId = () =>
+  globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 const {
   sortedConversations,
@@ -33,8 +43,8 @@ const {
   openConversation,
   sendMessage: sendChatMessage,
   reportConversation,
-  loadUnreadCount,
-  mergeActiveConversationMessages,
+  onActiveRealtimeMessage,
+  onInboxRealtimeMessage,
   closeConversation,
   loadMoreMessages,
 } = useChat()
@@ -43,6 +53,7 @@ const route = useRoute()
 const router = useRouter()
 const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
+const realtimeChannelId = createRealtimeChannelId()
 
 const isMobile = ref(false)
 const searchQuery = ref("")
@@ -57,8 +68,11 @@ const composerError = ref<string | null>(null)
 const isUploadingImage = ref(false)
 const pendingImageFile = ref<File | null>(null)
 const pendingImagePreviewUrl = ref<string | null>(null)
+const pendingConversationTransactionId = ref<string | null>(null)
+const shouldStickToBottom = ref(true)
 
 const chatAreaRef = ref<HTMLElement | null>(null)
+const sidebarScrollRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const photoInputRef = ref<HTMLInputElement | null>(null)
 const emojiMenuRef = ref<HTMLElement | null>(null)
@@ -88,6 +102,26 @@ const canSendMessage = computed(
 
 const lastOutgoingMessageId = computed(() =>
   getLastOutgoingMessageId(messages.value, activeConversation.value?.otherParticipant?.id),
+)
+
+const selectedConversationTransactionId = computed(
+  () =>
+    pendingConversationTransactionId.value ??
+    routeTransactionId.value ??
+    activeConversation.value?.transactionId ??
+    null,
+)
+const activeConversationId = computed(() => activeConversation.value?.conversationId ?? null)
+const isPendingConversationSwitch = computed(
+  () =>
+    Boolean(pendingConversationTransactionId.value) &&
+    pendingConversationTransactionId.value !== activeConversation.value?.transactionId,
+)
+const shouldShowConversationSkeleton = computed(
+  () =>
+    isPendingConversationSwitch.value ||
+    (isOpeningConversation.value && !activeConversation.value) ||
+    (isLoadingMessages.value && !messages.value.length),
 )
 
 const avatarColors = ["bg-burning-orange", "bg-blue-estate", "bg-cinnamon-ice"]
@@ -129,11 +163,53 @@ const checkMobile = () => {
 }
 
 const scrollToBottom = () => {
-  nextTick(() => {
+  const applyScroll = () => {
     if (chatAreaRef.value) {
       chatAreaRef.value.scrollTop = chatAreaRef.value.scrollHeight
     }
+  }
+
+  nextTick(() => {
+    applyScroll()
+
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        applyScroll()
+        window.requestAnimationFrame(applyScroll)
+      })
+    }
   })
+}
+
+const restoreSidebarScrollPosition = (scrollTop: number) => {
+  const applyScroll = () => {
+    if (sidebarScrollRef.value) {
+      sidebarScrollRef.value.scrollTop = scrollTop
+    }
+  }
+
+  nextTick(() => {
+    applyScroll()
+
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        applyScroll()
+        window.requestAnimationFrame(applyScroll)
+      })
+    }
+  })
+}
+
+const handleMessageImageLoad = () => {
+  if (shouldStickToBottom.value) {
+    scrollToBottom()
+  }
+}
+
+const updateStickToBottom = () => {
+  const element = chatAreaRef.value
+  if (!element) return
+  shouldStickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 120
 }
 
 const adjustTextareaHeight = () => {
@@ -203,9 +279,54 @@ const getChatTime = (conversation: (typeof sortedConversations.value)[0]) => {
 const getClosedConversationLabel = (conversation: NonNullable<typeof activeConversation.value>) =>
   getChatClosedPreviewLabel(conversation.closureState) ?? "Chat unavailable"
 
+let openConversationPromise: Promise<void> | null = null
+let openConversationTransactionId: string | null = null
+let openConversationToken: symbol | null = null
+
 const openConversationFromRoute = async (transactionId: string) => {
-  await openConversation(transactionId)
-  scrollToBottom()
+  if (
+    activeConversation.value?.transactionId === transactionId &&
+    !isOpeningConversation.value &&
+    !error.value
+  ) {
+    if (pendingConversationTransactionId.value === transactionId) {
+      pendingConversationTransactionId.value = null
+    }
+    scrollToBottom()
+    return
+  }
+
+  if (openConversationTransactionId === transactionId && openConversationPromise) {
+    await openConversationPromise
+    return
+  }
+
+  shouldStickToBottom.value = true
+  pendingConversationTransactionId.value = transactionId
+
+  const openToken = Symbol(transactionId)
+  openConversationToken = openToken
+
+  const nextOpenPromise = (async () => {
+    try {
+      await openConversation(transactionId)
+      scrollToBottom()
+    } finally {
+      if (pendingConversationTransactionId.value === transactionId) {
+        pendingConversationTransactionId.value = null
+      }
+
+      if (openConversationToken === openToken) {
+        openConversationPromise = null
+        openConversationTransactionId = null
+        openConversationToken = null
+      }
+    }
+  })()
+
+  openConversationTransactionId = transactionId
+  openConversationPromise = nextOpenPromise
+  await nextOpenPromise
 }
 
 const triggerPhotoPicker = () => {
@@ -237,6 +358,7 @@ const handlePhotoSelected = (event: Event) => {
 }
 
 const uploadChatImage = async (file: File) => {
+  const uploadFile = await convertImageFileToWebP(file)
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -254,16 +376,16 @@ const uploadChatImage = async (file: File) => {
         Authorization: `Bearer ${accessToken}`,
       },
       body: {
-        fileName: file.name,
+        fileName: uploadFile.name,
       },
     },
   )
 
   const { error: uploadError } = await supabase.storage
     .from(runtimeConfig.public.chatImageBucket)
-    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
       upsert: true,
-      contentType: file.type || "application/octet-stream",
+      contentType: uploadFile.type || "application/octet-stream",
     })
 
   if (uploadError) {
@@ -276,10 +398,24 @@ const uploadChatImage = async (file: File) => {
 const handleSelectChat = async (transactionId: string) => {
   if (!transactionId) return
 
+  const sidebarScrollTop = sidebarScrollRef.value?.scrollTop ?? 0
+  pendingConversationTransactionId.value = transactionId
+  shouldStickToBottom.value = true
+
+  void openConversationFromRoute(transactionId).finally(() => {
+    restoreSidebarScrollPosition(sidebarScrollTop)
+  })
+  restoreSidebarScrollPosition(sidebarScrollTop)
+
+  if (routeTransactionId.value === transactionId) {
+    return
+  }
+
   await router.replace({
     path: "/chat",
     query: { transactionId },
   })
+  restoreSidebarScrollPosition(sidebarScrollTop)
 }
 
 const handleCloseChat = async () => {
@@ -309,7 +445,11 @@ const handleSendMessage = async () => {
       imageUrl = await uploadChatImage(pendingImageFile.value)
     }
 
-    const sentMessage = await sendChatMessage(body, imageUrl)
+    const sendPromise = sendChatMessage(body, imageUrl)
+    resetComposer()
+    scrollToBottom()
+
+    const sentMessage = await sendPromise
     if (!sentMessage) return
 
     if (shouldWarn) {
@@ -318,9 +458,6 @@ const handleSendMessage = async () => {
         showWarning.value = false
       }, 8000)
     }
-
-    resetComposer()
-    scrollToBottom()
   } catch (uploadError) {
     composerError.value = getFetchErrorMessage(uploadError, "Unable to send your message.")
   } finally {
@@ -398,40 +535,342 @@ const handleDocumentClick = (event: MouseEvent) => {
   showEmojiPicker.value = false
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
+let inboxRealtimeChannel: RealtimeChannel | null = null
+let activeRealtimeChannel: RealtimeChannel | null = null
+let inboxBroadcastChannel: RealtimeChannel | null = null
+let activeBroadcastChannel: RealtimeChannel | null = null
+let activeRealtimeGeneration = 0
+let activeBroadcastGeneration = 0
+let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
+let hasWarnedMissingRealtimeSession = false
 
-const startPolling = () => {
-  if (pollTimer) return
-  pollTimer = setInterval(async () => {
-    if (!activeConversation.value) return
+const getConversationBroadcastTopic = (conversationId: string) =>
+  `chat-conversation-${conversationId}`
 
-    try {
-      await loadConversations()
-      const data = await $fetch<{
-        messages: ChatMessage[]
-        nextCursor: string | null
-        hasMore: boolean
-      }>("/api/chat/messages", {
-        params: {
-          conversationId: activeConversation.value.conversationId,
-        },
-      })
+const getUserBroadcastTopic = (userId: string) => `chat-user-${userId}`
 
-      await mergeActiveConversationMessages(data.messages)
-    } catch {
-      // Ignore transient polling errors.
-    }
-  }, 5000)
+const getRealtimeAccessToken = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  return session?.access_token ?? null
 }
 
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+const waitForRealtimeAccessToken = async () => {
+  const currentAccessToken = await getRealtimeAccessToken()
+  if (currentAccessToken) return currentAccessToken
+
+  if (typeof window === "undefined") return null
+
+  return await new Promise<string | null>((resolve) => {
+    let timeoutId: number | null = null
+    let authSubscription: { unsubscribe: () => void } | null = null
+    let settled = false
+
+    const finish = (accessToken: string | null) => {
+      if (settled) return
+      settled = true
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+      authSubscription?.unsubscribe()
+      resolve(accessToken)
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        finish(session.access_token)
+      }
+    })
+    authSubscription = subscription
+
+    timeoutId = window.setTimeout(() => {
+      void getRealtimeAccessToken()
+        .then(finish)
+        .catch(() => finish(null))
+    }, REALTIME_SESSION_WAIT_MS)
+  })
+}
+
+const ensureRealtimeAuth = async () => {
+  const accessToken = await waitForRealtimeAccessToken()
+
+  if (!accessToken) {
+    if (!hasWarnedMissingRealtimeSession) {
+      console.warn(
+        "[chat realtime] no Supabase auth session; realtime subscriptions were not started",
+      )
+      hasWarnedMissingRealtimeSession = true
+    }
+    return false
+  }
+
+  hasWarnedMissingRealtimeSession = false
+  supabase.realtime.setAuth(accessToken)
+  return true
+}
+
+const logRealtimeStatus = (channelName: string, status: string, error?: Error) => {
+  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+    console.warn(`[chat realtime] ${channelName} ${status}`, error)
   }
 }
 
-watch(messages, () => scrollToBottom(), { deep: true })
+const setupRealtimeAuthListener = () => {
+  if (realtimeAuthSubscription) return
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    if (session?.access_token) {
+      supabase.realtime.setAuth(session.access_token)
+      void setupInboxBroadcast()
+      void setupInboxRealtime()
+      if (activeConversationId.value) {
+        void setupActiveBroadcast(activeConversationId.value)
+        void setupActiveRealtime(activeConversationId.value)
+      }
+      return
+    }
+
+    if (event === "SIGNED_OUT") {
+      stopRealtime()
+    }
+  })
+
+  realtimeAuthSubscription = subscription
+}
+
+const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null => {
+  if (
+    typeof row.id !== "string" ||
+    typeof row.conversation_id !== "string" ||
+    typeof row.sender_user_id !== "string" ||
+    typeof row.created_at !== "string"
+  ) {
+    return null
+  }
+
+  const body = typeof row.body === "string" ? row.body : ""
+  const imageUrl = typeof row.image_url === "string" ? row.image_url : null
+  const isRead = typeof row.is_read === "boolean" ? row.is_read : false
+  const readAt = typeof row.read_at === "string" ? row.read_at : null
+
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderUserId: row.sender_user_id,
+    body,
+    imageUrl,
+    isRead,
+    readAt,
+    createdAt: row.created_at,
+  }
+}
+
+const mapBroadcastMessage = (value: unknown): ChatMessage | null => {
+  if (typeof value !== "object" || value === null) {
+    return null
+  }
+
+  const payload = value as { message?: Record<string, unknown> }
+  const message = payload.message
+  if (!message) return null
+
+  if (
+    typeof message.id !== "string" ||
+    typeof message.conversationId !== "string" ||
+    typeof message.senderUserId !== "string" ||
+    typeof message.createdAt !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    senderUserId: message.senderUserId,
+    body: typeof message.body === "string" ? message.body : "",
+    imageUrl: typeof message.imageUrl === "string" ? message.imageUrl : null,
+    isRead: typeof message.isRead === "boolean" ? message.isRead : false,
+    readAt: typeof message.readAt === "string" ? message.readAt : null,
+    createdAt: message.createdAt,
+  }
+}
+
+const handleBroadcastMessage = (payload: BroadcastMessagePayload) => {
+  const message = mapBroadcastMessage(payload.payload)
+  if (!message) return
+
+  if (activeConversation.value?.conversationId === message.conversationId) {
+    onActiveRealtimeMessage(message, "INSERT")
+    return
+  }
+
+  onInboxRealtimeMessage(message, "INSERT")
+}
+
+const handleInboxRealtimeMessage = (
+  payload: RealtimeMessagePayload,
+  eventType: "INSERT" | "UPDATE",
+) => {
+  const message = mapRealtimeMessage(payload.new)
+  if (!message) return
+
+  if (activeConversation.value?.conversationId === message.conversationId) {
+    onActiveRealtimeMessage(message, eventType)
+    return
+  }
+
+  onInboxRealtimeMessage(message, eventType)
+}
+
+const handleActiveRealtimeMessage = (
+  payload: RealtimeMessagePayload,
+  eventType: "INSERT" | "UPDATE",
+) => {
+  const message = mapRealtimeMessage(payload.new)
+  if (!message) return
+
+  onActiveRealtimeMessage(message, eventType)
+}
+
+const stopActiveRealtime = async () => {
+  const channel = activeRealtimeChannel
+  activeRealtimeChannel = null
+
+  if (channel) {
+    await supabase.removeChannel(channel)
+  }
+}
+
+const stopActiveBroadcast = async () => {
+  const channel = activeBroadcastChannel
+  activeBroadcastChannel = null
+
+  if (channel) {
+    await supabase.removeChannel(channel)
+  }
+}
+
+const setupInboxBroadcast = async () => {
+  if (inboxBroadcastChannel) return
+
+  const { authUser, fetch: fetchAuthUser } = useAuthUser()
+  const currentUser = authUser.value ?? (await fetchAuthUser().catch(() => null))
+  if (!currentUser?.id) return
+
+  if (inboxBroadcastChannel) return
+  inboxBroadcastChannel = supabase
+    .channel(getUserBroadcastTopic(currentUser.id))
+    .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .subscribe((status, error) => logRealtimeStatus("inbox broadcast", status, error))
+}
+
+const setupActiveBroadcast = async (conversationId: string | null) => {
+  const generation = ++activeBroadcastGeneration
+  await stopActiveBroadcast()
+
+  if (generation !== activeBroadcastGeneration || !conversationId) {
+    return
+  }
+
+  activeBroadcastChannel = supabase
+    .channel(getConversationBroadcastTopic(conversationId))
+    .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .subscribe((status, error) => logRealtimeStatus("active broadcast", status, error))
+}
+
+const setupInboxRealtime = async () => {
+  if (inboxRealtimeChannel) return
+
+  if (!(await ensureRealtimeAuth())) return
+  if (inboxRealtimeChannel) return
+
+  inboxRealtimeChannel = supabase
+    .channel(`chat-inbox-messages-${realtimeChannelId}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) =>
+      handleInboxRealtimeMessage(payload, "INSERT"),
+    )
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) =>
+      handleInboxRealtimeMessage(payload, "UPDATE"),
+    )
+    .subscribe((status, error) => logRealtimeStatus("inbox", status, error))
+}
+
+const setupActiveRealtime = async (conversationId: string | null) => {
+  const generation = ++activeRealtimeGeneration
+  await stopActiveRealtime()
+
+  if (generation !== activeRealtimeGeneration || !conversationId) {
+    return
+  }
+
+  if (!(await ensureRealtimeAuth())) return
+  if (generation !== activeRealtimeGeneration) {
+    return
+  }
+
+  activeRealtimeChannel = supabase
+    .channel(`chat-active-${realtimeChannelId}-${conversationId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => handleActiveRealtimeMessage(payload, "INSERT"),
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => handleActiveRealtimeMessage(payload, "UPDATE"),
+    )
+    .subscribe((status, error) => logRealtimeStatus("active", status, error))
+}
+
+const stopRealtime = () => {
+  activeRealtimeGeneration += 1
+  activeBroadcastGeneration += 1
+  void stopActiveRealtime()
+  void stopActiveBroadcast()
+
+  if (inboxRealtimeChannel) {
+    void supabase.removeChannel(inboxRealtimeChannel)
+    inboxRealtimeChannel = null
+  }
+
+  if (inboxBroadcastChannel) {
+    void supabase.removeChannel(inboxBroadcastChannel)
+    inboxBroadcastChannel = null
+  }
+}
+
+watch(
+  messages,
+  (nextMessages, previousMessages) => {
+    const latestMessage = nextMessages.at(-1)
+    const isNewOutgoingMessage =
+      latestMessage &&
+      latestMessage.id !== previousMessages.at(-1)?.id &&
+      latestMessage.senderUserId !== activeConversation.value?.otherParticipant?.id
+
+    if (previousMessages.length === 0 || shouldStickToBottom.value || isNewOutgoingMessage) {
+      scrollToBottom()
+    }
+  },
+  { deep: true },
+)
 watch([newMessage, pendingImagePreviewUrl], () => nextTick(adjustTextareaHeight))
 watch(
   () => activeConversation.value?.isExpired,
@@ -444,47 +883,67 @@ watch(
 
 watch(routeTransactionId, async (transactionId, previousTransactionId) => {
   resetComposer()
+  shouldStickToBottom.value = true
 
   if (transactionId) {
+    pendingConversationTransactionId.value = transactionId
     await openConversationFromRoute(transactionId)
     return
   }
+
+  pendingConversationTransactionId.value = null
 
   if (previousTransactionId) {
     closeConversation()
   }
 })
 
+watch(
+  activeConversationId,
+  (conversationId, previousConversationId) => {
+    if (conversationId && conversationId !== previousConversationId) {
+      shouldStickToBottom.value = true
+      scrollToBottom()
+    }
+
+    void setupActiveBroadcast(conversationId)
+    void setupActiveRealtime(conversationId)
+  },
+  { immediate: true },
+)
+
 onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
   document.addEventListener("click", handleDocumentClick)
+  setupRealtimeAuthListener()
+  void setupInboxBroadcast()
+  void setupInboxRealtime()
 
-  await Promise.all([loadNotifications(), loadConversations(), loadUnreadCount()])
+  await loadConversations({ background: sortedConversations.value.length > 0 })
 
   if (routeTransactionId.value) {
     await openConversationFromRoute(routeTransactionId.value)
+  } else if (sortedConversations.value[0]) {
+    await openConversationFromRoute(sortedConversations.value[0].transactionId)
   }
 
-  startPolling()
   nextTick(adjustTextareaHeight)
 })
 
 onUnmounted(() => {
   window.removeEventListener("resize", checkMobile)
   document.removeEventListener("click", handleDocumentClick)
-  stopPolling()
+  realtimeAuthSubscription?.unsubscribe()
+  realtimeAuthSubscription = null
+  stopRealtime()
   clearComposerImage()
 })
 </script>
 
 <template>
   <div class="h-screen flex flex-col overflow-hidden bg-white pt-14 font-geist text-noble-black">
-    <Header
-      :notifications="notifications"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
-    />
+    <Header />
 
     <div class="relative flex flex-1 overflow-hidden">
       <aside
@@ -493,8 +952,8 @@ onUnmounted(() => {
           isMobile && routeTransactionId ? '-translate-x-full absolute inset-0' : 'translate-x-0',
         ]"
       >
-        <div class="flex items-center justify-between p-4">
-          <h1 class="text-2xl font-bold">Inbox</h1>
+        <div class="flex items-center justify-between pt-6 px-4 pb-4">
+          <h1 class="font-montravia text-2xl font-semibold">Inbox</h1>
         </div>
 
         <div class="px-4 pb-4">
@@ -505,29 +964,30 @@ onUnmounted(() => {
               placeholder="Search conversations..."
               class="w-full rounded-full border border-cinnamon-ice/30 bg-cream/50 py-2 pl-11 pr-4 text-[14px] outline-none transition-all duration-300 focus:border-burning-orange/50 focus:bg-white"
             />
-            <svg
-              class="absolute left-4 top-1/2 -translate-y-1/2 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-noble-black/30 hover:text-burning-orange transition-colors"
+              @click="searchQuery = ''"
             >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
+              <Icon name="ph:x" size="16" />
+            </button>
+            <Icon
+              v-else
+              name="ph:magnifying-glass"
+              class="absolute left-4 top-1/2 -translate-y-1/2 shrink-0 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
+              size="16"
+            />
           </div>
         </div>
 
-        <div class="custom-chat-scrollbar flex-1 overflow-y-auto">
-          <div v-if="isLoadingConversations" class="space-y-4 p-4">
+        <div ref="sidebarScrollRef" class="custom-chat-scrollbar flex-1 overflow-y-auto">
+          <div v-if="isLoadingConversations && !sortedConversations.length" class="space-y-4 p-4">
             <div v-for="index in 6" :key="index" class="flex animate-pulse gap-3">
-              <div class="h-12 w-12 rounded-full bg-cream"></div>
+              <div class="h-12 w-12 rounded-full bg-noble-black/10"></div>
               <div class="flex-1 space-y-2 py-1">
-                <div class="h-3 w-3/4 rounded bg-cream"></div>
-                <div class="h-2 w-1/2 rounded bg-cream"></div>
+                <div class="h-3 w-3/4 rounded bg-noble-black/20"></div>
+                <div class="h-2 w-1/2 rounded bg-noble-black/10"></div>
               </div>
             </div>
           </div>
@@ -539,23 +999,12 @@ onUnmounted(() => {
             <div
               class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-cinnabar-red/5 text-cinnabar-red/60"
             >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" x2="12" y1="8" y2="12" />
-                <line x1="12" x2="12.01" y1="16" y2="16" />
-              </svg>
+              <Icon name="ph:warning-circle" class="shrink-0" size="24" />
             </div>
             <p class="mb-4 text-sm font-medium text-noble-black/60">Failed to load conversations</p>
             <button
               class="text-xs font-bold uppercase tracking-wider text-blue-estate transition-colors hover:text-burning-orange"
-              @click="loadConversations"
+              @click="() => loadConversations()"
             >
               Retry
             </button>
@@ -576,8 +1025,7 @@ onUnmounted(() => {
               :key="conversation.conversationId"
               class="group relative cursor-pointer px-4 py-3 transition-all duration-200"
               :class="[
-                routeTransactionId === conversation.transactionId ||
-                activeConversation?.transactionId === conversation.transactionId
+                selectedConversationTransactionId === conversation.transactionId
                   ? 'bg-cream'
                   : 'hover:bg-cream/40',
               ]"
@@ -647,27 +1095,28 @@ onUnmounted(() => {
         ]"
       >
         <div
-          v-if="isOpeningConversation && !activeConversation"
-          class="flex flex-1 flex-col items-center justify-center space-y-4"
+          v-if="shouldShowConversationSkeleton"
+          class="flex flex-1 flex-col p-6 gap-6 animate-pulse bg-cream"
         >
+          <div class="flex items-center gap-4 mb-4">
+            <div class="h-10 w-10 rounded-full bg-noble-black/10"></div>
+            <div class="space-y-2">
+              <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+              <div class="h-3 w-24 bg-noble-black/10 rounded"></div>
+            </div>
+          </div>
           <div
-            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
-          ></div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
-            Opening conversation...
-          </p>
-        </div>
-
-        <div
-          v-else-if="isLoadingMessages && !messages.length"
-          class="flex flex-1 flex-col items-center justify-center space-y-4"
-        >
-          <div
-            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
-          ></div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
-            Loading messages...
-          </p>
+            v-for="i in 4"
+            :key="i"
+            class="flex flex-col"
+            :class="i % 2 === 0 ? 'items-end' : 'items-start'"
+          >
+            <div
+              class="h-12 w-2/3 rounded-2xl bg-noble-black/10"
+              :class="i % 2 === 0 ? 'rounded-tr-none' : 'rounded-tl-none'"
+            ></div>
+            <div class="h-2 w-20 bg-noble-black/5 rounded mt-2"></div>
+          </div>
         </div>
 
         <template v-else-if="activeConversation">
@@ -679,17 +1128,7 @@ onUnmounted(() => {
                 class="-ml-2 rounded-full p-2 transition-colors hover:bg-cream lg:hidden"
                 @click="handleCloseChat"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <path d="m15 18-6-6 6-6" />
-                </svg>
+                <Icon name="ph:caret-left" class="shrink-0" size="20" />
               </button>
 
               <NuxtLink
@@ -800,6 +1239,7 @@ onUnmounted(() => {
           <div
             ref="chatAreaRef"
             class="custom-chat-scrollbar flex flex-1 flex-col gap-6 overflow-y-auto p-6"
+            @scroll="updateStickToBottom"
           >
             <div v-if="hasMoreMessages" class="flex justify-center">
               <button
@@ -816,16 +1256,7 @@ onUnmounted(() => {
               class="flex flex-1 flex-col items-center justify-center py-12 text-center opacity-40"
             >
               <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
+                <Icon name="ph:chat-centered-dots" class="shrink-0" size="24" />
               </div>
               <p class="text-sm font-bold">No messages yet</p>
               <p class="text-xs">Start the conversation</p>
@@ -862,6 +1293,7 @@ onUnmounted(() => {
                     :src="message.imageUrl"
                     alt="Chat attachment"
                     class="mb-3 max-h-64 w-full rounded-2xl object-cover"
+                    @load="handleMessageImageLoad"
                   />
                   <p
                     v-if="message.body.trim()"
@@ -910,18 +1342,7 @@ onUnmounted(() => {
               <div
                 class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 text-stone-600"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M8.5 12h7" />
-                </svg>
+                <Icon name="ph:minus-circle" class="shrink-0" size="18" />
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-noble-black">
@@ -959,24 +1380,12 @@ onUnmounted(() => {
             <div class="flex items-end gap-2 lg:gap-3">
               <!-- Photo Icon (Outside) -->
               <button
-                class="mb-1 rounded-full p-2 text-noble-black/40 transition-colors hover:bg-cream hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-noble-black/40 transition-colors hover:bg-cream hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
                 type="button"
                 :disabled="isUploadingImage"
                 @click="triggerPhotoPicker"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                >
-                  <rect x="3" y="5" width="18" height="14" rx="2" />
-                  <circle cx="8.5" cy="10" r="1.5" />
-                  <path d="m21 15-4.2-4.2a1 1 0 0 0-1.4 0L9 17" />
-                </svg>
+                <Icon name="ph:image" class="shrink-0" size="22" />
               </button>
 
               <div
@@ -984,7 +1393,7 @@ onUnmounted(() => {
               >
                 <!-- Aa Icon (Inside Left) -->
                 <div
-                  class="mb-1 ml-3 flex h-8 w-8 items-center justify-center text-[15px] font-bold italic tracking-tighter text-noble-black/25 select-none"
+                  class="flex h-[44px] w-10 shrink-0 items-center justify-center pl-1 text-[15px] font-bold italic tracking-tighter text-noble-black/25 select-none"
                 >
                   Aa
                 </div>
@@ -995,32 +1404,19 @@ onUnmounted(() => {
                   rows="1"
                   :disabled="isUploadingImage"
                   placeholder="Type your message..."
-                  class="custom-chat-scrollbar w-full resize-none bg-transparent px-2 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-noble-black/30"
+                  class="custom-chat-scrollbar w-full resize-none bg-transparent px-1 py-[11px] text-[14px] leading-relaxed outline-none placeholder:text-noble-black/30"
                   style="min-height: 44px; max-height: 140px"
                   @input="handleComposerInput"
                   @keydown="handleKeydown"
                 ></textarea>
 
-                <div ref="emojiMenuRef" class="relative mb-1 mr-2">
+                <div ref="emojiMenuRef" class="relative">
                   <button
-                    class="rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                    class="flex h-[44px] w-10 shrink-0 items-center justify-center pr-1 text-noble-black/40 transition-colors hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
                     type="button"
                     @click.stop="toggleEmojiPicker"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                    >
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                      <line x1="9" x2="9.01" y1="9" y2="9" />
-                      <line x1="15" x2="15.01" y1="9" y2="9" />
-                    </svg>
+                    <Icon name="ph:smiley" class="shrink-0" size="20" />
                   </button>
 
                   <div
@@ -1041,7 +1437,7 @@ onUnmounted(() => {
               </div>
 
               <button
-                class="mb-1 shrink-0 rounded-full p-2.5 text-white shadow-md transition-all duration-300"
+                class="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all duration-300"
                 :class="[
                   'bg-burning-orange hover:bg-burning-orange/90',
                   { 'cursor-not-allowed opacity-50 grayscale': !canSendMessage },
@@ -1049,18 +1445,7 @@ onUnmounted(() => {
                 :disabled="!canSendMessage"
                 @click="handleSendMessage"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="22" x2="11" y1="2" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
+                <Icon name="ph:paper-plane-tilt" class="shrink-0" size="20" />
               </button>
             </div>
 
@@ -1088,19 +1473,7 @@ onUnmounted(() => {
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-cinnamon-ice/20 bg-white text-cinnabar-red/70 shadow-sm"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" x2="12" y1="8" y2="12" />
-              <line x1="12" x2="12.01" y1="16" y2="16" />
-            </svg>
+            <Icon name="ph:warning-circle" class="shrink-0" size="32" />
           </div>
           <h2 class="mb-2 text-xl font-bold">Unable to open chat</h2>
           <p class="max-w-sm text-sm text-noble-black/60">{{ error }}</p>
@@ -1113,17 +1486,7 @@ onUnmounted(() => {
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
+            <Icon name="ph:chat-centered-dots" class="shrink-0" size="32" />
           </div>
           <h2 class="mb-2 text-xl font-bold">Select a conversation</h2>
           <p class="max-w-sm text-sm text-noble-black/60">
@@ -1155,14 +1518,7 @@ onUnmounted(() => {
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeReportModal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <Icon name="ph:x" class="shrink-0" size="18" />
               </button>
             </div>
 

@@ -108,7 +108,7 @@ const buildAdminListingsSummary = async (prisma: {
 }
 
 const getActiveListingTransactionWhere = () =>
-  Prisma.sql`status::text IN (${Prisma.join(NON_TERMINAL_TRANSACTION_STATUS_DB_VALUES)})`
+  Prisma.sql`tx."current_status"::text IN (${Prisma.join(NON_TERMINAL_TRANSACTION_STATUS_DB_VALUES)})`
 
 export const adminRouter = t.router({
   users: t.router({
@@ -121,7 +121,7 @@ export const adminRouter = t.router({
           skip: z.number().int().nonnegative().default(0),
           take: z.number().int().positive().max(100).default(20),
           search: z.string().optional(),
-          role: z.enum(["LENDER", "BORROWER", "ADMIN"]).optional(),
+          role: z.enum(["ADMIN", "USER"]).optional(),
           status: z.enum(["ACTIVE", "SUSPENDED", "BANNED", "PENDING", "DEACTIVATED"]).optional(),
         }),
       )
@@ -890,6 +890,89 @@ export const adminRouter = t.router({
       }),
 
     /**
+     * Suspend a user for a specified number of days
+     */
+    suspendUser: adminProcedure
+      .input(
+        z.object({
+          userId: z.string().uuid(),
+          reason: z.string().min(1, "Reason is required"),
+          durationDays: z.number().int().min(1).max(365),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const currentUser = ctx.user
+        if (!currentUser) throw new Error("Not authenticated")
+
+        if (currentUser.id === input.userId) {
+          throw new Error("You cannot suspend yourself")
+        }
+
+        const suspendedUntil = new Date(Date.now() + input.durationDays * 24 * 60 * 60 * 1000)
+
+        const updated = await ctx.prisma.user.update({
+          where: { id: input.userId },
+          data: { status: "SUSPENDED", suspendedUntil },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        })
+
+        await createAdminActionLog(ctx.prisma, {
+          adminId: currentUser.id,
+          actionType: ADMIN_ACTION_TYPES.SUSPEND_USER,
+          targetType: ADMIN_ACTION_TARGET_TYPES.USER,
+          targetId: input.userId,
+          targetLabel: `${updated.firstName} ${updated.lastName}`,
+          description: input.reason,
+          metadata: {
+            email: updated.email,
+            name: `${updated.firstName} ${updated.lastName}`,
+            durationDays: input.durationDays,
+            suspendedUntil: suspendedUntil.toISOString(),
+          },
+        })
+
+        return updated
+      }),
+
+    /**
+     * Unsuspend a user
+     */
+    unsuspendUser: adminProcedure
+      .input(z.object({ userId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const currentUser = ctx.user
+        if (!currentUser) throw new Error("Not authenticated")
+
+        const updated = await ctx.prisma.user.update({
+          where: { id: input.userId },
+          data: { status: "ACTIVE", suspendedUntil: null },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        })
+
+        await createAdminActionLog(ctx.prisma, {
+          adminId: currentUser.id,
+          actionType: ADMIN_ACTION_TYPES.UNSUSPEND_USER,
+          targetType: ADMIN_ACTION_TARGET_TYPES.USER,
+          targetId: input.userId,
+          targetLabel: `${updated.firstName} ${updated.lastName}`,
+          description: "User unsuspended by admin",
+          metadata: { email: updated.email, name: `${updated.firstName} ${updated.lastName}` },
+        })
+
+        return updated
+      }),
+
+    /**
      * Delete a user (with safeguards)
      */
     deleteUser: adminProcedure
@@ -1088,16 +1171,10 @@ export const adminRouter = t.router({
           throw new Error("User not found")
         }
 
-        // Determine default role
-        let defaultAccountType: "LENDER" | "BORROWER" = "BORROWER"
-        if (userDetails.lender) {
-          defaultAccountType = "LENDER"
-        }
-
-        // Update account type back to default
+        // Update account type back to USER
         const userUpdated = await ctx.prisma.user.update({
           where: { id: input.userId },
-          data: { accountType: defaultAccountType },
+          data: { accountType: "USER" },
           select: {
             id: true,
             email: true,

@@ -1,4 +1,4 @@
-import { computed, ref } from "vue"
+import { computed } from "vue"
 import { mergeChatMessages } from "../utils/chat-message-utils"
 import {
   getChatClosedNotice,
@@ -16,6 +16,7 @@ export type ChatMessage = {
   isRead: boolean
   readAt: string | null
   createdAt: string
+  isOptimistic?: boolean
 }
 
 export type ChatParticipant = {
@@ -70,6 +71,27 @@ type FetchErrorData = {
   }
 }
 
+type LoadConversationsOptions = {
+  background?: boolean
+}
+
+type LoadMessagesOptions = {
+  expectedOpenRequestId?: number
+  background?: boolean
+  force?: boolean
+}
+
+type PrefetchConversationsOptions = {
+  initialCount?: number
+}
+
+type MessagePageState = {
+  nextCursor: string | null
+  hasMore: boolean
+}
+
+type RealtimeMessageEvent = "INSERT" | "UPDATE"
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (
     typeof error === "object" &&
@@ -97,19 +119,126 @@ const resetConversationState = (
   hasMoreMessages.value = false
 }
 
+const getConversationDetailFromSummary = (
+  conversation: ConversationSummary,
+): ConversationDetail => ({
+  conversationId: conversation.conversationId,
+  transactionId: conversation.transactionId,
+  closureState: conversation.closureState,
+  isExpired: conversation.isExpired,
+  closedNotice: conversation.closedNotice,
+  item: conversation.item,
+  otherParticipant: conversation.otherParticipant,
+})
+
+const createOptimisticMessageId = () =>
+  `temp-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+
 export const useChat = () => {
-  const conversations = ref<ConversationSummary[]>([])
-  const activeConversation = ref<ConversationDetail | null>(null)
-  const messages = ref<ChatMessage[]>([])
-  const isLoadingConversations = ref(false)
-  const isLoadingMessages = ref(false)
-  const isOpeningConversation = ref(false)
-  const isSending = ref(false)
-  const isReporting = ref(false)
-  const error = ref<string | null>(null)
-  const hasMoreMessages = ref(false)
-  const nextCursor = ref<string | null>(null)
-  const totalUnreadCount = ref(0)
+  const conversations = useState<ConversationSummary[]>("chat-conversations", () => [])
+  const activeConversation = useState<ConversationDetail | null>(
+    "chat-active-conversation",
+    () => null,
+  )
+  const messages = useState<ChatMessage[]>("chat-messages", () => [])
+  const messageCache = useState<Record<string, ChatMessage[]>>("chat-message-cache", () => ({}))
+  const messagePageState = useState<Record<string, MessagePageState>>(
+    "chat-message-page-state",
+    () => ({}),
+  )
+  const isLoadingConversations = useState("chat-loading-conv", () => false)
+  const isRefreshingConversations = useState("chat-refreshing-conv", () => false)
+  const isLoadingMessages = useState("chat-loading-msg", () => false)
+  const isOpeningConversation = useState("chat-opening", () => false)
+  const isSending = useState("chat-sending", () => false)
+  const isReporting = useState("chat-reporting", () => false)
+  const error = useState<string | null>("chat-error", () => null)
+  const hasMoreMessages = useState("chat-has-more", () => false)
+  const nextCursor = useState<string | null>("chat-next-cursor", () => null)
+  const totalUnreadCount = useState("chat-unread-count", () => 0)
+  const openRequestId = useState("chat-open-request-id", () => 0)
+  const processedRealtimeInsertIds = useState<string[]>("chat-processed-realtime-inserts", () => [])
+  const readSyncInFlight = useState<Record<string, boolean>>("chat-read-sync-in-flight", () => ({}))
+  const prefetchInFlight = useState<Record<string, boolean>>("chat-prefetch-in-flight", () => ({}))
+  const messageLoadInFlight = useState<Record<string, boolean>>(
+    "chat-message-load-in-flight",
+    () => ({}),
+  )
+
+  const getCachedMessages = (conversationId: string) => messageCache.value[conversationId] ?? []
+  const hasLoadedMessagePage = (conversationId: string) =>
+    Boolean(messagePageState.value[conversationId])
+
+  const setCachedMessages = (
+    conversationId: string,
+    nextMessages: ChatMessage[],
+    pageState?: MessagePageState,
+  ) => {
+    messageCache.value = {
+      ...messageCache.value,
+      [conversationId]: nextMessages,
+    }
+
+    if (pageState) {
+      messagePageState.value = {
+        ...messagePageState.value,
+        [conversationId]: pageState,
+      }
+    }
+
+    if (activeConversation.value?.conversationId === conversationId) {
+      messages.value = nextMessages
+      const nextPageState = pageState ?? messagePageState.value[conversationId]
+      nextCursor.value = nextPageState?.nextCursor ?? null
+      hasMoreMessages.value = nextPageState?.hasMore ?? false
+    }
+  }
+
+  const mergeCachedMessages = (conversationId: string, incoming: ChatMessage[]) => {
+    const merged = mergeChatMessages(getCachedMessages(conversationId), incoming)
+    setCachedMessages(conversationId, merged)
+    return merged
+  }
+
+  const replaceOptimisticMessage = (
+    conversationId: string,
+    optimisticId: string,
+    savedMessage: ChatMessage,
+  ) => {
+    const withoutOptimistic = getCachedMessages(conversationId).filter(
+      (message) => message.id !== optimisticId,
+    )
+    const merged = mergeChatMessages(withoutOptimistic, [savedMessage])
+    setCachedMessages(conversationId, merged)
+  }
+
+  const removeCachedMessage = (conversationId: string, messageId: string) => {
+    setCachedMessages(
+      conversationId,
+      getCachedMessages(conversationId).filter((message) => message.id !== messageId),
+    )
+  }
+
+  const hasProcessedRealtimeInsert = (messageId: string) => {
+    if (processedRealtimeInsertIds.value.includes(messageId)) {
+      return true
+    }
+
+    processedRealtimeInsertIds.value = [...processedRealtimeInsertIds.value, messageId].slice(-200)
+    return false
+  }
+
+  const clearPrefetchInFlight = (conversationId: string) => {
+    prefetchInFlight.value = Object.fromEntries(
+      Object.entries(prefetchInFlight.value).filter(([key]) => key !== conversationId),
+    )
+  }
+
+  const clearMessageLoadInFlight = (loadKey: string) => {
+    messageLoadInFlight.value = Object.fromEntries(
+      Object.entries(messageLoadInFlight.value).filter(([key]) => key !== loadKey),
+    )
+  }
 
   const updateConversationClosureState = (
     conversationId: string,
@@ -144,7 +273,7 @@ export const useChat = () => {
     )
 
     if (!conversation) {
-      void loadConversations()
+      void loadConversations({ background: true })
       return
     }
 
@@ -176,26 +305,51 @@ export const useChat = () => {
   }
 
   const syncLocalReadState = async (conversationId: string) => {
-    await markAsRead(conversationId)
-
     const conversation = conversations.value.find(
       (entry) => entry.conversationId === conversationId,
     )
-    if (!conversation) {
+    const otherParticipantId =
+      activeConversation.value?.conversationId === conversationId
+        ? activeConversation.value.otherParticipant?.id
+        : conversation?.otherParticipant?.id
+    const hasUnreadIncomingMessages =
+      otherParticipantId &&
+      getCachedMessages(conversationId).some(
+        (message) => message.senderUserId === otherParticipantId && !message.isRead,
+      )
+    const hasSidebarUnread = (conversation?.unreadCount ?? 0) > 0
+
+    if (!hasUnreadIncomingMessages && !hasSidebarUnread) {
       return
     }
 
-    totalUnreadCount.value = Math.max(0, totalUnreadCount.value - conversation.unreadCount)
-    conversation.unreadCount = 0
+    if (readSyncInFlight.value[conversationId]) {
+      return
+    }
 
-    const otherParticipantId = activeConversation.value?.otherParticipant?.id
-    if (activeConversation.value?.conversationId === conversationId && otherParticipantId) {
+    readSyncInFlight.value = { ...readSyncInFlight.value, [conversationId]: true }
+
+    try {
+      await markAsRead(conversationId)
+    } finally {
+      readSyncInFlight.value = Object.fromEntries(
+        Object.entries(readSyncInFlight.value).filter(([key]) => key !== conversationId),
+      )
+    }
+
+    if (conversation) {
+      totalUnreadCount.value = Math.max(0, totalUnreadCount.value - conversation.unreadCount)
+      conversation.unreadCount = 0
+    }
+
+    if (otherParticipantId) {
       const readAt = new Date().toISOString()
-      messages.value = messages.value.map((message) =>
+      const readMessages = getCachedMessages(conversationId).map((message) =>
         message.senderUserId === otherParticipantId && !message.isRead
           ? { ...message, isRead: true, readAt: message.readAt ?? readAt }
           : message,
       )
+      setCachedMessages(conversationId, readMessages)
     }
   }
 
@@ -204,8 +358,9 @@ export const useChat = () => {
       return
     }
 
-    const knownIds = new Set(messages.value.map((message) => message.id))
-    messages.value = mergeChatMessages(messages.value, incoming)
+    const conversationId = activeConversation.value.conversationId
+    const knownIds = new Set(getCachedMessages(conversationId).map((message) => message.id))
+    mergeCachedMessages(conversationId, incoming)
 
     for (const message of incoming) {
       updateConversationFromMessage(message, false)
@@ -213,15 +368,20 @@ export const useChat = () => {
 
     const hasNewIncomingMessage = incoming.some((message) => !knownIds.has(message.id))
     if (hasNewIncomingMessage) {
-      await syncLocalReadState(activeConversation.value.conversationId)
+      await syncLocalReadState(conversationId)
     }
   }
 
-  const loadConversations = async () => {
-    if (isLoadingConversations.value) return
+  const loadConversations = async (options: LoadConversationsOptions = {}) => {
+    const isBackgroundRefresh = options.background === true
+    if (isLoadingConversations.value || isRefreshingConversations.value) return
 
-    isLoadingConversations.value = true
-    error.value = null
+    if (isBackgroundRefresh) {
+      isRefreshingConversations.value = true
+    } else {
+      isLoadingConversations.value = true
+      error.value = null
+    }
 
     try {
       const data = await $fetch<ConversationSummary[]>("/api/chat")
@@ -244,15 +404,42 @@ export const useChat = () => {
         }
       }
     } catch (e: unknown) {
-      error.value = getErrorMessage(e, "Failed to load conversations")
-      conversations.value = []
+      if (!isBackgroundRefresh) {
+        error.value = getErrorMessage(e, "Failed to load conversations")
+        conversations.value = []
+      }
     } finally {
-      isLoadingConversations.value = false
+      if (isBackgroundRefresh) {
+        isRefreshingConversations.value = false
+      } else {
+        isLoadingConversations.value = false
+      }
     }
   }
 
-  const loadMessages = async (conversationId: string, cursor?: string) => {
-    isLoadingMessages.value = true
+  const loadMessages = async (
+    conversationId: string,
+    cursor?: string,
+    options: LoadMessagesOptions = {},
+  ) => {
+    const shouldApplyResult = () =>
+      options.expectedOpenRequestId === undefined ||
+      options.expectedOpenRequestId === openRequestId.value
+
+    if (!cursor && !options.force && hasLoadedMessagePage(conversationId)) {
+      return
+    }
+
+    const loadKey = `${conversationId}:${cursor ?? "latest"}`
+    if (messageLoadInFlight.value[loadKey]) {
+      return
+    }
+
+    messageLoadInFlight.value = { ...messageLoadInFlight.value, [loadKey]: true }
+
+    if (!options.background) {
+      isLoadingMessages.value = true
+    }
 
     try {
       const params: Record<string, string> = { conversationId }
@@ -264,69 +451,188 @@ export const useChat = () => {
         hasMore: boolean
       }>("/api/chat/messages", { params })
 
-      if (cursor) {
-        messages.value = mergeChatMessages(data.messages, messages.value)
-      } else {
-        messages.value = data.messages
+      if (!shouldApplyResult()) return
+
+      const pageState = {
+        nextCursor: data.nextCursor,
+        hasMore: data.hasMore,
       }
 
-      nextCursor.value = data.nextCursor
-      hasMoreMessages.value = data.hasMore
+      if (cursor) {
+        setCachedMessages(
+          conversationId,
+          mergeChatMessages(data.messages, getCachedMessages(conversationId)),
+          pageState,
+        )
+      } else {
+        const existingMessages = getCachedMessages(conversationId)
+        setCachedMessages(
+          conversationId,
+          existingMessages.length > 0
+            ? mergeChatMessages(existingMessages, data.messages)
+            : data.messages,
+          pageState,
+        )
+      }
     } catch (err: unknown) {
-      error.value = getErrorMessage(err, "Failed to load messages.")
+      if (shouldApplyResult() && !options.background) {
+        error.value = getErrorMessage(err, "Failed to load messages.")
+      }
     } finally {
-      isLoadingMessages.value = false
+      clearMessageLoadInFlight(loadKey)
+
+      if (shouldApplyResult() && !options.background) {
+        isLoadingMessages.value = false
+      }
     }
   }
 
   const openConversation = async (transactionId: string) => {
     if (!transactionId) return
 
+    const requestId = openRequestId.value + 1
+    openRequestId.value = requestId
     isOpeningConversation.value = true
     error.value = null
 
     try {
+      const cachedConversation = conversations.value.find(
+        (conversation) => conversation.transactionId === transactionId,
+      )
+
+      if (cachedConversation) {
+        const cachedMessages = getCachedMessages(cachedConversation.conversationId)
+        activeConversation.value = getConversationDetailFromSummary(cachedConversation)
+        if (cachedMessages.length > 0) {
+          setCachedMessages(cachedConversation.conversationId, cachedMessages)
+        } else {
+          resetConversationState(messages, nextCursor, hasMoreMessages)
+        }
+
+        await loadMessages(cachedConversation.conversationId, undefined, {
+          expectedOpenRequestId: requestId,
+          background: cachedMessages.length > 0,
+        })
+        if (requestId !== openRequestId.value) return
+
+        void syncLocalReadState(cachedConversation.conversationId)
+        return
+      }
+
+      activeConversation.value = null
+      resetConversationState(messages, nextCursor, hasMoreMessages)
+
       const data = await $fetch<ConversationDetail>(
         `/api/chat/transactions/${encodeURIComponent(transactionId)}`,
       )
+      if (requestId !== openRequestId.value) return
 
+      const cachedMessages = getCachedMessages(data.conversationId)
       activeConversation.value = data
-      resetConversationState(messages, nextCursor, hasMoreMessages)
-      await loadMessages(data.conversationId)
-      await syncLocalReadState(data.conversationId)
+      if (cachedMessages.length > 0) {
+        setCachedMessages(data.conversationId, cachedMessages)
+      }
+
+      await loadMessages(data.conversationId, undefined, {
+        expectedOpenRequestId: requestId,
+        background: cachedMessages.length > 0,
+      })
+      if (requestId !== openRequestId.value) return
+
+      void syncLocalReadState(data.conversationId)
     } catch (err: unknown) {
+      if (requestId !== openRequestId.value) return
       activeConversation.value = null
       resetConversationState(messages, nextCursor, hasMoreMessages)
       error.value = getErrorMessage(err, "Failed to open conversation.")
     } finally {
-      isOpeningConversation.value = false
+      if (requestId === openRequestId.value) {
+        isOpeningConversation.value = false
+      }
     }
   }
 
   const openConversationById = async (conversationId: string) => {
     if (!conversationId) return
 
+    const requestId = openRequestId.value + 1
+    openRequestId.value = requestId
     isOpeningConversation.value = true
     error.value = null
 
     try {
+      const cachedConversation = conversations.value.find(
+        (conversation) => conversation.conversationId === conversationId,
+      )
+      if (cachedConversation) {
+        const cachedMessages = getCachedMessages(conversationId)
+        activeConversation.value = getConversationDetailFromSummary(cachedConversation)
+        if (cachedMessages.length > 0) {
+          setCachedMessages(conversationId, cachedMessages)
+        } else {
+          resetConversationState(messages, nextCursor, hasMoreMessages)
+        }
+      } else {
+        activeConversation.value = null
+        resetConversationState(messages, nextCursor, hasMoreMessages)
+      }
+
       const data = await $fetch<ConversationDetail>(
         `/api/chat/conversations/${encodeURIComponent(conversationId)}`,
       )
+      if (requestId !== openRequestId.value) return
 
+      const cachedMessages = getCachedMessages(data.conversationId)
       activeConversation.value = data
-      resetConversationState(messages, nextCursor, hasMoreMessages)
-      await loadMessages(data.conversationId)
-      await syncLocalReadState(data.conversationId)
+      await loadMessages(data.conversationId, undefined, {
+        expectedOpenRequestId: requestId,
+        background: cachedMessages.length > 0,
+      })
+      if (requestId !== openRequestId.value) return
+
+      void syncLocalReadState(data.conversationId)
     } catch (err: unknown) {
+      if (requestId !== openRequestId.value) return
       error.value = getErrorMessage(err, "Failed to open conversation.")
     } finally {
-      isOpeningConversation.value = false
+      if (requestId === openRequestId.value) {
+        isOpeningConversation.value = false
+      }
     }
   }
 
   const selectConversation = async (conversationId: string) => {
     await openConversationById(conversationId)
+  }
+
+  const prefetchConversationMessages = async (conversationId: string) => {
+    if (
+      !conversationId ||
+      hasLoadedMessagePage(conversationId) ||
+      prefetchInFlight.value[conversationId]
+    ) {
+      return
+    }
+
+    prefetchInFlight.value = { ...prefetchInFlight.value, [conversationId]: true }
+
+    try {
+      await loadMessages(conversationId, undefined, { background: true })
+    } finally {
+      clearPrefetchInFlight(conversationId)
+    }
+  }
+
+  const prefetchConversationMessagesForInbox = (options: PrefetchConversationsOptions = {}) => {
+    const initialCount = options.initialCount ?? 8
+    const conversationIds = sortedConversations.value.map(
+      (conversation) => conversation.conversationId,
+    )
+    const priorityConversationIds = conversationIds.slice(0, initialCount)
+
+    void Promise.allSettled(
+      priorityConversationIds.map((conversationId) => prefetchConversationMessages(conversationId)),
+    )
   }
 
   const loadMoreMessages = async () => {
@@ -343,10 +649,25 @@ export const useChat = () => {
 
     isSending.value = true
     error.value = null
+    const conversationId = activeConversation.value.conversationId
+    const optimisticMessage: ChatMessage = {
+      id: createOptimisticMessageId(),
+      conversationId,
+      senderUserId: "local-user",
+      body,
+      imageUrl: imageUrl ?? null,
+      isRead: false,
+      readAt: null,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true,
+    }
+
+    mergeCachedMessages(conversationId, [optimisticMessage])
+    updateConversationFromMessage(optimisticMessage, false)
 
     try {
       const message = await $fetch<ChatMessage>(
-        `/api/chat/conversations/${encodeURIComponent(activeConversation.value.conversationId)}/messages`,
+        `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
         {
           method: "POST",
           body: {
@@ -356,10 +677,11 @@ export const useChat = () => {
         },
       )
 
-      messages.value = mergeChatMessages(messages.value, [message])
+      replaceOptimisticMessage(conversationId, optimisticMessage.id, message)
       updateConversationFromMessage(message, false)
       return message
     } catch (e: unknown) {
+      removeCachedMessage(conversationId, optimisticMessage.id)
       const message = getErrorMessage(e, "Failed to send message")
       error.value = message
 
@@ -434,23 +756,93 @@ export const useChat = () => {
     }
   }
 
+  const isMessageFromOtherParticipant = (message: ChatMessage) => {
+    const isActiveConversation = activeConversation.value?.conversationId === message.conversationId
+    const conversation = isActiveConversation
+      ? activeConversation.value
+      : conversations.value.find((entry) => entry.conversationId === message.conversationId)
+
+    return conversation?.otherParticipant?.id === message.senderUserId
+  }
+
+  const onActiveRealtimeMessage = (message: ChatMessage, eventType: RealtimeMessageEvent) => {
+    if (activeConversation.value?.conversationId !== message.conversationId) {
+      return
+    }
+
+    const alreadyKnown = getCachedMessages(message.conversationId).some(
+      (entry) => entry.id === message.id,
+    )
+    mergeCachedMessages(message.conversationId, [message])
+    updateConversationFromMessage(message, false)
+
+    if (eventType === "INSERT" && !alreadyKnown && isMessageFromOtherParticipant(message)) {
+      void syncLocalReadState(message.conversationId)
+    }
+  }
+
+  const onInboxRealtimeMessage = (message: ChatMessage, eventType: RealtimeMessageEvent) => {
+    if (activeConversation.value?.conversationId === message.conversationId) {
+      return
+    }
+
+    const conversation = conversations.value.find(
+      (entry) => entry.conversationId === message.conversationId,
+    )
+
+    if (!conversation) {
+      void loadConversations({ background: true })
+      void loadUnreadCount()
+      return
+    }
+
+    const cachedMessages = getCachedMessages(message.conversationId)
+    const alreadyKnown =
+      cachedMessages.some((entry) => entry.id === message.id) ||
+      conversation.lastMessage?.id === message.id ||
+      (eventType === "INSERT" && hasProcessedRealtimeInsert(message.id))
+
+    if (cachedMessages.length > 0) {
+      mergeCachedMessages(message.conversationId, [message])
+    }
+
+    const isUnreadIncomingInsert =
+      eventType === "INSERT" && !alreadyKnown && isMessageFromOtherParticipant(message)
+
+    updateConversationFromMessage(message, isUnreadIncomingInsert)
+
+    if (isUnreadIncomingInsert) {
+      totalUnreadCount.value += 1
+      return
+    }
+  }
+
   const onIncomingMessage = (message: ChatMessage) => {
     const isActiveConversation = activeConversation.value?.conversationId === message.conversationId
-    const alreadyKnown = messages.value.some((entry) => entry.id === message.id)
+    const alreadyKnown = getCachedMessages(message.conversationId).some(
+      (entry) => entry.id === message.id,
+    )
+    const isFromOtherParticipant = isMessageFromOtherParticipant(message)
 
     if (isActiveConversation) {
-      messages.value = mergeChatMessages(messages.value, [message])
-      if (!alreadyKnown) {
+      mergeCachedMessages(message.conversationId, [message])
+      if (!alreadyKnown && isFromOtherParticipant) {
         void syncLocalReadState(message.conversationId)
       }
-    } else if (!alreadyKnown) {
+    } else if (!alreadyKnown && isFromOtherParticipant) {
       totalUnreadCount.value += 1
     }
 
-    updateConversationFromMessage(message, !isActiveConversation && !alreadyKnown)
+    updateConversationFromMessage(
+      message,
+      !isActiveConversation && !alreadyKnown && isFromOtherParticipant,
+    )
   }
 
   const closeConversation = () => {
+    openRequestId.value += 1
+    isOpeningConversation.value = false
+    isLoadingMessages.value = false
     activeConversation.value = null
     resetConversationState(messages, nextCursor, hasMoreMessages)
   }
@@ -480,12 +872,15 @@ export const useChat = () => {
     openConversation,
     openConversationById,
     selectConversation,
+    prefetchConversationMessagesForInbox,
     loadMoreMessages,
     sendMessage,
     reportConversation,
     markAsRead,
     loadUnreadCount,
     onIncomingMessage,
+    onActiveRealtimeMessage,
+    onInboxRealtimeMessage,
     mergeActiveConversationMessages,
     closeConversation,
   }

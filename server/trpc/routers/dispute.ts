@@ -49,6 +49,7 @@ const participantUserSelect = {
   email: true,
   status: true,
   points: true,
+  avatarUrl: true,
 } as const
 
 const disputeActionSelect = {
@@ -83,6 +84,7 @@ const disputeRecordSelect = {
   rebuttalById: true,
   rebuttalText: true,
   rebuttalNotes: true,
+  rebuttalImageUrl: true,
   rebuttalSubmittedAt: true,
   createdAt: true,
   raisedBy: {
@@ -270,6 +272,7 @@ type DisputeParticipant = {
   email: string
   status: string
   points: number
+  avatarUrl: string | null
 }
 
 type DisputeActionRecord = {
@@ -300,6 +303,7 @@ type DisputeRecord = {
   rebuttalById: string | null
   rebuttalText: string | null
   rebuttalNotes: string | null
+  rebuttalImageUrl: string | null
   rebuttalSubmittedAt: Date | null
   createdAt: Date
   raisedBy: DisputeParticipant | null
@@ -544,6 +548,7 @@ const mapParticipant = (user: DisputeParticipant | null | undefined) =>
         lastName: user.lastName,
         status: user.status,
         points: user.points,
+        avatarUrl: user.avatarUrl,
         displayName: formatDisplayName(user),
       }
     : null
@@ -646,6 +651,7 @@ const mapDisputeRecord = (
     hasRebuttal,
     rebuttalText: record.rebuttalText,
     rebuttalNotes: record.rebuttalNotes,
+    rebuttalImageUrl: record.rebuttalImageUrl,
     rebuttalSubmittedAt: record.rebuttalSubmittedAt,
     rebuttalBy: mapParticipant(record.rebuttalBy),
     rebuttalSubmittedByRole:
@@ -843,6 +849,10 @@ const applyDisputeActions = async (
         })
       }
 
+      const suspendedUntil = action.durationDays
+        ? new Date(Date.now() + action.durationDays * 24 * 60 * 60 * 1000)
+        : null
+
       const suspendUpdate = await tx.user.updateMany({
         where: {
           id: action.targetUserId,
@@ -852,6 +862,7 @@ const applyDisputeActions = async (
         },
         data: {
           status: SUSPENDED_USER_STATUS,
+          suspendedUntil,
         },
       })
 
@@ -1164,12 +1175,28 @@ export const disputeRouter = router({
     }
   }),
 
+  counts: adminProcedure.query(async ({ ctx }) => {
+    const [submitted, open, appealed, rejected, closed] = await Promise.all([
+      ctx.prisma.transactionDispute.count({ where: { status: SUBMITTED_DISPUTE_STATUS } }),
+      ctx.prisma.transactionDispute.count({ where: { status: OPEN_DISPUTE_STATUS } }),
+      ctx.prisma.transactionDispute.count({ where: { status: fromApiDisputeStatus("APPEALED") } }),
+      ctx.prisma.transactionDispute.count({ where: { status: REJECTED_DISPUTE_STATUS } }),
+      ctx.prisma.transactionDispute.count({ where: { status: fromApiDisputeStatus("CLOSED") } }),
+    ])
+
+    return {
+      SUBMITTED: submitted,
+      OPEN: open,
+      APPEALED: appealed,
+      REJECTED: rejected,
+      CLOSED: closed,
+    }
+  }),
+
   list: adminProcedure.input(listDisputesSchema).query(async ({ ctx, input }) => {
     const disputePrisma = getDisputePrisma(ctx)
     const disputes = await disputePrisma.transactionDispute.findMany({
-      where: {
-        status: fromApiDisputeStatus(input.status),
-      },
+      where: input.status ? { status: fromApiDisputeStatus(input.status) } : undefined,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: disputeRecordSelect,
     })
@@ -1338,6 +1365,7 @@ export const disputeRouter = router({
             rebuttalById: ctx.user.id,
             rebuttalText: input.rebuttalText.trim(),
             rebuttalNotes: normalizeOptionalText(input.rebuttalNotes),
+            rebuttalImageUrl: input.rebuttalImageUrl ?? null,
             rebuttalSubmittedAt: new Date(),
           },
         })

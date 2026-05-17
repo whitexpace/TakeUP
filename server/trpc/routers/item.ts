@@ -6,7 +6,7 @@ import { protectedProcedure, publicProcedure } from "../procedures"
 import {
   createItemSchema,
   deleteItemSchema,
-  itemIdSchema,
+  itemDetailSchema,
   listItemsSchema,
   myListingsSchema,
   paginatedItemsSchema,
@@ -28,7 +28,7 @@ import {
   sortFeedItemsByRelevance,
   type ViewerInterestProfile,
 } from "../../utils/item-feed-ranking"
-import { expireActiveBoosts } from "../../utils/rewards"
+import { expireActiveBoostsThrottled } from "../../utils/rewards"
 
 import { getDefaultItemOrderBy } from "./item-sorting"
 import { mapTransactionReview, transactionReviewSelect } from "../review-helpers"
@@ -74,6 +74,10 @@ const itemWithTaxonomy = {
   },
   lender: {
     select: {
+      lenderRating: true,
+      _count: {
+        select: { bookings: true },
+      },
       user: {
         select: {
           username: true,
@@ -82,6 +86,7 @@ const itemWithTaxonomy = {
           lastName: true,
           email: true,
           status: true,
+          avatarUrl: true,
         },
       },
     },
@@ -163,6 +168,7 @@ const itemSearchSelect = {
   },
   lender: {
     select: {
+      lenderRating: true,
       user: {
         select: {
           username: true,
@@ -171,6 +177,7 @@ const itemSearchSelect = {
           lastName: true,
           email: true,
           status: true,
+          avatarUrl: true,
         },
       },
     },
@@ -374,10 +381,13 @@ const mapItemTaxonomy = (
     ...rest
   } = item
   const lenderUser = lender?.user
+  const lenderRating = lender?.lenderRating ?? 0
+  const lenderBookingCount = lender?._count?.bookings ?? 0
   const lenderFullName = lenderUser
     ? [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ")
     : null
   const lenderUsername = lenderUser?.username || null
+  const lenderAvatarUrl = lenderUser?.avatarUrl || null
   const ownerName = lenderUsername || lenderFullName || lenderUser?.email || item.lenderId
   const orderedPhotos =
     images?.map((entry) => entry.path) ??
@@ -394,6 +404,9 @@ const mapItemTaxonomy = (
     ownerName,
     lenderUsername,
     lenderFullName,
+    lenderRating,
+    lenderBookingCount,
+    lenderAvatarUrl,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     images:
       images?.map((entry, index) => ({
@@ -566,7 +579,7 @@ const buildListWhere = (
   const includeSearch = options.includeSearch ?? true
   const userId = options.userId ?? null
   const now = options.now ?? new Date()
-  const shouldApplyPublicVisibility = !ownedOnly
+  const shouldApplyPublicVisibility = !ownedOnly && !likedOnly
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? (status as ItemStatus)
@@ -799,32 +812,94 @@ const orderItemsByIds = <T extends { id: string }>(items: T[], orderedIds: strin
   return orderedIds.map((id) => itemsById.get(id)).filter((item): item is T => Boolean(item))
 }
 
+const VIEWER_FEED_PROFILE_TTL_MS = 60_000
+
+const viewerFeedProfileCache = new Map<
+  string,
+  {
+    expiresAt: number
+    profile: ViewerInterestProfile
+  }
+>()
+const pendingViewerFeedProfileRequests = new Map<string, Promise<ViewerInterestProfile>>()
+
+const getCachedViewerFeedProfile = (userId: string) => {
+  const cachedEntry = viewerFeedProfileCache.get(userId)
+  if (!cachedEntry) {
+    return null
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    viewerFeedProfileCache.delete(userId)
+    return null
+  }
+
+  return cachedEntry.profile
+}
+
 const getViewerInterestProfileForFeed = async (prisma: PrismaClientLike, userId: string | null) => {
   if (!userId) {
     return buildViewerInterestProfile([])
   }
 
-  const likedItems = await prisma.like.findMany({
-    where: { userId },
-    select: {
-      item: {
+  const cachedProfile = getCachedViewerFeedProfile(userId)
+  if (cachedProfile) {
+    return cachedProfile
+  }
+
+  const pendingRequest = pendingViewerFeedProfileRequests.get(userId)
+  if (pendingRequest) {
+    return pendingRequest
+  }
+
+  let requestPromise: Promise<ViewerInterestProfile> | null = null
+
+  requestPromise = (async () => {
+    try {
+      const likedItems = await prisma.like.findMany({
+        where: { userId },
         select: {
-          categories: {
-            select: { category: true },
-          },
-          tags: {
+          item: {
             select: {
-              tag: {
-                select: { name: true },
+              categories: {
+                select: { category: true },
+              },
+              tags: {
+                select: {
+                  tag: {
+                    select: { name: true },
+                  },
+                },
               },
             },
           },
         },
-      },
-    },
-  })
+      })
 
-  return buildViewerInterestProfile(likedItems)
+      const profile = buildViewerInterestProfile(likedItems)
+      viewerFeedProfileCache.set(userId, {
+        expiresAt: Date.now() + VIEWER_FEED_PROFILE_TTL_MS,
+        profile,
+      })
+      return profile
+    } catch (error) {
+      if ((error as { code?: string } | null)?.code === "P2024") {
+        console.warn(
+          `[feed] Falling back to neutral viewer profile for user ${userId} after Prisma pool timeout.`,
+        )
+        return buildViewerInterestProfile([])
+      }
+
+      throw error
+    } finally {
+      if (requestPromise && pendingViewerFeedProfileRequests.get(userId) === requestPromise) {
+        pendingViewerFeedProfileRequests.delete(userId)
+      }
+    }
+  })()
+
+  pendingViewerFeedProfileRequests.set(userId, requestPromise)
+  return requestPromise
 }
 
 type PrismaClientLike = {
@@ -866,6 +941,7 @@ const loadPendingFeedRecords = async (
   now: Date,
   requiredWindow: { startDate: Date; endDate: Date } | null,
   search?: string,
+  likedOnly = false,
 ) => {
   if (pendingIds.length === 0) {
     return []
@@ -878,13 +954,15 @@ const loadPendingFeedRecords = async (
     },
   })
 
-  const filteredPendingRecords = filterPublicVisibleItems(
-    search
-      ? filterAndRankSearchResults(pendingRecords, search, { sortByScore: false })
-      : pendingRecords,
-    now,
-    requiredWindow,
-  )
+  const filteredPendingRecords = likedOnly
+    ? pendingRecords
+    : filterPublicVisibleItems(
+        search
+          ? filterAndRankSearchResults(pendingRecords, search, { sortByScore: false })
+          : pendingRecords,
+        now,
+        requiredWindow,
+      )
 
   return orderItemsByIds(filteredPendingRecords, pendingIds)
 }
@@ -899,6 +977,7 @@ const collectRankedFeedRecords = async ({
   now,
   requiredWindow,
   viewerProfile,
+  likedOnly = false,
 }: {
   prisma: PrismaClientLike
   userId: string | null
@@ -909,6 +988,7 @@ const collectRankedFeedRecords = async ({
   now: Date
   requiredWindow: { startDate: Date; endDate: Date } | null
   viewerProfile: ViewerInterestProfile
+  likedOnly?: boolean
 }) => {
   const collectedRecords = await loadPendingFeedRecords(
     prisma.item,
@@ -918,14 +998,16 @@ const collectRankedFeedRecords = async ({
     now,
     requiredWindow,
     search,
+    likedOnly,
   )
 
   let scanCursor = pagination.scanCursor
   let scanExhausted = pagination.scanExhausted
   let scannedCount = 0
+  const scanLimit = likedOnly ? 100_000 : FEED_RANKING_SCAN_LIMIT
 
-  while (!scanExhausted && scannedCount < FEED_RANKING_SCAN_LIMIT) {
-    const take = Math.min(VISIBILITY_SCAN_BATCH_SIZE, FEED_RANKING_SCAN_LIMIT - scannedCount)
+  while (!scanExhausted && scannedCount < scanLimit) {
+    const take = Math.min(VISIBILITY_SCAN_BATCH_SIZE, scanLimit - scannedCount)
     const records = await prisma.item.findMany({
       take,
       orderBy: getDefaultItemOrderBy(),
@@ -940,11 +1022,13 @@ const collectRankedFeedRecords = async ({
 
     scannedCount += records.length
 
-    const filteredRecords = filterPublicVisibleItems(
-      search ? filterAndRankSearchResults(records, search, { sortByScore: false }) : records,
-      now,
-      requiredWindow,
-    )
+    const filteredRecords = likedOnly
+      ? records
+      : filterPublicVisibleItems(
+          search ? filterAndRankSearchResults(records, search, { sortByScore: false }) : records,
+          now,
+          requiredWindow,
+        )
     collectedRecords.push(...filteredRecords)
 
     const lastScannedRecord = records.at(-1)
@@ -981,7 +1065,7 @@ const collectRankedFeedRecords = async ({
 
 export const itemRouter = router({
   list: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1007,13 +1091,14 @@ export const itemRouter = router({
       now,
       requiredWindow,
       viewerProfile,
+      likedOnly: !!input?.likedOnly,
     })
 
     return pageRecords.map(mapItemTaxonomy)
   }),
 
   paginatedList: publicProcedure.input(paginatedItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1053,6 +1138,7 @@ export const itemRouter = router({
       now,
       requiredWindow,
       viewerProfile,
+      likedOnly: !!input.likedOnly,
     })
 
     return {
@@ -1062,7 +1148,7 @@ export const itemRouter = router({
   }),
 
   countFiltered: publicProcedure.input(listItemsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const search = input?.search?.trim()
     const now = new Date()
     const requiredWindow = getRequiredAvailabilityWindow(input)
@@ -1091,9 +1177,10 @@ export const itemRouter = router({
         break
       }
 
-      const visibleBatch = batch.filter((item) =>
-        isPublicVisibleItem(item, now, { requiredWindow }),
-      )
+      const visibleBatch = input?.likedOnly
+        ? batch
+        : batch.filter((item) => isPublicVisibleItem(item, now, { requiredWindow }))
+
       totalCount += search
         ? filterAndRankSearchResults(visibleBatch, search, { sortByScore: false }).length
         : visibleBatch.length
@@ -1242,8 +1329,8 @@ export const itemRouter = router({
       .then((item) => mapItemTaxonomy(item as ItemWithUserLike))
   }),
 
-  byId: publicProcedure.input(itemIdSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+  byId: publicProcedure.input(itemDetailSchema).query(async ({ ctx, input }) => {
+    await expireActiveBoostsThrottled(ctx.prisma)
     const now = new Date()
     const viewer = ctx.user
       ? await ctx.prisma.user.findUnique({
@@ -1261,6 +1348,7 @@ export const itemRouter = router({
         orderBy: {
           createdAt: "desc",
         },
+        take: input.reviewsLimit,
         select: transactionReviewSelect,
       },
     } satisfies Prisma.ItemInclude
@@ -1298,16 +1386,21 @@ export const itemRouter = router({
     updateItem?.({ where: { id: item.id }, data: { viewCount: { increment: 1 } } }).catch(() => {})
 
     const reviews = item.transactionReviews.map(mapTransactionReview)
-    const averageRating =
-      reviews.length > 0
-        ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length
-        : 0
+    const reviewStats = await ctx.prisma.transactionReview.aggregate({
+      where: {
+        itemId: item.id,
+        reviewType: "ITEM_REVIEW",
+      },
+      _avg: { rating: true },
+      _count: { _all: true },
+    })
+    const averageRating = reviewStats._avg.rating ?? 0
 
     return {
       ...mapItemTaxonomy(item),
       rating: averageRating,
       reviews,
-      reviewsCount: reviews.length,
+      reviewsCount: reviewStats._count._all,
       bookingBlocks: item.bookings.map((booking) => ({
         id: booking.id,
         startDate: booking.startDate,
@@ -1460,7 +1553,7 @@ export const itemRouter = router({
   }),
 
   myListings: protectedProcedure.input(myListingsSchema).query(async ({ ctx, input }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     const { search, statuses, categories, limit, cursor } = input
     const userId = ctx.user.id
 

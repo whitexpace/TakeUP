@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue"
 import type {
   ListingAnalyticsItem,
+  ListingAnalyticsPreviewItem,
   ListingAnalyticsRange,
 } from "../../../composables/use-listing-analytics"
 import { buildItemDetailPath } from "~/utils/item-detail-route"
@@ -9,12 +10,19 @@ import { buildItemDetailPath } from "~/utils/item-detail-route"
 const {
   selectedRange,
   summary,
+  listingCount,
   listings,
+  previewChartItems,
+  previewTopItems,
   categoryBreakdown,
   error,
   hasFetched,
+  hasTopFetched,
+  hasFreshCache,
+  hasFreshTopCache,
   hasListings,
   hasActivity,
+  fetchAnalyticsTop,
   fetchAnalytics,
   refresh,
   setRange,
@@ -64,7 +72,7 @@ const getInitials = (name: string) =>
     .map((word) => word.charAt(0).toUpperCase())
     .join("") || "IT"
 
-const getItemDetailPath = (item: ListingAnalyticsItem) =>
+const getItemDetailPath = (item: ListingAnalyticsItem | ListingAnalyticsPreviewItem) =>
   buildItemDetailPath({
     id: item.listingId,
     name: item.itemName,
@@ -76,39 +84,39 @@ const statCards = computed(() => {
   return [
     {
       label: "Listings",
-      value: formatNumber(listings.value.length),
+      value: formatNumber(listingCount.value),
       helper: "Total active listings",
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+      icon: "ph:squares-four",
     },
     {
       label: "Available days",
       value: formatNumber(current?.availabilityDays ?? 0),
       helper: "Total days available",
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>',
+      icon: "ph:calendar-blank",
     },
     {
       label: "Booked days",
       value: formatNumber(current?.bookedDays ?? 0),
       helper: "Total days booked",
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>',
+      icon: "ph:calendar-check",
     },
     {
       label: "Total Views",
       value: formatNumber(current?.totalViews ?? 0),
       helper: "All-time listing views",
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+      icon: "ph:eye",
     },
     {
       label: "Revenue",
       value: formatPeso(current?.totalRevenue ?? 0),
       helper: `${formatNumber(current?.totalCompletedTransactions ?? 0)} completed bookings`,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>',
+      icon: "ph:wallet",
     },
     {
       label: "Transactions",
       value: formatNumber(current?.totalCompletedTransactions ?? 0),
       helper: `${formatNumber(current?.totalBookings ?? 0)} accepted bookings`,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17V7"/></svg>',
+      icon: "ph:receipt",
     },
   ]
 })
@@ -143,22 +151,42 @@ const activityItems = computed(() =>
 )
 
 const topItems = computed(() =>
-  [...activityItems.value]
-    .sort(
-      (left, right) =>
-        right.totalViews - left.totalViews ||
-        right.totalBookings - left.totalBookings ||
-        right.totalRevenue - left.totalRevenue,
-    )
-    .slice(0, 5),
+  listings.value.length
+    ? [...activityItems.value]
+        .sort(
+          (left, right) =>
+            right.totalViews - left.totalViews ||
+            right.totalBookings - left.totalBookings ||
+            right.totalRevenue - left.totalRevenue,
+        )
+        .slice(0, 5)
+    : previewTopItems.value,
 )
 
 const chartItems = computed(() =>
-  [...listings.value]
-    .filter((item) => item.totalViews > 0)
-    .sort((left, right) => right.totalViews - left.totalViews)
-    .slice(0, 6),
+  listings.value.length
+    ? [...listings.value]
+        .filter((item) => item.totalViews > 0)
+        .sort((left, right) => right.totalViews - left.totalViews)
+        .slice(0, 6)
+    : previewChartItems.value,
 )
+
+const hasVisibleListings = computed(() => listingCount.value > 0)
+
+const loadAnalytics = async () => {
+  if (!hasTopFetched.value || !hasFreshTopCache.value) {
+    await fetchAnalyticsTop()
+  }
+
+  if (!hasFetched.value || !hasFreshCache.value) {
+    void fetchAnalytics()
+  }
+}
+
+const refreshAnalytics = () => {
+  void refresh()
+}
 
 const maxViews = computed(() => Math.max(...chartItems.value.map((item) => item.totalViews), 1))
 const maxCategoryCount = computed(() =>
@@ -227,19 +255,23 @@ const filteredAndSortedListings = computed(() => {
 })
 
 onMounted(() => {
-  void fetchAnalytics()
+  void loadAnalytics()
 })
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+  <AnalyticsSkeleton v-if="(!hasTopFetched || !hasFetched) && !error" />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">My Listing Analytics</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+            My Listing Analytics
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Track your listing performance and insights.
         </p>
       </section>
@@ -265,25 +297,14 @@ onMounted(() => {
       </div>
     </header>
 
-    <!-- Tier 1: Top strip (KPI stat chips) -->
-    <template v-if="!hasFetched && !error">
-      <section class="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-8">
-        <div
-          v-for="index in 6"
-          :key="index"
-          class="h-[120px] animate-pulse rounded-[14px] border border-cinnamon-ice/20 bg-white"
-        />
-      </section>
-    </template>
-
-    <template v-else-if="error">
+    <template v-if="error">
       <section class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 mb-8">
-        <h2 class="text-xl font-bold text-noble-black">Unable to load analytics</h2>
+        <h2 class="text-xl font-semibold text-noble-black">Unable to load analytics</h2>
         <p class="mt-2 text-sm text-noble-black/70">{{ error }}</p>
         <button
           class="mt-5 rounded-[12px] bg-burning-orange px-5 py-3 text-[14px] font-bold text-white transition hover:brightness-110 active:scale-95"
           type="button"
-          @click="refresh"
+          @click="refreshAnalytics"
         >
           Retry
         </button>
@@ -298,14 +319,16 @@ onMounted(() => {
           class="flex flex-col h-full rounded-[14px] border border-cinnamon-ice/20 bg-white px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
         >
           <div class="flex items-center justify-between mb-3">
-            <span class="w-4 h-4 text-noble-black/40" v-html="card.icon"></span>
+            <Icon :name="card.icon" class="w-4 h-4 text-noble-black/40" />
           </div>
           <div>
-            <p class="text-[11px] font-bold tracking-widest text-noble-black/40 uppercase mb-1">
+            <p class="text-[11px] font-semibold tracking-widest text-noble-black/40 uppercase mb-1">
               {{ card.label }}
             </p>
-            <p class="text-[24px] font-bold text-noble-black leading-none mb-2">{{ card.value }}</p>
-            <p class="text-[12px] font-medium text-noble-black/40 leading-snug">
+            <p class="text-[24px] font-semibold text-noble-black leading-none mb-2">
+              {{ card.value }}
+            </p>
+            <p class="text-[12px] font-light text-noble-black/40 leading-snug">
               {{ card.helper }}
             </p>
           </div>
@@ -313,20 +336,16 @@ onMounted(() => {
       </section>
 
       <section
-        v-if="hasFetched && !hasListings"
+        v-if="(hasTopFetched || hasFetched) && !hasVisibleListings"
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-8 text-center mb-8"
       >
         <div
           class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mx-auto mb-6 text-cinnamon-ice/40"
         >
-          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.5" />
-            <path d="M3 9h18" stroke-width="1.5" />
-            <path d="M9 21V9" stroke-width="1.5" />
-          </svg>
+          <Icon name="ph:squares-four" class="w-10 h-10" />
         </div>
-        <p class="text-[18px] font-bold text-noble-black">No listings yet</p>
-        <p class="mt-2 text-[14px] font-medium text-noble-black/50 max-w-sm mx-auto">
+        <p class="text-[18px] font-semibold text-noble-black">No listings yet</p>
+        <p class="mt-2 text-[14px] font-light text-noble-black/50 max-w-sm mx-auto">
           Publish an item first, then analytics for views, bookings, and utilization will appear
           here.
         </p>
@@ -343,11 +362,11 @@ onMounted(() => {
         <!-- Left 65%: Main charts -->
         <div class="w-full lg:w-[65%] space-y-6">
           <div
-            v-if="hasFetched && !hasActivity"
+            v-if="(hasTopFetched || hasFetched) && !hasActivity"
             class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6"
           >
-            <p class="text-[18px] font-bold text-noble-black">No data yet</p>
-            <p class="mt-1 text-[14px] font-medium text-noble-black/50">
+            <p class="text-[18px] font-semibold text-noble-black">No data yet</p>
+            <p class="mt-1 text-[13px] font-light text-noble-black/50">
               Your listings are ready, but they do not have views, bookings, or completed
               transactions yet.
             </p>
@@ -358,8 +377,8 @@ onMounted(() => {
           >
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[20px] font-bold text-noble-black">Views Snapshot</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/50">
+                <h2 class="text-[20px] font-semibold text-noble-black">Views Snapshot</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Current all-time view counts from your listing records.
                 </p>
               </div>
@@ -397,8 +416,8 @@ onMounted(() => {
             class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
           >
             <div class="border-l-[3px] border-burning-orange pl-4">
-              <h2 class="text-[20px] font-bold text-noble-black">Performance Metrics</h2>
-              <p class="mt-1 text-[13px] font-medium text-noble-black/50">
+              <h2 class="text-[20px] font-semibold text-noble-black">Performance Metrics</h2>
+              <p class="mt-1 text-[13px] font-light text-noble-black/50">
                 Revenue, bookings, completed transactions, and utilization use
                 {{ activeRangeLabel }}.
               </p>
@@ -442,7 +461,7 @@ onMounted(() => {
           >
             <div class="flex items-center justify-between gap-4 mb-4">
               <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[18px] font-bold text-noble-black">Top Items</h2>
+                <h2 class="text-[18px] font-semibold text-noble-black">Top Items</h2>
               </div>
               <NuxtLink
                 class="text-[12px] font-bold text-burning-orange hover:underline"
@@ -498,7 +517,7 @@ onMounted(() => {
           >
             <div class="flex items-center justify-between gap-4 mb-4">
               <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[18px] font-bold text-noble-black">Items by Category</h2>
+                <h2 class="text-[18px] font-semibold text-noble-black">Items by Category</h2>
               </div>
               <button
                 v-if="categoryBreakdown.length > 5"
@@ -542,15 +561,15 @@ onMounted(() => {
       >
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div class="border-l-[3px] border-burning-orange pl-4">
-            <h2 class="text-[20px] font-bold text-noble-black">Listing Details</h2>
-            <p class="mt-1 text-[13px] font-medium text-noble-black/50">
+            <h2 class="text-[20px] font-semibold text-noble-black">Listing Details</h2>
+            <p class="mt-1 text-[13px] font-light text-noble-black/50">
               Per-listing views, bookings, revenue, and availability utilization.
             </p>
           </div>
           <span
             class="text-[11px] font-bold uppercase tracking-widest text-burning-orange border border-burning-orange/20 bg-burning-orange/5 px-2.5 py-1 rounded-full"
           >
-            {{ listings.length }} listings tracked
+            {{ listingCount }} listings tracked
           </span>
         </div>
 
@@ -706,19 +725,5 @@ onMounted(() => {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%");
-  border-radius: 20px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
 }
 </style>

@@ -58,7 +58,9 @@ export interface ListedItem {
   ownerName: string
   lenderUsername?: string | null
   lenderFullName?: string | null
-  borrowerId: string | null
+  lenderRating?: number
+  lenderBookingCount?: number
+  lenderAvatarUrl?: string | null
   categories: string[]
   tags: string[]
   hasActiveBoost?: boolean

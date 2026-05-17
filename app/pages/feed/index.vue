@@ -15,7 +15,12 @@
         <div class="flex flex-col lg:flex-row gap-10">
           <aside class="hidden lg:block lg:w-[240px] xl:w-[280px] shrink-0">
             <div class="sticky top-6">
+              <div
+                v-if="isLoadingFeed"
+                class="h-64 w-full bg-noble-black/5 rounded-[24px] animate-pulse"
+              ></div>
               <CommunityActivitySidebar
+                v-else
                 :posts-made="userActivity.postsMade"
                 :offers-sent="userActivity.offersSent"
                 :offers-received="userActivity.offersReceived"
@@ -25,9 +30,11 @@
 
           <div class="flex-1 min-w-0 flex flex-col gap-8">
             <div class="flex flex-col">
-              <h1 class="text-[28px] font-bold text-gray-900 leading-tight">Community Feed</h1>
+              <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+                Community Feed
+              </h1>
               <div class="h-[2px] w-10 bg-burning-orange rounded-full mt-2"></div>
-              <p class="mt-2 text-[14px] text-gray-400">
+              <p class="mt-2 text-[14px] font-light text-noble-black/50">
                 Post what you need and receive offers directly from the UPC community
               </p>
             </div>
@@ -97,23 +104,14 @@
               <div
                 class="mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-cream text-burning-orange/30"
               >
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.517 15.153 3 13.66 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
+                <Icon name="ph:chat-centered-text" class="w-8 h-8" />
               </div>
-              <h3 class="text-[22px] font-bold text-noble-black mb-2">No live requests yet</h3>
-              <p class="text-[15px] text-noble-black/40 max-w-[360px] leading-relaxed mb-8">
+              <h3 class="font-montravia text-[24px] font-medium text-noble-black mb-2">
+                No live requests yet
+              </h3>
+              <p
+                class="text-[15px] font-normal text-noble-black/40 max-w-[360px] leading-relaxed mb-8"
+              >
                 The feed is now reading directly from the database. Create the first request to get
                 it started.
               </p>
@@ -128,7 +126,11 @@
 
           <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
             <div class="sticky top-6">
-              <CommunityTrendingSidebar :trending-items="trendingItems" />
+              <div
+                v-if="isLoadingFeed"
+                class="h-96 w-full bg-noble-black/5 rounded-[24px] animate-pulse"
+              ></div>
+              <CommunityTrendingSidebar v-else :trending-items="trendingItems" />
             </div>
           </aside>
         </div>
@@ -176,16 +178,7 @@
                 aria-label="Close new listing form"
                 @click="closeNewItemComposer"
               >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -205,91 +198,32 @@
 </template>
 
 <script setup lang="ts">
+import { useViewerSession } from "../../composables/use-viewer-session"
+import { useCommunityFeedCache } from "../../composables/use-community-feed-cache"
+import { recordPerfEvent, withPerfTimer } from "../../utils/performance-telemetry"
+import {
+  COMMUNITY_FEED_CACHE_TTL_MS,
+  type ApiCommunityNotification,
+  type ApiCommunityRequest,
+  type ApiOfferableItem,
+  buildCommunityFeedActivity,
+  buildCommunityFeedTrendingItems,
+  normalizeCommunityNotification,
+  normalizeCommunityRequest,
+  normalizeOfferableItem,
+} from "../../utils/community-feed"
+
 import { computed, onMounted, ref, watch } from "vue"
 import type {
-  CommunityMember,
-  CommunityOffer,
   CommunityOfferFormInput,
-  CommunityOfferNotification,
   CommunityOfferStatus,
-  CommunityOfferableItem,
-  CommunityRequest,
   CommunityRequestComposerInput,
   CommunityRequestStatus,
-  TrendingRequest,
-  UserActivity,
 } from "~/types/community-requests"
 import CommunityCreatePost from "~/components/CommunityCreatePost.vue"
 import ListingForm from "~/components/ListingForm.vue"
 
 definePageMeta({ layout: false })
-
-type ApiCommunityMember = {
-  profileId: number
-  userId: string
-  username: string
-  name: string
-  avatar: string
-}
-
-type ApiCommunityOffer = {
-  id: number
-  lenderID: number
-  requestID: number
-  itemID: number
-  itemName: string
-  rentalFee: number
-  availability: boolean
-  condition: string
-  rentalTerms: string
-  status: string
-  borrowerReadAt: string | Date | null
-  createdAt: string | Date
-  updatedAt: string | Date
-  lender: ApiCommunityMember
-  itemThumbnailImage: string | null
-}
-
-type ApiCommunityRequest = {
-  id: number
-  borrowerID: number
-  itemNeeded: string
-  referenceImageUrl: string | null
-  requestedDates: Array<string | Date>
-  priceRange: number[]
-  description: string
-  status: string
-  createdAt: string | Date
-  updatedAt: string | Date
-  offersCount: number
-  borrower: ApiCommunityMember
-  offers: ApiCommunityOffer[]
-}
-
-type ApiCommunityNotification = {
-  id: number
-  requestId: number
-  requestTitle: string
-  recipientId: number
-  actorName: string
-  itemName: string
-  fee: number
-  createdAt: string | Date
-  read: boolean
-}
-
-type ApiOfferableItem = {
-  id: string
-  numericId: number
-  name: string
-  thumbnailImage: string | null
-  condition: string
-  rentalFee: number
-  freeToBorrow: boolean
-  status: string
-  rateOption: string
-  createdAt: string | Date
-}
 
 const createPostRef = ref<InstanceType<typeof CommunityCreatePost> | null>(null)
 const feedMainRef = ref<HTMLElement | null>(null)
@@ -298,7 +232,6 @@ const triggerCreatePost = () => {
   createPostRef.value?.triggerHighlight()
 }
 
-const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 
 const asNonEmptyString = (value: unknown) => {
@@ -399,11 +332,20 @@ const availableFilters = computed(() => {
   return filters
 })
 
-const requests = ref<CommunityRequest[]>([])
-const notifications = ref<CommunityOfferNotification[]>([])
-const offerableItems = ref<CommunityOfferableItem[]>([])
-const currentDbUserId = ref("")
-const isLoadingFeed = ref(true)
+const {
+  requests,
+  notifications,
+  offerableItems,
+  currentDbUserId,
+  feedHydrated,
+  feedLastLoadedAt,
+  feedViewerKey,
+  feedActivity,
+  feedTrendingItems,
+  setFeedSummary,
+} = useCommunityFeedCache()
+const initialViewerKey = user.value?.id ?? "anonymous"
+const isLoadingFeed = ref(!feedHydrated.value || feedViewerKey.value !== initialViewerKey)
 const isCreatingRequest = ref(false)
 const isSubmittingOffer = ref(false)
 const feedError = ref<string | null>(null)
@@ -415,13 +357,7 @@ const preferredOfferItemId = ref<number | null>(null)
 const isNewItemComposerOpen = ref(false)
 const isSubmittingNewItem = ref(false)
 const newItemComposerError = ref<string | null>(null)
-const feedHydrated = ref(false)
 const { createListing } = useMyListings()
-
-const toDate = (value: string | Date | null | undefined) => {
-  if (!value) return null
-  return value instanceof Date ? value : new Date(value)
-}
 
 const getFirstFieldError = (value: unknown) => {
   const record = asRecord(value)
@@ -467,91 +403,14 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
   )
 }
 
-const normalizeMember = (member: ApiCommunityMember): CommunityMember => ({
-  profileId: Number(member.profileId),
-  userId: member.userId,
-  username: member.username,
-  name: member.name,
-  avatar: member.avatar || "",
-})
-
-const normalizeOffer = (offer: ApiCommunityOffer): CommunityOffer => ({
-  id: Number(offer.id),
-  lenderID: Number(offer.lenderID),
-  requestID: Number(offer.requestID),
-  itemID: Number(offer.itemID),
-  itemName: offer.itemName,
-  itemThumbnailImage: offer.itemThumbnailImage,
-  rentalFee: Number(offer.rentalFee),
-  availability: Boolean(offer.availability),
-  condition: offer.condition as CommunityOffer["condition"],
-  rentalTerms: offer.rentalTerms ?? "",
-  status: offer.status as CommunityOfferStatus,
-  borrowerReadAt: toDate(offer.borrowerReadAt),
-  createdAt: toDate(offer.createdAt) ?? new Date(),
-  updatedAt: toDate(offer.updatedAt) ?? new Date(),
-  lender: normalizeMember(offer.lender),
-})
-
-const normalizeRequest = (request: ApiCommunityRequest): CommunityRequest => ({
-  id: Number(request.id),
-  borrowerID: Number(request.borrowerID),
-  itemNeeded: request.itemNeeded,
-  referenceImageUrl: request.referenceImageUrl,
-  requestedDates: request.requestedDates
-    .map((value) => toDate(value))
-    .filter((value): value is Date => Boolean(value)),
-  priceRange: [Number(request.priceRange[0] ?? 0), Number(request.priceRange[1] ?? 0)],
-  description: request.description,
-  status: request.status as CommunityRequestStatus,
-  createdAt: toDate(request.createdAt) ?? new Date(),
-  updatedAt: toDate(request.updatedAt) ?? new Date(),
-  offersCount: Number(request.offersCount ?? 0),
-  borrower: normalizeMember(request.borrower),
-  offers: request.offers.map(normalizeOffer),
-})
-
-const normalizeNotification = (
-  notification: ApiCommunityNotification,
-): CommunityOfferNotification => ({
-  id: Number(notification.id),
-  requestId: Number(notification.requestId),
-  requestTitle: notification.requestTitle,
-  recipientId: Number(notification.recipientId),
-  actorName: notification.actorName,
-  itemName: notification.itemName,
-  fee: Number(notification.fee),
-  createdAt: toDate(notification.createdAt) ?? new Date(),
-  read: Boolean(notification.read),
-})
-
-const normalizeOfferableItem = (item: ApiOfferableItem): CommunityOfferableItem => ({
-  id: item.id,
-  numericId: Number(item.numericId),
-  name: item.name,
-  thumbnailImage: item.thumbnailImage,
-  condition: item.condition as CommunityOfferableItem["condition"],
-  rentalFee: Number(item.rentalFee),
-  freeToBorrow: Boolean(item.freeToBorrow),
-  status: item.status,
-  rateOption: item.rateOption,
-  createdAt: toDate(item.createdAt) ?? new Date(),
-})
-
-const getAccessToken = async () => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  return session?.access_token
-}
-
 const getAuthHeaders = async () => {
-  const accessToken = await getAccessToken()
-  if (!accessToken) return undefined
+  const { getAuthHeaders } = useViewerSession()
+  const headers = await getAuthHeaders()
+  const authorization = headers?.Authorization ?? headers?.authorization
+  if (!authorization) return undefined
 
   return {
-    authorization: `Bearer ${accessToken}`,
+    authorization,
   }
 }
 
@@ -598,31 +457,46 @@ const refreshFeed = async () => {
 
   try {
     const headers = await getAuthHeaders()
+    feedViewerKey.value = user.value?.id ?? "anonymous"
 
     if (headers) {
-      const { fetch: fetchAuthUser } = useAuthUser()
-      const authUser = await fetchAuthUser()
+      const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+      const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
       currentDbUserId.value = authUser?.id ?? ""
     } else {
       currentDbUserId.value = ""
     }
 
-    const [requestResponse, notificationResponse, offerableItemResponse] = await Promise.all([
-      $fetch<ApiCommunityRequest[]>("/api/item-requests", {
-        query: { includeCancelledOffers: true },
-        ...(headers ? { headers } : {}),
-      }),
-      headers
-        ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", { headers })
-        : Promise.resolve([]),
-      headers
-        ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
-        : Promise.resolve([]),
-    ])
+    const [requestResponse, notificationResponse, offerableItemResponse] = await withPerfTimer(
+      "community-feed",
+      feedViewerKey.value,
+      () =>
+        Promise.all([
+          $fetch<ApiCommunityRequest[]>("/api/item-requests", {
+            query: { includeCancelledOffers: true, offersLimit: 5 },
+            ...(headers ? { headers } : {}),
+          }),
+          headers
+            ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", {
+                query: { limit: 20 },
+                headers,
+              })
+            : Promise.resolve([]),
+          headers
+            ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
+            : Promise.resolve([]),
+        ]),
+      {
+        detail: "refreshFeed",
+      },
+    )
 
-    requests.value = requestResponse.map(normalizeRequest)
-    notifications.value = notificationResponse.map(normalizeNotification)
+    const nextRequests = requestResponse.map(normalizeCommunityRequest)
+    requests.value = nextRequests
+    notifications.value = notificationResponse.map(normalizeCommunityNotification)
     offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
+    setFeedSummary(nextRequests, currentDbUserId.value)
+    feedLastLoadedAt.value = Date.now()
   } catch (error) {
     console.error("Failed to load community feed", error)
     feedError.value = "Unable to load the live community feed right now."
@@ -650,41 +524,15 @@ const currentUserNotifications = computed(() => {
   )
 })
 
-const userActivity = computed<UserActivity>(() => {
-  if (!currentDbUserId.value) {
-    return { postsMade: 0, offersSent: 0, offersReceived: 0 }
-  }
+const userActivity = computed(
+  () => feedActivity.value ?? buildCommunityFeedActivity(requests.value, currentDbUserId.value),
+)
 
-  const myRequests = requests.value.filter(
-    (request) => request.borrower.userId === currentDbUserId.value,
-  )
-  const offersSent = requests.value.reduce((count, request) => {
-    return (
-      count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
-    )
-  }, 0)
-  const offersReceived = myRequests.reduce((count, request) => count + request.offersCount, 0)
-
-  return {
-    postsMade: myRequests.length,
-    offersSent,
-    offersReceived,
-  }
-})
-
-const trendingItems = computed<TrendingRequest[]>(() => {
-  return [...requests.value]
-    .sort((left, right) => {
-      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
-      return right.createdAt.getTime() - left.createdAt.getTime()
-    })
-    .slice(0, 5)
-    .map((request) => ({
-      id: request.id,
-      title: request.itemNeeded,
-      offersCount: request.offersCount,
-    }))
-})
+const trendingItems = computed(() =>
+  feedTrendingItems.value.length > 0
+    ? feedTrendingItems.value
+    : buildCommunityFeedTrendingItems(requests.value),
+)
 
 const sortedRequests = computed(() => {
   let filteredRequests = [...requests.value]
@@ -1044,6 +892,29 @@ const markAllNotificationsRead = async () => {
 }
 
 onMounted(() => {
+  const currentViewerKey = user.value?.id ?? "anonymous"
+  const isViewerCacheMatch = feedViewerKey.value === currentViewerKey
+  const isCachedFeedFresh =
+    feedHydrated.value &&
+    isViewerCacheMatch &&
+    feedLastLoadedAt.value !== null &&
+    Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS
+
+  if (isCachedFeedFresh) {
+    recordPerfEvent("community-feed", currentViewerKey, "cache-hit")
+    isLoadingFeed.value = false
+    return
+  }
+
+  if (feedHydrated.value && isViewerCacheMatch) {
+    recordPerfEvent("community-feed", currentViewerKey, "background-refresh")
+    isLoadingFeed.value = false
+    void refreshFeed()
+    return
+  }
+
+  recordPerfEvent("community-feed", currentViewerKey, "cache-miss")
+
   void refreshFeed()
 })
 

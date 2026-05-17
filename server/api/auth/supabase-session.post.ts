@@ -16,6 +16,7 @@ const userProfileSelect = {
   lastName: true,
   accountType: true,
   status: true,
+  suspendedUntil: true,
   createdAt: true,
   location: true,
   avatarUrl: true,
@@ -80,8 +81,11 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (!email.endsWith("@up.edu.ph")) {
-    throw createError({ statusCode: 403, statusMessage: "Only @up.edu.ph accounts are allowed." })
+  if (!email.endsWith("@up.edu.ph") && !email.endsWith("@gmail.com")) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Only @up.edu.ph and @gmail.com accounts are allowed.",
+    })
   }
 
   let user = await prisma.user.findUnique({
@@ -99,7 +103,7 @@ export default defineEventHandler(async (event) => {
         firstName: username,
         lastName: "User",
         googleSub: supabaseSub,
-        accountType: "LENDER",
+        accountType: "USER",
         status: "ACTIVE",
         lender: { create: { lenderRating: 0 } },
         borrower: { create: { borrowStatus: "ACTIVE", borrowerRating: 0 } },
@@ -121,8 +125,27 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // Auto-lift expired suspensions
+  if (
+    user.status === "SUSPENDED" &&
+    user.suspendedUntil &&
+    new Date(user.suspendedUntil) <= new Date()
+  ) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { status: "ACTIVE", suspendedUntil: null },
+      select: userProfileSelect,
+    })
+  }
+
   if (user.status !== "ACTIVE") {
-    throw createError({ statusCode: 403, statusMessage: "Your account is not active." })
+    const message =
+      user.status === "SUSPENDED" && user.suspendedUntil
+        ? `Your account is suspended until ${new Date(user.suspendedUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.`
+        : user.status === "BANNED"
+          ? "Your account has been banned."
+          : "Your account is not active."
+    throw createError({ statusCode: 403, statusMessage: message })
   }
 
   // Repair legacy users only when a role profile is actually missing.

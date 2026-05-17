@@ -3,7 +3,17 @@ import type { inferRouterOutputs } from "@trpc/server"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 import { useBag } from "../../composables/use-bag"
 import { useLikes } from "../../composables/use-likes"
+import {
+  clearPaginatedItemsState,
+  resetPaginatedItemsCache,
+} from "../../composables/use-paginated-items"
+import { clearPersistedSessionState } from "../../composables/use-persisted-session-state"
+import type { ListedItem } from "../../types/item-listing"
 import { buildItemDetailPath, extractItemIdFromSlug } from "../../utils/item-detail-route"
+import {
+  getPrefetchedItemDetail,
+  hasPrefetchedItemDetail,
+} from "../../composables/use-destination-image-prefetch"
 import type { AppRouter } from "../../../server/trpc/routers"
 
 definePageMeta({
@@ -14,6 +24,7 @@ const route = useRoute()
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type ItemDetail = RouterOutputs["item"]["byId"]
+const ITEM_DETAIL_REVIEW_FETCH_LIMIT = 5
 
 const monthNames = [
   "January",
@@ -84,13 +95,14 @@ const {
   () => `item:${itemId.value ?? "missing"}`,
   async () => {
     if (!itemId.value) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: "Item not found",
-      })
+      return null
     }
 
-    return await $fetch<ItemDetail>(`/api/items/${itemId.value}`)
+    if (hasPrefetchedItemDetail(itemId.value)) {
+      return getPrefetchedItemDetail<ItemDetail>(itemId.value) ?? null
+    }
+
+    return await $fetch<ItemDetail>(`/api/items/${itemId.value}/prefetch`)
   },
   {
     watch: [itemId],
@@ -100,12 +112,37 @@ const {
 )
 
 const item = computed(() => data.value)
+const isLoadingFullItem = ref(false)
+let fullItemRequestVersion = 0
 const itemLoadErrorMessage = computed(
   () => error.value?.statusMessage ?? error.value?.message ?? "Unable to load item details.",
 )
 
+const loadFullItemDetails = async () => {
+  if (!import.meta.client || !itemId.value) return
+
+  const requestVersion = ++fullItemRequestVersion
+  isLoadingFullItem.value = true
+
+  try {
+    const fullItem = await $fetch<ItemDetail>(`/api/items/${itemId.value}`, {
+      query: { reviewsLimit: ITEM_DETAIL_REVIEW_FETCH_LIMIT },
+    })
+    if (requestVersion === fullItemRequestVersion) {
+      data.value = fullItem
+    }
+  } catch {
+    // Keep the fast shell rendered. The retry button still refreshes the primary item request.
+  } finally {
+    if (requestVersion === fullItemRequestVersion) {
+      isLoadingFullItem.value = false
+    }
+  }
+}
+
 const currentDate = new Date()
 const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+const currentTimeMinutes = currentDate.getHours() * 60 + currentDate.getMinutes()
 
 const currentImageIndex = ref(0)
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -115,7 +152,18 @@ const isLightboxOpen = ref(false)
 const isMobileModalOpen = ref(false)
 const isCalendarExpanded = ref(false)
 const isSaved = ref(false)
+const isTogglingLike = ref(false)
 const shareFeedback = ref("")
+
+watch(
+  () => item.value?.isLiked,
+  (nextValue) => {
+    if (typeof nextValue === "boolean") {
+      isSaved.value = nextValue
+    }
+  },
+  { immediate: true },
+)
 const isSubmittingBooking = ref(false)
 const showPaymentModal = ref(false)
 const bookingErrorMessage = ref("")
@@ -279,7 +327,6 @@ const replacementCostLabel = computed(() => {
 const statusLabel = computed(() => (item.value ? humanizeEnum(item.value.status) : ""))
 const formattedCondition = computed(() => (item.value ? humanizeEnum(item.value.condition) : ""))
 const formattedCategories = computed(() => item.value?.categories.map(humanizeEnum) ?? [])
-const typeLabel = computed(() => (item.value?.freeToBorrow ? "Borrow" : "Rent"))
 const isItemRented = computed(() => item.value?.status === "RENTED")
 const isItemUnavailableForBooking = computed(() =>
   Boolean(item.value && (item.value.status === "DEACTIVATED" || item.value.status === "DELETED")),
@@ -290,28 +337,6 @@ const unavailableItemLabel = computed(() => {
     return item.value.freeToBorrow ? "Borrowed" : "Rented"
   }
   return "Unavailable"
-})
-const availabilityBadge = computed(() => {
-  if (isItemRented.value) {
-    return {
-      label: unavailableItemLabel.value,
-      className: "bg-noble-black/90 text-white",
-    }
-  }
-
-  if (isItemUnavailableForBooking.value) {
-    return {
-      label: unavailableItemLabel.value,
-      className: "bg-noble-black/90 text-white",
-    }
-  }
-
-  return {
-    label: typeLabel.value,
-    className: item.value?.freeToBorrow
-      ? "bg-blue-estate text-white"
-      : "bg-cinnamon-ice text-noble-black",
-  }
 })
 const bookingAvailabilityTitle = computed(() =>
   isItemUnavailableForBooking.value ? "Currently unavailable" : "Select Dates & Time",
@@ -340,7 +365,15 @@ const ownerInitials = computed(() => {
 })
 
 const ratingLabel = computed(() => (item.value ? item.value.rating.toFixed(1) : "0.0"))
-const bookingCountLabel = computed(() => `${item.value?.bookingCount ?? 0} booking(s)`)
+const lenderRatingLabel = computed(() => (item.value ? item.value.lenderRating.toFixed(1) : "0.0"))
+const lenderBookingCountLabel = computed(() => {
+  const count = item.value?.lenderBookingCount ?? 0
+  return `${count.toLocaleString()} ${count === 1 ? "booking" : "bookings"}`
+})
+const bookingCountLabel = computed(() => {
+  const count = item.value?.bookingCount ?? 0
+  return `${count.toLocaleString()} ${count === 1 ? "booking" : "bookings"}`
+})
 
 const offerHighlights = computed(() => {
   const explicitOffers = splitDetailList(item.value?.whatItemOffers)
@@ -365,11 +398,13 @@ const usageLimitationsList = computed(() => splitDetailList(item.value?.usageLim
 const availabilityRanges = computed(() =>
   [...(item.value?.availability ?? []), ...(item.value?.bookingBlocks ?? [])].map((slot) => ({
     id: slot.id,
-    startDate: normalizeDate(new Date(slot.startDate)),
-    endDate: normalizeDate(new Date(slot.endDate)),
+    startDate: new Date(slot.startDate),
+    endDate: new Date(slot.endDate),
     status: slot.status,
   })),
 )
+
+const MIN_BOOKABLE_MS = 30 * 60 * 1000
 
 const isDateUnavailable = (date: Date | null) => {
   if (!date) return true
@@ -378,26 +413,67 @@ const isDateUnavailable = (date: Date | null) => {
   const normalizedDate = normalizeDate(date)
   if (normalizedDate.getTime() < today.getTime()) return true
 
-  if (!availabilityRanges.value.length) return false
+  const ranges = availabilityRanges.value
+  if (!ranges.length) return false
 
-  const hasAvailableRanges = availabilityRanges.value.some((range) => range.status === "AVAILABLE")
+  const dayStart = normalizedDate.getTime()
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000
 
-  const hasAvailableWindow = availabilityRanges.value.some(
+  const hasAvailableRanges = ranges.some((range) => range.status === "AVAILABLE")
+
+  if (!hasAvailableRanges) return false
+
+  const hasAvailableWindow = ranges.some(
     (range) =>
       range.status === "AVAILABLE" &&
-      normalizedDate.getTime() >= range.startDate.getTime() &&
-      normalizedDate.getTime() <= range.endDate.getTime(),
+      range.startDate.getTime() < dayEnd &&
+      range.endDate.getTime() > dayStart,
   )
 
-  const hasBlockedWindow = availabilityRanges.value.some(
+  if (!hasAvailableWindow) return true
+
+  const rentedOnDay = ranges.filter(
     (range) =>
       range.status !== "AVAILABLE" &&
-      normalizedDate.getTime() >= range.startDate.getTime() &&
-      normalizedDate.getTime() <= range.endDate.getTime(),
+      range.startDate.getTime() < dayEnd &&
+      range.endDate.getTime() > dayStart,
   )
 
-  if (hasBlockedWindow) return true
-  return hasAvailableRanges ? !hasAvailableWindow : false
+  if (!rentedOnDay.length) return false
+
+  const availableIntervals = ranges
+    .filter(
+      (range) =>
+        range.status === "AVAILABLE" &&
+        range.startDate.getTime() < dayEnd &&
+        range.endDate.getTime() > dayStart,
+    )
+    .map((range) => ({
+      start: Math.max(range.startDate.getTime(), dayStart),
+      end: Math.min(range.endDate.getTime(), dayEnd),
+    }))
+
+  const bookedIntervals = rentedOnDay.map((range) => ({
+    start: Math.max(range.startDate.getTime(), dayStart),
+    end: Math.min(range.endDate.getTime(), dayEnd),
+  }))
+
+  let remaining = [...availableIntervals]
+  for (const booked of bookedIntervals) {
+    const newRemaining: Array<{ start: number; end: number }> = []
+    for (const avail of remaining) {
+      if (booked.end <= avail.start || booked.start >= avail.end) {
+        newRemaining.push(avail)
+      } else {
+        if (booked.start > avail.start) newRemaining.push({ start: avail.start, end: booked.start })
+        if (booked.end < avail.end) newRemaining.push({ start: booked.end, end: avail.end })
+      }
+    }
+    remaining = newRemaining
+  }
+
+  const remainingMs = remaining.reduce((sum, interval) => sum + interval.end - interval.start, 0)
+  return remainingMs < MIN_BOOKABLE_MS
 }
 
 const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate()
@@ -593,20 +669,50 @@ const isSameDay = computed(() => {
   return startDate.value.getTime() === endDate.value.getTime()
 })
 
-const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
-  if (!isSameDay.value) return false
-  if (!isEnd) return false
+const isStartDateToday = computed(() => {
+  if (!startDate.value) return false
+  return startDate.value.getTime() === today.getTime()
+})
 
-  return timeToMinutes(timeValue) <= timeToMinutes(startTime.value)
+const isTimeOnDayBooked = (timeValue: string, date: Date | null) => {
+  if (!date) return false
+  const dayStart = normalizeDate(date).getTime()
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000
+  const timeMs = dayStart + timeToMinutes(timeValue) * 60 * 1000
+
+  return availabilityRanges.value.some(
+    (range) =>
+      range.status !== "AVAILABLE" &&
+      range.startDate.getTime() < dayEnd &&
+      range.endDate.getTime() > dayStart &&
+      timeMs >= range.startDate.getTime() &&
+      timeMs <= range.endDate.getTime(),
+  )
+}
+
+const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
+  if (!isEnd) {
+    // For Start Time
+    if (isStartDateToday.value) {
+      return timeToMinutes(timeValue) <= currentTimeMinutes
+    }
+    return false
+  }
+
+  // For End Time
+  if (!isSameDay.value) return false
+  return timeToMinutes(timeValue) < timeToMinutes(startTime.value) + 60
 }
 
 const selectStartTime = (timeValue: string) => {
+  if (isTimeDisabled(timeValue, false)) return
+  if (isTimeOnDayBooked(timeValue, startDate.value)) return
   startTime.value = timeValue
   isStartTimeOpen.value = false
 
-  if (isSameDay.value && timeToMinutes(timeValue) >= timeToMinutes(endTime.value)) {
+  if (isSameDay.value && timeToMinutes(timeValue) >= timeToMinutes(endTime.value) - 60) {
     const nextValidTime = timeOptions.find(
-      (option) => timeToMinutes(option) > timeToMinutes(timeValue),
+      (option) => timeToMinutes(option) >= timeToMinutes(timeValue) + 60,
     )
     endTime.value = nextValidTime ?? endTime.value
   }
@@ -614,6 +720,7 @@ const selectStartTime = (timeValue: string) => {
 
 const selectEndTime = (timeValue: string) => {
   if (isTimeDisabled(timeValue, true)) return
+  if (isTimeOnDayBooked(timeValue, displayEndDate.value)) return
 
   endTime.value = timeValue
   isEndTimeOpen.value = false
@@ -746,6 +853,7 @@ watch(itemId, () => {
   hasRequestedBooking.value = false
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
+  void loadFullItemDetails()
 })
 
 const openLightbox = () => {
@@ -899,12 +1007,99 @@ const closeBookingModal = () => {
 }
 
 const { incrementLikes, decrementLikes } = useLikes()
-const toggleSaved = () => {
-  isSaved.value = !isSaved.value
-  if (isSaved.value) {
-    incrementLikes()
-  } else {
-    decrementLikes()
+const toggleSaved = async () => {
+  if (isTogglingLike.value || !item.value) return
+
+  let previousValue: boolean | null = null
+
+  try {
+    const user = useSupabaseUser()
+    const supabase = useSupabaseClient()
+    if (!user.value) {
+      console.error("User not authenticated. Please log in first.")
+      // Optional: trigger login modal here if available
+      return
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      console.error("No active Supabase session token found.")
+      return
+    }
+
+    previousValue = isSaved.value
+    isSaved.value = !previousValue
+    isTogglingLike.value = true
+
+    const response = await $fetch("/api/trpc/item.toggleLike", {
+      method: "POST",
+      body: {
+        json: {
+          itemId: String(item.value.id),
+        },
+      },
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    const typedResponse = response as {
+      result?: { data?: { isLiked?: boolean; json?: { isLiked?: boolean } } }
+    }
+    const nextIsLiked =
+      typedResponse.result?.data?.isLiked ?? typedResponse.result?.data?.json?.isLiked
+
+    if (typeof nextIsLiked === "boolean") {
+      isSaved.value = nextIsLiked
+      resetPaginatedItemsCache()
+      clearPaginatedItemsState("dashboard-listed-items")
+      clearPaginatedItemsState("likes-listed-items")
+      clearPersistedSessionState("dashboard-results-count")
+
+      // Surgically update memory state for a seamless experience
+      const dashboardItems = useState<ListedItem[]>("dashboard-listed-items")
+      if (dashboardItems.value && item.value) {
+        const itemIdx = dashboardItems.value.findIndex(
+          (i) => String(i.id) === String(item.value?.id),
+        )
+        if (itemIdx !== -1 && dashboardItems.value[itemIdx]) {
+          dashboardItems.value[itemIdx].isLiked = nextIsLiked
+        }
+      }
+
+      const likesItems = useState<ListedItem[]>("likes-listed-items")
+      if (likesItems.value && item.value) {
+        const itemIdx = likesItems.value.findIndex((i) => String(i.id) === String(item.value?.id))
+        if (itemIdx !== -1 && likesItems.value[itemIdx]) {
+          if (!nextIsLiked) {
+            likesItems.value.splice(itemIdx, 1)
+          } else {
+            likesItems.value[itemIdx].isLiked = true
+          }
+        }
+      }
+
+      if (nextIsLiked) {
+        incrementLikes()
+      } else {
+        decrementLikes()
+      }
+    }
+  } catch (error) {
+    if (previousValue !== null) {
+      isSaved.value = previousValue
+    }
+
+    if (error instanceof Error) {
+      console.error("Failed to toggle like:", error.message)
+    } else {
+      console.error("Failed to toggle like:", error)
+    }
+  } finally {
+    isTogglingLike.value = false
   }
 }
 
@@ -1036,6 +1231,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 onMounted(() => {
+  void loadFullItemDetails()
   updateScrollStatus()
   window.addEventListener("keydown", handleKeydown)
 })
@@ -1059,44 +1255,39 @@ onUnmounted(() => {
         :to="backNavigationPath"
         class="flex items-center gap-2 text-noble-black/70 hover:text-burning-orange transition-colors mb-6 group"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <Icon
+          name="ph:caret-left"
+          size="20"
           class="transition-transform group-hover:-translate-x-1"
-        >
-          <path d="m15 18-6-6 6-6" />
-        </svg>
+        />
         <span class="font-normal">{{ backNavigationLabel }}</span>
       </NuxtLink>
 
-      <div v-if="pending" class="space-y-8 pb-28 lg:pb-6">
+      <div v-if="pending && !item" class="space-y-8 pb-28 lg:pb-6 animate-pulse">
         <div class="flex flex-col gap-4">
-          <div class="h-10 w-3/5 animate-pulse rounded-2xl bg-cream"></div>
-          <div class="h-5 w-48 animate-pulse rounded-2xl bg-cream"></div>
+          <div class="h-10 w-3/5 bg-noble-black/20 rounded-2xl"></div>
+          <div class="h-5 w-48 bg-noble-black/10 rounded-full"></div>
         </div>
-        <div class="grid gap-12 lg:grid-cols-3">
-          <div class="space-y-6 lg:col-span-2">
-            <div class="aspect-video animate-pulse rounded-[28px] bg-cream"></div>
-            <div class="h-28 animate-pulse rounded-[28px] bg-cream"></div>
-            <div class="h-48 animate-pulse rounded-[28px] bg-cream"></div>
+        <div class="grid gap-10 lg:grid-cols-3">
+          <div class="space-y-8 lg:col-span-2">
+            <div
+              class="aspect-video bg-noble-black/5 rounded-[24px] border border-cinnamon-ice/10"
+            ></div>
+            <div class="h-32 bg-cream/50 rounded-2xl border border-cinnamon-ice/10"></div>
+            <div class="h-64 bg-cream/50 rounded-2xl border border-cinnamon-ice/10"></div>
           </div>
-          <div class="space-y-6">
-            <div class="h-80 animate-pulse rounded-[28px] bg-cream"></div>
-            <div class="h-72 animate-pulse rounded-[28px] bg-cream"></div>
+          <div class="space-y-8">
+            <div
+              class="h-[420px] bg-white rounded-2xl border border-cinnamon-ice/20 shadow-sm"
+            ></div>
+            <div class="h-64 bg-white rounded-2xl border border-cinnamon-ice/20 shadow-sm"></div>
           </div>
         </div>
       </div>
 
       <div
-        v-else-if="error"
-        class="rounded-[28px] border border-cinnamon-ice/15 bg-cream px-6 py-16 text-center"
+        v-else-if="error && !item"
+        class="rounded-[28px] border border-cinnamon-ice/30 bg-white px-6 py-16 text-center shadow-sm"
       >
         <h2 class="text-2xl font-bold text-noble-black">Unable to load item</h2>
         <p class="mx-auto mt-3 max-w-md text-sm text-noble-black/60">
@@ -1118,13 +1309,13 @@ onUnmounted(() => {
               <span
                 v-for="category in formattedCategories"
                 :key="category"
-                class="rounded-full border border-cinnamon-ice/15 bg-cream px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-burning-orange"
+                class="rounded-full border-[0.5px] border-cinnamon-ice/30 bg-noble-black/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-noble-black/70"
               >
                 {{ category }}
               </span>
               <span
                 v-if="item.isTrending"
-                class="rounded-full bg-burning-orange px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white"
+                class="rounded-full bg-burning-orange px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white"
               >
                 Trending
               </span>
@@ -1132,70 +1323,54 @@ onUnmounted(() => {
             <h1 class="text-3xl font-bold text-noble-black">{{ item.name }}</h1>
           </div>
           <div class="flex items-center gap-4">
-            <button
-              class="p-2 text-noble-black/70 hover:text-noble-black transition-all duration-300 ease-in-out group"
-              title="Share"
-              @click="shareItem"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
+            <div class="relative flex items-stretch group/tooltip">
+              <button
+                class="p-2 text-noble-black/70 hover:text-noble-black transition-all duration-300 ease-in-out group"
+                title="Share"
+                @click="shareItem"
               >
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
-                <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
-              </svg>
-            </button>
-            <button
-              class="p-2 transition-all duration-300 ease-in-out group"
-              :class="
-                isSaved ? 'text-burning-orange' : 'text-noble-black/70 hover:text-noble-black'
-              "
-              title="Save"
-              @click="toggleSaved"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
-                :class="{ 'fill-burning-orange/20': isSaved }"
-              >
-                <path
-                  d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+                <Icon
+                  name="ph:share-network"
+                  size="22"
+                  class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
                 />
-              </svg>
-            </button>
+              </button>
+              <div class="custom-tooltip">
+                Share
+                <div class="tooltip-arrow"></div>
+              </div>
+            </div>
+
+            <div class="relative flex items-stretch group/tooltip">
+              <button
+                class="p-2 transition-all duration-300 ease-in-out group"
+                :class="
+                  isSaved ? 'text-burning-orange' : 'text-noble-black/70 hover:text-noble-black'
+                "
+                title="Save"
+                @click="toggleSaved"
+              >
+                <Icon
+                  :name="isSaved ? 'ph:heart-fill' : 'ph:heart'"
+                  size="22"
+                  class="group-hover:stroke-[2] transition-all duration-300 ease-in-out"
+                />
+              </button>
+              <div class="custom-tooltip">
+                Like
+                <div class="tooltip-arrow"></div>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Rating Row -->
         <div class="flex items-center gap-2 mb-8 text-sm">
           <div class="flex items-center gap-1 text-burning-orange">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-              />
-            </svg>
-            <span class="font-bold">{{ ratingLabel }}</span>
+            <Icon name="ph:star-fill" size="16" class="-translate-y-[0.5px]" />
+            <span class="font-bold leading-none">{{ ratingLabel }}</span>
           </div>
-          <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+          <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
         </div>
 
         <!-- Main Grid -->
@@ -1208,6 +1383,9 @@ onUnmounted(() => {
                   v-if="currentImage"
                   :src="currentImage"
                   :alt="item.name"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
                   class="w-full h-full object-cover"
                 />
                 <div
@@ -1216,47 +1394,19 @@ onUnmounted(() => {
                 >
                   No image available
                 </div>
-                <div
-                  class="absolute top-4 left-4 px-4 py-1.5 min-w-[80px] h-[32px] rounded-full font-geist text-[15px] font-normal tracking-wide flex items-center justify-center shadow-sm"
-                  :class="availabilityBadge.className"
-                >
-                  {{ availabilityBadge.label }}
-                </div>
                 <button
                   v-if="imageGallery.length > 1"
-                  class="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   @click="prevImage"
                 >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="m15 18-6-6 6-6" />
-                  </svg>
+                  <Icon name="ph:caret-left" size="24" />
                 </button>
                 <button
                   v-if="imageGallery.length > 1"
-                  class="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   @click="nextImage"
                 >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
+                  <Icon name="ph:caret-right" size="24" />
                 </button>
                 <div
                   class="absolute bottom-4 left-4 px-3 py-1.5 bg-white/80 backdrop-blur-sm text-noble-black text-[13px] font-medium rounded-full shadow-sm"
@@ -1264,25 +1414,10 @@ onUnmounted(() => {
                   {{ imageGallery.length ? currentImageIndex + 1 : 0 }} / {{ imageGallery.length }}
                 </div>
                 <button
-                  class="absolute bottom-4 right-4 p-2 bg-white/80 backdrop-blur-sm text-noble-black rounded-full hover:bg-white transition-colors shadow-sm z-10"
+                  class="absolute bottom-4 right-4 w-9 h-9 flex items-center justify-center bg-white/80 backdrop-blur-sm text-noble-black rounded-full hover:bg-white transition-colors shadow-sm z-10"
                   @click="openLightbox"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M15 3h6v6" />
-                    <path d="M9 21H3v-6" />
-                    <path d="M21 3l-7 7" />
-                    <path d="M3 21l7-7" />
-                  </svg>
+                  <Icon name="ph:arrows-out" size="18" />
                 </button>
               </div>
               <div
@@ -1295,19 +1430,7 @@ onUnmounted(() => {
                   @click="scrollOnce('left')"
                 >
                   <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
+                    <Icon name="ph:caret-left" size="20" />
                   </div>
                 </div>
                 <div
@@ -1329,6 +1452,9 @@ onUnmounted(() => {
                   >
                     <img
                       :src="img"
+                      loading="lazy"
+                      fetchpriority="low"
+                      decoding="async"
                       class="w-full h-full object-cover transition-all duration-300"
                       :class="
                         currentImageIndex === idx ? '' : 'blur-[1px] group-hover/thumb:blur-0'
@@ -1342,19 +1468,7 @@ onUnmounted(() => {
                   @click="scrollOnce('right')"
                 >
                   <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
+                    <Icon name="ph:caret-right" size="20" />
                   </div>
                 </div>
               </div>
@@ -1366,12 +1480,12 @@ onUnmounted(() => {
               <div class="hidden md:grid grid-cols-2 gap-8">
                 <div class="space-y-6">
                   <div
-                    class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm overflow-hidden"
+                    class="bg-white border border-cinnamon-ice/30 rounded-2xl p-5 shadow-sm overflow-hidden"
                     @mouseleave="handleCalendarMouseLeave"
                   >
                     <div
                       v-if="isItemUnavailableForBooking"
-                      class="mb-5 rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+                      class="mb-5 rounded-2xl border border-cinnamon-ice/30 bg-white px-4 py-3 text-sm text-noble-black/75"
                     >
                       <span class="font-semibold text-noble-black"
                         >{{ bookingAvailabilityTitle }}.</span
@@ -1380,45 +1494,23 @@ onUnmounted(() => {
                     </div>
                     <!-- Calendar Grid -->
                     <div class="flex items-center justify-between mb-6">
-                      <h3 class="font-semibold text-noble-black">
+                      <h3 class="text-base font-semibold text-noble-black">
                         {{ monthNames[viewMonth] }} {{ viewYear }}
                       </h3>
-                      <div class="flex gap-2">
+                      <div class="flex gap-1">
                         <button
-                          class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                          class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                           :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(-1)"
                         >
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          >
-                            <path d="m15 18-6-6 6-6" />
-                          </svg>
+                          <Icon name="ph:caret-left" size="20" />
                         </button>
                         <button
-                          class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                          class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                           :disabled="isItemUnavailableForBooking"
                           @click="changeMonth(1)"
                         >
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          >
-                            <path d="m9 18 6-6-6-6" />
-                          </svg>
+                          <Icon name="ph:caret-right" size="20" />
                         </button>
                       </div>
                     </div>
@@ -1426,7 +1518,7 @@ onUnmounted(() => {
                       <div
                         v-for="day in daysOfWeek"
                         :key="day"
-                        class="text-[10px] uppercase tracking-wider text-noble-black/40 font-bold py-2"
+                        class="text-[11px] uppercase tracking-[1px] text-gray-400 font-bold py-2"
                       >
                         {{ day }}
                       </div>
@@ -1463,11 +1555,11 @@ onUnmounted(() => {
                         />
                         <button
                           v-if="dayObj.day"
-                          class="relative w-9 h-9 flex items-center justify-center text-sm rounded-full transition-all duration-200 z-10 select-none"
+                          class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                           :class="[
                             dayObj.isUnavailable || dayObj.isPast
-                              ? 'text-noble-black/30 cursor-not-allowed'
-                              : 'text-noble-black hover:bg-transparent hover:text-burning-orange cursor-pointer',
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                             dayObj.isUnavailable ? 'line-through' : '',
                             isSelected(dayObj.fullDate) ||
                             (hoverDate &&
@@ -1477,7 +1569,7 @@ onUnmounted(() => {
                               ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                               : '',
                             dayObj.isToday && !isSelected(dayObj.fullDate)
-                              ? 'text-burning-orange font-bold'
+                              ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                               : '',
                           ]"
                           @mousedown="
@@ -1518,41 +1610,36 @@ onUnmounted(() => {
                   <div class="grid grid-cols-2 gap-4">
                     <div class="relative">
                       <span
-                        class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                        class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                         >Start Time</span
                       ><button
-                        class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        :class="
+                          isStartTimeOpen
+                            ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                            : 'hover:border-burning-orange/50'
+                        "
                         :disabled="isItemUnavailableForBooking"
                         @click="toggleStartTime"
                       >
-                        {{ startTime
-                        }}<svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="text-noble-black/30"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                       </button>
                       <div
                         v-if="isStartTimeOpen"
-                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                       >
                         <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                           <div
                             v-for="time in timeOptions"
                             :key="time"
-                            class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                            :class="
-                              startTime === time ? 'bg-cream text-burning-orange font-bold' : ''
-                            "
+                            class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
+                            :class="[
+                              isTimeDisabled(time, false) || isTimeOnDayBooked(time, startDate)
+                                ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                                : startTime === time
+                                  ? 'bg-gray-50 text-burning-orange font-bold'
+                                  : '',
+                            ]"
                             @click="selectStartTime(time)"
                           >
                             {{ time }}
@@ -1562,43 +1649,34 @@ onUnmounted(() => {
                     </div>
                     <div class="relative">
                       <span
-                        class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                        class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                         >End Time</span
                       ><button
-                        class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        :class="
+                          isEndTimeOpen
+                            ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                            : 'hover:border-burning-orange/50'
+                        "
                         :disabled="isItemUnavailableForBooking"
                         @click="toggleEndTime"
                       >
-                        {{ endTime
-                        }}<svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          class="text-noble-black/30"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                       </button>
                       <div
                         v-if="isEndTimeOpen"
-                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                        class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                       >
                         <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                           <div
                             v-for="time in timeOptions"
                             :key="time"
-                            class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
+                            class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
                             :class="[
-                              isTimeDisabled(time, true)
+                              isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
                                 ? 'opacity-30 cursor-not-allowed pointer-events-none'
                                 : endTime === time
-                                  ? 'bg-cream text-burning-orange font-bold'
+                                  ? 'bg-gray-50 text-burning-orange font-bold'
                                   : '',
                             ]"
                             @click="selectEndTime(time)"
@@ -1611,7 +1689,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div
-                  class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm flex flex-col h-full justify-between"
+                  class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 shadow-sm flex flex-col h-full justify-between"
                 >
                   <div>
                     <div class="flex items-baseline gap-1 mb-4">
@@ -1621,10 +1699,9 @@ onUnmounted(() => {
                       }}</span>
                     </div>
                     <div class="grid grid-cols-2 mb-6 relative">
-                      <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
+                      <div class="absolute left-1/2 top-1 bottom-1 w-px bg-gray-100" />
                       <div class="flex flex-col gap-1 pr-4">
-                        <span
-                          class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                           >Start</span
                         >
                         <div class="flex flex-col">
@@ -1635,8 +1712,7 @@ onUnmounted(() => {
                         </div>
                       </div>
                       <div class="flex flex-col gap-1 pl-4">
-                        <span
-                          class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                           >End</span
                         >
                         <div class="flex flex-col">
@@ -1668,20 +1744,7 @@ onUnmounted(() => {
                       :disabled="!canAddToBag"
                       @click="handleAddToBag"
                     >
-                      <svg
-                        v-if="isInBag"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <Icon v-if="isInBag" name="ph:check" size="18" class="stroke-[3]" />
                       {{ addToBagButtonLabel }}
                     </button>
                     <p
@@ -1695,7 +1758,7 @@ onUnmounted(() => {
                     </p>
                   </div>
                   <div>
-                    <div class="h-px bg-cinnamon-ice/15 mb-4" />
+                    <div class="h-px bg-gray-100 mb-4" />
                     <div class="space-y-3 mb-4">
                       <div class="flex justify-between items-center text-sm text-noble-black/70">
                         <span>
@@ -1709,27 +1772,12 @@ onUnmounted(() => {
                         </span>
                       </div>
                     </div>
-                    <div class="h-px bg-cinnamon-ice/15 mb-4" />
+                    <div class="h-px bg-gray-100 mb-4" />
                     <div class="flex justify-between items-center mb-4">
                       <span class="text-base font-semibold text-noble-black">Total</span
                       ><span class="text-lg font-bold text-noble-black">
                         {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
                       </span>
-                    </div>
-                    <div class="h-px bg-cinnamon-ice/15 mb-4" />
-                    <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
-                      ><span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
                     </div>
                   </div>
                 </div>
@@ -1737,12 +1785,12 @@ onUnmounted(() => {
 
               <!-- 2b. Small Layout (sm to md): Stacked, Collapsible Calendar & Time -->
               <div class="hidden sm:block md:hidden space-y-6">
-                <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
+                <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 shadow-sm">
                   <button
                     class="w-full flex items-center justify-between group"
                     @click="isCalendarExpanded = !isCalendarExpanded"
                   >
-                    <div class="flex flex-col items-start">
+                    <div class="flex flex-col items-start text-left">
                       <h3 class="font-bold text-noble-black">
                         {{
                           isItemUnavailableForBooking
@@ -1750,7 +1798,7 @@ onUnmounted(() => {
                             : "Select Dates & Time"
                         }}
                       </h3>
-                      <p class="text-[11px] text-noble-black/60 font-medium">
+                      <p class="text-[11px] text-gray-400 font-medium">
                         {{
                           isItemUnavailableForBooking
                             ? bookingAvailabilityMessage
@@ -1761,26 +1809,18 @@ onUnmounted(() => {
                       </p>
                     </div>
                     <div
-                      class="w-10 h-10 rounded-full bg-white/50 border border-cinnamon-ice/15 flex items-center justify-center transition-all group-hover:bg-white group-hover:border-burning-orange/30"
+                      class="w-10 h-10 rounded-full bg-gray-50 border border-cinnamon-ice/30 flex items-center justify-center transition-all group-hover:bg-gray-100 group-hover:border-burning-orange/30"
                       :class="{
                         'rotate-180 bg-burning-orange/5 !border-burning-orange/20':
                           isCalendarExpanded,
                       }"
                     >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="text-noble-black/40"
-                        :class="{ '!text-burning-orange': isCalendarExpanded }"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
+                      <Icon
+                        name="ph:caret-down"
+                        size="20"
+                        class="text-gray-400 transition-transform duration-300"
+                        :class="{ 'rotate-180 !text-burning-orange': isCalendarExpanded }"
+                      />
                     </div>
                   </button>
                   <Transition
@@ -1793,11 +1833,11 @@ onUnmounted(() => {
                   >
                     <div
                       v-if="isCalendarExpanded"
-                      class="mt-8 pt-6 border-t border-cinnamon-ice/15 space-y-8"
+                      class="mt-8 pt-6 border-t border-cinnamon-ice/30 space-y-8"
                     >
                       <div
                         v-if="isItemUnavailableForBooking"
-                        class="rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+                        class="rounded-2xl border border-cinnamon-ice/30 bg-white px-4 py-3 text-sm text-noble-black/75"
                       >
                         <span class="font-semibold text-noble-black"
                           >{{ bookingAvailabilityTitle }}.</span
@@ -1806,45 +1846,23 @@ onUnmounted(() => {
                       </div>
                       <div>
                         <div class="flex items-center justify-between mb-6">
-                          <h3 class="font-semibold text-noble-black">
+                          <h3 class="text-base font-semibold text-noble-black">
                             {{ monthNames[viewMonth] }} {{ viewYear }}
                           </h3>
-                          <div class="flex gap-2">
+                          <div class="flex gap-1">
                             <button
-                              class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                              class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                               :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(-1)"
                             >
-                              <svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                              >
-                                <path d="m15 18-6-6 6-6" />
-                              </svg>
+                              <Icon name="ph:caret-left" size="20" />
                             </button>
                             <button
-                              class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                              class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                               :disabled="isItemUnavailableForBooking"
                               @click="changeMonth(1)"
                             >
-                              <svg
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                              >
-                                <path d="m9 18 6-6-6-6" />
-                              </svg>
+                              <Icon name="ph:caret-right" size="20" />
                             </button>
                           </div>
                         </div>
@@ -1852,7 +1870,7 @@ onUnmounted(() => {
                           <div
                             v-for="day in daysOfWeek"
                             :key="day"
-                            class="text-[10px] uppercase tracking-wider text-noble-black/40 font-bold py-2"
+                            class="text-[11px] uppercase tracking-[1px] text-gray-400 font-bold py-2"
                           >
                             {{ day }}
                           </div>
@@ -1889,11 +1907,11 @@ onUnmounted(() => {
                             />
                             <button
                               v-if="dayObj.day"
-                              class="relative w-9 h-9 flex items-center justify-center text-sm rounded-full transition-all duration-200 z-10 select-none"
+                              class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                               :class="[
                                 dayObj.isUnavailable || dayObj.isPast
-                                  ? 'text-noble-black/30 cursor-not-allowed'
-                                  : 'text-noble-black hover:bg-transparent hover:text-burning-orange cursor-pointer',
+                                  ? 'text-gray-300 cursor-not-allowed'
+                                  : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                                 dayObj.isUnavailable ? 'line-through' : '',
                                 isSelected(dayObj.fullDate) ||
                                 (hoverDate &&
@@ -1903,7 +1921,7 @@ onUnmounted(() => {
                                   ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                                   : '',
                                 dayObj.isToday && !isSelected(dayObj.fullDate)
-                                  ? 'text-burning-orange font-bold'
+                                  ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                                   : '',
                               ]"
                               @mousedown="
@@ -1943,41 +1961,37 @@ onUnmounted(() => {
                       <div class="grid grid-cols-2 gap-4">
                         <div class="relative">
                           <span
-                            class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                            class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                             >Start Time</span
                           ><button
-                            class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                            :class="
+                              isStartTimeOpen
+                                ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                                : 'hover:border-burning-orange/50'
+                            "
                             :disabled="isItemUnavailableForBooking"
                             @click="toggleStartTime"
                           >
                             {{ startTime
-                            }}<svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="text-noble-black/30"
-                            >
-                              <path d="m6 9 6 6 6-6" />
-                            </svg>
+                            }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                           </button>
                           <div
                             v-if="isStartTimeOpen"
-                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                           >
                             <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                               <div
                                 v-for="time in timeOptions"
                                 :key="time"
-                                class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                                :class="
-                                  startTime === time ? 'bg-cream text-burning-orange font-bold' : ''
-                                "
+                                class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
+                                :class="[
+                                  isTimeDisabled(time, false) || isTimeOnDayBooked(time, startDate)
+                                    ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                                    : startTime === time
+                                      ? 'bg-gray-50 text-burning-orange font-bold'
+                                      : '',
+                                ]"
                                 @click="selectStartTime(time)"
                               >
                                 {{ time }}
@@ -1987,41 +2001,38 @@ onUnmounted(() => {
                         </div>
                         <div class="relative">
                           <span
-                            class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                            class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                             >End Time</span
                           ><button
-                            class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                            :class="
+                              isEndTimeOpen
+                                ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                                : 'hover:border-burning-orange/50'
+                            "
                             :disabled="isItemUnavailableForBooking"
                             @click="toggleEndTime"
                           >
                             {{ endTime
-                            }}<svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="text-noble-black/30"
-                            >
-                              <path d="m6 9 6 6 6-6" />
-                            </svg>
+                            }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                           </button>
                           <div
                             v-if="isEndTimeOpen"
-                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                            class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                           >
                             <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                               <div
                                 v-for="time in timeOptions"
                                 :key="time"
-                                class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                                :class="
-                                  endTime === time ? 'bg-cream text-burning-orange font-bold' : ''
-                                "
+                                class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
+                                :class="[
+                                  isTimeDisabled(time, true) ||
+                                  isTimeOnDayBooked(time, displayEndDate)
+                                    ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                                    : endTime === time
+                                      ? 'bg-gray-50 text-burning-orange font-bold'
+                                      : '',
+                                ]"
                                 @click="selectEndTime(time)"
                               >
                                 {{ time }}
@@ -2033,7 +2044,7 @@ onUnmounted(() => {
                     </div>
                   </Transition>
                 </div>
-                <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
+                <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 shadow-sm">
                   <div class="flex items-baseline gap-1 mb-4">
                     <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
                     ><span class="text-sm text-noble-black/60 font-medium">{{
@@ -2041,10 +2052,9 @@ onUnmounted(() => {
                     }}</span>
                   </div>
                   <div class="grid grid-cols-2 mb-6 relative">
-                    <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
+                    <div class="absolute left-1/2 top-1 bottom-1 w-px bg-gray-100" />
                     <div class="flex flex-col gap-1 pr-4">
-                      <span
-                        class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                      <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                         >Start</span
                       >
                       <div class="flex flex-col">
@@ -2055,8 +2065,7 @@ onUnmounted(() => {
                       </div>
                     </div>
                     <div class="flex flex-col gap-1 pl-4">
-                      <span
-                        class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                      <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                         >End</span
                       >
                       <div class="flex flex-col">
@@ -2084,20 +2093,7 @@ onUnmounted(() => {
                     :disabled="!canAddToBag"
                     @click="handleAddToBag"
                   >
-                    <svg
-                      v-if="isInBag"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    <Icon v-if="isInBag" name="ph:check" size="16" class="stroke-[3]" />
                     {{ addToBagButtonLabel }}
                   </button>
                   <p
@@ -2110,7 +2106,7 @@ onUnmounted(() => {
                     {{ bagFeedbackMessage }}
                   </p>
 
-                  <div class="h-px bg-cinnamon-ice/15 mb-4" />
+                  <div class="h-px bg-gray-100 mb-4" />
                   <div class="space-y-2 mb-4">
                     <div class="flex justify-between items-center text-sm text-noble-black/70">
                       <span>
@@ -2122,146 +2118,126 @@ onUnmounted(() => {
                       </span>
                     </div>
                   </div>
-                  <div class="h-px bg-cinnamon-ice/15 mb-4" />
+                  <div class="h-px bg-gray-100 mb-4" />
                   <div class="flex justify-between items-center mb-4">
                     <span class="text-base font-semibold text-noble-black">Total</span
                     ><span class="text-lg font-bold text-noble-black">
                       {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
                     </span>
                   </div>
-                  <div class="h-px bg-cinnamon-ice/15 mb-4" />
-                  <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
-                    ><span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
-                  </div>
                 </div>
               </div>
             </div>
 
-            <!-- Unified Metadata Container -->
-            <div
-              class="mb-10 rounded-2xl border-[0.5px] border-cinnamon-ice/15 bg-white p-7 md:p-8 shadow-sm"
-            >
-              <!-- Top Metadata Row -->
+            <!-- Redesigned Metadata Container -->
+            <div class="mb-10 rounded-[14px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm">
               <div class="grid grid-cols-2 md:grid-cols-4 gap-y-8 md:gap-y-0 items-start">
                 <!-- Status -->
-                <div class="flex flex-col gap-3 pr-4 md:border-r-[0.5px] border-cinnamon-ice/20">
-                  <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                <div class="flex flex-col gap-1 pr-4 md:border-r-[0.5px] border-cinnamon-ice/20">
+                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Status</span
                   >
-                  <div
-                    class="flex w-fit items-center gap-2 rounded-full px-3 py-1"
-                    :class="
-                      isItemUnavailableForBooking ? 'bg-noble-black/10' : 'bg-burning-orange/10'
-                    "
-                  >
+                  <div class="flex items-center gap-2">
                     <div
                       class="h-1.5 w-1.5 rounded-full"
-                      :class="isItemUnavailableForBooking ? 'bg-noble-black' : 'bg-burning-orange'"
-                    />
-                    <span
-                      class="text-xs font-bold"
                       :class="
-                        isItemUnavailableForBooking ? 'text-noble-black' : 'text-burning-orange'
+                        isItemUnavailableForBooking ? 'bg-noble-black/30' : 'bg-success-green'
                       "
-                      >{{ statusLabel }}</span
-                    >
+                    />
+                    <span class="text-[14px] font-semibold text-noble-black">{{
+                      statusLabel
+                    }}</span>
                   </div>
                 </div>
                 <!-- Condition -->
                 <div
-                  class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
+                  class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
                 >
-                  <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Condition</span
                   >
-                  <div class="flex w-fit items-center rounded-full bg-noble-black/5 px-3 py-1">
-                    <span class="text-xs font-bold text-noble-black/70">{{
-                      formattedCondition
-                    }}</span>
-                  </div>
+                  <span
+                    class="text-[14px] font-semibold"
+                    :class="item.condition === 'POOR' ? 'text-burning-orange' : 'text-noble-black'"
+                    >{{ formattedCondition }}</span
+                  >
                 </div>
                 <!-- Replacement Cost -->
                 <div
-                  class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
+                  class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
                 >
-                  <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Replacement</span
                   >
-                  <span class="text-base font-semibold text-noble-black">{{
+                  <span class="text-[14px] font-semibold text-noble-black">{{
                     replacementCostLabel
                   }}</span>
                 </div>
                 <!-- Tags -->
-                <div class="flex flex-col gap-3 pl-0 md:pl-6">
-                  <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                <div class="flex flex-col gap-1 pl-0 md:pl-6">
+                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Tags</span
                   >
                   <div v-if="item.tags.length" class="flex flex-wrap gap-2">
                     <span
                       v-for="tag in item.tags"
                       :key="tag"
-                      class="rounded-full border border-cinnamon-ice/20 bg-cinnamon-ice/10 px-2.5 py-0.5 text-[11px] font-medium text-noble-black/60 hover:border-burning-orange/40 hover:bg-burning-orange/5 transition-colors cursor-default"
+                      class="rounded-[12px] rounded-tl-[999px] rounded-br-[999px] bg-noble-black/5 px-2.5 py-1 text-[11px] font-medium text-noble-black/60 hover:bg-noble-black/10 transition-colors cursor-default"
                     >
-                      #{{ tag }}
+                      {{ tag }}
                     </span>
                   </div>
-                  <span v-else class="text-sm italic text-noble-black/30">None listed</span>
+                  <span v-else class="text-[14px] font-semibold text-noble-black/30">None</span>
                 </div>
               </div>
 
               <!-- Horizontal Divider -->
-              <div class="my-8 h-[0.5px] bg-cinnamon-ice/15" />
+              <div class="my-8 h-[0.5px] bg-gray-100" />
 
-              <!-- Bottom Metadata Row -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <!-- Known Issues -->
                 <div class="flex flex-col gap-3">
-                  <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Known Issues</span
                   >
-                  <div v-if="knownIssuesList.length" class="space-y-2">
+                  <div v-if="knownIssuesList.length" class="space-y-1">
                     <p
                       v-for="issue in knownIssuesList"
                       :key="issue"
-                      class="text-sm leading-relaxed text-noble-black/80 flex items-start gap-2"
+                      class="text-[13px] text-noble-black/70 flex items-start gap-2"
                     >
-                      <span
-                        class="text-burning-orange mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current"
-                      />
-                      {{ issue }}
+                      <span class="flex items-center justify-center h-6 shrink-0"
+                        ><span class="w-1 h-1 rounded-full bg-burning-orange"
+                      /></span>
+                      <span class="leading-6">{{ issue }}</span>
                     </p>
                   </div>
-                  <p v-else class="text-sm italic text-noble-black/40">No known issues listed</p>
+                  <p
+                    v-else
+                    class="text-[13px] font-medium text-success-green flex items-center gap-1.5"
+                  >
+                    No known issues reported
+                    <Icon name="ph:check-circle-fill" size="14" class="shrink-0" />
+                  </p>
                 </div>
                 <!-- Usage Limitations -->
                 <div class="flex flex-col gap-3">
-                  <span class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Usage Limitations</span
                   >
-                  <div v-if="usageLimitationsList.length" class="space-y-2">
+                  <div v-if="usageLimitationsList.length" class="space-y-1">
                     <p
                       v-for="limitation in usageLimitationsList"
                       :key="limitation"
-                      class="text-sm leading-relaxed text-noble-black/80 flex items-start gap-2"
+                      class="text-[13px] text-noble-black/70 flex items-start gap-2"
                     >
-                      <span
-                        class="text-burning-orange mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current"
-                      />
-                      {{ limitation }}
+                      <span class="flex items-center justify-center h-6 shrink-0"
+                        ><span class="w-1 h-1 rounded-full bg-burning-orange"
+                      /></span>
+                      <span class="leading-6">{{ limitation }}</span>
                     </p>
                   </div>
-                  <p v-else class="text-sm italic text-noble-black/40">
+                  <p v-else class="text-[13px] italic text-noble-black/40">
                     No usage limitations listed
                   </p>
                 </div>
@@ -2270,145 +2246,116 @@ onUnmounted(() => {
 
             <!-- Description Section -->
             <div class="border-b border-cinnamon-ice/15 py-8">
-              <h2 class="text-lg font-semibold mb-3">Description</h2>
-              <p class="text-noble-black/80 text-sm leading-relaxed">{{ item.description }}</p>
+              <div class="border-l-[3px] border-burning-orange pl-4 mb-4">
+                <h2 class="text-lg font-semibold">Description</h2>
+              </div>
+              <p class="text-noble-black/80 text-sm leading-relaxed whitespace-pre-wrap">
+                {{ item.description }}
+              </p>
             </div>
             <!-- Offers Section -->
             <div class="border-b border-cinnamon-ice/15 py-8">
-              <h2 class="text-lg font-semibold mb-3">What This Item Offers</h2>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div class="border-l-[3px] border-burning-orange pl-4 mb-4">
+                <h2 class="text-lg font-semibold">What This Item Offers</h2>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-x-10">
                 <div
                   v-for="(offer, idx) in offerHighlights"
                   :key="idx"
-                  class="flex items-center gap-2.5 px-3 py-2 bg-cream rounded-xl border border-cinnamon-ice/15"
+                  class="flex items-start gap-3"
                 >
-                  <div class="text-burning-orange scale-90 shrink-0">
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="M12 5v14" />
-                    </svg>
+                  <div class="flex items-center justify-center h-6 shrink-0">
+                    <Icon name="ph:plus-bold" size="15" class="text-burning-orange" />
                   </div>
-                  <span class="text-sm text-noble-black/90">{{ offer }}</span>
+                  <span class="text-sm text-noble-black/90 leading-6">{{ offer }}</span>
                 </div>
               </div>
             </div>
             <div v-if="includedItems.length" class="border-b border-cinnamon-ice/15 py-8 mb-12">
-              <h2 class="text-lg font-semibold mb-3">What's Included</h2>
+              <div class="border-l-[3px] border-burning-orange pl-4 mb-4">
+                <h2 class="text-lg font-semibold">What's Included</h2>
+              </div>
               <ul class="space-y-2">
                 <li
                   v-for="(included, idx) in includedItems"
                   :key="idx"
-                  class="flex items-center gap-2.5"
+                  class="flex items-start gap-3"
                 >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-burning-orange"
-                  >
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
-                  <span class="text-noble-black/90 text-sm">{{ included }}</span>
+                  <div class="flex items-center justify-center h-6 shrink-0">
+                    <Icon name="ph:check-circle-fill" size="17" class="text-burning-orange" />
+                  </div>
+                  <span class="text-noble-black/90 text-sm leading-6">{{ included }}</span>
                 </li>
               </ul>
             </div>
 
-            <!-- Seller Card -->
+            <!-- Redesigned Lender Card -->
             <NuxtLink
               v-if="item.lenderUsername"
               :to="`/profile/${item.lenderUsername}`"
-              class="bg-cream rounded-3xl p-5 border border-cinnamon-ice/15 flex items-center gap-4 mt-16 sm:p-6 sm:gap-6 hover:bg-cinnamon-ice/10 transition-colors group/seller"
+              class="bg-white rounded-[16px] p-5 border border-cinnamon-ice/30 flex items-center justify-between mt-16 group/seller shadow-sm hover:shadow-md transition-all duration-300"
             >
-              <div class="flex items-center gap-4 sm:gap-5">
+              <div class="flex items-center gap-4">
                 <div
-                  class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-cinnamon-ice flex items-center justify-center text-white text-lg sm:text-xl font-bold shrink-0 group-hover/seller:scale-105 transition-transform"
+                  class="w-[52px] h-[52px] rounded-full border border-cinnamon-ice/40 bg-cinnamon-ice/10 flex items-center justify-center text-noble-black/70 text-lg font-bold shrink-0 overflow-hidden"
                 >
-                  {{ ownerInitials || "TU" }}
+                  <img
+                    v-if="item.lenderAvatarUrl"
+                    :src="item.lenderAvatarUrl"
+                    class="w-full h-full object-cover"
+                  />
+                  <span v-else>{{ ownerInitials || "TU" }}</span>
                 </div>
+
                 <div class="flex flex-col">
-                  <h3
-                    class="text-base sm:text-lg font-semibold text-noble-black group-hover/seller:text-burning-orange transition-colors"
-                  >
+                  <h3 class="text-[16px] font-semibold text-noble-black leading-tight">
                     {{ ownerName }}
                   </h3>
-                  <div class="flex items-center gap-1.5 text-sm">
+                  <div class="flex items-center gap-1.5 text-[13px] text-noble-black/60 mt-1">
                     <div class="flex items-center gap-1 text-burning-orange">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon
-                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                        />
-                      </svg>
-                      <span class="font-bold">{{ ratingLabel }}</span>
+                      <Icon name="ph:star-fill" size="14" class="fill-current" />
+                      <span class="font-bold">{{ lenderRatingLabel }}</span>
                     </div>
-                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+                    <span class="text-noble-black/30">·</span>
+                    <span>{{ lenderBookingCountLabel }}</span>
                   </div>
-                  <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
-                    Item owner on TakeUP • View Profile
-                  </p>
+                  <p class="text-[12px] text-noble-black/40 mt-0.5">Item owner on TakeUP</p>
                 </div>
               </div>
-              <div
-                class="ml-auto text-noble-black/20 group-hover/seller:text-burning-orange transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+
+              <div class="text-[14px] font-semibold text-burning-orange hover:underline">
+                View Profile →
               </div>
             </NuxtLink>
+
+            <!-- Non-linked version -->
             <div
               v-else
-              class="bg-cream rounded-3xl p-5 border border-cinnamon-ice/15 flex items-center gap-4 mt-16 sm:p-6 sm:gap-6"
+              class="bg-white rounded-[16px] p-5 border border-cinnamon-ice/30 flex items-center gap-4 mt-16 shadow-sm"
             >
-              <div class="flex items-center gap-4 sm:gap-5">
-                <div
-                  class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-cinnamon-ice flex items-center justify-center text-white text-lg sm:text-xl font-bold shrink-0"
-                >
-                  {{ ownerInitials || "TU" }}
-                </div>
-                <div class="flex flex-col">
-                  <h3 class="text-base sm:text-lg font-semibold text-noble-black">
-                    {{ ownerName }}
-                  </h3>
-                  <div class="flex items-center gap-1.5 text-sm">
-                    <div class="flex items-center gap-1 text-burning-orange">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon
-                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                        />
-                      </svg>
-                      <span class="font-bold">{{ ratingLabel }}</span>
-                    </div>
-                    <span class="text-noble-black/60">({{ bookingCountLabel }})</span>
+              <div
+                class="w-[52px] h-[52px] rounded-full border border-cinnamon-ice/40 bg-cinnamon-ice/10 flex items-center justify-center text-noble-black/70 text-lg font-bold shrink-0 overflow-hidden"
+              >
+                <img
+                  v-if="item.lenderAvatarUrl"
+                  :src="item.lenderAvatarUrl"
+                  class="w-full h-full object-cover"
+                />
+                <span v-else>{{ ownerInitials || "TU" }}</span>
+              </div>
+              <div class="flex flex-col">
+                <h3 class="text-[16px] font-semibold text-noble-black leading-tight">
+                  {{ ownerName }}
+                </h3>
+                <div class="flex items-center gap-1.5 text-[13px] text-noble-black/60 mt-1">
+                  <div class="flex items-center gap-1 text-burning-orange">
+                    <Icon name="ph:star-fill" size="14" class="fill-current" />
+                    <span class="font-bold">{{ lenderRatingLabel }}</span>
                   </div>
-                  <p class="hidden sm:block text-xs text-noble-black/60 mt-1">
-                    Item owner on TakeUP
-                  </p>
+                  <span class="text-noble-black/30">·</span>
+                  <span>{{ lenderBookingCountLabel }}</span>
                 </div>
+                <p class="text-[12px] text-noble-black/40 mt-0.5">Item owner on TakeUP</p>
               </div>
             </div>
           </div>
@@ -2416,56 +2363,34 @@ onUnmounted(() => {
           <!-- Sidebar Layout (lg+) -->
           <div class="hidden lg:block space-y-6">
             <div
-              class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm overflow-hidden"
+              class="bg-white border border-cinnamon-ice/30 rounded-2xl p-5 shadow-sm overflow-hidden"
               @mouseleave="handleCalendarMouseLeave"
             >
               <div
                 v-if="isItemUnavailableForBooking"
-                class="mb-5 rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+                class="mb-5 rounded-2xl border border-cinnamon-ice/30 bg-white px-4 py-3 text-sm text-noble-black/75"
               >
                 <span class="font-semibold text-noble-black">{{ bookingAvailabilityTitle }}.</span>
                 {{ bookingAvailabilityMessage }}
               </div>
               <div class="flex items-center justify-between mb-6">
-                <h3 class="font-semibold text-noble-black">
+                <h3 class="text-base font-semibold text-noble-black">
                   {{ monthNames[viewMonth] }} {{ viewYear }}
                 </h3>
-                <div class="flex gap-2">
+                <div class="flex gap-1">
                   <button
-                    class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
+                    <Icon name="ph:caret-left" size="20" />
                   </button>
                   <button
-                    class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
+                    <Icon name="ph:caret-right" size="20" />
                   </button>
                 </div>
               </div>
@@ -2473,7 +2398,7 @@ onUnmounted(() => {
                 <div
                   v-for="day in daysOfWeek"
                   :key="day"
-                  class="text-[10px] uppercase tracking-wider text-noble-black/40 font-bold py-2"
+                  class="text-[11px] uppercase tracking-[1px] text-gray-400 font-bold py-2"
                 >
                   {{ day }}
                 </div>
@@ -2510,11 +2435,11 @@ onUnmounted(() => {
                   />
                   <button
                     v-if="dayObj.day"
-                    class="relative w-9 h-9 flex items-center justify-center text-sm rounded-full transition-all duration-200 z-10 select-none"
+                    class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                     :class="[
                       dayObj.isUnavailable || dayObj.isPast
-                        ? 'text-noble-black/30 cursor-not-allowed'
-                        : 'text-noble-black hover:bg-transparent hover:text-burning-orange cursor-pointer',
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                       dayObj.isUnavailable ? 'line-through' : '',
                       isSelected(dayObj.fullDate) ||
                       (hoverDate &&
@@ -2524,7 +2449,7 @@ onUnmounted(() => {
                         ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                         : '',
                       dayObj.isToday && !isSelected(dayObj.fullDate)
-                        ? 'text-burning-orange font-bold'
+                        ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                         : '',
                     ]"
                     @mousedown="
@@ -2564,39 +2489,36 @@ onUnmounted(() => {
             <div class="grid grid-cols-2 gap-4">
               <div class="relative">
                 <span
-                  class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                  class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                   >Start Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="
+                    isStartTimeOpen
+                      ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                      : 'hover:border-burning-orange/50'
+                  "
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
-                  {{ startTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                 </button>
                 <div
                   v-if="isStartTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
                       v-for="time in timeOptions"
                       :key="time"
-                      class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                      :class="startTime === time ? 'bg-cream text-burning-orange font-bold' : ''"
+                      class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
+                      :class="[
+                        isTimeDisabled(time, false) || isTimeOnDayBooked(time, startDate)
+                          ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                          : startTime === time
+                            ? 'bg-gray-50 text-burning-orange font-bold'
+                            : '',
+                      ]"
                       @click="selectStartTime(time)"
                     >
                       {{ time }}
@@ -2606,43 +2528,34 @@ onUnmounted(() => {
               </div>
               <div class="relative">
                 <span
-                  class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                  class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                   >End Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="
+                    isEndTimeOpen
+                      ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                      : 'hover:border-burning-orange/50'
+                  "
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
-                  {{ endTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                 </button>
                 <div
                   v-if="isEndTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
                       v-for="time in timeOptions"
                       :key="time"
-                      class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
+                      class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
                       :class="[
-                        isTimeDisabled(time, true)
+                        isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
                           ? 'opacity-30 cursor-not-allowed pointer-events-none'
                           : endTime === time
-                            ? 'bg-cream text-burning-orange font-bold'
+                            ? 'bg-gray-50 text-burning-orange font-bold'
                             : '',
                       ]"
                       @click="selectEndTime(time)"
@@ -2653,109 +2566,79 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
-              <div class="flex items-baseline gap-1 mb-4">
-                <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
-                ><span class="text-sm text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+            <div
+              class="bg-white border border-cinnamon-ice/30 rounded-[20px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
+            >
+              <div class="flex items-baseline gap-1 mb-6">
+                <span class="text-[32px] font-bold text-noble-black">{{ priceAmount }}</span>
+                <span class="text-[16px] text-noble-black/40 font-medium">{{
+                  priceUnitLabel
+                }}</span>
               </div>
+
               <div class="grid grid-cols-2 mb-6 relative">
-                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
+                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-gray-100" />
                 <div class="flex flex-col gap-1 pr-4">
-                  <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                  <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                     >Start</span
                   >
                   <div class="flex flex-col">
-                    <span class="text-sm font-semibold text-noble-black">{{
+                    <span class="text-[14px] font-semibold text-noble-black">{{
                       formatDate(displayStartDate)
-                    }}</span
-                    ><span class="text-xs text-noble-black/60">{{ startTime }}</span>
+                    }}</span>
+                    <span class="text-xs text-noble-black/50">{{ startTime }}</span>
                   </div>
                 </div>
                 <div class="flex flex-col gap-1 pl-4">
-                  <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                  <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                     >End</span
                   >
                   <div class="flex flex-col">
-                    <span class="text-sm font-semibold text-noble-black">{{
+                    <span class="text-[14px] font-semibold text-noble-black">{{
                       formatDate(displayEndDate)
-                    }}</span
-                    ><span class="text-xs text-noble-black/60">{{ endTime }}</span>
+                    }}</span>
+                    <span class="text-xs text-noble-black/50">{{ endTime }}</span>
                   </div>
                 </div>
               </div>
+
+              <div class="space-y-2 mb-4">
+                <div class="flex justify-between items-center text-[13px] text-noble-black/60">
+                  <span
+                    >Rate ({{ item.freeToBorrow ? "Free" : formatPesoAmount(item.rentalFee) }} x
+                    {{ totalUnits }} {{ totalUnitsLabel }})</span
+                  >
+                  <span class="font-medium">{{
+                    item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice)
+                  }}</span>
+                </div>
+              </div>
+
+              <div class="border-t border-dashed border-cinnamon-ice/30 my-4" />
+
+              <div class="flex justify-between items-center mb-6">
+                <span class="text-[16px] font-bold text-noble-black">Total</span>
+                <span class="text-[16px] font-bold text-noble-black">{{
+                  item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice)
+                }}</span>
+              </div>
+
               <button
-                class="w-full py-2 rounded-2xl bg-burning-orange text-white font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:brightness-110 shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                class="w-full py-3 rounded-2xl bg-burning-orange text-white font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:brightness-110 shadow-md shadow-burning-orange/10 mb-2.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 :disabled="!canSubmitBooking"
                 @click="submitBookingRequest"
               >
                 {{ requestBookingButtonLabel }}
               </button>
-              <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
-                {{ bookingFeedbackMessage }}
-              </p>
 
               <button
-                class="w-full py-2 rounded-2xl border border-burning-orange text-burning-orange font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-2.5"
+                class="w-full py-3 rounded-2xl border border-burning-orange text-burning-orange font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 :disabled="!canAddToBag"
                 @click="handleAddToBag"
               >
-                <svg
-                  v-if="isInBag"
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Icon v-if="isInBag" name="ph:check" size="16" class="stroke-[3]" />
                 {{ addToBagButtonLabel }}
               </button>
-              <p
-                v-if="bagFeedbackMessage"
-                class="text-center text-[11px] mb-4 font-normal"
-                :class="bagFeedbackTone === 'success' ? 'text-blue-estate' : 'text-cinnabar-red'"
-              >
-                {{ bagFeedbackMessage }}
-              </p>
-              <div class="h-px bg-cinnamon-ice/15 mb-4" />
-              <div class="space-y-2 mb-4">
-                <div class="flex justify-between items-center text-sm text-noble-black/70">
-                  <span>
-                    Rate ({{ item.freeToBorrow ? "Free" : formatPesoAmount(item.rentalFee) }} x
-                    {{ totalUnits }} {{ totalUnitsLabel }})
-                  </span>
-                  <span class="font-medium text-noble-black">
-                    {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
-                  </span>
-                </div>
-              </div>
-              <div class="h-px bg-cinnamon-ice/15 mb-4" />
-              <div class="flex justify-between items-center mb-4">
-                <span class="text-base font-semibold text-noble-black">Total</span
-                ><span class="text-lg font-bold text-noble-black">
-                  {{ item.freeToBorrow ? "Free" : formatPesoAmount(totalPrice) }}
-                </span>
-              </div>
-              <div class="h-px bg-cinnamon-ice/15 mb-4" />
-              <div class="flex items-center gap-2 text-noble-black/40 justify-center">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg
-                ><span class="text-[11px] font-normal">Protected by TakeUP Guarantee</span>
-              </div>
             </div>
           </div>
         </div>
@@ -2808,17 +2691,7 @@ onUnmounted(() => {
                 class="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
                 @click="showPaymentModal = false"
               >
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <Icon name="ph:x" size="24" />
               </button>
             </div>
 
@@ -2878,20 +2751,7 @@ onUnmounted(() => {
           :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
           @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
         >
-          <svg
-            v-if="isInBag"
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="3"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
           {{
             isItemUnavailableForBooking
               ? `Currently ${unavailableItemLabel}`
@@ -2913,20 +2773,7 @@ onUnmounted(() => {
         :disabled="isItemUnavailableForBooking"
         @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
       >
-        <svg
-          v-if="isInBag"
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
+        <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
         {{ mobileBookingButtonLabel }}
       </button>
     </div>
@@ -2949,73 +2796,40 @@ onUnmounted(() => {
             class="sticky top-0 bg-white border-b border-cinnamon-ice/15 p-4 flex items-center justify-between z-10"
           >
             <button class="p-2 -ml-2" @click="closeBookingModal">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icon name="ph:x" size="24" />
             </button>
             <h2 class="font-bold text-noble-black text-base">Booking Details</h2>
             <div class="w-10" />
           </div>
           <div class="p-6 space-y-8 pb-32">
-            <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6">
-              <h3 class="font-bold text-noble-black mb-3">
+            <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-5 shadow-sm">
+              <h3 class="font-bold text-noble-black mb-4">
                 {{ isItemUnavailableForBooking ? bookingAvailabilityTitle : "Select Dates" }}
               </h3>
               <p
                 v-if="isItemUnavailableForBooking"
-                class="mb-5 rounded-2xl border border-noble-black/10 bg-white px-4 py-3 text-sm text-noble-black/75"
+                class="mb-5 rounded-2xl border border-cinnamon-ice/30 bg-white px-4 py-3 text-sm text-noble-black/75"
               >
                 {{ bookingAvailabilityMessage }}
               </p>
               <div class="flex items-center justify-between mb-6">
-                <h3 class="font-semibold text-noble-black">
+                <h3 class="text-base font-semibold text-noble-black">
                   {{ monthNames[viewMonth] }} {{ viewYear }}
                 </h3>
-                <div class="flex gap-2">
+                <div class="flex gap-1">
                   <button
-                    class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(-1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
+                    <Icon name="ph:caret-left" size="20" />
                   </button>
                   <button
-                    class="p-1 hover:bg-white/20 rounded-full transition-colors text-noble-black/60"
+                    class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
                     :disabled="isItemUnavailableForBooking"
                     @click="changeMonth(1)"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
+                    <Icon name="ph:caret-right" size="20" />
                   </button>
                 </div>
               </div>
@@ -3023,7 +2837,7 @@ onUnmounted(() => {
                 <div
                   v-for="day in daysOfWeek"
                   :key="day"
-                  class="text-[10px] uppercase tracking-wider text-noble-black/40 font-bold py-2"
+                  class="text-[11px] uppercase tracking-[1px] text-gray-400 font-bold py-2"
                 >
                   {{ day }}
                 </div>
@@ -3060,11 +2874,11 @@ onUnmounted(() => {
                   />
                   <button
                     v-if="dayObj.day"
-                    class="relative w-9 h-9 flex items-center justify-center text-sm rounded-full transition-all duration-200 z-10 select-none"
+                    class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                     :class="[
                       dayObj.isUnavailable || dayObj.isPast
-                        ? 'text-noble-black/30 cursor-not-allowed'
-                        : 'text-noble-black hover:bg-transparent hover:text-burning-orange cursor-pointer',
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                       dayObj.isUnavailable ? 'line-through' : '',
                       isSelected(dayObj.fullDate) ||
                       (hoverDate &&
@@ -3074,7 +2888,7 @@ onUnmounted(() => {
                         ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                         : '',
                       dayObj.isToday && !isSelected(dayObj.fullDate)
-                        ? 'text-burning-orange font-bold'
+                        ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                         : '',
                     ]"
                     @mousedown="
@@ -3114,39 +2928,36 @@ onUnmounted(() => {
             <div class="grid grid-cols-2 gap-4">
               <div class="relative">
                 <span
-                  class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                  class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                   >Start Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="
+                    isStartTimeOpen
+                      ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                      : 'hover:border-burning-orange/50'
+                  "
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleStartTime"
                 >
-                  {{ startTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                 </button>
                 <div
                   v-if="isStartTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
                       v-for="time in timeOptions"
                       :key="time"
-                      class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
-                      :class="startTime === time ? 'bg-cream text-burning-orange font-bold' : ''"
+                      class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
+                      :class="[
+                        isTimeDisabled(time, false) || isTimeOnDayBooked(time, startDate)
+                          ? 'opacity-30 cursor-not-allowed pointer-events-none'
+                          : startTime === time
+                            ? 'bg-gray-50 text-burning-orange font-bold'
+                            : '',
+                      ]"
                       @click="selectStartTime(time)"
                     >
                       {{ time }}
@@ -3156,43 +2967,34 @@ onUnmounted(() => {
               </div>
               <div class="relative">
                 <span
-                  class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider mb-1.5 block ml-1"
+                  class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                   >End Time</span
                 ><button
-                  class="w-full bg-cream border border-cinnamon-ice/15 rounded-2xl px-4 py-3 text-sm font-medium text-noble-black flex items-center justify-between hover:border-burning-orange transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="
+                    isEndTimeOpen
+                      ? 'border-burning-orange ring-1 ring-burning-orange/20'
+                      : 'hover:border-burning-orange/50'
+                  "
                   :disabled="isItemUnavailableForBooking"
                   @click="toggleEndTime"
                 >
-                  {{ endTime
-                  }}<svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-noble-black/30"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                  {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
                 </button>
                 <div
                   v-if="isEndTimeOpen"
-                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/15 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  class="absolute z-50 mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
                 >
                   <div class="max-h-60 overflow-y-auto custom-time-scrollbar py-2">
                     <div
                       v-for="time in timeOptions"
                       :key="time"
-                      class="px-4 py-2 text-sm text-noble-black hover:bg-cream hover:text-burning-orange cursor-pointer transition-colors"
+                      class="px-4 py-2 text-sm text-noble-black hover:bg-gray-50 hover:text-burning-orange cursor-pointer transition-colors"
                       :class="[
-                        isTimeDisabled(time, true)
+                        isTimeDisabled(time, true) || isTimeOnDayBooked(time, displayEndDate)
                           ? 'opacity-30 cursor-not-allowed pointer-events-none'
                           : endTime === time
-                            ? 'bg-cream text-burning-orange font-bold'
+                            ? 'bg-gray-50 text-burning-orange font-bold'
                             : '',
                       ]"
                       @click="selectEndTime(time)"
@@ -3203,38 +3005,38 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div class="bg-cream border border-cinnamon-ice/15 rounded-3xl p-6 shadow-sm">
-              <div class="flex items-baseline gap-1 mb-4">
-                <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span
-                ><span class="text-sm text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+            <div class="bg-white border border-cinnamon-ice/30 rounded-2xl p-6 shadow-sm">
+              <div class="flex items-baseline gap-1 mb-6">
+                <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span>
+                <span class="text-sm text-noble-black/40 font-medium">{{ priceUnitLabel }}</span>
               </div>
               <div class="grid grid-cols-2 mb-6 relative">
-                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/15" />
+                <div class="absolute left-1/2 top-1 bottom-1 w-px bg-gray-100" />
                 <div class="flex flex-col gap-1 pr-4">
-                  <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                  <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                     >Start</span
                   >
                   <div class="flex flex-col">
-                    <span class="text-sm font-semibold text-noble-black">{{
+                    <span class="text-[14px] font-semibold text-noble-black">{{
                       formatDate(displayStartDate)
-                    }}</span
-                    ><span class="text-xs text-noble-black/60">{{ startTime }}</span>
+                    }}</span>
+                    <span class="text-xs text-noble-black/50">{{ startTime }}</span>
                   </div>
                 </div>
                 <div class="flex flex-col gap-1 pl-4">
-                  <span class="text-[10px] uppercase font-bold text-noble-black/40 tracking-wider"
+                  <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                     >End</span
                   >
                   <div class="flex flex-col">
-                    <span class="text-sm font-semibold text-noble-black">{{
+                    <span class="text-[14px] font-semibold text-noble-black">{{
                       formatDate(displayEndDate)
-                    }}</span
-                    ><span class="text-xs text-noble-black/60">{{ endTime }}</span>
+                    }}</span>
+                    <span class="text-xs text-noble-black/50">{{ endTime }}</span>
                   </div>
                 </div>
               </div>
-              <div class="h-px bg-cinnamon-ice/15 mb-4" />
-              <div class="space-y-2 mb-4">
+              <div class="border-t border-dashed border-cinnamon-ice/30 my-4" />
+              <div class="space-y-3 mb-4">
                 <div class="flex justify-between items-center text-sm text-noble-black/70">
                   <span>
                     Rate ({{ item.freeToBorrow ? "Free" : formatPesoAmount(item.rentalFee) }} x
@@ -3245,7 +3047,7 @@ onUnmounted(() => {
                   </span>
                 </div>
               </div>
-              <div class="h-px bg-cinnamon-ice/15 mb-4" />
+              <div class="h-px bg-gray-100 mb-4" />
               <div class="flex justify-between items-center mb-4">
                 <span class="text-base font-semibold text-noble-black">Total</span
                 ><span class="text-lg font-bold text-noble-black">
@@ -3288,55 +3090,21 @@ onUnmounted(() => {
             class="absolute top-6 right-6 text-white/70 hover:text-white transition-colors p-2 z-[2010]"
             @click="closeLightbox"
           >
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <Icon name="ph:x" size="32" />
           </button>
           <button
             v-if="imageGallery.length > 1"
             class="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[2010]"
             @click="prevImage"
           >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+            <Icon name="ph:caret-left" size="48" />
           </button>
           <button
             v-if="imageGallery.length > 1"
             class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors p-4 z-[2010]"
             @click="nextImage"
           >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="m9 18 6-6-6-6" />
-            </svg>
+            <Icon name="ph:caret-right" size="48" />
           </button>
           <div class="relative w-full h-full flex items-center justify-center">
             <img
@@ -3389,5 +3157,60 @@ onUnmounted(() => {
 }
 .pb-safe-area-inset-bottom {
   padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* Custom Tooltip Styling */
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
 }
 </style>

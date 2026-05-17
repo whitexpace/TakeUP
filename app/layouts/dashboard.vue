@@ -4,8 +4,6 @@
     <Header
       :notifications="notifications"
       scroll-container-selector=".custom-main-scrollbar"
-      @mark-notification-read="markNotificationRead"
-      @mark-all-notifications-read="markAllNotificationsRead"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
       <template #left>
@@ -16,25 +14,13 @@
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
-            >
-              <path
-                d="M4 6H20M4 12H20M4 18H20"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <Icon
+              name="ph:list"
+              class="w-5.5 h-5.5 transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95"
+            />
           </button>
           <div class="custom-tooltip">
-            Toggle Sidebar
+            Sidebar
             <div class="tooltip-arrow"></div>
           </div>
         </div>
@@ -92,7 +78,7 @@
 
       <!-- Main Content Area -->
       <main
-        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative"
+        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative px-6 sm:px-10 lg:px-16 xl:px-24"
         :class="isHeaderVisible ? 'pt-14' : 'pt-0'"
       >
         <slot />
@@ -106,14 +92,14 @@ import { computed, ref, onMounted, onUnmounted, provide } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import { useDashboardFilters } from "../composables/use-dashboard-filters"
 import { useNotifications } from "../composables/use-notifications"
+import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const hideSidebar = computed(() => Boolean(route.meta.hideDashboardSidebar))
-const { notifications, loadNotifications, markNotificationRead, markAllNotificationsRead } =
-  useNotifications()
+const { notifications, loadNotifications } = useNotifications()
 
 const toggleSidebar = () => {
   if (hideSidebar.value) return
@@ -160,7 +146,14 @@ onMounted(() => {
     startupTasks.push(fetchFilterMetadata())
   }
 
-  void Promise.allSettled(startupTasks)
+  void Promise.allSettled(startupTasks).then(() => {
+    scheduleIdleWarmup(() => {
+      const { fetch: fetchAuthUser } = useAuthUser()
+      const { loadLikesCount } = useLikes()
+
+      void Promise.allSettled([fetchAuthUser(), loadLikesCount()])
+    })
+  })
 })
 
 onUnmounted(() => {
@@ -222,51 +215,5 @@ onUnmounted(() => {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(14px);
-}
-
-.custom-sidebar-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.custom-sidebar-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 50%");
-  border-radius: 20px;
-}
-
-.custom-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.cinnamon-ice");
-}
-
-/* Firefox support */
-.custom-sidebar-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.cinnamon-ice / 50%") transparent;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%"); /* noble-black/10 */
-  border-radius: 20px;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
-}
-
-/* Firefox support */
-.custom-main-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.noble-black / 10%") transparent;
 }
 </style>

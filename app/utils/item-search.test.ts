@@ -31,7 +31,6 @@ const makeItem = (id: string, overrides: Partial<ListedItem> = {}): ListedItem =
   ownerName: "Alice",
   lenderUsername: "alice-lender",
   lenderFullName: "Alice Lender",
-  borrowerId: null,
   categories: ["ELECTRONICS"],
   tags: [],
   hasActiveBoost: false,

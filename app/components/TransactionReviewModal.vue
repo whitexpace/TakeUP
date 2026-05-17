@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
-import {
-  ALLOWED_REVIEW_IMAGE_TYPES,
-  MAX_REVIEW_IMAGES,
-  MAX_REVIEW_IMAGE_BYTES,
-  type ReviewType,
-} from "#shared/schemas/review"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { MAX_REVIEW_IMAGES, MAX_REVIEW_IMAGE_BYTES, type ReviewType } from "#shared/schemas/review"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { normalizeReviewImageUrl } from "../utils/review-image"
 
 type ReviewContext = {
@@ -107,6 +103,10 @@ const resetState = () => {
   persistedDraftImages.value = []
 }
 
+onBeforeUnmount(() => {
+  resetState()
+})
+
 const getSafeFileName = (fileName: string) =>
   fileName
     .toLowerCase()
@@ -182,10 +182,8 @@ const validateFiles = (files: File[]) => {
   }
 
   for (const file of files) {
-    if (
-      !ALLOWED_REVIEW_IMAGE_TYPES.includes(file.type as (typeof ALLOWED_REVIEW_IMAGE_TYPES)[number])
-    ) {
-      errorMessage.value = "Only JPG, PNG, and WebP images are supported."
+    if (!file.type.startsWith("image/")) {
+      errorMessage.value = "Only image files are supported."
       return false
     }
 
@@ -322,8 +320,8 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
     return []
   }
 
-  const { fetch: fetchAuthUser } = useAuthUser()
-  const authUser = await fetchAuthUser()
+  const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+  const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
   if (!authUser) throw new Error("Not authenticated")
   const userId = authUser.id
 
@@ -336,8 +334,9 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
   const total = files.length
 
   for (const [index, file] of files.entries()) {
+    const uploadFile = await convertImageFileToWebP(file)
     const datePrefix = new Date().toISOString().slice(0, 10)
-    const storagePath = `items/${userId}/reviews/${datePrefix}/${crypto.randomUUID()}-${getSafeFileName(file.name)}`
+    const storagePath = `items/${userId}/reviews/${datePrefix}/${crypto.randomUUID()}-${getSafeFileName(uploadFile.name)}`
     const uploadId = storagePath
 
     await new Promise<void>((resolve, reject) => {
@@ -349,7 +348,7 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
       )
       xhr.setRequestHeader("apikey", supabaseKey)
       if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
-      xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+      xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
 
       xhr.upload.onprogress = (progressEvent) => {
         if (!progressEvent.lengthComputable) return
@@ -362,9 +361,9 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
         const message = "Review image upload failed because the network request did not complete."
         console.error("[TransactionReviewModal] review image upload network error", {
           storagePath,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
+          fileName: uploadFile.name,
+          fileType: uploadFile.type,
+          fileSize: uploadFile.size,
         })
         reject(new Error(message))
       }
@@ -376,9 +375,9 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
             status: xhr.status,
             responseText: xhr.responseText,
             storagePath,
-            fileName: file.name,
-            fileType: file.type,
-            fileSize: file.size,
+            fileName: uploadFile.name,
+            fileType: uploadFile.type,
+            fileSize: uploadFile.size,
           })
           reject(new Error(message))
           return
@@ -391,7 +390,7 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
         resolve()
       }
 
-      xhr.send(file)
+      xhr.send(uploadFile)
     })
   }
 
@@ -657,17 +656,10 @@ const submitReview = async () => {
             </div>
 
             <button
-              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="closeModal"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M18 6L6 18M6 6L18 18"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                />
-              </svg>
+              <Icon name="ph:x" class="w-6 h-6" />
             </button>
           </div>
 
@@ -686,22 +678,13 @@ const submitReview = async () => {
                     @mouseenter="hoverRating = star"
                     @mouseleave="hoverRating = 0"
                   >
-                    <svg
-                      class="w-8 h-8"
-                      viewBox="0 0 24 24"
-                      :fill="(hoverRating || rating) >= star ? 'currentColor' : 'none'"
+                    <Icon
+                      name="ph:star-fill"
+                      class="w-8 h-8 transition-colors"
                       :class="
                         (hoverRating || rating) >= star ? 'text-burning-orange' : 'text-gray-200'
                       "
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M12 3.75l2.664 5.398 5.958.866-4.311 4.202 1.018 5.934L12 17.348l-5.329 2.802 1.018-5.934-4.311-4.202 5.958-.866L12 3.75z"
-                      />
-                    </svg>
+                    />
                   </button>
                 </div>
                 <p class="mt-2 text-[12px] font-bold uppercase tracking-widest text-burning-orange">
@@ -731,20 +714,10 @@ const submitReview = async () => {
               <div v-if="isItemReview" class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
                   <label class="flex items-center gap-2 cursor-pointer group">
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      class="text-gray-400 group-hover:text-burning-orange transition-colors"
-                    >
-                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                      <circle cx="9" cy="9" r="2" />
-                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                      <path d="M16 5h4M18 3v4" />
-                    </svg>
+                    <Icon
+                      name="ph:camera-plus"
+                      class="w-5 h-5 text-gray-400 group-hover:text-burning-orange transition-colors"
+                    />
                     <span
                       class="text-[13px] font-medium text-gray-500 group-hover:text-gray-700 transition-colors"
                     >
@@ -752,7 +725,7 @@ const submitReview = async () => {
                     </span>
                     <input
                       type="file"
-                      accept="image/jpeg,image/png,image/webp"
+                      accept="image/*"
                       multiple
                       class="sr-only"
                       @change="handleImageSelection"
@@ -771,15 +744,7 @@ const submitReview = async () => {
                       class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-gray-900 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                       @click="removePersistedDraftImage(image)"
                     >
-                      <svg
-                        viewBox="0 0 24 24"
-                        class="h-2 w-2"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="4"
-                      >
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
+                      <Icon name="ph:x" class="h-2 w-2" />
                     </button>
                   </div>
                 </div>
@@ -798,30 +763,14 @@ const submitReview = async () => {
                     :class="isAnonymous ? 'translate-x-5' : 'translate-x-1'"
                   />
                 </button>
-                <span class="text-[13px] font-medium text-gray-600">Submit anonymously</span>
-                <div class="relative group/tooltip">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-gray-400 cursor-help"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                    <path d="M12 17h.01" />
-                  </svg>
-                  <div
-                    class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-[11px] font-medium rounded-lg whitespace-nowrap opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all"
-                  >
-                    Your name won't be visible on the review
-                    <div
-                      class="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"
-                    ></div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[13px] font-medium text-gray-600">Submit anonymously</span>
+                  <div class="relative group/tooltip flex items-center">
+                    <Icon name="ph:question" class="w-4 h-4 text-gray-400 cursor-help" />
+                    <div class="custom-tooltip !text-[11px] !font-medium">
+                      Your name won't be visible on the review
+                      <div class="tooltip-arrow"></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -868,6 +817,61 @@ const submitReview = async () => {
 </template>
 
 <style scoped>
+/* Custom Tooltip Styling matching Header.vue */
+.custom-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  bottom: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-14px);
+}
+
 .custom-modal-scrollbar::-webkit-scrollbar {
   width: 5px;
 }

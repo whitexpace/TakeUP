@@ -499,7 +499,6 @@ export async function deleteAccountAndAnonymizeData(
           viewCount: 0,
           likeCount: 0,
           rating: 0,
-          borrowerId: null,
         },
       })
     }

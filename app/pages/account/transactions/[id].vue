@@ -4,7 +4,14 @@ import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../../../server/trpc/routers"
 import type { ReviewType } from "#shared/schemas/review"
 import { isChatAvailableForBookingStatus } from "#shared/chat-rules"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
+import {
+  clearPrefetchedBookingDetail,
+  getPrefetchedBookingDetail,
+  prefetchBookingDetail,
+  seedPrefetchedBookingDetail,
+} from "../../../composables/use-booking-detail-prefetch"
 
 definePageMeta({
   layout: "account",
@@ -27,60 +34,41 @@ const orderIdForDisplay = computed(() => bookingId.value.slice(0, 16).toUpperCas
 
 const { authUser } = useAuthUser()
 const currentUserId = computed(() => authUser.value?.id ?? null)
+const shouldBypassPrefetchedBookingDetail = ref(false)
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = useLazyAsyncData(
   () => `booking:${bookingId.value || "missing"}`,
   async () => {
     if (!bookingId.value) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: "Booking request not found.",
-      })
+      return null
     }
-    return await $fetch<BookingDetail | null>(`/api/bookings/${bookingId.value}`)
-  },
-  { watch: [bookingId] },
-)
 
-if (error.value) {
-  throw error.value
-}
+    if (!shouldBypassPrefetchedBookingDetail.value) {
+      const prefetched = getPrefetchedBookingDetail<BookingDetail>(bookingId.value)
+      if (prefetched) {
+        return prefetched
+      }
 
-const { refresh: _refreshReviewState } = await useAsyncData(
-  () => `booking-review:${bookingId.value || "missing"}`,
-  async () => {
-    if (!bookingId.value) {
-      return {
-        canSubmit: false,
-        review: null,
-        transactionId: null,
+      const prioritizedPrefetch = await prefetchBookingDetail(bookingId.value, {
+        immediate: true,
+        priority: true,
+      }).catch(() => null)
+      if (prioritizedPrefetch) {
+        return prioritizedPrefetch
       }
     }
 
-    return await $fetch<{
-      canSubmit: boolean
-      transactionId: string | null
-      review: null | {
-        id: string
-        rating: number
-        reviewText: string | null
-        isAnonymous: boolean
-        createdAt: string | Date
-      }
-    }>(`/api/reviews/booking/${bookingId.value}`)
+    const bookingDetail = await $fetch<BookingDetail | null>(`/api/bookings/${bookingId.value}`)
+    if (bookingDetail) {
+      seedPrefetchedBookingDetail(bookingId.value, bookingDetail)
+    }
+
+    return bookingDetail
   },
-  { watch: [bookingId] },
+  { watch: [bookingId], default: () => null },
 )
 
-const booking = computed(() => {
-  if (!data.value) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: "Booking request not found.",
-    })
-  }
-  return data.value
-})
+const booking = computed(() => data.value)
 
 const isActing = ref(false)
 const isDisputeDescriptionExpanded = ref(false)
@@ -88,35 +76,46 @@ const actionErrorMessage = ref("")
 const actionSuccessMessage = ref("")
 const proofUploadErrorMessage = ref("")
 
-const isLender = computed(() => booking.value.lenderId === currentUserId.value)
+const refreshBookingDetail = async () => {
+  if (bookingId.value) {
+    clearPrefetchedBookingDetail(bookingId.value)
+  }
+
+  shouldBypassPrefetchedBookingDetail.value = true
+  try {
+    await refresh()
+  } finally {
+    shouldBypassPrefetchedBookingDetail.value = false
+  }
+}
+
+const isLender = computed(() => booking.value?.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
-const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
-const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
+const canRespond = computed(() => isLender.value && booking.value?.status === "PENDING")
+const canConfirmReceipt = computed(() => isLender.value && booking.value?.status === "RETURNED")
 const canUploadHandoffProof = computed(
   () =>
     isLender.value &&
-    booking.value.status === "CONFIRMED" &&
-    !booking.value.lenderHandoffProofUploadedAt,
+    booking.value?.status === "CONFIRMED" &&
+    !booking.value?.lenderHandoffProofUploadedAt,
 )
 const canOpenChat = computed(
   () =>
-    Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
+    Boolean(booking.value?.transactionId) &&
+    booking.value &&
+    isChatAvailableForBookingStatus(booking.value.status),
 )
-const isPendingRequest = computed(() => booking.value.status === "PENDING")
-const canCancelRequest = computed(() => !isLender.value && booking.value.status === "PENDING")
+const isPendingRequest = computed(() => booking.value?.status === "PENDING")
+const canCancelRequest = computed(() => !isLender.value && booking.value?.status === "PENDING")
 const canBorrowerReturnItem = computed(
   () =>
     !isLender.value &&
-    booking.value.status === "CONFIRMED" &&
-    Boolean(booking.value.lenderHandoffProofUploadedAt),
-)
-const requestStageMessage = computed(() =>
-  isLender.value
-    ? "Requested - waiting for you to accept the booking"
-    : "Requested - waiting for lender to accept the booking",
+    booking.value?.status === "CONFIRMED" &&
+    Boolean(booking.value?.lenderHandoffProofUploadedAt),
 )
 
 const mappedStatus = computed(() => {
+  if (!booking.value) return "PENDING"
   switch (booking.value.status) {
     case "PENDING":
       return "PENDING"
@@ -177,20 +176,25 @@ const computeDuration = (startDate: Date | string, endDate: Date | string): stri
   return `${weekPart} and ${dayPart}`
 }
 
-const duration = computed(() => computeDuration(booking.value.startDate, booking.value.endDate))
+const duration = computed(() => {
+  if (!booking.value) return ""
+  return computeDuration(booking.value.startDate, booking.value.endDate)
+})
 
-const itemDetailPath = computed(() =>
-  buildItemDetailPath({
+const itemDetailPath = computed(() => {
+  if (!booking.value) return ""
+  return buildItemDetailPath({
     id: booking.value.item.id,
     name: booking.value.item.name,
-  }),
-)
+  })
+})
 
 const backToTransactionsPath = computed(() => {
   return `/account/transactions?role=${userRole.value}`
 })
 
 const timeline = computed(() => {
+  if (!booking.value) return []
   const entries = booking.value.timeline ?? []
   return entries.map((entry, index) => {
     let description = entry.description
@@ -199,15 +203,15 @@ const timeline = computed(() => {
 
     if (entry.label === "In use") {
       description = "Item picked up by borrower"
-      if (booking.value.lenderHandoffProofUrl) {
+      if (booking.value?.lenderHandoffProofUrl) {
         proofUrl = booking.value.lenderHandoffProofUrl
         proofLabel = "View lending proof"
       }
     } else if (entry.label === "Returned") {
-      if (booking.value.refundAmount > 0) {
+      if (booking.value && booking.value.refundAmount > 0) {
         description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
       }
-      if (booking.value.borrowerReturnProofUrl) {
+      if (booking.value?.borrowerReturnProofUrl) {
         proofUrl = booking.value.borrowerReturnProofUrl
         proofLabel = "View return proof"
       }
@@ -226,6 +230,7 @@ const timeline = computed(() => {
 
 const isReturnModalOpen = ref(false)
 const isHandoffProofModalOpen = ref(false)
+const proofImageUrl = ref<string | null>(null)
 const isSuccessModalOpen = ref(false)
 const isSubmittingReturn = ref(false)
 const isSubmittingHandoffProof = ref(false)
@@ -236,6 +241,8 @@ const rebuttalModalStep = ref<"form" | "confirm">("form")
 const isSubmittingRebuttal = ref(false)
 const rebuttalText = ref("")
 const rebuttalNotes = ref("")
+const rebuttalImageFile = ref<File | null>(null)
+const rebuttalImagePreview = ref<string | null>(null)
 const rebuttalValidationMessage = ref("")
 
 const parsedDisputeDescription = computed(() => {
@@ -276,8 +283,11 @@ const parsedDisputeDescription = computed(() => {
 })
 
 const handoffProofFile = ref<File | null>(null)
+const handoffProofPreview = ref<string | null>(null)
 const returnProofFile = ref<File | null>(null)
+const returnProofPreview = ref<string | null>(null)
 const earlyReturnProofFile = ref<File | null>(null)
+const earlyReturnProofPreview = ref<string | null>(null)
 
 type ProofUploadType = "HANDOFF" | "RETURN"
 type ProofUploadUrlResponse = {
@@ -303,6 +313,10 @@ const getFetchErrorMessage = (err: unknown, fallback: string) => {
 const setProofFile = (
   event: Event,
   target: typeof handoffProofFile | typeof returnProofFile | typeof earlyReturnProofFile,
+  previewTarget:
+    | typeof handoffProofPreview
+    | typeof returnProofPreview
+    | typeof earlyReturnProofPreview,
 ) => {
   proofUploadErrorMessage.value = ""
   const input = event.target as HTMLInputElement
@@ -310,32 +324,62 @@ const setProofFile = (
 
   if (file && !file.type.startsWith("image/")) {
     target.value = null
+    previewTarget.value = null
     input.value = ""
     proofUploadErrorMessage.value = "Please upload an image file as proof."
     return
   }
 
   target.value = file
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      previewTarget.value = (e.target?.result as string) ?? null
+    }
+    reader.readAsDataURL(file)
+  } else {
+    previewTarget.value = null
+  }
 }
 
-const setHandoffProofFile = (event: Event) => setProofFile(event, handoffProofFile)
-const setReturnProofFile = (event: Event) => setProofFile(event, returnProofFile)
-const setEarlyReturnProofFile = (event: Event) => setProofFile(event, earlyReturnProofFile)
+const setHandoffProofFile = (event: Event) =>
+  setProofFile(event, handoffProofFile, handoffProofPreview)
+const setReturnProofFile = (event: Event) =>
+  setProofFile(event, returnProofFile, returnProofPreview)
+const setEarlyReturnProofFile = (event: Event) =>
+  setProofFile(event, earlyReturnProofFile, earlyReturnProofPreview)
+
+const clearHandoffProof = () => {
+  handoffProofFile.value = null
+  handoffProofPreview.value = null
+}
+
+const clearReturnProof = () => {
+  returnProofFile.value = null
+  returnProofPreview.value = null
+}
+
+const clearEarlyReturnProof = () => {
+  earlyReturnProofFile.value = null
+  earlyReturnProofPreview.value = null
+}
 
 const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
+  if (!booking.value) throw new Error("Booking data missing.")
+  const uploadFile = await convertImageFileToWebP(file)
   const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
     method: "POST",
     body: {
       bookingId: booking.value.id,
       proofType,
-      fileName: file.name,
+      fileName: uploadFile.name,
     },
   })
 
   const { error: uploadError } = await supabase.storage
     .from(signedUpload.bucket)
-    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
-      contentType: file.type || "image/jpeg",
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
+      contentType: uploadFile.type || "image/jpeg",
       upsert: false,
     })
 
@@ -349,14 +393,14 @@ const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
 const handleReturn = () => {
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
-  returnProofFile.value = null
+  clearReturnProof()
   isReturnModalOpen.value = true
 }
 
 const handleHandoffProof = () => {
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
-  handoffProofFile.value = null
+  clearHandoffProof()
   if (!isRentalPeriodStarted.value) {
     isTooEarlyForHandoffOpen.value = true
     return
@@ -365,15 +409,16 @@ const handleHandoffProof = () => {
 }
 
 const isRentalPeriodStarted = computed(() => {
+  if (!booking.value) return false
   const now = new Date()
-  const start = new Date(booking.value.startDate)
+  const start = new Date(booking.value.transactionStartDate ?? booking.value.startDate)
   return now >= start
 })
 
 const isTooEarlyForHandoffOpen = ref(false)
 
 const isEarlyReturnEligible = computed(() => {
-  if (isLender.value || booking.value.status !== "CONFIRMED") return false
+  if (!booking.value || isLender.value || booking.value.status !== "CONFIRMED") return false
   const now = new Date()
   const end = new Date(booking.value.endDate)
   return now < end
@@ -403,9 +448,10 @@ const earlyReturnPreviewData = ref<EarlyReturnPreviewData | null>(null)
 const isFetchingPreview = ref(false)
 
 const handleEarlyReturn = async () => {
+  if (!booking.value) return
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
-  earlyReturnProofFile.value = null
+  clearEarlyReturnProof()
   isFetchingPreview.value = true
   try {
     const data = await $fetch<EarlyReturnPreviewData>(
@@ -433,6 +479,7 @@ const handleEarlyReturn = async () => {
 }
 
 const confirmEarlyReturn = async () => {
+  if (!booking.value) return
   if (!earlyReturnProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of return before submitting."
     return
@@ -453,7 +500,7 @@ const confirmEarlyReturn = async () => {
     isSuccessModalOpen.value = true
     actionSuccessMessage.value =
       "Early return submitted. The lender was notified to confirm receipt."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     proofUploadErrorMessage.value =
       err instanceof Error
@@ -465,6 +512,7 @@ const confirmEarlyReturn = async () => {
 }
 
 const confirmReturn = async () => {
+  if (!booking.value) return
   if (!returnProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of return before submitting."
     return
@@ -483,7 +531,7 @@ const confirmReturn = async () => {
     isReturnModalOpen.value = false
     isSuccessModalOpen.value = true
     actionSuccessMessage.value = "Return submitted. The lender was notified to confirm receipt."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     actionErrorMessage.value =
       err instanceof Error
@@ -495,6 +543,7 @@ const confirmReturn = async () => {
 }
 
 const confirmHandoffProof = async () => {
+  if (!booking.value) return
   if (!handoffProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of handoff before marking the item in use."
     return
@@ -513,7 +562,7 @@ const confirmHandoffProof = async () => {
     })
     isHandoffProofModalOpen.value = false
     actionSuccessMessage.value = "Handoff proof uploaded. The item is now marked as in use."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     actionErrorMessage.value =
       err instanceof Error
@@ -525,6 +574,7 @@ const confirmHandoffProof = async () => {
 }
 
 const confirmReceipt = async () => {
+  if (!booking.value) return
   isActing.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
@@ -534,7 +584,7 @@ const confirmReceipt = async () => {
       method: "PATCH",
       body: { status: "COMPLETED" },
     })
-    await refresh()
+    await refreshBookingDetail()
     actionSuccessMessage.value = "Return confirmed. The transaction is now complete."
   } catch (err: unknown) {
     const errorData = (
@@ -556,6 +606,7 @@ const confirmReceipt = async () => {
 }
 
 const cancelRequest = async () => {
+  if (!booking.value) return
   isActing.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
@@ -568,7 +619,7 @@ const cancelRequest = async () => {
         cancellationReason: "Cancelled by borrower.",
       },
     })
-    await refresh()
+    await refreshBookingDetail()
     actionSuccessMessage.value = "Booking request cancelled."
   } catch (err: unknown) {
     const errorData = (
@@ -593,8 +644,12 @@ const copyOrderId = () => {
   navigator.clipboard.writeText(bookingId.value)
 }
 
+const actingStatus = ref<"CONFIRMED" | "CANCELLED" | null>(null)
+
 const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
+  if (!booking.value) return
   isActing.value = true
+  actingStatus.value = status
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
 
@@ -603,7 +658,7 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
       method: "PATCH",
       body: { status },
     })
-    await refresh()
+    await refreshBookingDetail()
     actionSuccessMessage.value =
       status === "CONFIRMED"
         ? "Booking request approved. The listing status was updated."
@@ -624,23 +679,24 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
       "Unable to update the request right now."
   } finally {
     isActing.value = false
+    actingStatus.value = null
   }
 }
 
-const latestDispute = computed(() => booking.value.latestDispute)
-const canRaiseDispute = computed(() => booking.value.canRaiseDispute)
+const latestDispute = computed(() => booking.value?.latestDispute ?? null)
+const canRaiseDispute = computed(() => booking.value?.canRaiseDispute ?? false)
 const canSubmitRebuttal = computed(() => Boolean(latestDispute.value?.canSubmitRebuttal))
 const isLatestDisputeRaisedByCurrentUser = computed(
   () => latestDispute.value?.raisedById === currentUserId.value,
 )
 const isReviewBlockedByDispute = computed(
-  () => booking.value.status === "COMPLETED" && !booking.value.reviewState.isCompleted,
+  () => booking.value?.status === "COMPLETED" && !booking.value?.reviewState.isCompleted,
 )
 const showReviewBonusSection = computed(
-  () => booking.value.status === "COMPLETED" && booking.value.reviewState.isCompleted,
+  () => booking.value?.status === "COMPLETED" && booking.value?.reviewState.isCompleted,
 )
 const disputeReportPath = computed(() =>
-  booking.value.transactionId
+  booking.value?.transactionId
     ? {
         path: "/account/disputes",
         query: {
@@ -715,13 +771,16 @@ const disputeStatusDescription = computed(() => {
   }
 })
 
+const disputeRaiser = computed(() => {
+  if (!latestDispute.value || !booking.value) return null
+  return latestDispute.value.raisedById === booking.value.borrowerId
+    ? booking.value.borrower.user
+    : booking.value.lender.user
+})
+
 const disputeRaisedByName = computed(() => {
-  if (!latestDispute.value) return null
-  const user =
-    latestDispute.value.raisedById === booking.value.borrowerId
-      ? booking.value.borrower.user
-      : booking.value.lender.user
-  return `${user.firstName} ${user.lastName[0]}.`
+  if (!disputeRaiser.value) return null
+  return `${disputeRaiser.value.firstName} ${disputeRaiser.value.lastName[0]}.`
 })
 
 const rebuttalSubmittedByName = computed(() => {
@@ -738,8 +797,29 @@ const handleDispute = async () => {
 const resetRebuttalForm = () => {
   rebuttalText.value = ""
   rebuttalNotes.value = ""
+  rebuttalImageFile.value = null
+  rebuttalImagePreview.value = null
   rebuttalValidationMessage.value = ""
   rebuttalModalStep.value = "form"
+}
+
+const setRebuttalImageFile = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  if (file && !file.type.startsWith("image/")) {
+    rebuttalValidationMessage.value = "Please upload an image file."
+    return
+  }
+  rebuttalImageFile.value = file
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      rebuttalImagePreview.value = (e.target?.result as string) ?? null
+    }
+    reader.readAsDataURL(file)
+  } else {
+    rebuttalImagePreview.value = null
+  }
 }
 
 const openRebuttalModal = () => {
@@ -777,17 +857,47 @@ const submitRebuttal = async () => {
   actionSuccessMessage.value = ""
 
   try {
+    let rebuttalImageUrl: string | undefined
+
+    if (rebuttalImageFile.value) {
+      const uploadFile = await convertImageFileToWebP(rebuttalImageFile.value)
+      type UploadUrlResponse = { token: string; path: string; publicUrl: string; bucket: string }
+      const uploadData = await $fetch<UploadUrlResponse>(
+        `/api/disputes/${latestDispute.value.id}/rebuttal-upload-url`,
+        {
+          method: "POST",
+          body: { fileName: uploadFile.name },
+        },
+      )
+
+      const { error: uploadError } = await supabase.storage
+        .from(uploadData.bucket)
+        .uploadToSignedUrl(uploadData.path, uploadData.token, uploadFile, {
+          contentType: uploadFile.type || "image/jpeg",
+          upsert: false,
+        })
+
+      if (uploadError) {
+        throw new Error(uploadError.message || "Unable to upload rebuttal image.")
+      }
+
+      rebuttalImageUrl = uploadData.publicUrl
+    }
+
     await $fetch(`/api/disputes/${latestDispute.value.id}/rebuttal`, {
       method: "POST",
       body: {
         rebuttalText: rebuttalText.value.trim(),
         rebuttalNotes: rebuttalNotes.value.trim() || undefined,
+        rebuttalImageUrl,
       },
     })
 
-    closeRebuttalModal()
+    // Directly close without guard since we're still in submitting state
+    isRebuttalModalOpen.value = false
+    resetRebuttalForm()
     actionSuccessMessage.value = "Your rebuttal has been submitted."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     const errorData = (
       err as {
@@ -809,7 +919,7 @@ const submitRebuttal = async () => {
 }
 
 const openChat = async () => {
-  if (!booking.value.transactionId || !canOpenChat.value) return
+  if (!booking.value?.transactionId || !canOpenChat.value) return
 
   await router.push({
     path: "/chat",
@@ -818,12 +928,13 @@ const openChat = async () => {
 }
 
 const reviewCounterpartName = computed(() => {
+  if (!booking.value) return ""
   const user = isLender.value ? booking.value.borrower.user : booking.value.lender.user
   return `${user.firstName} ${user.lastName[0]}.`
 })
 
 const reviewContext = computed(() => {
-  if (!booking.value.transactionId || !selectedReviewType.value) return null
+  if (!booking.value?.transactionId || !selectedReviewType.value || !booking.value) return null
 
   return {
     transactionId: booking.value.transactionId,
@@ -843,7 +954,7 @@ const reviewContext = computed(() => {
 
 const openReviewModal = (reviewType: ReviewType) => {
   selectedReviewType.value = reviewType
-  const action = booking.value.reviewState.actions.find((entry) => entry.reviewType === reviewType)
+  const action = booking.value?.reviewState.actions.find((entry) => entry.reviewType === reviewType)
   if (!action?.canSubmit) return
   isReviewModalOpen.value = true
 }
@@ -890,7 +1001,7 @@ watch(
 )
 
 const handleReviewSubmitted = async () => {
-  await refresh()
+  await refreshBookingDetail()
   actionSuccessMessage.value = "Thanks for your feedback. Your review is now visible here."
 }
 </script>
@@ -898,37 +1009,98 @@ const handleReviewSubmitted = async () => {
 <template>
   <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
-    <NuxtLink
-      :to="backToTransactionsPath"
-      class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="transition-transform group-hover:-translate-x-1"
+    <div class="relative group/tooltip w-fit mb-8">
+      <NuxtLink
+        :to="backToTransactionsPath"
+        class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
       >
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-      <span class="text-[15px] font-bold">Back to My Transactions</span>
-    </NuxtLink>
+        <Icon
+          name="ph:caret-left"
+          class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+        />
+      </NuxtLink>
+      <div class="custom-tooltip">
+        Back to My Transactions
+        <div class="tooltip-arrow"></div>
+      </div>
+    </div>
 
-    <template v-if="pending">
+    <template v-if="pending && !booking">
       <div class="flex flex-col gap-8 animate-pulse">
-        <div class="h-10 w-48 bg-cream rounded-xl"></div>
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          <div class="lg:col-span-3 space-y-6">
-            <div class="h-64 bg-cream rounded-[24px]"></div>
-            <div class="h-96 bg-cream rounded-[24px]"></div>
+        <!-- Header Skeleton -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="space-y-4">
+            <div class="h-10 w-64 bg-noble-black/20 rounded-xl"></div>
+            <div class="h-4 w-40 bg-noble-black/10 rounded-lg"></div>
           </div>
-          <div class="lg:col-span-2 space-y-6">
-            <div class="h-80 bg-cream rounded-[24px]"></div>
+          <div class="h-8 w-24 bg-noble-black/10 rounded-full"></div>
+        </div>
+
+        <!-- Content Grid Skeleton -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <!-- Left Column Skeletons -->
+          <div class="lg:col-span-3 space-y-8">
+            <!-- Item Detail Card Skeleton -->
+            <div class="bg-white border border-cinnamon-ice/10 rounded-[24px] p-6 shadow-sm">
+              <div class="h-6 w-32 bg-noble-black/20 rounded mb-6"></div>
+              <div class="flex gap-6">
+                <div class="w-24 h-24 rounded-xl bg-noble-black/10 shrink-0"></div>
+                <div class="space-y-3 flex-1">
+                  <div class="h-5 w-3/4 bg-noble-black/20 rounded"></div>
+                  <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
+                  <div class="h-8 w-40 bg-noble-black/5 rounded-full mt-2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Timeline Section Skeleton -->
+            <div class="bg-cream/50 border border-cinnamon-ice/15 rounded-[24px] p-8 h-[400px]">
+              <div class="h-6 w-40 bg-noble-black/20 rounded mb-10"></div>
+              <div class="space-y-8">
+                <div v-for="i in 3" :key="i" class="flex gap-6">
+                  <div class="w-8 h-8 rounded-full bg-noble-black/10 shrink-0"></div>
+                  <div class="space-y-2 flex-1 pt-1">
+                    <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+                    <div class="h-3 w-48 bg-noble-black/10 rounded"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column Skeletons -->
+          <div class="lg:col-span-2 space-y-8">
+            <!-- Payment Summary Skeleton -->
+            <div
+              class="bg-white border border-cinnamon-ice/10 rounded-[16px] p-6 shadow-sm space-y-6"
+            >
+              <div class="h-5 w-32 bg-noble-black/20 rounded"></div>
+              <div class="space-y-4">
+                <div v-for="i in 2" :key="i" class="flex justify-between">
+                  <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
+                  <div class="h-4 w-16 bg-noble-black/10 rounded"></div>
+                </div>
+                <div class="pt-5 border-t border-dashed border-gray-100 flex justify-between">
+                  <div class="h-6 w-20 bg-noble-black/20 rounded"></div>
+                  <div class="h-6 w-24 bg-noble-black/20 rounded"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Counterpart Info Skeleton -->
+            <div
+              class="bg-white border border-cinnamon-ice/10 rounded-[12px] p-5 shadow-sm space-y-4"
+            >
+              <div class="h-3 w-16 bg-noble-black/10 rounded mb-4"></div>
+              <div class="flex items-center gap-4">
+                <div class="h-12 w-12 rounded-full bg-noble-black/10 shrink-0"></div>
+                <div class="space-y-2 flex-1">
+                  <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+                  <div class="h-3 w-24 bg-noble-black/10 rounded"></div>
+                </div>
+              </div>
+              <div class="h-10 w-full bg-noble-black/5 rounded-[10px] mt-2"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -938,41 +1110,32 @@ const handleReviewSubmitted = async () => {
       <!-- Redesigned Page Header Strip -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div class="space-y-1.5">
-          <h1 class="text-[24px] font-bold text-noble-black leading-tight">Order Details</h1>
-          <div class="flex flex-wrap items-center gap-2.5 text-[13px] text-gray-500 font-medium">
+          <div class="space-y-2 mb-2">
+            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+              Order Details
+            </h1>
+            <div class="w-10 h-0.5 bg-burning-orange"></div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-[13px] text-gray-500 font-medium">
             <div
-              class="flex items-center gap-1.5 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
+              class="flex items-center gap-2 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
             >
-              <span>ORDER ID. {{ orderIdForDisplay }}</span>
+              <span class="leading-none">ORDER ID. {{ orderIdForDisplay }}</span>
               <button
-                class="hover:text-burning-orange transition-colors"
+                class="hover:text-burning-orange transition-colors flex items-center justify-center shrink-0 -translate-y-[0.5px]"
                 title="Copy Order ID"
                 @click="copyOrderId"
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                </svg>
+                <Icon name="ph:copy" class="w-3 h-3 shrink-0" />
               </button>
             </div>
-            <span class="opacity-30 select-none">·</span>
-            <span>Placed on {{ formatDateTime(booking.requestedAt) }}</span>
           </div>
         </div>
 
         <div class="shrink-0">
           <span
             v-if="isPendingRequest"
-            class="inline-flex items-center rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
+            class="inline-flex items-center gap-2 rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
           >
             Requested
           </span>
@@ -989,28 +1152,6 @@ const handleReviewSubmitted = async () => {
       <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
         <!-- Left Column (60%) -->
         <div class="lg:col-span-3 space-y-8">
-          <div
-            v-if="isPendingRequest"
-            class="rounded-[20px] border border-burning-orange/10 bg-burning-orange/[0.03] px-5 py-4 text-[14px] font-bold text-noble-black flex items-start gap-3"
-          >
-            <svg
-              class="text-burning-orange mt-0.5 shrink-0"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-            {{ requestStageMessage }}
-          </div>
-
           <!-- Section 1: Item Details -->
           <div
             class="bg-white border border-[#F0EDE8] rounded-[24px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] relative group"
@@ -1021,27 +1162,14 @@ const handleReviewSubmitted = async () => {
                 :to="itemDetailPath"
                 class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-burning-orange font-bold text-[13px] hover:bg-burning-orange/5 transition-all"
               >
-                View Full Listing
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
-                  />
-                </svg>
+                <span class="leading-none">View Full Listing</span>
+                <Icon name="ph:arrow-square-out" class="w-3.5 h-3.5 -translate-y-[0.5px]" />
               </NuxtLink>
             </div>
             <div class="flex flex-col sm:flex-row gap-6">
               <div class="shrink-0 relative">
                 <img
-                  v-if="booking.item.thumbnailImage"
+                  v-if="booking.item?.thumbnailImage"
                   :src="booking.item.thumbnailImage"
                   :alt="booking.item.name"
                   class="w-24 h-24 object-cover rounded-[12px] border border-gray-100 shadow-sm"
@@ -1050,29 +1178,17 @@ const handleReviewSubmitted = async () => {
                   v-else
                   class="w-24 h-24 bg-cinnamon-ice/10 rounded-[12px] border border-gray-100 flex items-center justify-center"
                 >
-                  <svg
-                    class="w-8 h-8 text-cinnamon-ice/40"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.5"
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
+                  <Icon name="ph:image" class="w-8 h-8 text-cinnamon-ice/40" />
                 </div>
               </div>
               <div class="flex flex-col justify-center min-w-0">
                 <h3 class="text-[18px] font-semibold text-noble-black leading-tight mb-1 truncate">
-                  {{ booking.item.name }}
+                  {{ booking.item?.name }}
                 </h3>
                 <p class="text-[13px] text-gray-500 font-medium mb-4">
                   Condition:
                   {{
-                    booking.item.condition
+                    booking.item?.condition
                       ?.replace("_", " ")
                       .toLowerCase()
                       .replace(/\b\w/g, (l) => l.toUpperCase())
@@ -1081,24 +1197,13 @@ const handleReviewSubmitted = async () => {
                 <div
                   class="flex items-center gap-2.5 text-[12px] font-bold text-gray-600 bg-gray-100 w-fit px-4 py-2 rounded-full border border-gray-200/50 shadow-sm"
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="text-gray-400"
-                  >
-                    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                    <line x1="16" x2="16" y1="2" y2="6" />
-                    <line x1="8" x2="8" y1="2" y2="6" />
-                    <line x1="3" x2="21" y1="10" y2="10" />
-                  </svg>
-                  <span
-                    >{{ formatDate(booking.startDate) }} - {{ formatDate(booking.endDate) }}</span
+                  <Icon
+                    name="ph:calendar-blank"
+                    class="w-3.5 h-3.5 text-gray-400 -translate-y-[0.5px] shrink-0"
+                  />
+                  <span class="leading-none"
+                    >{{ formatDateTime(booking.startDate) }} –
+                    {{ formatDateTime(booking.endDate) }}</span
                   >
                 </div>
               </div>
@@ -1117,40 +1222,19 @@ const handleReviewSubmitted = async () => {
               v-if="actionSuccessMessage"
               class="mb-6 flex items-center gap-3 text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-4 rounded-[14px]"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              {{ actionSuccessMessage }}
+              <Icon name="ph:check" class="w-[18px] h-[18px] shrink-0 -translate-y-[0.5px]" />
+              <span class="leading-none">{{ actionSuccessMessage }}</span>
             </div>
 
             <div
               v-if="actionErrorMessage"
               class="mb-6 flex items-center gap-3 text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-4 rounded-[14px]"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              {{ actionErrorMessage }}
+              <Icon
+                name="ph:warning-circle"
+                class="w-[18px] h-[18px] shrink-0 -translate-y-[0.5px]"
+              />
+              <span class="leading-none">{{ actionErrorMessage }}</span>
             </div>
 
             <div class="space-y-0 relative pl-1">
@@ -1172,18 +1256,7 @@ const handleReviewSubmitted = async () => {
                     v-if="step.status === 'completed'"
                     class="w-8 h-8 rounded-full bg-white border-2 border-success-green flex items-center justify-center shadow-sm"
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#22C55E"
-                      stroke-width="4"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    <Icon name="ph:check" class="w-4 h-4 text-[#22C55E]" />
                   </div>
                   <div
                     v-else-if="step.status === 'current'"
@@ -1214,29 +1287,18 @@ const handleReviewSubmitted = async () => {
                     >
                       {{ step.description }}
                     </p>
-                    <a
+                    <button
                       v-if="step.proofUrl"
-                      :href="step.proofUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      type="button"
                       class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
+                      @click.stop="proofImageUrl = step.proofUrl"
                     >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <polyline points="21 15 16 10 5 21" />
-                      </svg>
-                      {{ step.proofLabel }}
-                    </a>
+                      <Icon
+                        name="ph:image"
+                        class="w-[13px] h-[13px] shrink-0 -translate-y-[0.5px]"
+                      />
+                      <span class="leading-none">{{ step.proofLabel }}</span>
+                    </button>
                   </div>
                   <span
                     class="text-[11px] font-mono text-noble-black/30 whitespace-nowrap pt-1 uppercase tracking-tighter"
@@ -1292,20 +1354,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-burning-orange/20 shadow-sm"
               >
-                <svg
-                  class="text-burning-orange"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="8" r="7" />
-                  <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                </svg>
+                <Icon name="ph:seal-check" class="w-6 h-6 text-burning-orange" />
               </div>
             </div>
           </section>
@@ -1338,6 +1387,13 @@ const handleReviewSubmitted = async () => {
               >
                 {{ disputeStatusLabel }}
               </span>
+            </div>
+
+            <!-- Empty State Message -->
+            <div v-if="!latestDispute" class="mb-4">
+              <p class="text-[14px] text-noble-black/40 italic">
+                No concerns or disputes have been raised for this transaction yet.
+              </p>
             </div>
 
             <!-- Redesigned Dispute Metadata Grid -->
@@ -1403,18 +1459,7 @@ const handleReviewSubmitted = async () => {
                 class="rounded-[16px] border border-success-green/20 bg-success-green/[0.04] p-5"
               >
                 <div class="flex items-center gap-2 text-success-green mb-2">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
+                  <Icon name="ph:check" class="w-[18px] h-[18px]" />
                   <p class="text-[14px] font-bold">
                     {{ finalDecisionLabel(latestDispute.finalDecision) }}
                   </p>
@@ -1464,22 +1509,7 @@ const handleReviewSubmitted = async () => {
                 class="flex-1 min-w-[160px] h-11 inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[14px] font-bold hover:bg-cinnabar-red hover:text-white transition-all"
                 @click="handleDispute"
               >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
-                  />
-                  <line x1="12" x2="12" y1="9" y2="13" />
-                  <line x1="12" x2="12.01" y1="17" y2="17" />
-                </svg>
+                <Icon name="ph:warning" class="w-[18px] h-[18px]" />
                 Report Issue
               </button>
             </div>
@@ -1519,14 +1549,14 @@ const handleReviewSubmitted = async () => {
                 class="h-12 bg-gradient-to-br from-burning-orange to-orange-500 text-white rounded-[12px] font-bold text-[14px] hover:brightness-105 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
                 @click="respondToBooking('CONFIRMED')"
               >
-                Approve
+                {{ actingStatus === "CONFIRMED" ? "Approving..." : "Approve" }}
               </button>
               <button
                 :disabled="isActing"
-                class="h-12 bg-white border-2 border-gray-200 text-noble-black/60 rounded-[12px] font-bold text-[14px] hover:bg-gray-50 transition-all disabled:opacity-50"
+                class="h-12 bg-white border-2 border-burning-orange text-burning-orange rounded-[12px] font-bold text-[14px] hover:bg-burning-orange/5 transition-all disabled:opacity-50"
                 @click="respondToBooking('CANCELLED')"
               >
-                Decline
+                {{ actingStatus === "CANCELLED" ? "Declining..." : "Decline" }}
               </button>
             </div>
 
@@ -1536,18 +1566,11 @@ const handleReviewSubmitted = async () => {
               class="w-full h-12 flex items-center justify-center gap-2 bg-blue-estate text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
               @click="handleHandoffProof"
             >
-              <svg
+              <Icon
                 v-if="isSubmittingHandoffProof"
-                class="animate-spin"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-              >
-                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-              </svg>
+                name="ph:circle-notch"
+                class="animate-spin w-4 h-4"
+              />
               Upload Handoff Proof
             </button>
 
@@ -1557,18 +1580,7 @@ const handleReviewSubmitted = async () => {
               class="w-full h-12 flex items-center justify-center gap-2 bg-burning-orange text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
               @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
             >
-              <svg
-                v-if="isFetchingPreview"
-                class="animate-spin"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-              >
-                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-              </svg>
+              <Icon v-if="isFetchingPreview" name="ph:circle-notch" class="animate-spin w-4 h-4" />
               {{ isEarlyReturnEligible ? "Confirm Early Return" : "Return Item Now" }}
             </button>
 
@@ -1658,21 +1670,12 @@ const handleReviewSubmitted = async () => {
               <div
                 class="bg-blue-estate/[0.03] border border-blue-estate/10 rounded-[12px] p-4 flex gap-3 items-start"
               >
-                <div class="shrink-0 text-blue-estate">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
+                <div
+                  class="shrink-0 text-blue-estate flex items-center justify-center -translate-y-[0.5px]"
+                >
+                  <Icon name="ph:shield-check" class="w-[18px] h-[18px] shrink-0" />
                 </div>
-                <p class="text-[12px] text-blue-estate font-medium leading-relaxed">
+                <p class="text-[12px] text-blue-estate font-medium leading-snug">
                   <span class="font-bold">TakeUP Secure.</span> Funds are held safely until the
                   transaction is fully complete.
                 </p>
@@ -1686,18 +1689,30 @@ const handleReviewSubmitted = async () => {
               {{ isLender ? "Borrower" : "Lender" }}
             </p>
             <div class="flex flex-col gap-5">
-              <div class="flex items-center gap-4 min-w-0">
+              <NuxtLink
+                :to="`/profile/${
+                  isLender ? booking.borrower.user.username : booking.lender.user.username
+                }`"
+                class="flex items-center gap-4 min-w-0 group/counterpart"
+              >
                 <UserAvatar
                   :user-name="
                     isLender
                       ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
                       : `${booking.lender.user.firstName} ${booking.lender.user.lastName}`
                   "
+                  :avatar-url="
+                    isLender
+                      ? (booking.borrower.user as any).avatarUrl
+                      : (booking.lender.user as any).avatarUrl
+                  "
                   size="lg"
-                  class="shrink-0 ring-4 ring-gray-50"
+                  class="shrink-0 ring-4 ring-gray-50 transition-transform group-hover/counterpart:scale-105"
                 />
                 <div class="min-w-0 flex-1">
-                  <h3 class="font-semibold text-noble-black text-[15px] truncate">
+                  <h3
+                    class="font-semibold text-noble-black text-[15px] truncate group-hover/counterpart:text-burning-orange transition-colors"
+                  >
                     {{
                       isLender
                         ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
@@ -1708,16 +1723,12 @@ const handleReviewSubmitted = async () => {
                     <div
                       class="flex items-center gap-0.5 text-burning-orange font-bold text-[13px]"
                     >
-                      <span>{{
+                      <span class="leading-none">{{
                         isLender
                           ? booking.borrower.borrowerRating?.toFixed(1) || "5.0"
                           : booking.lender.lenderRating?.toFixed(1) || "5.0"
                       }}</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon
-                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                        />
-                      </svg>
+                      <Icon name="ph:star-fill" class="w-3 h-3 -translate-y-[0.5px]" />
                     </div>
                     <span class="text-noble-black/30 text-[12px] font-medium"
                       >•
@@ -1725,26 +1736,15 @@ const handleReviewSubmitted = async () => {
                     >
                   </div>
                 </div>
-              </div>
+              </NuxtLink>
 
               <button
                 v-if="canOpenChat"
                 class="w-full h-10 flex items-center justify-center gap-2 rounded-[10px] bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.12] font-bold text-[13px] transition-all"
                 @click="openChat"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                Message {{ isLender ? "Borrower" : "Lender" }}
+                <Icon name="ph:chat-teardrop-text" class="w-4 h-4 shrink-0 -translate-y-[0.5px]" />
+                <span class="leading-none">Message {{ isLender ? "Borrower" : "Lender" }}</span>
               </button>
             </div>
           </section>
@@ -1756,19 +1756,7 @@ const handleReviewSubmitted = async () => {
       <div
         class="w-20 h-20 bg-cinnabar-red/10 rounded-full flex items-center justify-center mx-auto mb-6"
       >
-        <svg
-          class="text-cinnabar-red"
-          width="40"
-          height="40"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
+        <Icon name="ph:warning-circle" class="w-10 h-10 text-cinnabar-red" />
       </div>
       <h2 class="text-2xl font-bold text-noble-black mb-4">Transaction Not Found</h2>
       <p class="text-noble-black/50 mb-8 max-w-sm mx-auto">
@@ -1802,7 +1790,7 @@ const handleReviewSubmitted = async () => {
       <Teleport to="body">
         <div
           v-if="isHandoffProofModalOpen"
-          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <div
             class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
@@ -1810,78 +1798,121 @@ const handleReviewSubmitted = async () => {
           ></div>
 
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
-            <div class="text-center">
-              <div
-                class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#1f3a5f"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" x2="12" y1="3" y2="15" />
-                </svg>
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Upload Handoff Proof</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Show the item handoff to update the status to "In Use".
+                </p>
               </div>
-              <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
-              <p class="text-noble-black/60 mb-6 leading-relaxed">
-                Upload proof that you have given the item to the borrower. This will mark the
-                transaction as in use.
-              </p>
-
-              <label
-                class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="isHandoffProofModalOpen = false"
               >
-                <span class="block text-sm font-bold text-noble-black">Proof image</span>
-                <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                  {{ handoffProofFile?.name || "Choose an image file" }}
-                </span>
-                <input type="file" accept="image/*" class="sr-only" @change="setHandoffProofFile" />
-              </label>
+                <Icon name="ph:x" class="w-5 h-5" />
+              </button>
+            </div>
 
-              <p v-if="proofUploadErrorMessage" class="mt-3 text-sm text-red-600">
-                {{ proofUploadErrorMessage }}
-              </p>
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6">
+                <!-- Unified Dropzone -->
+                <div class="relative group">
+                  <label
+                    class="block w-full aspect-square max-w-[140px] mx-auto rounded-[20px] border-2 border-dashed border-cinnamon-ice bg-cream/50 overflow-hidden cursor-pointer hover:border-burning-orange hover:bg-burning-orange/[0.02] transition-all duration-300"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="setHandoffProofFile"
+                    />
 
-              <div class="flex flex-col gap-3 mt-6">
-                <button
-                  :disabled="isSubmittingHandoffProof"
-                  class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-burning-orange transition-colors flex items-center justify-center disabled:opacity-50"
-                  @click="confirmHandoffProof"
-                >
-                  <span v-if="isSubmittingHandoffProof" class="animate-spin mr-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                    <!-- Empty State -->
+                    <div
+                      v-if="!handoffProofPreview"
+                      class="h-full w-full flex flex-col items-center justify-center gap-2 p-4 text-center"
                     >
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                  </span>
-                  {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
-                </button>
-                <button
-                  class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
-                  @click="isHandoffProofModalOpen = false"
+                      <div
+                        class="w-9 h-9 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/20 group-hover:text-burning-orange group-hover:bg-burning-orange/10 transition-colors"
+                      >
+                        <Icon name="ph:plus" class="w-5 h-5" />
+                      </div>
+                      <span
+                        class="text-[12px] font-bold text-noble-black/40 group-hover:text-burning-orange/70 transition-colors"
+                        >Add image</span
+                      >
+                    </div>
+
+                    <!-- Selected State (Preview) -->
+                    <div v-else class="relative h-full w-full group/preview">
+                      <img
+                        :src="handoffProofPreview"
+                        class="h-full w-full object-cover"
+                        alt="Handoff proof"
+                      />
+                      <div
+                        class="absolute inset-0 bg-noble-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <div
+                          class="flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-noble-black text-[12px] font-bold shadow-lg"
+                        >
+                          <Icon name="ph:arrows-clockwise" class="w-4 h-4" />
+                          Replace Image
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <!-- Remove Button (Corner) -->
+                  <button
+                    v-if="handoffProofPreview"
+                    type="button"
+                    class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white border border-gray-100 shadow-md flex items-center justify-center text-cinnabar-red hover:scale-110 transition-transform z-10"
+                    title="Remove Image"
+                    @click.prevent="clearHandoffProof"
+                  >
+                    <Icon name="ph:trash" class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p
+                  v-if="proofUploadErrorMessage"
+                  class="mt-6 text-sm text-red-600 font-medium text-center"
                 >
-                  Cancel
-                </button>
+                  {{ proofUploadErrorMessage }}
+                </p>
               </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex gap-3 shrink-0">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                @click="isHandoffProofModalOpen = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                :disabled="isSubmittingHandoffProof || !handoffProofFile"
+                @click="confirmHandoffProof"
+              >
+                <span
+                  v-if="isSubmittingHandoffProof"
+                  class="flex items-center justify-center gap-2"
+                >
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
+                  Confirming...
+                </span>
+                <span v-else>Confirm Handoff</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1914,29 +1945,20 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <svg
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#E8650A"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
+                <Icon name="ph:warning-circle" class="w-10 h-10" style="color: #e8650a" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Not Yet Time to Lend</h3>
               <p class="text-noble-black/60 mb-2 leading-relaxed">
                 You can only lend the item within the agreed rental period.
               </p>
-              <p class="text-[13px] text-noble-black/40 font-medium mb-8">
-                Rental starts on
+              <p v-if="booking" class="text-[13px] text-noble-black/40 font-medium mb-8">
+                Rental period:
                 <span class="font-bold text-noble-black/60">{{
-                  formatDate(booking.startDate)
+                  formatDateTime(booking.transactionStartDate ?? booking.startDate)
+                }}</span>
+                –
+                <span class="font-bold text-noble-black/60">{{
+                  formatDateTime(booking.transactionEndDate ?? booking.endDate)
                 }}</span
                 >.
               </p>
@@ -1964,7 +1986,7 @@ const handleReviewSubmitted = async () => {
       <Teleport to="body">
         <div
           v-if="isReturnModalOpen"
-          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <!-- Backdrop -->
           <div
@@ -1974,78 +1996,118 @@ const handleReviewSubmitted = async () => {
 
           <!-- Modal -->
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
-            <div class="text-center">
-              <div
-                class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#ff7124"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="m15 10-4 4 6 6" />
-                  <path d="M4 18V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v7" />
-                  <path d="M11 22a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-                </svg>
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Confirm Item Return</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Provide proof that you have returned the item to the lender.
+                </p>
               </div>
-              <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
-              <p class="text-noble-black/60 mb-8 leading-relaxed">
-                Upload proof that the item has been returned. The return timestamp will be recorded
-                when this proof is submitted.
-              </p>
-
-              <label
-                class="mb-4 block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="isReturnModalOpen = false"
               >
-                <span class="block text-sm font-bold text-noble-black">Return proof image</span>
-                <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                  {{ returnProofFile?.name || "Choose an image file" }}
-                </span>
-                <input type="file" accept="image/*" class="sr-only" @change="setReturnProofFile" />
-              </label>
+                <Icon name="ph:x" class="w-5 h-5" />
+              </button>
+            </div>
 
-              <p v-if="proofUploadErrorMessage" class="mb-4 text-sm text-red-600">
-                {{ proofUploadErrorMessage }}
-              </p>
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6">
+                <!-- Unified Dropzone -->
+                <div class="relative group">
+                  <label
+                    class="block w-full aspect-square max-w-[140px] mx-auto rounded-[20px] border-2 border-dashed border-cinnamon-ice bg-cream/50 overflow-hidden cursor-pointer hover:border-burning-orange hover:bg-burning-orange/[0.02] transition-all duration-300"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="setReturnProofFile"
+                    />
 
-              <div class="flex flex-col gap-3">
-                <button
-                  :disabled="isSubmittingReturn"
-                  class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
-                  @click="confirmReturn"
-                >
-                  <span v-if="isSubmittingReturn" class="animate-spin mr-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                    <!-- Empty State -->
+                    <div
+                      v-if="!returnProofPreview"
+                      class="h-full w-full flex flex-col items-center justify-center gap-2 p-4 text-center"
                     >
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                  </span>
-                  {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
-                </button>
-                <button
-                  class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
-                  @click="isReturnModalOpen = false"
+                      <div
+                        class="w-9 h-9 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/20 group-hover:text-burning-orange group-hover:bg-burning-orange/10 transition-colors"
+                      >
+                        <Icon name="ph:plus" class="w-5 h-5" />
+                      </div>
+                      <span
+                        class="text-[12px] font-bold text-noble-black/40 group-hover:text-burning-orange/70 transition-colors"
+                        >Add image</span
+                      >
+                    </div>
+
+                    <!-- Selected State (Preview) -->
+                    <div v-else class="relative h-full w-full group/preview">
+                      <img
+                        :src="returnProofPreview"
+                        class="h-full w-full object-cover"
+                        alt="Return proof"
+                      />
+                      <div
+                        class="absolute inset-0 bg-noble-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <div
+                          class="flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-noble-black text-[12px] font-bold shadow-lg"
+                        >
+                          <Icon name="ph:arrows-clockwise" class="w-4 h-4" />
+                          Replace Image
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <!-- Remove Button (Corner) -->
+                  <button
+                    v-if="returnProofPreview"
+                    type="button"
+                    class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white border border-gray-100 shadow-md flex items-center justify-center text-cinnabar-red hover:scale-110 transition-transform z-10"
+                    title="Remove Image"
+                    @click.prevent="clearReturnProof"
+                  >
+                    <Icon name="ph:trash" class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p
+                  v-if="proofUploadErrorMessage"
+                  class="mt-6 text-sm text-red-600 font-medium text-center"
                 >
-                  Not yet
-                </button>
+                  {{ proofUploadErrorMessage }}
+                </p>
               </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex gap-3 shrink-0">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                @click="isReturnModalOpen = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                :disabled="isSubmittingReturn || !returnProofFile"
+                @click="confirmReturn"
+              >
+                <span v-if="isSubmittingReturn" class="flex items-center justify-center gap-2">
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
+                  Confirming...
+                </span>
+                <span v-else>Confirm Return</span>
+              </button>
             </div>
           </div>
         </div>
@@ -2072,155 +2134,178 @@ const handleReviewSubmitted = async () => {
           ></div>
 
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
             <!-- Header -->
-            <div class="px-8 pt-8 pb-4 shrink-0">
-              <div
-                class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-5"
-              >
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#E8650A"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" />
-                  <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9" />
-                  <path d="M12 3v6" />
-                </svg>
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Confirm Early Return</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Submit proof to finalize your early return and refund.
+                </p>
               </div>
-              <h3 class="text-[22px] font-bold text-noble-black text-center">
-                Confirm Early Return
-              </h3>
-              <p
-                class="mt-1.5 text-[13px] text-noble-black/50 font-medium text-center leading-relaxed"
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="isEarlyReturnModalOpen = false"
               >
-                Attach proof of return to complete the early return request.
-              </p>
+                <Icon name="ph:x" class="w-5 h-5" />
+              </button>
             </div>
 
-            <!-- Scrollable body -->
-            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-8 py-4 space-y-5">
-              <!-- Refund breakdown -->
-              <div
-                v-if="earlyReturnPreviewData"
-                class="rounded-[16px] border border-cinnamon-ice bg-cream p-5 space-y-3"
-              >
-                <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/40">
-                  Refund Breakdown
-                </p>
-
-                <div class="space-y-2">
-                  <div class="flex justify-between text-[13px]">
-                    <span class="text-noble-black/60 font-medium">Usage</span>
-                    <span class="font-bold text-noble-black">
-                      {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
-                    </span>
-                  </div>
-                  <div class="flex justify-between text-[13px]">
-                    <span class="text-noble-black/60 font-medium">Unused rental value</span>
-                    <span class="font-semibold text-noble-black">
-                      {{ formatPeso(earlyReturnPreviewData.refund.unusedRentalValue) }}
-                    </span>
-                  </div>
-                  <div class="flex justify-between text-[13px]">
-                    <span class="text-noble-black/60 font-medium">Early return penalty (30%)</span>
-                    <span class="font-semibold text-cinnabar-red">
-                      -{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}
-                    </span>
-                  </div>
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6 space-y-6">
+                <div
+                  class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-4"
+                >
+                  <Icon name="ph:package" class="w-8 h-8" style="color: #e8650a" />
                 </div>
 
-                <div class="border-t border-cinnamon-ice/50 pt-3 flex justify-between items-center">
-                  <span class="text-[14px] font-bold text-noble-black">
-                    {{ earlyReturnPreviewData.refund.eligible ? "Refund Amount" : "No Refund" }}
-                  </span>
-                  <span
-                    class="text-[16px] font-bold"
-                    :class="
-                      earlyReturnPreviewData.refund.eligible
-                        ? 'text-success-green'
-                        : 'text-noble-black/40'
-                    "
+                <!-- Refund breakdown -->
+                <div
+                  v-if="earlyReturnPreviewData"
+                  class="rounded-[16px] border border-cinnamon-ice/30 bg-cream/50 p-5 space-y-3"
+                >
+                  <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/40">
+                    Refund Breakdown
+                  </p>
+
+                  <div class="space-y-2">
+                    <div class="flex justify-between text-[13px]">
+                      <span class="text-noble-black/60 font-medium">Usage</span>
+                      <span class="font-bold text-noble-black">
+                        {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
+                      </span>
+                    </div>
+                    <div class="flex justify-between text-[13px]">
+                      <span class="text-noble-black/60 font-medium">Unused rental value</span>
+                      <span class="font-semibold text-noble-black">
+                        {{ formatPeso(earlyReturnPreviewData.refund.unusedRentalValue) }}
+                      </span>
+                    </div>
+                    <div class="flex justify-between text-[13px]">
+                      <span class="text-noble-black/60 font-medium"
+                        >Early return penalty (30%)</span
+                      >
+                      <span class="font-semibold text-cinnabar-red">
+                        -{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    class="border-t border-cinnamon-ice/50 pt-3 flex justify-between items-center"
                   >
-                    {{
-                      earlyReturnPreviewData.refund.eligible
-                        ? formatPeso(earlyReturnPreviewData.refund.refundAmount)
-                        : "₱0"
-                    }}
-                  </span>
+                    <span class="text-[14px] font-bold text-noble-black">
+                      {{ earlyReturnPreviewData.refund.eligible ? "Refund Amount" : "No Refund" }}
+                    </span>
+                    <span
+                      class="text-[16px] font-bold"
+                      :class="
+                        earlyReturnPreviewData.refund.eligible
+                          ? 'text-success-green'
+                          : 'text-noble-black/40'
+                      "
+                    >
+                      {{
+                        earlyReturnPreviewData.refund.eligible
+                          ? formatPeso(earlyReturnPreviewData.refund.refundAmount)
+                          : "₱0"
+                      }}
+                    </span>
+                  </div>
                 </div>
 
-                <p
-                  v-if="!earlyReturnPreviewData.refund.eligible"
-                  class="text-[12px] text-noble-black/40 font-medium leading-relaxed"
-                >
-                  {{
-                    earlyReturnPreviewData.refund.reason ?? "Usage exceeded the refund threshold."
-                  }}
-                </p>
-              </div>
+                <!-- Unified Dropzone -->
+                <div class="relative group">
+                  <label
+                    class="block w-full aspect-square max-w-[140px] mx-auto rounded-[20px] border-2 border-dashed border-cinnamon-ice bg-cream/50 overflow-hidden cursor-pointer hover:border-burning-orange hover:bg-burning-orange/[0.02] transition-all duration-300"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="setEarlyReturnProofFile"
+                    />
 
-              <!-- Proof upload -->
-              <div>
-                <p class="text-[13px] font-bold text-noble-black mb-2">
-                  Proof of Return <span class="text-cinnabar-red">*</span>
-                </p>
-                <label
-                  class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 cursor-pointer hover:border-burning-orange transition-colors"
-                >
-                  <span class="block text-sm font-bold text-noble-black">Attach image</span>
-                  <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                    {{ earlyReturnProofFile?.name || "Choose an image file" }}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    class="sr-only"
-                    @change="setEarlyReturnProofFile"
-                  />
-                </label>
+                    <!-- Empty State -->
+                    <div
+                      v-if="!earlyReturnProofPreview"
+                      class="h-full w-full flex flex-col items-center justify-center gap-2 p-4 text-center"
+                    >
+                      <div
+                        class="w-9 h-9 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/20 group-hover:text-burning-orange group-hover:bg-burning-orange/10 transition-colors"
+                      >
+                        <Icon name="ph:plus" class="w-5 h-5" />
+                      </div>
+                      <span
+                        class="text-[12px] font-bold text-noble-black/40 group-hover:text-burning-orange/70 transition-colors"
+                        >Add image</span
+                      >
+                    </div>
+
+                    <!-- Selected State (Preview) -->
+                    <div v-else class="relative h-full w-full group/preview">
+                      <img
+                        :src="earlyReturnProofPreview"
+                        class="h-full w-full object-cover"
+                        alt="Early return proof"
+                      />
+                      <div
+                        class="absolute inset-0 bg-noble-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <div
+                          class="flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-noble-black text-[12px] font-bold shadow-lg"
+                        >
+                          <Icon name="ph:arrows-clockwise" class="w-4 h-4" />
+                          Replace Image
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <!-- Remove Button (Corner) -->
+                  <button
+                    v-if="earlyReturnProofPreview"
+                    type="button"
+                    class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white border border-gray-100 shadow-md flex items-center justify-center text-cinnabar-red hover:scale-110 transition-transform z-10"
+                    title="Remove Image"
+                    @click.prevent="clearEarlyReturnProof"
+                  >
+                    <Icon name="ph:trash" class="w-4 h-4" />
+                  </button>
+                </div>
+
                 <p
                   v-if="proofUploadErrorMessage"
-                  class="mt-2 text-[13px] text-cinnabar-red font-medium"
+                  class="mt-2 text-sm text-red-600 font-medium text-center"
                 >
                   {{ proofUploadErrorMessage }}
                 </p>
               </div>
             </div>
 
-            <!-- Footer actions -->
-            <div class="px-8 pb-8 pt-4 shrink-0 flex flex-col gap-3">
+            <!-- Footer -->
+            <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex gap-3 shrink-0">
               <button
-                :disabled="isSubmittingReturn || !earlyReturnProofFile"
-                class="w-full h-12 bg-burning-orange text-white rounded-[14px] font-bold text-[14px] hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                @click="confirmEarlyReturn"
-              >
-                <svg
-                  v-if="isSubmittingReturn"
-                  class="animate-spin"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                >
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-                {{ isSubmittingReturn ? "Submitting..." : "Confirm Early Return" }}
-              </button>
-              <button
-                :disabled="isSubmittingReturn"
-                class="w-full h-12 bg-cream text-noble-black rounded-[14px] font-bold text-[14px] hover:bg-pale-cashmere transition-all disabled:opacity-50"
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
                 @click="isEarlyReturnModalOpen = false"
               >
                 Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                :disabled="isSubmittingReturn || !earlyReturnProofFile"
+                @click="confirmEarlyReturn"
+              >
+                <span v-if="isSubmittingReturn" class="flex items-center justify-center gap-2">
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
+                  Confirming...
+                </span>
+                <span v-else>Confirm & Refund</span>
               </button>
             </div>
           </div>
@@ -2256,19 +2341,7 @@ const handleReviewSubmitted = async () => {
               <div
                 class="w-20 h-20 bg-success-green/10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#34A853"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Icon name="ph:check" class="w-10 h-10" style="color: #34a853" />
               </div>
               <h3 class="text-2xl font-bold text-noble-black mb-2">Success!</h3>
               <p class="text-noble-black/60 mb-8 leading-relaxed">
@@ -2328,14 +2401,7 @@ const handleReviewSubmitted = async () => {
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeRebuttalModal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -2478,6 +2544,39 @@ const handleReviewSubmitted = async () => {
                         This is optional and only visible to the moderation team.
                       </p>
                     </label>
+
+                    <div class="block">
+                      <span class="text-[13px] font-semibold text-[#374151]">Evidence Image</span>
+                      <p class="mt-1 text-[12px] text-noble-black/40 font-medium italic">
+                        Optional. Attach one image as supporting evidence.
+                      </p>
+                      <label
+                        class="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[10px] border-[1.5px] border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center transition hover:border-burning-orange hover:bg-burning-orange/5"
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          class="hidden"
+                          @change="setRebuttalImageFile"
+                        />
+                        <Icon name="ph:image" class="w-5 h-5 text-noble-black/30" />
+                        <span
+                          v-if="!rebuttalImageFile"
+                          class="text-[12px] text-noble-black/40 font-medium"
+                        >
+                          Click to upload an image
+                        </span>
+                        <span v-else class="text-[12px] font-semibold text-burning-orange">
+                          {{ rebuttalImageFile.name }}
+                        </span>
+                      </label>
+                      <img
+                        v-if="rebuttalImagePreview"
+                        :src="rebuttalImagePreview"
+                        alt="Rebuttal evidence preview"
+                        class="mt-3 max-h-40 w-full rounded-[10px] object-cover border border-gray-200"
+                      />
+                    </div>
                   </div>
 
                   <p
@@ -2537,6 +2636,19 @@ const handleReviewSubmitted = async () => {
                       {{ rebuttalNotes.trim() }}
                     </p>
                   </div>
+
+                  <div v-if="rebuttalImagePreview" class="pt-4 border-t border-gray-100">
+                    <p
+                      class="text-[11px] font-bold uppercase tracking-wider text-noble-black/40 mb-2"
+                    >
+                      Evidence Image
+                    </p>
+                    <img
+                      :src="rebuttalImagePreview"
+                      alt="Rebuttal evidence"
+                      class="max-h-48 w-full rounded-[10px] object-cover border border-gray-200"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -2559,17 +2671,7 @@ const handleReviewSubmitted = async () => {
                 @click="rebuttalModalStep === 'form' ? continueRebuttalReview() : submitRebuttal()"
               >
                 <span v-if="isSubmittingRebuttal" class="flex items-center justify-center gap-2">
-                  <svg
-                    class="animate-spin"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
                   Processing...
                 </span>
                 <span v-else>
@@ -2581,10 +2683,100 @@ const handleReviewSubmitted = async () => {
         </div>
       </Teleport>
     </Transition>
+
+    <!-- Proof Image Modal -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <Teleport to="body">
+        <div
+          v-if="proofImageUrl"
+          class="fixed inset-0 z-[1400] flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-noble-black/70 backdrop-blur-sm"
+            @click="proofImageUrl = null"
+          />
+          <div class="relative max-w-2xl w-full animate-in zoom-in-95 duration-300">
+            <button
+              class="absolute -top-4 -right-4 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-noble-black/60 hover:text-noble-black transition-colors"
+              @click="proofImageUrl = null"
+            >
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
+            </button>
+            <img
+              :src="proofImageUrl"
+              alt="Proof image"
+              class="w-full rounded-[20px] shadow-2xl object-contain max-h-[85vh]"
+            />
+          </div>
+        </div>
+      </Teleport>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
+/* Custom Tooltip Styling matching Header.vue */
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+
 .custom-modal-scrollbar::-webkit-scrollbar {
   width: 5px;
 }

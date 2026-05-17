@@ -86,16 +86,7 @@
                 </div>
 
                 <div class="px-1 text-gray-300">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                  >
-                    <path d="M5 12h14M13 5l7 7-7 7" />
-                  </svg>
+                  <Icon name="ph:arrow-right" class="w-[14px] h-[14px]" />
                 </div>
 
                 <!-- End Date/Time Stacked -->
@@ -184,21 +175,7 @@
                 :disabled="isUploadingReferenceImage || props.isSubmitting"
                 @click="triggerReferenceImageUpload"
               >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                  <path d="M16 5h4M18 3v4" />
-                </svg>
+                <Icon name="ph:image" class="w-[18px] h-[18px]" />
                 <span class="text-[13px] font-medium">+ Add photo</span>
               </button>
 
@@ -213,16 +190,7 @@
                   class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                   @click="removeReferenceImage"
                 >
-                  <svg
-                    width="8"
-                    height="8"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
+                  <Icon name="ph:x" class="w-2 h-2" />
                 </button>
               </div>
             </div>
@@ -254,6 +222,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch, nextTick } from "vue"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import type { CommunityRequestComposerInput } from "~/types/community-requests"
 
 type UploadedReferenceImage = {
@@ -510,8 +479,8 @@ const getSafeFileName = (fileName: string) => {
 const fetchCurrentUserId = async () => {
   if (currentUserId.value) return currentUserId.value
 
-  const { fetch: fetchAuthUser } = useAuthUser()
-  const authUser = await fetchAuthUser()
+  const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+  const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
   if (authUser) currentUserId.value = authUser.id
   return currentUserId.value
 }
@@ -597,7 +566,8 @@ const uploadReferenceImage = async (file: File) => {
     throw new Error("Please sign in again before uploading an image.")
   }
 
-  const storagePath = createStoragePath(file, userId)
+  const uploadFile = await convertImageFileToWebP(file)
+  const storagePath = createStoragePath(uploadFile, userId)
 
   const {
     data: { session },
@@ -617,7 +587,7 @@ const uploadReferenceImage = async (file: File) => {
       xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
     }
     xhr.setRequestHeader("x-upsert", "false")
-    xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+    xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
@@ -653,11 +623,11 @@ const uploadReferenceImage = async (file: File) => {
       resolve({
         id: storagePath,
         url: publicUrlData.publicUrl,
-        name: file.name,
+        name: uploadFile.name,
       })
     }
 
-    xhr.send(file)
+    xhr.send(uploadFile)
   })
 }
 

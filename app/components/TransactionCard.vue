@@ -2,6 +2,7 @@
 import { computed } from "vue"
 import type { AdminTransactionListItem } from "../composables/use-admin-transactions"
 import type { TransactionListItem } from "../composables/use-transactions"
+import { useBookingDetailPrefetch } from "../composables/use-booking-detail-prefetch"
 import type { ReviewType } from "#shared/schemas/review"
 import { isChatAvailableForTransactionStatus } from "#shared/chat-rules"
 
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { warmBookingDetail } = useBookingDetailPrefetch()
 const isAdminVariant = computed(() => props.variant === "admin")
 const userRole = computed(() => (props.activeRole === "LENDER" ? "LENDER" : "BORROWER"))
 const userTransaction = computed(() =>
@@ -70,11 +72,20 @@ const formatRating = (rating: number | null) => (rating === null ? null : rating
 const formatDate = (date: Date | string) =>
   new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
+const formatTime = (date: Date | string) =>
+  new Date(date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+
 const dateRange = computed(() => {
   const start = formatDate(props.transaction.startDate)
   const end = formatDate(props.transaction.endDate)
   const sameDay = start === end
   return sameDay ? start : `${start} - ${end}`
+})
+
+const timeRange = computed(() => {
+  const start = formatTime(props.transaction.startDate)
+  const end = formatTime(props.transaction.endDate)
+  return `${start} – ${end}`
 })
 
 const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
@@ -152,6 +163,16 @@ const handleWriteReview = (reviewType: ReviewType) => {
   emit("writeReview", { transaction: userTransaction.value, reviewType })
 }
 
+const warmOrderDetails = () => {
+  if (!detailPath.value) return
+  void warmBookingDetail(detailPath.value, { priority: true }).catch(() => {})
+}
+
+const warmOrderDetailsImmediately = () => {
+  if (!detailPath.value) return
+  void warmBookingDetail(detailPath.value, { immediate: true, priority: true }).catch(() => {})
+}
+
 const handleOpenChat = async () => {
   if (!canOpenChat.value) return
 
@@ -164,7 +185,15 @@ const handleOpenChat = async () => {
 
 <template>
   <template v-if="detailPath">
-    <NuxtLink :to="detailPath" :class="rootClass">
+    <NuxtLink
+      :to="detailPath"
+      :class="rootClass"
+      :prefetch-on="{ interaction: true }"
+      @pointerenter="warmOrderDetails"
+      @focus="warmOrderDetails"
+      @mousedown="warmOrderDetailsImmediately"
+      @touchstart.passive="warmOrderDetails"
+    >
       <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
         <div
           v-if="isAdminVariant"
@@ -220,19 +249,10 @@ const handleOpenChat = async () => {
               aria-label="Open chat"
               @click.stop.prevent="handleOpenChat"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="transition-transform group-hover/chat:scale-110"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+              <Icon
+                name="ph:chat-centered-text"
+                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110 shrink-0"
+              />
             </button>
           </div>
 
@@ -246,25 +266,15 @@ const handleOpenChat = async () => {
             v-if="transaction.item.thumbnailImage"
             :src="transaction.item.thumbnailImage"
             :alt="transaction.item.name"
+            loading="lazy"
+            decoding="async"
             class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
           />
           <div
             v-else
             class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
           >
-            <svg
-              class="w-6 h-6 text-cinnamon-ice/40"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
+            <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40 shrink-0" />
           </div>
         </div>
 
@@ -280,6 +290,8 @@ const handleOpenChat = async () => {
             <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
             <span v-else>{{ dateRange }}</span>
             <span class="opacity-50 select-none">·</span>
+            <span v-if="!isAdminVariant">{{ timeRange }}</span>
+            <span v-if="!isAdminVariant" class="opacity-50 select-none">·</span>
             <span>{{ duration }}</span>
             <template v-if="isAdminVariant">
               <span class="opacity-50 select-none">·</span>
@@ -372,19 +384,10 @@ const handleOpenChat = async () => {
               aria-label="Open chat"
               @click.stop.prevent="handleOpenChat"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="transition-transform group-hover/chat:scale-110"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+              <Icon
+                name="ph:chat-centered-text"
+                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110 shrink-0"
+              />
             </button>
           </div>
 
@@ -398,25 +401,15 @@ const handleOpenChat = async () => {
             v-if="transaction.item.thumbnailImage"
             :src="transaction.item.thumbnailImage"
             :alt="transaction.item.name"
+            loading="lazy"
+            decoding="async"
             class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
           />
           <div
             v-else
             class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
           >
-            <svg
-              class="w-6 h-6 text-cinnamon-ice/40"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
+            <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40 shrink-0" />
           </div>
         </div>
 
@@ -432,6 +425,8 @@ const handleOpenChat = async () => {
             <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
             <span v-else>{{ dateRange }}</span>
             <span class="opacity-50 select-none">·</span>
+            <span v-if="!isAdminVariant">{{ timeRange }}</span>
+            <span v-if="!isAdminVariant" class="opacity-50 select-none">·</span>
             <span>{{ duration }}</span>
             <template v-if="isAdminVariant">
               <span class="opacity-50 select-none">·</span>

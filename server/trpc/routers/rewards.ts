@@ -4,14 +4,14 @@ import { protectedProcedure, publicProcedure } from "../procedures"
 import { redeemBoostSchema } from "#shared/schemas/rewards"
 import {
   RewardEventStatus,
-  expireActiveBoosts,
+  expireActiveBoostsThrottled,
   listRewardLeaderboard,
   redeemListingBoost,
 } from "../../utils/rewards"
 
 export const rewardsRouter = router({
   summary: protectedProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
 
     const [rewardTotals, recentEvents, activeBoosts] = await Promise.all([
       ctx.prisma.userReward.upsert({
@@ -85,7 +85,7 @@ export const rewardsRouter = router({
   }),
 
   activeBoosts: protectedProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
 
     const boosts = await ctx.prisma.itemBoost.findMany({
       where: {
@@ -128,14 +128,14 @@ export const rewardsRouter = router({
   }),
 
   borrowerLeaderboard: publicProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     return {
       leaderboard: await listRewardLeaderboard(ctx.prisma, "BORROWER"),
     }
   }),
 
   lenderLeaderboard: publicProcedure.query(async ({ ctx }) => {
-    await expireActiveBoosts(ctx.prisma)
+    await expireActiveBoostsThrottled(ctx.prisma)
     return {
       leaderboard: await listRewardLeaderboard(ctx.prisma, "LENDER"),
     }
@@ -160,5 +160,51 @@ export const rewardsRouter = router({
         },
       }
     })
+  }),
+
+  activity: protectedProcedure.query(async ({ ctx }) => {
+    const events = await ctx.prisma.rewardEvent.findMany({
+      where: { userId: ctx.user.id },
+      orderBy: [{ createdAt: "desc" }],
+      take: 50,
+      include: {
+        itemBoost: {
+          include: {
+            item: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        transaction: {
+          select: {
+            id: true,
+            item: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        review: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    })
+
+    return {
+      events: events.map((event) => ({
+        id: event.id,
+        sourceType: event.sourceType,
+        roleCategory: event.roleCategory,
+        status: event.status,
+        pointsDelta: event.pointsDelta,
+        createdAt: event.createdAt,
+        appliedAt: event.appliedAt,
+        metadata: event.metadata,
+        item: event.itemBoost?.item ?? event.transaction?.item ?? null,
+        transactionId: event.transactionId,
+        reviewId: event.reviewId,
+      })),
+    }
   }),
 })

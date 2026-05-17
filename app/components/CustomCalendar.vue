@@ -6,19 +6,10 @@
       :class="{ 'border-burning-orange ring-1 ring-burning-orange/20': isOpen }"
       @click="toggleCalendar"
     >
-      <svg
+      <Icon
+        name="ph:calendar-blank"
         class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-      </svg>
+      />
       <span
         class="ml-2 font-geist text-[13px] transition-colors"
         :class="modelValue ? 'text-noble-black' : 'text-noble-black/40'"
@@ -38,43 +29,31 @@
     >
       <div
         v-if="isOpen"
-        class="absolute z-[100] mt-2 w-[260px] right-0 sm:left-0 bg-white border border-cinnamon-ice/30 rounded-[20px] shadow-[0_12px_40px_-10px_rgba(0,0,0,0.12)] p-4 font-geist"
+        class="absolute z-[100] mt-2 w-[280px] right-0 sm:left-0 bg-white border border-cinnamon-ice/30 rounded-2xl shadow-[0_12px_40px_-10px_rgba(0,0,0,0.12)] p-5 font-geist"
       >
         <!-- Calendar Header -->
         <div class="flex items-center justify-between mb-4 px-1">
-          <button
-            type="button"
-            class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
-            @click.stop="prevMonth"
-          >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2.5"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
-
-          <h4 class="font-bold text-[14px] text-noble-black tracking-tight">
+          <h4 class="font-semibold text-base text-noble-black tracking-tight">
             {{ monthNames[currentMonth] }} {{ currentYear }}
           </h4>
 
-          <button
-            type="button"
-            class="p-1.5 hover:bg-cream rounded-lg text-noble-black/40 hover:text-burning-orange transition-all duration-300"
-            @click.stop="nextMonth"
-          >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2.5"
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
+          <div class="flex gap-1">
+            <button
+              type="button"
+              class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full text-noble-black/40 hover:text-burning-orange transition-all duration-300"
+              @click.stop="prevMonth"
+            >
+              <Icon name="ph:caret-left" class="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full text-noble-black/40 hover:text-burning-orange transition-all duration-300"
+              @click.stop="nextMonth"
+            >
+              <Icon name="ph:caret-right" class="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <!-- Days Header -->
@@ -82,7 +61,7 @@
           <div
             v-for="day in ['S', 'M', 'T', 'W', 'T', 'F', 'S']"
             :key="day"
-            class="text-center text-[10px] font-bold text-noble-black/30 uppercase tracking-[0.1em]"
+            class="text-center text-[11px] font-bold text-gray-400 uppercase tracking-[1px]"
           >
             {{ day }}
           </div>
@@ -98,23 +77,22 @@
             <button
               v-if="day"
               type="button"
-              class="w-8 h-8 flex items-center justify-center rounded-lg text-[12px] transition-all duration-300 relative group"
+              class="w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-all duration-300 relative group font-semibold"
               :class="[
                 isDateDisabled(day)
-                  ? 'text-noble-black/20 cursor-not-allowed'
+                  ? 'text-gray-300 cursor-not-allowed'
                   : isSelected(day)
                     ? 'bg-burning-orange text-white font-bold shadow-lg shadow-burning-orange/25'
-                    : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange',
+                    : 'text-noble-black hover:bg-burning-orange hover:text-white',
               ]"
               :disabled="isDateDisabled(day)"
               @click.stop="selectDate(day)"
             >
               <span :class="{ 'opacity-50': isDateDisabled(day) }">{{ day }}</span>
-              <!-- Today Indicator Dot -->
+              <!-- Today Indicator -->
               <div
-                v-if="isToday(day)"
-                class="absolute bottom-1 w-1 h-1 rounded-full"
-                :class="isSelected(day) ? 'bg-white/60' : 'bg-burning-orange/40'"
+                v-if="isToday(day) && !isSelected(day)"
+                class="absolute inset-0 border-[1.5px] border-burning-orange rounded-lg"
               />
             </button>
           </div>

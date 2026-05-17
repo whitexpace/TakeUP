@@ -1,12 +1,40 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { effectScope, nextTick, ref } from "vue"
 import type { MyListingItem } from "../use-my-listings"
 import { useMyListings } from "../use-my-listings"
 import * as paginatedItemsModule from "../use-paginated-items"
 import * as filteredResultsCountModule from "../use-filtered-results-count"
 
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => unknown
+      }
+    ).useState(key, init),
+}))
+
+vi.mock("../use-viewer-session", () => ({
+  useViewerSession: () => ({
+    getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+  }),
+}))
+
 let fetchMock: ReturnType<typeof vi.fn>
 
 const ITEM_ID = "11111111-1111-1111-1111-111111111111"
+
+const createStateMock = () => {
+  const store = new Map<string, ReturnType<typeof ref>>()
+
+  return (key: string, init: () => unknown) => {
+    if (!store.has(key)) {
+      store.set(key, ref(init()))
+    }
+
+    return store.get(key)!
+  }
+}
 
 const makeItem = (id = ITEM_ID) =>
   ({
@@ -41,6 +69,9 @@ const makeItem = (id = ITEM_ID) =>
     ownerName: "Test Lender",
     lenderUsername: "test-lender",
     lenderFullName: "Test Lender",
+    lenderRating: 0,
+    lenderBookingCount: 0,
+    lenderAvatarUrl: null,
     isLiked: false,
     description: null,
     condition: "GOOD",
@@ -57,6 +88,7 @@ beforeEach(() => {
   fetchMock = vi.fn()
   vi.stubGlobal("$fetch", fetchMock)
   vi.stubGlobal("navigateTo", vi.fn())
+  vi.stubGlobal("useState", createStateMock())
   vi.useFakeTimers()
 })
 
@@ -183,6 +215,54 @@ describe("useMyListings", () => {
         }),
       }),
     )
+  })
+
+  it("clears pending refresh timers when the scope is disposed", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const scope = effectScope()
+    const listingsState = scope.run(() => useMyListings())
+
+    if (!listingsState) {
+      throw new Error("Failed to initialize scoped listings state")
+    }
+
+    await listingsState.refresh()
+    fetchMock.mockClear()
+
+    listingsState.toggleStatusFilter("DISPUTED")
+    await nextTick()
+    scope.stop()
+
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("cancels a pending refresh when refresh is called manually", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const scope = effectScope()
+    const listingsState = scope.run(() => useMyListings())
+
+    if (!listingsState) {
+      throw new Error("Failed to initialize scoped listings state")
+    }
+
+    await listingsState.refresh()
+    fetchMock.mockClear()
+
+    listingsState.toggleStatusFilter("DISPUTED")
+    await nextTick()
+
+    await listingsState.refresh()
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    scope.stop()
   })
 
   it("toggleStatus invalidates item search caches and refreshes filtered listings", async () => {

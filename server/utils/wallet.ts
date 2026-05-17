@@ -103,6 +103,7 @@ function generateReferenceCode(type: string): string {
   else if (type === "EARNING") prefix = "WTX-ER"
   else if (type === "REFUND") prefix = "WTX-RF"
   else if (type === "COMMISSION") prefix = "WTX-CM"
+  else if (type === "ADJUSTMENT") prefix = "WTX-AD"
 
   return `${prefix}-${date}-${random}`
 }
@@ -950,6 +951,54 @@ export async function runWalletSelfHealing(userId: string) {
       }
     }
   }
+}
+
+/**
+ * Withdraw from the wallet using the pseudo flow.
+ */
+export async function withdrawPseudo(userId: string, amount: number) {
+  if (amount <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Withdrawal amount must be greater than zero.",
+    })
+  }
+
+  return await globalPrisma.$transaction(async (tx) => {
+    const walletTx = asWalletPrisma(tx)
+    const wallet = await lockWallet({ scope: WalletScope.USER, userId }, walletTx)
+
+    const decimalAmount = new Prisma.Decimal(amount)
+
+    if (wallet.balance.lessThan(decimalAmount)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Insufficient wallet balance for withdrawal.",
+      })
+    }
+
+    const newBalance = wallet.balance.minus(decimalAmount)
+    const referenceCode = generateReferenceCode("ADJUSTMENT")
+
+    const transaction = await insertWalletTransaction(walletTx, {
+      walletId: wallet.id,
+      userId,
+      type: WalletTransactionType.ADJUSTMENT,
+      method: WalletTransactionMethod.PSEUDO,
+      direction: WalletTransactionDirection.DEBIT,
+      amount: decimalAmount,
+      balanceBefore: wallet.balance,
+      balanceAfter: newBalance,
+      referenceCode,
+      relatedEntityType: null,
+      relatedEntityId: null,
+      status: WalletTransactionStatus.SUCCESS,
+      metadata: { note: "Mockup withdrawal" },
+    })
+    const updatedWallet = await updateWalletBalance(wallet.id, newBalance, walletTx)
+
+    return { wallet: updatedWallet, transaction }
+  })
 }
 
 export async function runSystemWalletSelfHealing(systemKey = SYSTEM_WALLET_KEY) {

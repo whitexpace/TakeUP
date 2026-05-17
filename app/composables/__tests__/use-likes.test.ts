@@ -27,13 +27,6 @@ describe("useLikes", () => {
     vi.resetModules()
     vi.stubGlobal("useState", createStateMock())
     vi.stubGlobal("$fetch", vi.fn().mockResolvedValue({ count: 3 }))
-    vi.stubGlobal("useSupabaseClient", () => ({
-      auth: {
-        getSession: vi.fn().mockResolvedValue({
-          data: { session: { access_token: "token-123" } },
-        }),
-      },
-    }))
   })
 
   afterEach(() => {
@@ -42,6 +35,11 @@ describe("useLikes", () => {
   })
 
   it("loads the likes count once and includes the auth header", async () => {
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+      }),
+    }))
     const { useLikes } = await import("../use-likes")
     const likes = useLikes()
 
@@ -57,6 +55,11 @@ describe("useLikes", () => {
   })
 
   it("supports force reloading after the initial fetch", async () => {
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+      }),
+    }))
     vi.stubGlobal(
       "$fetch",
       vi.fn().mockResolvedValueOnce({ count: 2 }).mockResolvedValueOnce({ count: 5 }),
@@ -73,6 +76,11 @@ describe("useLikes", () => {
   })
 
   it("increments and decrements the count without going below zero", async () => {
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+      }),
+    }))
     const { useLikes } = await import("../use-likes")
     const likes = useLikes()
 
@@ -86,6 +94,11 @@ describe("useLikes", () => {
   })
 
   it("falls back to zero when loading the count fails", async () => {
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+      }),
+    }))
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.stubGlobal("$fetch", vi.fn().mockRejectedValue(new Error("boom")))
 

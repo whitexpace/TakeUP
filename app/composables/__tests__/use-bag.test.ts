@@ -1,6 +1,16 @@
 import { ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+vi.mock("#app", () => ({
+  useState: (key: string, init: () => unknown) =>
+    (
+      globalThis as unknown as {
+        useState: (stateKey: string, stateInit: () => unknown) => ReturnType<typeof ref>
+      }
+    ).useState(key, init),
+  useRoute: () => ({ path: "/dashboard" }),
+}))
+
 vi.mock("vue", async () => {
   const actual = await vi.importActual<typeof import("vue")>("vue")
   return {
@@ -41,14 +51,14 @@ describe("useBag", () => {
   beforeEach(() => {
     vi.resetModules()
     vi.stubGlobal("useState", createStateMock())
-    vi.stubGlobal("$fetch", vi.fn().mockResolvedValue({ items: [makeBagItem()] }))
-    vi.stubGlobal("useSupabaseClient", () => ({
-      auth: {
-        getSession: vi.fn().mockResolvedValue({
-          data: { session: { access_token: "token-123" } },
-        }),
-      },
+    vi.doMock("../use-auth-user", () => ({
+      useAuthUser: () => ({
+        authUser: ref({ id: "user-1", accountType: "USER" }),
+        hasFreshCache: ref(true),
+        fetch: vi.fn().mockResolvedValue({ id: "user-1", accountType: "USER" }),
+      }),
     }))
+    vi.stubGlobal("$fetch", vi.fn().mockResolvedValue({ items: [makeBagItem()] }))
   })
 
   afterEach(() => {
@@ -57,6 +67,11 @@ describe("useBag", () => {
   })
 
   it("loads persisted bag items from the backend", async () => {
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+      }),
+    }))
     const { useBag } = await import("../use-bag")
 
     const { bagItems, loadBag } = useBag()
@@ -69,6 +84,11 @@ describe("useBag", () => {
   })
 
   it("adds a new bag item through the backend and updates local state", async () => {
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+      }),
+    }))
     vi.stubGlobal(
       "$fetch",
       vi.fn().mockResolvedValueOnce({ items: [] }).mockResolvedValueOnce(makeBagItem()),
@@ -87,6 +107,11 @@ describe("useBag", () => {
   })
 
   it("matches an existing bag entry by item and booking window", async () => {
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token-123" }),
+      }),
+    }))
     const { useBag } = await import("../use-bag")
 
     const { loadBag, hasItemWithWindow } = useBag()
@@ -99,5 +124,28 @@ describe("useBag", () => {
         new Date("2026-04-03T09:00:00.000Z"),
       ),
     ).toBe(true)
+  })
+
+  it("loads the bag for admin accounts", async () => {
+    vi.doMock("../use-auth-user", () => ({
+      useAuthUser: () => ({
+        authUser: ref({ id: "admin-1", accountType: "ADMIN" }),
+        hasFreshCache: ref(true),
+        fetch: vi.fn().mockResolvedValue({ id: "admin-1", accountType: "ADMIN" }),
+      }),
+    }))
+    vi.doMock("../use-viewer-session", () => ({
+      useViewerSession: () => ({
+        getAuthHeaders: vi.fn(),
+      }),
+    }))
+    const { useBag } = await import("../use-bag")
+
+    const { loadBag } = useBag()
+    await loadBag({ force: true })
+
+    expect($fetch).toHaveBeenCalledWith("/api/cart", {
+      headers: undefined,
+    })
   })
 })

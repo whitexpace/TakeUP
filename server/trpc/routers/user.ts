@@ -3,6 +3,8 @@ import { TRPCError } from "@trpc/server"
 import { router } from "../init"
 import { publicProcedure, protectedProcedure } from "../procedures"
 
+const PUBLIC_SEARCHABLE_USER_STATUS = "ACTIVE" as const
+
 const formatName = (u: { firstName: string; lastName: string }) => {
   const first = (u.firstName || "").trim()
   const last = (u.lastName || "").trim()
@@ -11,8 +13,7 @@ const formatName = (u: { firstName: string; lastName: string }) => {
     return first.charAt(0).toUpperCase() + first.slice(1)
   }
 
-  const lastInitial = last.charAt(0).toUpperCase()
-  return `${first} ${lastInitial}.`
+  return `${first} ${last}`
 }
 
 export const userRouter = router({
@@ -46,10 +47,15 @@ export const userRouter = router({
   }),
 
   getPublicProfile: publicProcedure
-    .input(z.object({ username: z.string() }))
+    .input(
+      z.object({
+        username: z.string(),
+        reviewsLimit: z.coerce.number().int().min(1).max(50).default(5),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const user = await ctx.prisma.user.findFirst({
-        where: { username: input.username },
+        where: { username: input.username, status: PUBLIC_SEARCHABLE_USER_STATUS },
         select: {
           id: true,
           username: true,
@@ -64,7 +70,7 @@ export const userRouter = router({
             select: {
               lenderRating: true,
               _count: {
-                select: { listedItem: true },
+                select: { listedItem: true, bookings: true },
               },
               listedItem: {
                 where: { status: "AVAILABLE" },
@@ -99,6 +105,7 @@ export const userRouter = router({
           },
           transactionReviewsReviewee: {
             orderBy: { createdAt: "desc" },
+            take: input.reviewsLimit,
             select: {
               id: true,
               rating: true,
@@ -108,12 +115,18 @@ export const userRouter = router({
               reviewType: true,
               reviewerUser: {
                 select: {
+                  id: true,
                   username: true,
                   firstName: true,
                   lastName: true,
                   avatarUrl: true,
                 },
               },
+            },
+          },
+          _count: {
+            select: {
+              transactionReviewsReviewee: true,
             },
           },
         },
@@ -131,6 +144,12 @@ export const userRouter = router({
         lastName: user.lastName,
       })
 
+      const totalBookingsCount = await ctx.prisma.booking.count({
+        where: {
+          lenderId: user.id,
+        },
+      })
+
       return {
         user: {
           id: user.id,
@@ -145,7 +164,9 @@ export const userRouter = router({
           borrowerRating: user.borrower?.borrowerRating ?? 0,
           itemsSold: user.lender?._count.listedItem ?? 0, // Simplified mapping
           activeListings: user.lender?._count.listedItem ?? 0,
+          totalLenderBookings: totalBookingsCount,
         },
+        reviewsCount: user._count.transactionReviewsReviewee,
         reviews: user.transactionReviewsReviewee.map((r) => ({
           id: r.id,
           rating: r.rating,
@@ -153,11 +174,19 @@ export const userRouter = router({
           createdAt: r.createdAt,
           isAnonymous: r.isAnonymous,
           reviewType: r.reviewType,
-          reviewer: {
-            username: r.reviewerUser.username,
-            name: formatName(r.reviewerUser),
-            avatarUrl: r.reviewerUser.avatarUrl,
-          },
+          reviewer: r.isAnonymous
+            ? {
+                id: null,
+                username: null,
+                name: "Anonymous",
+                avatarUrl: null,
+              }
+            : {
+                id: r.reviewerUser.id,
+                username: r.reviewerUser.username,
+                name: formatName(r.reviewerUser),
+                avatarUrl: r.reviewerUser.avatarUrl,
+              },
         })),
         items: (user.lender?.listedItem ?? []).map((item) => ({
           id: item.id,
@@ -191,7 +220,7 @@ export const userRouter = router({
             { firstName: { contains: input.query, mode: "insensitive" } },
             { lastName: { contains: input.query, mode: "insensitive" } },
           ],
-          status: { not: "DEACTIVATED" },
+          status: PUBLIC_SEARCHABLE_USER_STATUS,
         },
         select: {
           id: true,
@@ -203,11 +232,12 @@ export const userRouter = router({
             select: {
               lenderRating: true,
               _count: {
-                select: { listedItem: true },
+                select: { listedItem: true, bookings: true },
               },
             },
           },
         },
+        orderBy: [{ username: "asc" }, { id: "asc" }],
         take: 3, // Only show top 3 matches to keep dashboard clean
       })
 

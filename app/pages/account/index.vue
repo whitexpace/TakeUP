@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, reactive } from "vue"
 import type { AuthMeUser } from "~/composables/use-auth-user"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 
 definePageMeta({
   layout: "account",
@@ -54,7 +55,12 @@ const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
 const avatarBucket = runtimeConfig.public.userAvatarBucket
 
-const { authUser: cachedAuthUser, fetch: fetchAuthUser, refresh: refreshAuthUser } = useAuthUser()
+const {
+  authUser: cachedAuthUser,
+  hasFreshCache: hasFreshAuthUserCache,
+  fetch: fetchAuthUser,
+  refresh: refreshAuthUser,
+} = useAuthUser()
 
 // Provide a compatible shape for existing template refs (authData.value?.user.X → authData.value?.user.X)
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
@@ -64,7 +70,9 @@ const isHydrated = ref(false)
 
 onMounted(async () => {
   isHydrated.value = true
-  await fetchAuthUser()
+  if (!hasFreshAuthUserCache.value && !cachedAuthUser.value) {
+    await fetchAuthUser()
+  }
   isAuthDataPending.value = false
 })
 
@@ -126,10 +134,6 @@ const buildDbFullName = (payload: AuthMeUser | undefined) => {
   const first = (payload.firstName || "").trim()
   const last = (payload.lastName || "").trim()
 
-  if (last.toLowerCase() === "user" || !last) {
-    return first.charAt(0).toUpperCase() + first.slice(1)
-  }
-
   const parts = [first, payload.middleName, last].filter(Boolean)
   return parts.length > 0 ? parts.join(" ") : null
 }
@@ -180,7 +184,8 @@ const profileDetails = computed(() => {
   const isVerified =
     Boolean(authUserRecord?.email_confirmed_at) ||
     Boolean(authUserRecord?.confirmed_at) ||
-    email.endsWith("@up.edu.ph")
+    email.endsWith("@up.edu.ph") ||
+    email.endsWith("@gmail.com")
 
   return {
     fullName,
@@ -335,13 +340,14 @@ const saveProfile = async () => {
     let avatarUrl = authData.value?.user.avatarUrl || null
 
     if (currentAvatarFile.value) {
-      const fileExt = currentAvatarFile.value.name.split(".").pop()
+      const avatarFile = await convertImageFileToWebP(currentAvatarFile.value)
+      const fileExt = avatarFile.name.split(".").pop()
       const fileName = `${authData.value?.user.id}-${Math.random().toString(36).substring(7)}.${fileExt}`
       const filePath = `avatars/${fileName}`
 
       const { error: uploadError } = await supabase.storage
         .from(avatarBucket)
-        .upload(filePath, currentAvatarFile.value)
+        .upload(filePath, avatarFile)
 
       if (uploadError) throw uploadError
 
@@ -403,7 +409,7 @@ const {
   data: deactivationEligibility,
   refresh: loadDeactivationEligibility,
   pending: isLoadingDeactivationEligibility,
-} = useAsyncData(
+} = useLazyAsyncData(
   "account:deactivation-check",
   () => $fetch<DeactivationEligibilityResponse>("/api/account/deactivation-eligibility"),
   {
@@ -446,7 +452,11 @@ const deactivateAccount = async () => {
   }
 }
 
-const { data: deletionEligibility, refresh: loadDeletionEligibility } = useAsyncData(
+const {
+  data: deletionEligibility,
+  refresh: loadDeletionEligibility,
+  pending: _isDeletionPending,
+} = useLazyAsyncData(
   "account:deletion-check",
   () => $fetch<AccountDeletionEligibilityResponse>("/api/account/deletion"),
   {
@@ -549,15 +559,19 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <PersonalAccountPageSkeleton v-if="!isHydrated || isAuthDataPending" />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <!-- Main Content Area -->
-    <template v-if="isHydrated && authData">
+    <template v-if="authData">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="text-[28px] font-semibold text-noble-black">Account Information</h1>
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+            Account Information
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-medium text-noble-black/50">
+        <p class="text-[16px] font-light text-noble-black/50">
           Manage your personal details and account settings.
         </p>
       </section>
@@ -570,8 +584,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
           class="relative px-5 py-5 bg-gradient-to-br from-cream/95 to-cream/80 backdrop-blur-md border-b border-cinnamon-ice/10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <div class="border-l-[3px] border-burning-orange pl-4">
-            <h2 class="text-[20px] font-bold text-noble-black">Profile</h2>
-            <p class="mt-0.5 text-[13px] font-medium text-noble-black/50">
+            <h2 class="text-[20px] font-semibold text-noble-black">Profile</h2>
+            <p class="mt-0.5 text-[13px] font-light text-noble-black/50">
               Your personal information and profile picture
             </p>
           </div>
@@ -645,7 +659,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               </div>
             </div>
             <div class="min-w-0 flex-1 pt-1">
-              <h3 class="truncate text-[18px] font-semibold text-noble-black">
+              <h3 class="truncate text-[22px] font-semibold text-noble-black">
                 {{ profileDetails.fullName }}
               </h3>
               <div
@@ -667,8 +681,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-5 py-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6"
       >
         <div class="border-l-[3px] border-burning-orange pl-4">
-          <h2 class="text-[20px] font-bold text-noble-black">Danger Zone</h2>
-          <p class="text-[13px] font-medium text-noble-black/50">
+          <h2 class="text-[20px] font-semibold text-noble-black">Danger Zone</h2>
+          <p class="text-[13px] font-light text-noble-black/50">
             Irreversible actions related to your account security and data.
           </p>
         </div>
@@ -677,14 +691,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-bold text-noble-black">Deactivate Account</h3>
-              <p class="text-[13px] font-medium text-noble-black/50">
+              <h3 class="text-[16px] font-medium text-noble-black">Deactivate Account</h3>
+              <p class="text-[13px] font-light text-noble-black/50">
                 Hide your profile and listings until you sign in again. Your data remains safe.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-bold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
+              class="h-10 px-6 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-semibold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
               @click="openDeactivateAccountModal"
             >
               Deactivate
@@ -694,14 +708,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-bold text-noble-black">Delete Account</h3>
-              <p class="text-[13px] font-medium text-noble-black/50">
+              <h3 class="text-[16px] font-medium text-noble-black">Delete Account</h3>
+              <p class="text-[13px] font-light text-noble-black/50">
                 Permanently erase your account, active listings, and all personal data from TakeUP.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-bold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
+              class="h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-semibold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
               @click="openDeleteAccountModal"
             >
               Delete
@@ -727,8 +741,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <!-- Header -->
             <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[24px] font-bold text-noble-black">Edit Profile</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                <h2 class="text-[24px] font-semibold text-noble-black">Edit Profile</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Update your public account details.
                 </p>
               </div>
@@ -737,14 +751,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeEditProfileModal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -811,38 +818,13 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                       <div
                         class="absolute inset-0 bg-noble-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                       >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="white"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path
-                            d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                          />
-                          <circle cx="12" cy="13" r="4" />
-                        </svg>
+                        <Icon name="ph:camera" class="w-6 h-6 text-white" />
                       </div>
                     </div>
                     <div
                       class="absolute bottom-1 right-1 w-7 h-7 bg-burning-orange rounded-full flex items-center justify-center shadow-md z-20 transition-transform duration-300 group-hover:scale-110"
                     >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="3"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                      </svg>
+                      <Icon name="ph:pencil-simple" class="w-3 h-3 text-white" />
                     </div>
                   </div>
                 </div>
@@ -869,19 +851,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
+                    <Icon name="ph:user" class="w-[18px] h-[18px]" />
                   </div>
                   <input
                     id="edit-profile-name"
@@ -905,19 +875,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                       <div
                         class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300 z-10"
                       >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2.2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <circle cx="12" cy="12" r="4" />
-                          <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
-                        </svg>
+                        <Icon name="ph:at" class="w-[18px] h-[18px]" />
                       </div>
                       <div class="flex-1 relative">
                         <input
@@ -939,18 +897,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                           v-if="usernameStatus === 'available'"
                           class="absolute right-3 top-1/2 -translate-y-1/2 mt-2 text-success-green"
                         >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="3"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
+                          <Icon name="ph:check" class="w-4 h-4" />
                         </div>
                       </div>
                     </div>
@@ -976,19 +923,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                      <circle cx="12" cy="10" r="3" />
-                    </svg>
+                    <Icon name="ph:map-pin" class="w-[18px] h-[18px]" />
                   </div>
                   <input
                     id="edit-profile-location"
@@ -1008,21 +943,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                      <line x1="9" y1="9" x2="9.01" y2="9" />
-                      <line x1="15" y1="9" x2="15.01" y2="9" />
-                    </svg>
+                    <Icon name="ph:smiley" class="w-[18px] h-[18px]" />
                   </div>
                   <input
                     id="edit-profile-pronouns"
@@ -1042,19 +963,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   <div
                     class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                    </svg>
+                    <Icon name="ph:pencil-simple" class="w-[18px] h-[18px]" />
                   </div>
                   <textarea
                     id="edit-profile-bio"
@@ -1088,14 +997,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-semibold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
                   @click="closeEditProfileModal"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                   :disabled="!canSaveProfile"
                   @click="saveProfile"
                 >
@@ -1121,8 +1030,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <!-- Header -->
             <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[24px] font-bold text-noble-black">Deactivate Account</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                <h2 class="text-[24px] font-semibold text-noble-black">Deactivate Account</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Temporarily hide your profile and listings.
                 </p>
               </div>
@@ -1132,14 +1041,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 :disabled="isDeactivatingAccount"
                 @click="closeDeactivateAccountModal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -1149,22 +1051,11 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 <!-- Eligibility Banner -->
                 <div
                   v-if="isLoadingDeactivationEligibility"
-                  class="rounded-[14px] border-[1.5px] border-cinnamon-ice/20 bg-cream p-5 text-[14px] font-medium text-noble-black/60 flex items-center gap-2"
+                  class="flex items-center justify-center gap-3 py-8 text-[14px] font-medium text-noble-black/40"
                 >
-                  <svg
-                    class="animate-spin"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
-                  Checking eligibility...
+                  <Icon name="ph:circle-notch" class="w-5 h-5 animate-spin" />
+                  <span>Checking eligibility...</span>
                 </div>
-
                 <div
                   v-else-if="deactivationEligibility?.blockers.length"
                   class="rounded-[14px] border-[1.5px] border-cinnabar-red/20 bg-cinnabar-red/5 p-5"
@@ -1178,17 +1069,10 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                       :key="blocker.code"
                       class="text-[13px] font-medium text-noble-black/80 flex items-start gap-3"
                     >
-                      <svg
-                        class="text-cinnabar-red shrink-0 mt-0.5"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path
-                          d="M12 22c5.523 0 9-3.477 9-9s-3.477-9-9-9-9 3.477-9 9 3.477 9 9 9zM12 8a1 1 0 0 1 1 1v4a1 1 0 0 1-2 0V9a1 1 0 0 1 1-1zm0 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"
-                        />
-                      </svg>
+                      <Icon
+                        name="ph:warning-circle"
+                        class="w-[18px] h-[18px] text-cinnabar-red shrink-0 mt-0.5"
+                      />
                       <span class="leading-relaxed">{{ blocker.message }}</span>
                     </li>
                   </ul>
@@ -1196,21 +1080,10 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 
                 <div
                   v-else-if="deactivationEligibility?.allowed"
-                  class="rounded-[14px] border border-cinnamon-ice/20 bg-cream p-5"
+                  class="rounded-[14px] border border-success-green/20 bg-success-green/[0.03] p-5"
                 >
                   <div class="flex items-center gap-3 text-success-green">
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    <Icon name="ph:check" class="w-5 h-5" />
                     <h3 class="text-[16px] font-bold">Account ready to deactivate</h3>
                   </div>
                   <p class="mt-2 text-[13px] font-medium text-noble-black/50 leading-relaxed">
@@ -1221,9 +1094,10 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 
                 <div
                   v-else
-                  class="rounded-[14px] border border-cinnamon-ice/20 bg-cream p-5 text-[14px] font-medium text-noble-black/60"
+                  class="flex items-center justify-center gap-3 py-8 text-[14px] font-medium text-cinnabar-red/60"
                 >
-                  Unable to check eligibility at this time. Please try again later.
+                  <Icon name="ph:warning-circle" class="w-5 h-5" />
+                  <span>Unable to check eligibility at this time. Please try again later.</span>
                 </div>
               </div>
             </div>
@@ -1241,7 +1115,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-bold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5 disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-semibold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5 disabled:opacity-50"
                   :disabled="isDeactivatingAccount"
                   @click="closeDeactivateAccountModal"
                 >
@@ -1249,7 +1123,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 </button>
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="!canDeactivateAccount"
                   @click="deactivateAccount"
                 >
@@ -1275,8 +1149,8 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
             <!-- Header -->
             <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h2 class="text-[24px] font-bold text-noble-black">Delete Account</h2>
-                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                <h2 class="text-[24px] font-semibold text-noble-black">Delete Account</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   This action is permanent and cannot be undone.
                 </p>
               </div>
@@ -1285,14 +1159,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="closeDeleteAccountModal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-                </svg>
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
@@ -1303,21 +1170,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   class="rounded-[16px] border border-cinnabar-red/10 bg-cinnabar-red/[0.03] p-5"
                 >
                   <div class="flex items-start gap-3 text-cinnabar-red">
-                    <svg
-                      class="shrink-0 mt-0.5"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
+                    <Icon name="ph:info" class="w-[18px] h-[18px] shrink-0 mt-0.5" />
                     <p class="text-[13px] font-bold leading-relaxed">
                       Required financial and transaction records are retained in an anonymized form
                       for compliance.
@@ -1330,18 +1183,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                     <div
                       class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-cinnabar-red transition-colors duration-300"
                     >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <Icon name="ph:check" class="w-[18px] h-[18px]" />
                     </div>
                     <input
                       id="delete-confirmation"
@@ -1374,14 +1216,14 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
               <div class="flex gap-3 w-full">
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-bold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-semibold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5"
                   @click="closeDeleteAccountModal"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="!canDeleteAccount"
                   @click="deleteAccount"
                 >
@@ -1393,11 +1235,5 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         </div>
       </Teleport>
     </template>
-
-    <!-- Skeleton Loader for SSR -->
-    <section v-else class="space-y-6 animate-pulse">
-      <div class="h-8 w-64 rounded-lg bg-cinnamon-ice/70" />
-      <div class="rounded-[20px] border border-cinnamon-ice bg-cream h-64 shadow-sm" />
-    </section>
   </div>
 </template>

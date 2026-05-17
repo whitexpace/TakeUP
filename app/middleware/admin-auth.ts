@@ -3,10 +3,23 @@
  * On the server, verifies admin status from the JWT session cookie for instant SSR.
  * On the client, caches verification so subsequent navigations are instant.
  */
+import { useViewerSession } from "../composables/use-viewer-session"
+
 type AdminAuthCache = {
   accessToken: string | null
   accountType: string | null
   checked: boolean
+}
+
+const reloadOnceAfterBridge = (accessToken: string, path: string) => {
+  if (!import.meta.client) return false
+
+  const reloadKey = `takeup:admin-bridge-reload:${accessToken.slice(-24)}`
+  if (window.sessionStorage.getItem(reloadKey) === "1") return false
+
+  window.sessionStorage.setItem(reloadKey, "1")
+  window.location.replace(path)
+  return true
 }
 
 export default defineNuxtRouteMiddleware(async (to) => {
@@ -26,18 +39,19 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   // --- Client-side: bridge Supabase session and verify admin status ---
-  const supabase = useSupabaseClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
+  const nuxtApp = useNuxtApp()
+  const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
+  const serverRenderedAppSession = cookieAccountType.value !== null
   const authCache = useState<AdminAuthCache>("admin-auth-cache", () => ({
     accessToken: null,
     accountType: null,
     checked: false,
   }))
 
-  if (!session) {
+  const { getAccessToken, ensureBridgedSession } = useViewerSession()
+  const accessToken = await getAccessToken()
+
+  if (!accessToken) {
     authCache.value = { accessToken: null, accountType: null, checked: false }
     return navigateTo("/")
   }
@@ -45,14 +59,21 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const verifiedAccessToken = useState<string | null>("admin-verified-access-token", () => null)
 
   // Skip both bridge and admin check if we already verified this token
-  if (verifiedAccessToken.value === session.access_token) return
+  if (verifiedAccessToken.value === accessToken) return
 
-  const { ensureBridged } = useSessionBridge()
-  if (!(await ensureBridged(session.access_token))) {
+  if (!(await ensureBridgedSession())) {
     return navigateTo("/")
   }
 
-  if (authCache.value.checked && authCache.value.accessToken === session.access_token) {
+  if (nuxtApp.isHydrating && !serverRenderedAppSession) {
+    if (reloadOnceAfterBridge(accessToken, to.fullPath)) {
+      return abortNavigation()
+    }
+
+    return navigateTo("/")
+  }
+
+  if (authCache.value.checked && authCache.value.accessToken === accessToken) {
     if (authCache.value.accountType !== "ADMIN") {
       return navigateTo("/account")
     }
@@ -61,11 +82,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   try {
-    const { fetch: fetchAuthUser } = useAuthUser()
-    const authUser = await fetchAuthUser()
+    const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+    const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
 
     authCache.value = {
-      accessToken: session.access_token,
+      accessToken,
       accountType: authUser?.accountType ?? null,
       checked: true,
     }
@@ -74,7 +95,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       return navigateTo("/account")
     }
 
-    verifiedAccessToken.value = session.access_token
+    verifiedAccessToken.value = accessToken
   } catch {
     authCache.value = { accessToken: null, accountType: null, checked: false }
     return navigateTo("/account")

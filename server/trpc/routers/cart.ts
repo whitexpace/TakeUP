@@ -199,6 +199,8 @@ const isDateWithinAvailabilityRange = (date: Date, range: { startDate: Date; end
   )
 }
 
+const BAG_ACCOUNT_TYPES = new Set(["USER", "ADMIN"])
+
 const requireBorrowerAccount = async (
   ctx: Pick<Context, "prisma" | "user"> & { user: { id: string } },
 ) => {
@@ -214,10 +216,10 @@ const requireBorrowerAccount = async (
     })
   }
 
-  if (userRecord.accountType !== "BORROWER") {
+  if (!BAG_ACCOUNT_TYPES.has(userRecord.accountType)) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Only borrower accounts can use the bag.",
+      message: "Only user and admin accounts can use the bag.",
     })
   }
 }

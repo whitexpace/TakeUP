@@ -1,9 +1,13 @@
-import { ref, type Ref } from "vue"
+import { computed, getCurrentScope, onScopeDispose, ref, type Ref } from "vue"
+import { usePersistedSessionState } from "./use-persisted-session-state"
+import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
+import { useViewerSession } from "./use-viewer-session"
 
 type UseFilteredResultsCountOptions = {
   searchQuery: Ref<string>
   filterParams?: Ref<Record<string, string | undefined>>
   debounceMs?: number
+  stateKey?: string
 }
 
 type ResultsCountCacheEntry = {
@@ -73,12 +77,15 @@ export const useFilteredResultsCount = ({
   searchQuery,
   filterParams,
   debounceMs = 75,
+  stateKey,
 }: UseFilteredResultsCountOptions) => {
-  const supabase =
-    !import.meta.server && typeof useSupabaseClient === "function" ? useSupabaseClient() : null
   const canUseSharedCache = !import.meta.server
-  const totalResultsCount = ref<number | null>(null)
+  const { getAccessToken, session } = useViewerSession()
+  const totalResultsCount: Ref<number | null> = stateKey
+    ? usePersistedSessionState<number | null>(stateKey, () => null)
+    : ref<number | null>(null)
   const isCountLoading = ref(false)
+  const hasCachedCount = computed(() => totalResultsCount.value !== null)
   const requestVersion = ref(0)
   let pendingRefreshTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -96,18 +103,16 @@ export const useFilteredResultsCount = ({
     if (import.meta.server) {
       const event = useRequestEvent()
       viewerCacheKey = event?.context.authUser?.id ?? viewerCacheKey
-    } else if (supabase) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      accessToken = session?.access_token
-      viewerCacheKey = session?.user?.id ?? viewerCacheKey
+    } else {
+      accessToken = await getAccessToken()
+      viewerCacheKey = session.value?.user?.id ?? viewerCacheKey
     }
 
     const cacheKey = `${viewerCacheKey}:${serializeResultsCountQuery(query)}`
     const cachedCount = canUseSharedCache ? getCachedResultsCount(cacheKey) : null
 
     if (cachedCount !== null) {
+      recordPerfEvent("item-count", cacheKey, "cache-hit")
       if (version === requestVersion.value) {
         totalResultsCount.value = cachedCount
         isCountLoading.value = false
@@ -115,12 +120,17 @@ export const useFilteredResultsCount = ({
       return
     }
 
+    recordPerfEvent("item-count", cacheKey, "cache-miss")
+
     isCountLoading.value = true
 
     try {
       const pendingRequest = canUseSharedCache ? pendingResultsCountRequests.get(cacheKey) : null
       const count = pendingRequest
-        ? await pendingRequest
+        ? await (() => {
+            recordPerfEvent("item-count", cacheKey, "request-dedup-hit")
+            return pendingRequest
+          })()
         : await (() => {
             const headers = import.meta.server
               ? useRequestHeaders(["cookie"])
@@ -131,9 +141,9 @@ export const useFilteredResultsCount = ({
               query,
               ...(headers ? { headers } : {}),
             }
-            const request = $fetch<{ count: number }>("/api/items/count", requestOptions).then(
-              (result) => result.count,
-            )
+            const request = withPerfTimer("item-count", cacheKey, () =>
+              $fetch<{ count: number }>("/api/items/count", requestOptions),
+            ).then((result) => result.count)
 
             if (canUseSharedCache) {
               pendingResultsCountRequests.set(cacheKey, request)
@@ -180,9 +190,14 @@ export const useFilteredResultsCount = ({
     }, delayMs)
   }
 
+  if (getCurrentScope()) {
+    onScopeDispose(cancelPendingResultsCountRefresh)
+  }
+
   return {
     totalResultsCount,
     isCountLoading,
+    hasCachedCount,
     refreshResultsCount,
     scheduleResultsCountRefresh,
     cancelPendingResultsCountRefresh,

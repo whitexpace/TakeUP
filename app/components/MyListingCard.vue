@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MyListingItem } from "../composables/use-my-listings"
+import { prefetchMyListingEdit, type MyListingItem } from "../composables/use-my-listings"
 
 const props = defineProps<{
   item: MyListingItem
@@ -10,6 +10,10 @@ const emit = defineEmits<{
   toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
   boostListing: [itemId: string]
 }>()
+
+const warmListingEdit = () => {
+  void prefetchMyListingEdit(props.item.id, props.item)
+}
 
 const cardProps = computed(() => {
   const image =
@@ -80,16 +84,28 @@ const boostLabel = computed(() => {
 </script>
 
 <template>
-  <ItemCard v-bind="cardProps" class="group/mcard">
+  <ItemCard
+    v-bind="cardProps"
+    class="group/mcard"
+    @pointerenter="warmListingEdit"
+    @pointerover.passive="warmListingEdit"
+    @focusin="warmListingEdit"
+    @touchstart.passive="warmListingEdit"
+    @mousedown.left="warmListingEdit"
+  >
     <template #image-overlay>
       <!-- Dark blurred overlay with a smooth fade-in transition -->
       <div
-        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2.5 bg-noble-black/75 px-5 backdrop-blur-[2px] transition-all duration-300 ease-in-out opacity-0 group-hover/mcard:opacity-100"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2.5 bg-noble-black/75 px-5 backdrop-blur-[2px] transition-all duration-300 ease-in-out opacity-0 group-hover/mcard:opacity-100 rounded-t-[14px]"
       >
         <!-- Edit Button (Primary) -->
         <NuxtLink
           :to="`/account/listings/${item.id}/edit`"
+          :prefetch-on="{ interaction: true }"
           class="w-full h-10 flex items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[13px] font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95"
+          @pointerenter="warmListingEdit"
+          @focus="warmListingEdit"
+          @mousedown.left="warmListingEdit"
           @click.stop
         >
           Edit Listing
@@ -97,7 +113,7 @@ const boostLabel = computed(() => {
 
         <button
           :disabled="!isBoostEligible || isToggling"
-          class="w-full h-10 flex items-center justify-center rounded-[10px] bg-blue-estate text-[13px] font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:bg-blue-estate/30 disabled:hover:translate-y-0"
+          class="w-full h-10 flex items-center justify-center rounded-[10px] bg-transparent border-2 border-burning-orange text-[13px] font-bold text-burning-orange shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-burning-orange/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
           @click.stop="emit('boostListing', item.id)"
         >
           {{ boostLabel }}
@@ -108,18 +124,7 @@ const boostLabel = computed(() => {
         v-if="hasActiveBoost"
         class="absolute right-3 top-3 z-20 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/30 flex items-center gap-1"
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="4"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m5 12 5 5L20 7" />
-        </svg>
+        <Icon name="ph:check" class="w-2.5 h-2.5" />
         Boosted
       </div>
     </template>
