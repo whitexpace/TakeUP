@@ -13,6 +13,7 @@ const {
   linkedAccounts,
   toggleBalanceVisibility,
   topUpPseudo,
+  withdrawPseudo,
   formattedBalance,
   maskedBalance,
 } = useWallet()
@@ -34,6 +35,7 @@ const {
       :is-activity-loading="isInitialLoading && transactions.length === 0"
       :on-toggle-balance="toggleBalanceVisibility"
       :on-top-up="topUpPseudo"
+      :on-withdraw="withdrawPseudo"
     />
   </div>
 </template>

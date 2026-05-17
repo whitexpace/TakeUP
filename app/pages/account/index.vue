@@ -1049,12 +1049,11 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                 <!-- Eligibility Banner -->
                 <div
                   v-if="isLoadingDeactivationEligibility"
-                  class="rounded-[14px] border-[1.5px] border-cinnamon-ice/20 bg-cream p-5 text-[14px] font-medium text-noble-black/60 flex items-center gap-2"
+                  class="flex items-center justify-center gap-3 py-8 text-[14px] font-medium text-noble-black/40"
                 >
-                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
-                  Checking eligibility...
+                  <Icon name="ph:circle-notch" class="w-5 h-5 animate-spin" />
+                  <span>Checking eligibility...</span>
                 </div>
-
                 <div
                   v-else-if="deactivationEligibility?.blockers.length"
                   class="rounded-[14px] border-[1.5px] border-cinnabar-red/20 bg-cinnabar-red/5 p-5"
@@ -1079,7 +1078,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 
                 <div
                   v-else-if="deactivationEligibility?.allowed"
-                  class="rounded-[14px] border border-cinnamon-ice/20 bg-cream p-5"
+                  class="rounded-[14px] border border-success-green/20 bg-success-green/[0.03] p-5"
                 >
                   <div class="flex items-center gap-3 text-success-green">
                     <Icon name="ph:check" class="w-5 h-5" />
@@ -1093,9 +1092,10 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 
                 <div
                   v-else
-                  class="rounded-[14px] border border-cinnamon-ice/20 bg-cream p-5 text-[14px] font-medium text-noble-black/60"
+                  class="flex items-center justify-center gap-3 py-8 text-[14px] font-medium text-cinnabar-red/60"
                 >
-                  Unable to check eligibility at this time. Please try again later.
+                  <Icon name="ph:warning-circle" class="w-5 h-5" />
+                  <span>Unable to check eligibility at this time. Please try again later.</span>
                 </div>
               </div>
             </div>
