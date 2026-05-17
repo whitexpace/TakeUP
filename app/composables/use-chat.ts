@@ -166,6 +166,8 @@ export const useChat = () => {
   )
 
   const getCachedMessages = (conversationId: string) => messageCache.value[conversationId] ?? []
+  const hasLoadedMessagePage = (conversationId: string) =>
+    Boolean(messagePageState.value[conversationId])
 
   const setCachedMessages = (
     conversationId: string,
@@ -424,7 +426,7 @@ export const useChat = () => {
       options.expectedOpenRequestId === undefined ||
       options.expectedOpenRequestId === openRequestId.value
 
-    if (!cursor && !options.force && getCachedMessages(conversationId).length > 0) {
+    if (!cursor && !options.force && hasLoadedMessagePage(conversationId)) {
       return
     }
 
@@ -606,7 +608,7 @@ export const useChat = () => {
   const prefetchConversationMessages = async (conversationId: string) => {
     if (
       !conversationId ||
-      getCachedMessages(conversationId).length > 0 ||
+      hasLoadedMessagePage(conversationId) ||
       prefetchInFlight.value[conversationId]
     ) {
       return

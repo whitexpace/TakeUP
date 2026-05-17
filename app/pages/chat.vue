@@ -583,7 +583,9 @@ const handleInboxRealtimeMessage = (
 ) => {
   const message = mapRealtimeMessage(payload.new)
   if (!message) return
+
   if (activeConversation.value?.conversationId === message.conversationId) {
+    onActiveRealtimeMessage(message, eventType)
     return
   }
 
