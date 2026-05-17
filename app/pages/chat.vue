@@ -42,7 +42,6 @@ const {
   onInboxRealtimeMessage,
   closeConversation,
   loadMoreMessages,
-  prefetchConversationMessagesForInbox,
 } = useChat()
 
 const route = useRoute()
@@ -535,6 +534,22 @@ let inboxRealtimeChannel: RealtimeChannel | null = null
 let activeRealtimeChannel: RealtimeChannel | null = null
 let activeRealtimeGeneration = 0
 
+const ensureRealtimeAuth = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (session?.access_token) {
+    supabase.realtime.setAuth(session.access_token)
+  }
+}
+
+const logRealtimeStatus = (channelName: string, status: string, error?: Error) => {
+  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+    console.warn(`[chat realtime] ${channelName} ${status}`, error)
+  }
+}
+
 const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null => {
   if (
     typeof row.id !== "string" ||
@@ -594,7 +609,10 @@ const stopActiveRealtime = async () => {
   }
 }
 
-const setupInboxRealtime = () => {
+const setupInboxRealtime = async () => {
+  if (inboxRealtimeChannel) return
+
+  await ensureRealtimeAuth()
   if (inboxRealtimeChannel) return
 
   inboxRealtimeChannel = supabase
@@ -605,7 +623,7 @@ const setupInboxRealtime = () => {
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) =>
       handleInboxRealtimeMessage(payload, "UPDATE"),
     )
-    .subscribe()
+    .subscribe((status, error) => logRealtimeStatus("inbox", status, error))
 }
 
 const setupActiveRealtime = async (conversationId: string | null) => {
@@ -613,6 +631,11 @@ const setupActiveRealtime = async (conversationId: string | null) => {
   await stopActiveRealtime()
 
   if (generation !== activeRealtimeGeneration || !conversationId) {
+    return
+  }
+
+  await ensureRealtimeAuth()
+  if (generation !== activeRealtimeGeneration) {
     return
   }
 
@@ -638,7 +661,7 @@ const setupActiveRealtime = async (conversationId: string | null) => {
       },
       (payload) => handleActiveRealtimeMessage(payload, "UPDATE"),
     )
-    .subscribe()
+    .subscribe((status, error) => logRealtimeStatus("active", status, error))
 }
 
 const stopRealtime = () => {
@@ -710,7 +733,7 @@ onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
   document.addEventListener("click", handleDocumentClick)
-  setupInboxRealtime()
+  void setupInboxRealtime()
 
   await loadConversations({ background: sortedConversations.value.length > 0 })
 
@@ -719,8 +742,6 @@ onMounted(async () => {
   } else if (sortedConversations.value[0]) {
     await openConversationFromRoute(sortedConversations.value[0].transactionId)
   }
-
-  prefetchConversationMessagesForInbox({ initialCount: 8 })
 
   nextTick(adjustTextareaHeight)
 })

@@ -160,6 +160,10 @@ export const useChat = () => {
   const processedRealtimeInsertIds = useState<string[]>("chat-processed-realtime-inserts", () => [])
   const readSyncInFlight = useState<Record<string, boolean>>("chat-read-sync-in-flight", () => ({}))
   const prefetchInFlight = useState<Record<string, boolean>>("chat-prefetch-in-flight", () => ({}))
+  const messageLoadInFlight = useState<Record<string, boolean>>(
+    "chat-message-load-in-flight",
+    () => ({}),
+  )
 
   const getCachedMessages = (conversationId: string) => messageCache.value[conversationId] ?? []
 
@@ -225,6 +229,12 @@ export const useChat = () => {
   const clearPrefetchInFlight = (conversationId: string) => {
     prefetchInFlight.value = Object.fromEntries(
       Object.entries(prefetchInFlight.value).filter(([key]) => key !== conversationId),
+    )
+  }
+
+  const clearMessageLoadInFlight = (loadKey: string) => {
+    messageLoadInFlight.value = Object.fromEntries(
+      Object.entries(messageLoadInFlight.value).filter(([key]) => key !== loadKey),
     )
   }
 
@@ -414,15 +424,22 @@ export const useChat = () => {
       options.expectedOpenRequestId === undefined ||
       options.expectedOpenRequestId === openRequestId.value
 
+    if (!cursor && !options.force && getCachedMessages(conversationId).length > 0) {
+      return
+    }
+
+    const loadKey = `${conversationId}:${cursor ?? "latest"}`
+    if (messageLoadInFlight.value[loadKey]) {
+      return
+    }
+
+    messageLoadInFlight.value = { ...messageLoadInFlight.value, [loadKey]: true }
+
     if (!options.background) {
       isLoadingMessages.value = true
     }
 
     try {
-      if (!cursor && !options.force && getCachedMessages(conversationId).length > 0) {
-        return
-      }
-
       const params: Record<string, string> = { conversationId }
       if (cursor) params.cursor = cursor
 
@@ -460,6 +477,8 @@ export const useChat = () => {
         error.value = getErrorMessage(err, "Failed to load messages.")
       }
     } finally {
+      clearMessageLoadInFlight(loadKey)
+
       if (shouldApplyResult() && !options.background) {
         isLoadingMessages.value = false
       }
