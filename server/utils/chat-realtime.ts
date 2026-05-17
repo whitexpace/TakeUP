@@ -64,12 +64,6 @@ export const broadcastChatMessage = async (event: H3Event, message: Broadcastabl
   ]
 
   await Promise.allSettled(
-    topics.map((topic) =>
-      supabase.channel(topic).send({
-        type: "broadcast",
-        event: "message",
-        payload,
-      }),
-    ),
+    topics.map((topic) => supabase.channel(topic).httpSend("message", payload)),
   )
 }
