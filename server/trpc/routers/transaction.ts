@@ -818,10 +818,7 @@ export const transactionRouter = router({
           .rewardEvent
         if (rewardEventDelegate && typeof rewardEventDelegate.upsert === "function") {
           try {
-            await processTransactionRewards(
-              ctx.prisma as Prisma.TransactionClient,
-              reviewResult.transactionId,
-            )
+            await processTransactionRewards(ctx.prisma, reviewResult.transactionId)
           } catch (error) {
             console.error("Failed to process transaction rewards after review submission", error)
           }

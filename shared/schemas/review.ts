@@ -54,6 +54,7 @@ export const createReviewSchema = z.object({
   rating: reviewRatingSchema,
   reviewText: z.string().trim().max(1000).optional(),
   isAnonymous: z.boolean().default(false),
+  reviewType: reviewTypeSchema.optional(),
 })
 
 export const bookingReviewLookupSchema = z.object({

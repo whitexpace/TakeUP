@@ -22,23 +22,8 @@
     <div class="relative h-[180px] w-full bg-noble-black/5 rounded-t-[14px]">
       <!-- Dedicated container for image scale & rounded top -->
       <div class="absolute inset-0 overflow-hidden rounded-t-[14px]">
-        <NuxtImg
-          v-if="image && canOptimizeImage"
-          :src="image"
-          :alt="name"
-          width="280"
-          height="180"
-          sizes="(min-width: 1536px) 280px, (min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-          fit="cover"
-          format="webp"
-          :quality="55"
-          :loading="imageLoading"
-          :fetchpriority="imageFetchPriority"
-          decoding="async"
-          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
         <img
-          v-else-if="image"
+          v-if="image"
           :src="image"
           :alt="name"
           width="280"
@@ -207,7 +192,6 @@ const emit = defineEmits<{
 
 const { incrementLikes, decrementLikes } = useLikes()
 const { warmDestination } = useDestinationImagePrefetch()
-const runtimeConfig = useRuntimeConfig()
 const isLiked = ref(Boolean(props.isLiked))
 const isTogglingLike = ref(false)
 const router = useRouter()
@@ -234,22 +218,6 @@ const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")
 const displayPriceUnit = computed(() => props.priceUnit ?? "day")
 const canNavigate = computed(() => !props.isManagement || props.allowNavigation)
 const optimizedNavigation = computed(() => canNavigate.value && props.enableDestinationPrefetch)
-const optimizedImageDomains = computed(() => {
-  const domains = runtimeConfig.public.optimizedImageDomains
-  return Array.isArray(domains)
-    ? domains.filter((domain): domain is string => typeof domain === "string")
-    : []
-})
-const canOptimizeImage = computed(() => {
-  if (!props.image) return undefined
-
-  try {
-    const imageUrl = new URL(props.image)
-    return optimizedImageDomains.value.includes(imageUrl.hostname)
-  } catch {
-    return false
-  }
-})
 const linkTarget = computed(() => {
   if (props.fromPage) {
     return {

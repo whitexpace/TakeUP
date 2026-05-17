@@ -13,10 +13,7 @@ const supabaseImageDomain = (() => {
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
   devtools: { enabled: true },
-  modules: ["@nuxt/eslint", "@nuxtjs/tailwindcss", "@nuxtjs/supabase", "@nuxt/icon", "@nuxt/image"],
-  image: {
-    domains: supabaseImageDomain ? [supabaseImageDomain] : [],
-  },
+  modules: ["@nuxt/eslint", "@nuxtjs/tailwindcss", "@nuxtjs/supabase", "@nuxt/icon"],
   typescript: { strict: true },
   runtimeConfig: {
     googleClientId: process.env.GOOGLE_CLIENT_ID,
