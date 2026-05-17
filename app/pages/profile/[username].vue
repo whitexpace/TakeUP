@@ -490,8 +490,8 @@ const {
   `profile-${username}`,
   () => prefetchPublicProfile(username, { reviewsLimit: PROFILE_REVIEW_PAGE_SIZE }),
   {
-  default: () => getCachedPublicProfile(username),
-  lazy: true,
+    default: () => getCachedPublicProfile(username),
+    lazy: true,
   },
 )
 const isLoading = computed(() => isProfilePending.value && !profileData.value)
