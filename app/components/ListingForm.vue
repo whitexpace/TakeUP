@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from "vue"
 import type { MyListingItem } from "../composables/use-my-listings"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { mergeParsedTags } from "../utils/tag-input"
 
 const STEPS = [
@@ -94,6 +95,10 @@ const supabaseUrl = runtimeConfig.public.supabase.url
 const supabaseKey = runtimeConfig.public.supabase.key
 
 const MAX_GALLERY_IMAGE_COUNT = 10
+const MAX_GALLERY_IMAGE_SIZE_MB = 10
+const MAX_GALLERY_IMAGE_BYTES = MAX_GALLERY_IMAGE_SIZE_MB * 1024 * 1024
+const GALLERY_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp"
+const ALLOWED_GALLERY_IMAGE_MIME_TYPES = new Set(GALLERY_IMAGE_ACCEPT.split(","))
 const CATEGORIES: { value: ItemCategory; label: string }[] = [
   { value: "ELECTRONICS", label: "Electronics" },
   { value: "BOOKS", label: "Books" },
@@ -495,30 +500,111 @@ const getSafeFileName = (fileName: string) => {
   )
 }
 
+type GalleryUploadSkipCounts = {
+  invalidType: number
+  tooLarge: number
+  overLimit: number
+}
+
+const formatGalleryUploadSkipMessage = (skipped: GalleryUploadSkipCounts) => {
+  const totalSkipped = skipped.invalidType + skipped.tooLarge + skipped.overLimit
+  if (totalSkipped === 0) return null
+
+  const details: string[] = []
+  if (skipped.invalidType > 0) {
+    details.push(
+      `${skipped.invalidType} ${skipped.invalidType === 1 ? "is" : "are"} not JPEG, PNG, or WebP`,
+    )
+  }
+  if (skipped.tooLarge > 0) {
+    details.push(
+      `${skipped.tooLarge} ${skipped.tooLarge === 1 ? "exceeds" : "exceed"} ${MAX_GALLERY_IMAGE_SIZE_MB} MB`,
+    )
+  }
+  if (skipped.overLimit > 0) {
+    details.push(
+      `${skipped.overLimit} ${skipped.overLimit === 1 ? "exceeds" : "exceed"} the ${MAX_GALLERY_IMAGE_COUNT}-image limit`,
+    )
+  }
+
+  return `Skipped ${totalSkipped} ${totalSkipped === 1 ? "file" : "files"}: ${details.join("; ")}.`
+}
+
+const getUploadableGalleryFiles = (files: File[]) => {
+  const uploadableFiles: File[] = []
+  const skipped: GalleryUploadSkipCounts = {
+    invalidType: 0,
+    tooLarge: 0,
+    overLimit: 0,
+  }
+  const availableSlots = Math.max(
+    0,
+    MAX_GALLERY_IMAGE_COUNT - images.value.length - pendingUploads.value.length,
+  )
+
+  for (const file of files) {
+    if (!ALLOWED_GALLERY_IMAGE_MIME_TYPES.has(file.type)) {
+      skipped.invalidType += 1
+      continue
+    }
+
+    if (file.size > MAX_GALLERY_IMAGE_BYTES) {
+      skipped.tooLarge += 1
+      continue
+    }
+
+    if (uploadableFiles.length >= availableSlots) {
+      skipped.overLimit += 1
+      continue
+    }
+
+    uploadableFiles.push(file)
+  }
+
+  return {
+    uploadableFiles,
+    skippedMessage: formatGalleryUploadSkipMessage(skipped),
+  }
+}
+
+const resetGalleryInput = () => {
+  if (galleryInput.value) {
+    galleryInput.value.value = ""
+  }
+}
+
+const clearPendingUpload = (uploadId: string) => {
+  pendingUploadRequests.delete(uploadId)
+  pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+}
+
 const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
-  const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
-  const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
-  if (!authUser) throw new Error("Not authenticated")
-  const userId = authUser.id
-  const datePrefix = new Date().toISOString().slice(0, 10)
-  const uniqueId = crypto.randomUUID()
-  const storagePath = `items/${userId}/${datePrefix}/${uniqueId}-${getSafeFileName(file.name)}`
-  const uploadId = storagePath
-  pendingUploads.value.push({ id: uploadId, name: file.name, progress: 0 })
+  const uploadFile = await convertImageFileToWebP(file)
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const accessToken = session?.access_token
+  const storageOwnerId = session?.user?.id
+  if (!accessToken) throw new Error("You must be signed in to upload item images.")
+  if (!storageOwnerId) throw new Error("Unable to identify your Supabase account for upload.")
+
+  const datePrefix = new Date().toISOString().slice(0, 10)
+  const storagePath = `items/${storageOwnerId}/${datePrefix}/${crypto.randomUUID()}-${getSafeFileName(uploadFile.name)}`
+  const uploadId = storagePath
+  pendingUploads.value.push({ id: uploadId, name: uploadFile.name, progress: 0 })
+
   return new Promise<ListingImage>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
+
     pendingUploadRequests.set(uploadId, xhr)
     xhr.open(
       "POST",
       `${supabaseUrl}/storage/v1/object/${itemImageBucket}/${storagePath.split("/").map(encodeURIComponent).join("/")}`,
     )
     xhr.setRequestHeader("apikey", supabaseKey)
-    if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
-    xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+    xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
+    xhr.setRequestHeader("x-upsert", "false")
+    xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
       const progress = Math.min(100, Math.round((event.loaded / event.total) * 100))
@@ -527,13 +613,15 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
       )
     }
     xhr.onerror = () => {
-      pendingUploadRequests.delete(uploadId)
-      pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+      clearPendingUpload(uploadId)
       reject(new Error("Network error"))
     }
+    xhr.onabort = () => {
+      clearPendingUpload(uploadId)
+      reject(new Error("Upload cancelled"))
+    }
     xhr.onload = () => {
-      pendingUploadRequests.delete(uploadId)
-      pendingUploads.value = pendingUploads.value.filter((u) => u.id !== uploadId)
+      clearPendingUpload(uploadId)
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error("Upload failed"))
         return
@@ -542,27 +630,44 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
         .from(itemImageBucket)
         .getPublicUrl(storagePath)
       sessionUploadedImageUrls.add(publicUrlData.publicUrl)
-      resolve({ id: storagePath, url: publicUrlData.publicUrl, name: file.name })
+      resolve({ id: storagePath, url: publicUrlData.publicUrl, name: uploadFile.name })
     }
-    xhr.send(file)
+    xhr.send(uploadFile)
   })
 }
 
 const uploadFiles = async (files: File[]) => {
   imageUploadError.value = null
-  if (files.length === 0) return
+  if (files.length === 0) {
+    resetGalleryInput()
+    return
+  }
+
+  if (isUploadingImages.value) {
+    imageUploadError.value = "Please wait for current image uploads to finish before adding more."
+    resetGalleryInput()
+    return
+  }
+
+  const { uploadableFiles, skippedMessage } = getUploadableGalleryFiles(files)
+  imageUploadError.value = skippedMessage
+  if (uploadableFiles.length === 0) {
+    resetGalleryInput()
+    return
+  }
+
   isUploadingImages.value = true
   try {
-    const uploaded = await Promise.all(files.map((f) => uploadFileWithProgress(f)))
+    const uploaded = await Promise.all(uploadableFiles.map((f) => uploadFileWithProgress(f)))
     images.value = [...images.value, ...uploaded]
     if (!primaryImageId.value) primaryImageId.value = uploaded[0]!.id
   } catch {
-    imageUploadError.value = "Failed to upload images."
+    imageUploadError.value = skippedMessage
+      ? `Failed to upload images. ${skippedMessage}`
+      : "Failed to upload images."
   } finally {
     isUploadingImages.value = false
-    if (galleryInput.value) {
-      galleryInput.value.value = ""
-    }
+    resetGalleryInput()
   }
 }
 
@@ -574,6 +679,7 @@ const handleGallerySelect = (event: Event) => {
 const removeGalleryImage = (id: string) => {
   images.value = images.value.filter((img) => img.id !== id)
   if (primaryImageId.value === id) primaryImageId.value = images.value[0]?.id ?? null
+  imageUploadError.value = null
 }
 
 const triggerGalleryUpload = () => galleryInput.value?.click()
@@ -606,6 +712,8 @@ const confirmCancel = () => {
 
 const cleanupSessionUploadsOnExit = () => {
   for (const xhr of pendingUploadRequests.values()) xhr.abort()
+  pendingUploadRequests.clear()
+  pendingUploads.value = []
 }
 
 const buildPayload = () => {
@@ -873,7 +981,7 @@ const availabilityRowErrors = computed(() =>
             <input
               ref="galleryInput"
               type="file"
-              accept="image/*"
+              :accept="GALLERY_IMAGE_ACCEPT"
               multiple
               class="hidden"
               @change="handleGallerySelect"
@@ -894,10 +1002,13 @@ const availabilityRowErrors = computed(() =>
                 Drag photos here or click to browse
               </p>
               <p class="mt-1 text-[13px] font-medium text-noble-black/40">
-                + Cover photo · PNG, JPG or WebP
+                + Cover photo · PNG, JPG or WebP · {{ MAX_GALLERY_IMAGE_SIZE_MB }} MB max
               </p>
             </div>
           </div>
+          <p v-if="imageUploadError" class="text-[13px] font-medium text-cinnabar-red">
+            {{ imageUploadError }}
+          </p>
           <div
             v-if="images.length > 0 || pendingUploads.length > 0"
             class="flex items-center gap-4 overflow-x-auto pt-5 pb-3 px-2 scrollbar-hide"

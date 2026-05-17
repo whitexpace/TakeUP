@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
 import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
@@ -22,7 +22,7 @@ const {
   fetch: fetchAuthUser,
   clear: clearAuthUser,
 } = useAuthUser()
-const { clear: clearSessionBridge } = useSessionBridge()
+const { clear: clearBridge } = useSessionBridge()
 const { clear: clearViewerSession } = useViewerSession()
 const { warmAccountReviews } = useAccountReviewsPrefetch()
 const { warmListingAnalytics } = useListingAnalyticsPrefetch()
@@ -31,6 +31,13 @@ const { warmRewards } = useRewardsPrefetch()
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
 const { notifications, loadNotifications } = useNotifications()
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024
+  if (!isMobile.value && !isSidebarOpen.value) {
+    isSidebarOpen.value = true
+  }
+}
 
 onMounted(() => {
   void loadNotifications()
@@ -41,12 +48,7 @@ onMounted(() => {
   isMobile.value = window.innerWidth < 1024
   if (isMobile.value) isSidebarOpen.value = false
 
-  window.addEventListener("resize", () => {
-    isMobile.value = window.innerWidth < 1024
-    if (!isMobile.value && !isSidebarOpen.value) {
-      isSidebarOpen.value = true
-    }
-  })
+  window.addEventListener("resize", handleResize)
 })
 
 const markPointerInteraction = () => {
@@ -58,11 +60,18 @@ const toggleSidebar = () => {
 }
 
 const handleSignOut = async () => {
-  await supabase.auth.signOut()
+  await Promise.allSettled([
+    supabase.auth.signOut(),
+    $fetch("/api/auth/logout", { method: "POST" }),
+  ])
+  clearAuthCaches()
+  await navigateTo("/", { replace: true })
+}
+
+const clearAuthCaches = () => {
   clearAuthUser()
-  clearSessionBridge()
+  clearBridge()
   clearViewerSession()
-  navigateTo("/")
 }
 
 const isActive = (path: string) => {
@@ -223,6 +232,10 @@ const navGroups = computed(() => {
     })
   }
   return groups
+})
+
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize)
 })
 </script>
 

@@ -120,6 +120,8 @@ const warmOrderDetailsImmediately = () => {
           v-if="request.item.thumbnailImage"
           :src="request.item.thumbnailImage"
           :alt="request.item.name"
+          loading="lazy"
+          decoding="async"
           class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
         />
         <div

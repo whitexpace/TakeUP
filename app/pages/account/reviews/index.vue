@@ -3,8 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { ReviewType } from "~~/shared/schemas/review"
 import {
   useAccountReviews,
+  type ReviewDraftListPage,
   type ReviewDraftListItem,
+  type ReviewTransactionListPage,
   type ReviewTransactionListItem,
+  type SubmittedReviewListPage,
 } from "../../../composables/use-account-reviews"
 
 definePageMeta({
@@ -17,6 +20,12 @@ type ReviewsTab = "PENDING" | "DRAFTS" | "HISTORY"
 const activeTab = ref<ReviewsTab>("PENDING")
 const searchQuery = ref("")
 const user = useSupabaseUser()
+const REVIEW_LIST_PAGE_SIZE = 10
+const reviewListPage = ref(1)
+const transactionsNextCursor = ref<ReviewTransactionListPage["nextCursor"]>(null)
+const draftsNextCursor = ref<ReviewDraftListPage["nextCursor"]>(null)
+const historyNextCursor = ref<SubmittedReviewListPage["nextCursor"]>(null)
+const isLoadingMoreCurrentTab = ref(false)
 const {
   transactionsData,
   draftsData,
@@ -47,11 +56,37 @@ if (import.meta.client && !hasFreshTransactionsCache.value) {
   void fetchReviewTransactions()
 }
 
-const allTransactions = computed(() => transactionsData.value ?? [])
-const allDrafts = computed(() => draftsData.value ?? [])
-const allHistory = computed(() => historyData.value ?? [])
+const allTransactions = computed(() => transactionsData.value?.transactions ?? [])
+const allDrafts = computed(() => draftsData.value?.items ?? [])
+const allHistory = computed(() => historyData.value?.items ?? [])
 const borrowerLeaderboard = computed(() => leaderboardData.value?.borrowers ?? [])
 const lenderLeaderboard = computed(() => leaderboardData.value?.lenders ?? [])
+const displayedBorrowerLeaderboard = computed(() => borrowerLeaderboard.value.slice(0, 5))
+const displayedLenderLeaderboard = computed(() => lenderLeaderboard.value.slice(0, 5))
+
+watch(
+  transactionsData,
+  (value) => {
+    transactionsNextCursor.value = value?.nextCursor ?? null
+  },
+  { immediate: true },
+)
+
+watch(
+  draftsData,
+  (value) => {
+    draftsNextCursor.value = value?.nextCursor ?? null
+  },
+  { immediate: true },
+)
+
+watch(
+  historyData,
+  (value) => {
+    historyNextCursor.value = value?.nextCursor ?? null
+  },
+  { immediate: true },
+)
 
 const currentTabPending = computed(() => {
   if (activeTab.value === "DRAFTS") {
@@ -146,6 +181,101 @@ const filteredHistory = computed(() =>
     ]),
   ),
 )
+
+const activeReviewListLength = computed(() => {
+  if (activeTab.value === "DRAFTS") return filteredDrafts.value.length
+  if (activeTab.value === "HISTORY") return filteredHistory.value.length
+  return filteredPendingTransactions.value.length
+})
+const reviewListPageCount = computed(() =>
+  Math.max(1, Math.ceil(activeReviewListLength.value / REVIEW_LIST_PAGE_SIZE)),
+)
+const reviewListPageStart = computed(() => (reviewListPage.value - 1) * REVIEW_LIST_PAGE_SIZE)
+const reviewListPageEnd = computed(() =>
+  Math.min(reviewListPageStart.value + REVIEW_LIST_PAGE_SIZE, activeReviewListLength.value),
+)
+const reviewListRangeLabel = computed(() =>
+  activeReviewListLength.value === 0
+    ? ""
+    : `${reviewListPageStart.value + 1}-${reviewListPageEnd.value} of ${activeReviewListLength.value}`,
+)
+const visiblePendingTransactions = computed(() =>
+  filteredPendingTransactions.value.slice(reviewListPageStart.value, reviewListPageEnd.value),
+)
+const visibleDrafts = computed(() =>
+  filteredDrafts.value.slice(reviewListPageStart.value, reviewListPageEnd.value),
+)
+const visibleHistory = computed(() =>
+  filteredHistory.value.slice(reviewListPageStart.value, reviewListPageEnd.value),
+)
+const hasPreviousReviewListPage = computed(() => reviewListPage.value > 1)
+const hasNextReviewListPage = computed(() => reviewListPage.value < reviewListPageCount.value)
+const currentTabNextCursor = computed(() => {
+  if (activeTab.value === "DRAFTS") return draftsNextCursor.value
+  if (activeTab.value === "HISTORY") return historyNextCursor.value
+  return transactionsNextCursor.value
+})
+
+const setReviewListPage = (page: number) => {
+  reviewListPage.value = Math.min(Math.max(1, page), reviewListPageCount.value)
+}
+
+const loadMoreCurrentTab = async () => {
+  if (!currentTabNextCursor.value || isLoadingMoreCurrentTab.value) return
+
+  isLoadingMoreCurrentTab.value = true
+  try {
+    if (activeTab.value === "DRAFTS") {
+      const result = await $fetch<ReviewDraftListPage>("/api/my-reviews/drafts", {
+        query: {
+          limit: REVIEW_LIST_PAGE_SIZE,
+          cursor: JSON.stringify(draftsNextCursor.value),
+        },
+      })
+      draftsData.value = {
+        items: [...(draftsData.value?.items ?? []), ...result.items],
+        nextCursor: result.nextCursor,
+      }
+      return
+    }
+
+    if (activeTab.value === "HISTORY") {
+      const result = await $fetch<SubmittedReviewListPage>("/api/my-reviews/submitted", {
+        query: {
+          limit: REVIEW_LIST_PAGE_SIZE,
+          cursor: JSON.stringify(historyNextCursor.value),
+        },
+      })
+      historyData.value = {
+        items: [...(historyData.value?.items ?? []), ...result.items],
+        nextCursor: result.nextCursor,
+      }
+      return
+    }
+
+    const result = await $fetch<ReviewTransactionListPage>("/api/transactions", {
+      query: {
+        status: "COMPLETED",
+        limit: REVIEW_LIST_PAGE_SIZE,
+        cursor: JSON.stringify(transactionsNextCursor.value),
+      },
+    })
+    transactionsData.value = {
+      transactions: [...(transactionsData.value?.transactions ?? []), ...result.transactions],
+      nextCursor: result.nextCursor,
+    }
+  } finally {
+    isLoadingMoreCurrentTab.value = false
+  }
+}
+
+watch([activeTab, searchQuery], () => {
+  reviewListPage.value = 1
+})
+
+watch(activeReviewListLength, () => {
+  setReviewListPage(reviewListPage.value)
+})
 
 const sectionTitle = computed(() => {
   if (activeTab.value === "DRAFTS") return "Draft Reviews"
@@ -531,7 +661,7 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <article
-                v-for="transaction in filteredPendingTransactions"
+                v-for="transaction in visiblePendingTransactions"
                 :key="transaction.id"
                 class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 mb-4 last:mb-0"
               >
@@ -600,7 +730,7 @@ onBeforeUnmount(() => {
                 <p class="text-[14px] font-medium text-noble-black/30">No drafts saved.</p>
               </div>
               <article
-                v-for="draft in filteredDrafts"
+                v-for="draft in visibleDrafts"
                 :key="draft.id"
                 class="block bg-white rounded-[16px] border border-cinnamon-ice/20 p-5 shadow-sm hover:shadow-md transition-all duration-200 mb-4 last:mb-0"
               >
@@ -651,7 +781,7 @@ onBeforeUnmount(() => {
                 <p class="text-[14px] font-medium text-noble-black/30">No history available yet.</p>
               </div>
               <article
-                v-for="review in filteredHistory"
+                v-for="review in visibleHistory"
                 :key="review.id"
                 class="block bg-white rounded-[16px] border border-cinnamon-ice/20 p-5 shadow-sm hover:shadow-md transition-all duration-200 mb-4 last:mb-0"
               >
@@ -694,6 +824,47 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </article>
+            </div>
+
+            <div
+              v-if="activeReviewListLength > REVIEW_LIST_PAGE_SIZE || currentTabNextCursor"
+              class="flex flex-col gap-3 border-t border-cinnamon-ice/20 pt-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p class="text-[12px] font-medium text-noble-black/40">
+                Showing {{ reviewListRangeLabel }}
+              </p>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+                  :disabled="!hasPreviousReviewListPage"
+                  aria-label="Previous reviews page"
+                  @click="setReviewListPage(reviewListPage - 1)"
+                >
+                  <Icon name="ph:caret-left" class="mx-auto h-4 w-4" />
+                </button>
+                <span class="text-[12px] font-semibold text-noble-black/50">
+                  {{ reviewListPage }} / {{ reviewListPageCount }}
+                </span>
+                <button
+                  type="button"
+                  class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+                  :disabled="!hasNextReviewListPage"
+                  aria-label="Next reviews page"
+                  @click="setReviewListPage(reviewListPage + 1)"
+                >
+                  <Icon name="ph:caret-right" class="mx-auto h-4 w-4" />
+                </button>
+              </div>
+              <button
+                v-if="currentTabNextCursor"
+                type="button"
+                class="h-8 rounded-lg border border-burning-orange/20 px-4 text-[12px] font-bold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="isLoadingMoreCurrentTab"
+                @click="loadMoreCurrentTab"
+              >
+                {{ isLoadingMoreCurrentTab ? "Loading..." : "Load more" }}
+              </button>
             </div>
           </div>
         </div>
@@ -764,7 +935,7 @@ onBeforeUnmount(() => {
           </div>
           <div v-else class="space-y-0.5">
             <div
-              v-for="entry in borrowerLeaderboard"
+              v-for="entry in displayedBorrowerLeaderboard"
               :key="entry.user.id"
               class="relative flex items-center gap-4 py-3.5 px-3 -mx-3 transition-all rounded-[14px]"
               :class="[
@@ -821,9 +992,9 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <!-- Ghost Rows -->
-            <template v-if="borrowerLeaderboard.length < 5">
+            <template v-if="displayedBorrowerLeaderboard.length < 5">
               <div
-                v-for="i in 5 - borrowerLeaderboard.length"
+                v-for="i in 5 - displayedBorrowerLeaderboard.length"
                 :key="`ghost-borrower-${i}`"
                 class="flex items-center gap-4 py-3.5 px-3 -mx-3 opacity-[0.35]"
               >
@@ -852,7 +1023,7 @@ onBeforeUnmount(() => {
           </div>
           <div v-else class="space-y-0.5">
             <div
-              v-for="entry in lenderLeaderboard"
+              v-for="entry in displayedLenderLeaderboard"
               :key="entry.user.id"
               class="relative flex items-center gap-4 py-3.5 px-3 -mx-3 transition-all rounded-[14px]"
               :class="[
@@ -909,9 +1080,9 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <!-- Ghost Rows -->
-            <template v-if="lenderLeaderboard.length < 5">
+            <template v-if="displayedLenderLeaderboard.length < 5">
               <div
-                v-for="i in 5 - lenderLeaderboard.length"
+                v-for="i in 5 - displayedLenderLeaderboard.length"
                 :key="`ghost-lender-${i}`"
                 class="flex items-center gap-4 py-3.5 px-3 -mx-3 opacity-[0.35]"
               >

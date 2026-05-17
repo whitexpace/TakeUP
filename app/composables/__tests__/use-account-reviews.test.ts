@@ -55,17 +55,21 @@ describe("useAccountReviews", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/transactions", {
       query: {
         status: "COMPLETED",
-        limit: 100,
+        limit: 10,
       },
       credentials: "same-origin",
     })
-    expect(transactionsData.value).toHaveLength(1)
+    expect(transactionsData.value?.transactions).toHaveLength(1)
   })
 
   it("fetches secondary review data separately from pending transactions", async () => {
     const fetchMock = vi.fn((url: string) => {
-      if (url === "/api/my-reviews/drafts") return Promise.resolve([{ id: "draft-1" }])
-      if (url === "/api/my-reviews/submitted") return Promise.resolve([{ id: "review-1" }])
+      if (url === "/api/my-reviews/drafts") {
+        return Promise.resolve({ items: [{ id: "draft-1" }], nextCursor: null })
+      }
+      if (url === "/api/my-reviews/submitted") {
+        return Promise.resolve({ items: [{ id: "review-1" }], nextCursor: null })
+      }
       if (url === "/api/reviews/leaderboard/borrowers") {
         return Promise.resolve({ leaderboard: [{ userId: "borrower-1" }] })
       }
@@ -82,9 +86,15 @@ describe("useAccountReviews", () => {
     await fetchSecondaryReviewsData()
 
     expect(fetchMock).toHaveBeenCalledWith("/api/my-reviews/drafts", {
+      query: {
+        limit: 10,
+      },
       credentials: "same-origin",
     })
     expect(fetchMock).toHaveBeenCalledWith("/api/my-reviews/submitted", {
+      query: {
+        limit: 10,
+      },
       credentials: "same-origin",
     })
     expect(fetchMock).toHaveBeenCalledWith("/api/reviews/leaderboard/borrowers", {
@@ -93,8 +103,8 @@ describe("useAccountReviews", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/reviews/leaderboard/lenders", {
       credentials: "same-origin",
     })
-    expect(draftsData.value).toHaveLength(1)
-    expect(historyData.value).toHaveLength(1)
+    expect(draftsData.value?.items).toHaveLength(1)
+    expect(historyData.value?.items).toHaveLength(1)
     expect(leaderboardData.value?.borrowers).toHaveLength(1)
     expect(leaderboardData.value?.lenders).toHaveLength(1)
   })

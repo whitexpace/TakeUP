@@ -51,6 +51,13 @@ const {
   markAllNotificationsRead: globalMarkAllRead,
 } = useNotifications()
 
+const NOTIFICATION_RENDER_LIMIT = 20
+
+const getNotificationKey = (n: CommunityOfferNotification | AppHeaderNotification) => {
+  if ("type" in n) return `app-${n.id}`
+  return `offer-${n.id}`
+}
+
 const displayNotifications = computed(() => {
   const propNotifs = props.notifications || []
   const globalNotifs = globalNotifications.value || []
@@ -60,19 +67,19 @@ const displayNotifications = computed(() => {
 
   const map = new Map<string | number, CommunityOfferNotification | AppHeaderNotification>()
 
-  // Deduplicate by using a composite key to handle potential ID collisions between different notification types
-  const getEntryKey = (n: CommunityOfferNotification | AppHeaderNotification) => {
-    if ("type" in n) return `app-${n.id}`
-    return `offer-${n.id}`
-  }
-
-  globalNotifs.forEach((n) => map.set(getEntryKey(n), n))
-  propNotifs.forEach((n) => map.set(getEntryKey(n), n))
+  globalNotifs.forEach((n) => map.set(getNotificationKey(n), n))
+  propNotifs.forEach((n) => map.set(getNotificationKey(n), n))
 
   return Array.from(map.values()).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 })
+const visibleNotifications = computed(() =>
+  displayNotifications.value.slice(0, NOTIFICATION_RENDER_LIMIT),
+)
+const hiddenNotificationCount = computed(() =>
+  Math.max(0, displayNotifications.value.length - visibleNotifications.value.length),
+)
 
 const cookieAccountType = useState<string | null>("session-cookie-account-type", () => null)
 const headerRef = ref<HTMLElement | null>(null)
@@ -145,16 +152,11 @@ watch(isVisible, (val) => {
 const lastScrollY = ref(0)
 const scrollThreshold = 10 // Minimum scroll to trigger hide
 const isScrolled = ref(false)
+let activeScrollTarget: Window | Element | null = null
 
 const handleScroll = () => {
-  let currentScrollY = window.scrollY
-
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    if (container) {
-      currentScrollY = container.scrollTop
-    }
-  }
+  const currentScrollY =
+    activeScrollTarget instanceof Element ? activeScrollTarget.scrollTop : window.scrollY
 
   isScrolled.value = currentScrollY > 20
 
@@ -293,25 +295,13 @@ const handlePointerDownOutside = (event: PointerEvent) => {
 }
 
 const setupScrollListener = () => {
-  // Clean up previous listener if any
-  window.removeEventListener("scroll", handleScroll)
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    container?.removeEventListener("scroll", handleScroll)
-  }
+  activeScrollTarget?.removeEventListener("scroll", handleScroll)
 
-  // Set up new listener
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    if (container) {
-      container.addEventListener("scroll", handleScroll, { passive: true })
-    } else {
-      // If container not found yet, wait and retry or fallback
-      window.addEventListener("scroll", handleScroll, { passive: true })
-    }
-  } else {
-    window.addEventListener("scroll", handleScroll, { passive: true })
-  }
+  activeScrollTarget = props.scrollContainerSelector
+    ? (document.querySelector(props.scrollContainerSelector) ?? window)
+    : window
+
+  activeScrollTarget.addEventListener("scroll", handleScroll, { passive: true })
 }
 
 watch(() => props.scrollContainerSelector, setupScrollListener)
@@ -327,11 +317,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", handlePointerDownOutside)
-  window.removeEventListener("scroll", handleScroll)
-  if (props.scrollContainerSelector) {
-    const container = document.querySelector(props.scrollContainerSelector)
-    container?.removeEventListener("scroll", handleScroll)
-  }
+  activeScrollTarget?.removeEventListener("scroll", handleScroll)
+  activeScrollTarget = null
   if (accountTypeLoadTimeout !== null) {
     clearTimeout(accountTypeLoadTimeout)
     accountTypeLoadTimeout = null
@@ -477,8 +464,8 @@ onBeforeUnmount(() => {
               >
                 <div class="flex flex-col">
                   <button
-                    v-for="notification in displayNotifications"
-                    :key="notification.id"
+                    v-for="notification in visibleNotifications"
+                    :key="getNotificationKey(notification)"
                     class="relative flex gap-3 px-4 py-3.5 text-left border-b border-gray-50 last:border-b-0 transition-all hover:bg-gray-50/50 group"
                     :class="[
                       !notification.read
@@ -535,6 +522,13 @@ onBeforeUnmount(() => {
                       </div>
                     </div>
                   </button>
+                  <div
+                    v-if="hiddenNotificationCount > 0"
+                    class="px-4 py-3 text-center text-[12px] font-medium text-gray-400"
+                  >
+                    Showing latest {{ NOTIFICATION_RENDER_LIMIT }} of
+                    {{ displayNotifications.length }} notifications
+                  </div>
                 </div>
               </div>
 

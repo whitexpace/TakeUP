@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { ref } from "vue"
+import { effectScope, nextTick, ref } from "vue"
 import type { MyListingItem } from "../use-my-listings"
 import { useMyListings } from "../use-my-listings"
 import * as paginatedItemsModule from "../use-paginated-items"
@@ -215,6 +215,54 @@ describe("useMyListings", () => {
         }),
       }),
     )
+  })
+
+  it("clears pending refresh timers when the scope is disposed", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const scope = effectScope()
+    const listingsState = scope.run(() => useMyListings())
+
+    if (!listingsState) {
+      throw new Error("Failed to initialize scoped listings state")
+    }
+
+    await listingsState.refresh()
+    fetchMock.mockClear()
+
+    listingsState.toggleStatusFilter("DISPUTED")
+    await nextTick()
+    scope.stop()
+
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("cancels a pending refresh when refresh is called manually", async () => {
+    fetchMock = vi.fn().mockResolvedValue({ items: [makeItem()], nextCursor: null })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const scope = effectScope()
+    const listingsState = scope.run(() => useMyListings())
+
+    if (!listingsState) {
+      throw new Error("Failed to initialize scoped listings state")
+    }
+
+    await listingsState.refresh()
+    fetchMock.mockClear()
+
+    listingsState.toggleStatusFilter("DISPUTED")
+    await nextTick()
+
+    await listingsState.refresh()
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    scope.stop()
   })
 
   it("toggleStatus invalidates item search caches and refreshes filtered listings", async () => {

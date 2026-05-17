@@ -1,4 +1,4 @@
-import { computed, ref, watch } from "vue"
+import { computed, getCurrentScope, onScopeDispose, ref, watch } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import { resetPaginatedItemsCache } from "./use-paginated-items"
@@ -229,6 +229,13 @@ export const useMyListings = () => {
   let refreshTimeout: ReturnType<typeof setTimeout> | null = null
   let isInitialFetch = true
 
+  const cancelRefreshTimeout = () => {
+    if (!refreshTimeout) return
+
+    clearTimeout(refreshTimeout)
+    refreshTimeout = null
+  }
+
   const reset = () => {
     listings.value = []
     nextCursor.value = null
@@ -305,6 +312,7 @@ export const useMyListings = () => {
 
   const refresh = async () => {
     invalidateMyListingsWarmup()
+    cancelRefreshTimeout()
     requestVersion.value++
     const currentVersion = requestVersion.value
     hasFetched.value = false
@@ -313,14 +321,16 @@ export const useMyListings = () => {
   }
 
   const scheduleRefresh = () => {
-    if (refreshTimeout) {
-      clearTimeout(refreshTimeout)
-    }
+    cancelRefreshTimeout()
 
     refreshTimeout = setTimeout(() => {
       refreshTimeout = null
       void refresh()
     }, SEARCH_DEBOUNCE_MS)
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(cancelRefreshTimeout)
   }
 
   watch(

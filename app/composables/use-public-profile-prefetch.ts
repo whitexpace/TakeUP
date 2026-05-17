@@ -8,6 +8,7 @@ type ProfileCacheEntry = {
 const PUBLIC_PROFILE_CACHE_TTL_MS = 60_000
 const MAX_PUBLIC_PROFILE_CACHE_ENTRIES = 24
 const PUBLIC_PROFILE_PREVIEW_IMAGE_LIMIT = 4
+const PUBLIC_PROFILE_REVIEW_FETCH_LIMIT = 5
 
 const publicProfileCache = new Map<string, ProfileCacheEntry>()
 const pendingPublicProfileRequests = new Map<string, Promise<PublicProfile>>()
@@ -129,7 +130,10 @@ const warmProfileImages = (profile: PublicProfile) => {
   }
 }
 
-export const prefetchPublicProfile = (username: string | null | undefined) => {
+export const prefetchPublicProfile = (
+  username: string | null | undefined,
+  options: { reviewsLimit?: number } = {},
+) => {
   const normalizedUsername = normalizeUsername(username)
   if (!normalizedUsername) return Promise.resolve(null)
 
@@ -143,7 +147,9 @@ export const prefetchPublicProfile = (username: string | null | undefined) => {
     return pending
   }
 
-  const request = $fetch<PublicProfile>(`/api/users/${encodeURIComponent(normalizedUsername)}`)
+  const request = $fetch<PublicProfile>(`/api/users/${encodeURIComponent(normalizedUsername)}`, {
+    query: { reviewsLimit: options.reviewsLimit ?? PUBLIC_PROFILE_REVIEW_FETCH_LIMIT },
+  })
     .then((profile) => {
       setCachedPublicProfile(normalizedUsername, profile)
       warmProfileImages(profile)

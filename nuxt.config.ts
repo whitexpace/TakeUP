@@ -37,10 +37,13 @@ export default defineNuxtConfig({
     },
   },
   supabase: {
+    cookieOptions: {
+      secure: process.env.NODE_ENV === "production",
+    },
     redirectOptions: {
       login: "/",
       callback: "/auth/callback",
-      include: ["/dashboard*", "/account*", "/admin*", "/bag*"],
+      include: ["/dashboard*", "/account*", "/bag*"],
       exclude: ["/"],
     },
   },

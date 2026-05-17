@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
-import type { BorrowerItemRequest as LenderItemRequest } from "../composables/use-borrower-item-requests"
 import type { LenderItemRequest } from "../composables/use-lender-item-requests"
 import {
   clearPrefetchedBookingDetail,

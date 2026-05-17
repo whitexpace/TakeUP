@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { onMounted, onUnmounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
@@ -17,6 +17,9 @@ const isHeaderVisible = ref(true)
 const showLogoutModal = ref(false)
 
 const { notifications, loadNotifications } = useNotifications()
+const { clear: clearAuthUser } = useAuthUser()
+const { clear: clearBridge } = useSessionBridge()
+const { clear: clearViewerSession } = useViewerSession()
 
 const adminLinks: AdminLink[] = [
   {
@@ -81,30 +84,32 @@ const cancelLogout = () => {
 
 const confirmLogout = async () => {
   showLogoutModal.value = false
-  await supabase.auth.signOut()
+  await Promise.allSettled([
+    supabase.auth.signOut(),
+    $fetch("/api/auth/logout", { method: "POST" }),
+  ])
+  clearAuthCaches()
+  await navigateTo("/", { replace: true })
+}
 
-  // Clear client-side auth caches
-  const { clear: clearAuthUser } = useAuthUser()
-  const { clear: clearSessionBridge } = useSessionBridge()
-  const { clear: clearViewerSession } = useViewerSession()
+const clearAuthCaches = () => {
   clearAuthUser()
-  clearSessionBridge()
+  clearBridge()
   clearViewerSession()
+}
 
-  await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
-  await navigateTo("/")
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024
+  if (!isMobile.value && !isSidebarOpen.value) {
+    isSidebarOpen.value = true
+  }
 }
 
 onMounted(() => {
   isMobile.value = window.innerWidth < 1024
   if (isMobile.value) isSidebarOpen.value = false
 
-  window.addEventListener("resize", () => {
-    isMobile.value = window.innerWidth < 1024
-    if (!isMobile.value && !isSidebarOpen.value) {
-      isSidebarOpen.value = true
-    }
-  })
+  window.addEventListener("resize", handleResize)
 
   void loadNotifications()
   scheduleIdleWarmup(() => {
@@ -113,6 +118,10 @@ onMounted(() => {
 
     void Promise.allSettled([fetchAuthUser(), fetchOverview()])
   })
+})
+
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize)
 })
 </script>
 
@@ -317,6 +326,35 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.custom-sidebar-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-admin-main-scrollbar {
+  overflow-anchor: none;
+}
+
+.custom-admin-main-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice");
+  border-radius: 10px;
+}
+.custom-admin-main-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.burning-orange");
+}
+
 .custom-tooltip {
   position: absolute;
   top: 100%;

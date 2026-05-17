@@ -1,6 +1,8 @@
+import { useRoute } from "#app"
 import { computed, onMounted } from "vue"
 import { usePersistedSessionState } from "./use-persisted-session-state"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
+import { useAuthUser } from "./use-auth-user"
 import { useViewerSession } from "./use-viewer-session"
 
 export interface BagItem {
@@ -43,7 +45,10 @@ type CartListResponse = {
 }
 
 let pendingLoad: Promise<void> | null = null
+let bagMutationVersion = 0
+let activeLoadId = 0
 const BAG_CACHE_TTL_MS = 30_000
+const BAG_ACCOUNT_TYPES = new Set(["USER", "ADMIN"])
 
 const formatTimeLabel = (value: Date) =>
   value.toLocaleTimeString("en-US", {
@@ -70,7 +75,17 @@ const normalizeBagItem = (item: RawBagItem): BagItem => {
   }
 }
 
+const markBagMutation = () => {
+  bagMutationVersion += 1
+}
+
 export const useBag = () => {
+  const route = useRoute()
+  const {
+    authUser: cachedAuthUser,
+    hasFreshCache: hasFreshAuthUserCache,
+    fetch: fetchAuthUser,
+  } = useAuthUser()
   const bagItems = usePersistedSessionState<BagItem[]>("bag-items", () => [], {
     deserialize: (value) => JSON.parse(value).map(normalizeBagItem),
   })
@@ -78,9 +93,46 @@ export const useBag = () => {
   const hasLoaded = usePersistedSessionState<boolean>("bag-loaded", () => false)
   const errorMessage = usePersistedSessionState<string | null>("bag-error-message", () => null)
   const lastLoadedAt = usePersistedSessionState<number | null>("bag-last-loaded-at", () => null)
+  const bagOwnerUserId = useState<string | null>("bag-owner-user-id", () => null)
   const { getAuthHeaders } = useViewerSession()
 
+  const resetBagStateForUser = (userId: string | null) => {
+    if (bagOwnerUserId.value === userId) return
+
+    bagOwnerUserId.value = userId
+    markBagMutation()
+    pendingLoad = null
+    isLoading.value = false
+    bagItems.value = []
+    errorMessage.value = null
+    hasLoaded.value = false
+    lastLoadedAt.value = null
+  }
+
+  const resolveActiveViewer = async () => {
+    if (route.path.startsWith("/admin")) {
+      return null
+    }
+
+    if (cachedAuthUser.value) {
+      return cachedAuthUser.value
+    }
+
+    if (import.meta.client && !hasFreshAuthUserCache.value) {
+      return await fetchAuthUser()
+    }
+
+    return null
+  }
+
   const loadBag = async (options: { force?: boolean } = {}) => {
+    const viewer = await resolveActiveViewer()
+    resetBagStateForUser(viewer?.id ?? null)
+
+    if (!viewer || !viewer.accountType || !BAG_ACCOUNT_TYPES.has(viewer.accountType)) {
+      return
+    }
+
     if (pendingLoad && !options.force) {
       await pendingLoad
       return
@@ -104,6 +156,9 @@ export const useBag = () => {
       recordPerfEvent("bag", "cart", "cache-miss")
     }
 
+    const loadMutationVersion = bagMutationVersion
+    activeLoadId += 1
+    const loadId = activeLoadId
     pendingLoad = (async () => {
       isLoading.value = true
 
@@ -112,10 +167,14 @@ export const useBag = () => {
         const result = await withPerfTimer("bag", "cart", () =>
           $fetch<CartListResponse>("/api/cart", { headers }),
         )
+        if (loadMutationVersion !== bagMutationVersion) return
+
         bagItems.value = result.items.map(normalizeBagItem)
         errorMessage.value = null
         lastLoadedAt.value = Date.now()
       } catch (error: unknown) {
+        if (loadMutationVersion !== bagMutationVersion) return
+
         const statusCode = (error as { statusCode?: number })?.statusCode
 
         if (statusCode === 401) {
@@ -134,9 +193,14 @@ export const useBag = () => {
 
         errorMessage.value = "Unable to load your bag right now."
       } finally {
-        hasLoaded.value = true
-        isLoading.value = false
-        pendingLoad = null
+        if (loadMutationVersion === bagMutationVersion) {
+          hasLoaded.value = true
+        }
+
+        if (activeLoadId === loadId) {
+          isLoading.value = false
+          pendingLoad = null
+        }
       }
     })()
 
@@ -156,6 +220,7 @@ export const useBag = () => {
     })
 
     const normalizedEntry = normalizeBagItem(entry)
+    markBagMutation()
     const existingIndex = bagItems.value.findIndex((item) => item.id === normalizedEntry.id)
 
     if (existingIndex === -1) {
@@ -179,6 +244,7 @@ export const useBag = () => {
       headers,
     })
 
+    markBagMutation()
     bagItems.value = bagItems.value.filter((item) => item.id !== id)
     lastLoadedAt.value = Date.now()
   }

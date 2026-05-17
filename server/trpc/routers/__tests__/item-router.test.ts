@@ -428,6 +428,12 @@ describe("itemRouter", () => {
       prisma: {
         $queryRaw: vi.fn().mockResolvedValue([{ adminModerationState: null }]),
         item: { findUnique: findById, findFirst: findById, update: incrementViewCount },
+        transactionReview: {
+          aggregate: vi.fn().mockResolvedValue({
+            _avg: { rating: 5 },
+            _count: { _all: 1 },
+          }),
+        },
       } as never,
       user: null,
     })

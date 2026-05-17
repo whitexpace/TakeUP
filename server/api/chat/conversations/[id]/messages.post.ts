@@ -3,6 +3,7 @@ import { sendMessageSchema } from "#shared/schemas/chat"
 import { appRouter } from "../../../../trpc/routers"
 import { createContext } from "../../../../trpc/context"
 import { handleChatApiError } from "../../../chat/handle-chat-api-error"
+import { broadcastChatMessage } from "../../../../utils/chat-realtime"
 
 export default defineEventHandler(async (event) => {
   const rawId = getRouterParam(event, "id")
@@ -24,7 +25,9 @@ export default defineEventHandler(async (event) => {
   const caller = appRouter.createCaller(await createContext(event))
 
   try {
-    return await caller.chat.sendMessage(parsed.data)
+    const message = await caller.chat.sendMessage(parsed.data)
+    await broadcastChatMessage(event, message).catch(() => undefined)
+    return message
   } catch (error) {
     handleChatApiError(error, "send chat message")
   }

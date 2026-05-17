@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 import { useChat } from "../composables/use-chat"
 import type { ChatMessage } from "../composables/use-chat"
-import { useNotifications } from "../composables/use-notifications"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { insertTextAtSelection } from "../utils/chat-composer"
 import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
 import { getChatClosedPreviewLabel } from "#shared/chat-rules"
@@ -14,8 +15,18 @@ definePageMeta({
 
 const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
+const REALTIME_SESSION_WAIT_MS = 5_000
 
-const { notifications, loadNotifications } = useNotifications()
+type RealtimeMessagePayload = {
+  new: Record<string, unknown>
+}
+
+type BroadcastMessagePayload = {
+  payload: unknown
+}
+
+const createRealtimeChannelId = () =>
+  globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 const {
   sortedConversations,
@@ -32,8 +43,8 @@ const {
   openConversation,
   sendMessage: sendChatMessage,
   reportConversation,
-  loadUnreadCount,
-  mergeActiveConversationMessages,
+  onActiveRealtimeMessage,
+  onInboxRealtimeMessage,
   closeConversation,
   loadMoreMessages,
 } = useChat()
@@ -42,6 +53,7 @@ const route = useRoute()
 const router = useRouter()
 const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
+const realtimeChannelId = createRealtimeChannelId()
 
 const isMobile = ref(false)
 const searchQuery = ref("")
@@ -56,8 +68,11 @@ const composerError = ref<string | null>(null)
 const isUploadingImage = ref(false)
 const pendingImageFile = ref<File | null>(null)
 const pendingImagePreviewUrl = ref<string | null>(null)
+const pendingConversationTransactionId = ref<string | null>(null)
+const shouldStickToBottom = ref(true)
 
 const chatAreaRef = ref<HTMLElement | null>(null)
+const sidebarScrollRef = ref<HTMLElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const photoInputRef = ref<HTMLInputElement | null>(null)
 const emojiMenuRef = ref<HTMLElement | null>(null)
@@ -87,6 +102,26 @@ const canSendMessage = computed(
 
 const lastOutgoingMessageId = computed(() =>
   getLastOutgoingMessageId(messages.value, activeConversation.value?.otherParticipant?.id),
+)
+
+const selectedConversationTransactionId = computed(
+  () =>
+    pendingConversationTransactionId.value ??
+    routeTransactionId.value ??
+    activeConversation.value?.transactionId ??
+    null,
+)
+const activeConversationId = computed(() => activeConversation.value?.conversationId ?? null)
+const isPendingConversationSwitch = computed(
+  () =>
+    Boolean(pendingConversationTransactionId.value) &&
+    pendingConversationTransactionId.value !== activeConversation.value?.transactionId,
+)
+const shouldShowConversationSkeleton = computed(
+  () =>
+    isPendingConversationSwitch.value ||
+    (isOpeningConversation.value && !activeConversation.value) ||
+    (isLoadingMessages.value && !messages.value.length),
 )
 
 const avatarColors = ["bg-burning-orange", "bg-blue-estate", "bg-cinnamon-ice"]
@@ -128,11 +163,53 @@ const checkMobile = () => {
 }
 
 const scrollToBottom = () => {
-  nextTick(() => {
+  const applyScroll = () => {
     if (chatAreaRef.value) {
       chatAreaRef.value.scrollTop = chatAreaRef.value.scrollHeight
     }
+  }
+
+  nextTick(() => {
+    applyScroll()
+
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        applyScroll()
+        window.requestAnimationFrame(applyScroll)
+      })
+    }
   })
+}
+
+const restoreSidebarScrollPosition = (scrollTop: number) => {
+  const applyScroll = () => {
+    if (sidebarScrollRef.value) {
+      sidebarScrollRef.value.scrollTop = scrollTop
+    }
+  }
+
+  nextTick(() => {
+    applyScroll()
+
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        applyScroll()
+        window.requestAnimationFrame(applyScroll)
+      })
+    }
+  })
+}
+
+const handleMessageImageLoad = () => {
+  if (shouldStickToBottom.value) {
+    scrollToBottom()
+  }
+}
+
+const updateStickToBottom = () => {
+  const element = chatAreaRef.value
+  if (!element) return
+  shouldStickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 120
 }
 
 const adjustTextareaHeight = () => {
@@ -202,9 +279,54 @@ const getChatTime = (conversation: (typeof sortedConversations.value)[0]) => {
 const getClosedConversationLabel = (conversation: NonNullable<typeof activeConversation.value>) =>
   getChatClosedPreviewLabel(conversation.closureState) ?? "Chat unavailable"
 
+let openConversationPromise: Promise<void> | null = null
+let openConversationTransactionId: string | null = null
+let openConversationToken: symbol | null = null
+
 const openConversationFromRoute = async (transactionId: string) => {
-  await openConversation(transactionId)
-  scrollToBottom()
+  if (
+    activeConversation.value?.transactionId === transactionId &&
+    !isOpeningConversation.value &&
+    !error.value
+  ) {
+    if (pendingConversationTransactionId.value === transactionId) {
+      pendingConversationTransactionId.value = null
+    }
+    scrollToBottom()
+    return
+  }
+
+  if (openConversationTransactionId === transactionId && openConversationPromise) {
+    await openConversationPromise
+    return
+  }
+
+  shouldStickToBottom.value = true
+  pendingConversationTransactionId.value = transactionId
+
+  const openToken = Symbol(transactionId)
+  openConversationToken = openToken
+
+  const nextOpenPromise = (async () => {
+    try {
+      await openConversation(transactionId)
+      scrollToBottom()
+    } finally {
+      if (pendingConversationTransactionId.value === transactionId) {
+        pendingConversationTransactionId.value = null
+      }
+
+      if (openConversationToken === openToken) {
+        openConversationPromise = null
+        openConversationTransactionId = null
+        openConversationToken = null
+      }
+    }
+  })()
+
+  openConversationTransactionId = transactionId
+  openConversationPromise = nextOpenPromise
+  await nextOpenPromise
 }
 
 const triggerPhotoPicker = () => {
@@ -236,6 +358,7 @@ const handlePhotoSelected = (event: Event) => {
 }
 
 const uploadChatImage = async (file: File) => {
+  const uploadFile = await convertImageFileToWebP(file)
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -253,16 +376,16 @@ const uploadChatImage = async (file: File) => {
         Authorization: `Bearer ${accessToken}`,
       },
       body: {
-        fileName: file.name,
+        fileName: uploadFile.name,
       },
     },
   )
 
   const { error: uploadError } = await supabase.storage
     .from(runtimeConfig.public.chatImageBucket)
-    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
       upsert: true,
-      contentType: file.type || "application/octet-stream",
+      contentType: uploadFile.type || "application/octet-stream",
     })
 
   if (uploadError) {
@@ -275,10 +398,24 @@ const uploadChatImage = async (file: File) => {
 const handleSelectChat = async (transactionId: string) => {
   if (!transactionId) return
 
+  const sidebarScrollTop = sidebarScrollRef.value?.scrollTop ?? 0
+  pendingConversationTransactionId.value = transactionId
+  shouldStickToBottom.value = true
+
+  void openConversationFromRoute(transactionId).finally(() => {
+    restoreSidebarScrollPosition(sidebarScrollTop)
+  })
+  restoreSidebarScrollPosition(sidebarScrollTop)
+
+  if (routeTransactionId.value === transactionId) {
+    return
+  }
+
   await router.replace({
     path: "/chat",
     query: { transactionId },
   })
+  restoreSidebarScrollPosition(sidebarScrollTop)
 }
 
 const handleCloseChat = async () => {
@@ -308,7 +445,11 @@ const handleSendMessage = async () => {
       imageUrl = await uploadChatImage(pendingImageFile.value)
     }
 
-    const sentMessage = await sendChatMessage(body, imageUrl)
+    const sendPromise = sendChatMessage(body, imageUrl)
+    resetComposer()
+    scrollToBottom()
+
+    const sentMessage = await sendPromise
     if (!sentMessage) return
 
     if (shouldWarn) {
@@ -317,9 +458,6 @@ const handleSendMessage = async () => {
         showWarning.value = false
       }, 8000)
     }
-
-    resetComposer()
-    scrollToBottom()
   } catch (uploadError) {
     composerError.value = getFetchErrorMessage(uploadError, "Unable to send your message.")
   } finally {
@@ -397,40 +535,342 @@ const handleDocumentClick = (event: MouseEvent) => {
   showEmojiPicker.value = false
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
+let inboxRealtimeChannel: RealtimeChannel | null = null
+let activeRealtimeChannel: RealtimeChannel | null = null
+let inboxBroadcastChannel: RealtimeChannel | null = null
+let activeBroadcastChannel: RealtimeChannel | null = null
+let activeRealtimeGeneration = 0
+let activeBroadcastGeneration = 0
+let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
+let hasWarnedMissingRealtimeSession = false
 
-const startPolling = () => {
-  if (pollTimer) return
-  pollTimer = setInterval(async () => {
-    if (!activeConversation.value) return
+const getConversationBroadcastTopic = (conversationId: string) =>
+  `chat-conversation-${conversationId}`
 
-    try {
-      await loadConversations()
-      const data = await $fetch<{
-        messages: ChatMessage[]
-        nextCursor: string | null
-        hasMore: boolean
-      }>("/api/chat/messages", {
-        params: {
-          conversationId: activeConversation.value.conversationId,
-        },
-      })
+const getUserBroadcastTopic = (userId: string) => `chat-user-${userId}`
 
-      await mergeActiveConversationMessages(data.messages)
-    } catch {
-      // Ignore transient polling errors.
-    }
-  }, 5000)
+const getRealtimeAccessToken = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  return session?.access_token ?? null
 }
 
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+const waitForRealtimeAccessToken = async () => {
+  const currentAccessToken = await getRealtimeAccessToken()
+  if (currentAccessToken) return currentAccessToken
+
+  if (typeof window === "undefined") return null
+
+  return await new Promise<string | null>((resolve) => {
+    let timeoutId: number | null = null
+    let authSubscription: { unsubscribe: () => void } | null = null
+    let settled = false
+
+    const finish = (accessToken: string | null) => {
+      if (settled) return
+      settled = true
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+      authSubscription?.unsubscribe()
+      resolve(accessToken)
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        finish(session.access_token)
+      }
+    })
+    authSubscription = subscription
+
+    timeoutId = window.setTimeout(() => {
+      void getRealtimeAccessToken()
+        .then(finish)
+        .catch(() => finish(null))
+    }, REALTIME_SESSION_WAIT_MS)
+  })
+}
+
+const ensureRealtimeAuth = async () => {
+  const accessToken = await waitForRealtimeAccessToken()
+
+  if (!accessToken) {
+    if (!hasWarnedMissingRealtimeSession) {
+      console.warn(
+        "[chat realtime] no Supabase auth session; realtime subscriptions were not started",
+      )
+      hasWarnedMissingRealtimeSession = true
+    }
+    return false
+  }
+
+  hasWarnedMissingRealtimeSession = false
+  supabase.realtime.setAuth(accessToken)
+  return true
+}
+
+const logRealtimeStatus = (channelName: string, status: string, error?: Error) => {
+  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+    console.warn(`[chat realtime] ${channelName} ${status}`, error)
   }
 }
 
-watch(messages, () => scrollToBottom(), { deep: true })
+const setupRealtimeAuthListener = () => {
+  if (realtimeAuthSubscription) return
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    if (session?.access_token) {
+      supabase.realtime.setAuth(session.access_token)
+      void setupInboxBroadcast()
+      void setupInboxRealtime()
+      if (activeConversationId.value) {
+        void setupActiveBroadcast(activeConversationId.value)
+        void setupActiveRealtime(activeConversationId.value)
+      }
+      return
+    }
+
+    if (event === "SIGNED_OUT") {
+      stopRealtime()
+    }
+  })
+
+  realtimeAuthSubscription = subscription
+}
+
+const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null => {
+  if (
+    typeof row.id !== "string" ||
+    typeof row.conversation_id !== "string" ||
+    typeof row.sender_user_id !== "string" ||
+    typeof row.created_at !== "string"
+  ) {
+    return null
+  }
+
+  const body = typeof row.body === "string" ? row.body : ""
+  const imageUrl = typeof row.image_url === "string" ? row.image_url : null
+  const isRead = typeof row.is_read === "boolean" ? row.is_read : false
+  const readAt = typeof row.read_at === "string" ? row.read_at : null
+
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderUserId: row.sender_user_id,
+    body,
+    imageUrl,
+    isRead,
+    readAt,
+    createdAt: row.created_at,
+  }
+}
+
+const mapBroadcastMessage = (value: unknown): ChatMessage | null => {
+  if (typeof value !== "object" || value === null) {
+    return null
+  }
+
+  const payload = value as { message?: Record<string, unknown> }
+  const message = payload.message
+  if (!message) return null
+
+  if (
+    typeof message.id !== "string" ||
+    typeof message.conversationId !== "string" ||
+    typeof message.senderUserId !== "string" ||
+    typeof message.createdAt !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    senderUserId: message.senderUserId,
+    body: typeof message.body === "string" ? message.body : "",
+    imageUrl: typeof message.imageUrl === "string" ? message.imageUrl : null,
+    isRead: typeof message.isRead === "boolean" ? message.isRead : false,
+    readAt: typeof message.readAt === "string" ? message.readAt : null,
+    createdAt: message.createdAt,
+  }
+}
+
+const handleBroadcastMessage = (payload: BroadcastMessagePayload) => {
+  const message = mapBroadcastMessage(payload.payload)
+  if (!message) return
+
+  if (activeConversation.value?.conversationId === message.conversationId) {
+    onActiveRealtimeMessage(message, "INSERT")
+    return
+  }
+
+  onInboxRealtimeMessage(message, "INSERT")
+}
+
+const handleInboxRealtimeMessage = (
+  payload: RealtimeMessagePayload,
+  eventType: "INSERT" | "UPDATE",
+) => {
+  const message = mapRealtimeMessage(payload.new)
+  if (!message) return
+
+  if (activeConversation.value?.conversationId === message.conversationId) {
+    onActiveRealtimeMessage(message, eventType)
+    return
+  }
+
+  onInboxRealtimeMessage(message, eventType)
+}
+
+const handleActiveRealtimeMessage = (
+  payload: RealtimeMessagePayload,
+  eventType: "INSERT" | "UPDATE",
+) => {
+  const message = mapRealtimeMessage(payload.new)
+  if (!message) return
+
+  onActiveRealtimeMessage(message, eventType)
+}
+
+const stopActiveRealtime = async () => {
+  const channel = activeRealtimeChannel
+  activeRealtimeChannel = null
+
+  if (channel) {
+    await supabase.removeChannel(channel)
+  }
+}
+
+const stopActiveBroadcast = async () => {
+  const channel = activeBroadcastChannel
+  activeBroadcastChannel = null
+
+  if (channel) {
+    await supabase.removeChannel(channel)
+  }
+}
+
+const setupInboxBroadcast = async () => {
+  if (inboxBroadcastChannel) return
+
+  const { authUser, fetch: fetchAuthUser } = useAuthUser()
+  const currentUser = authUser.value ?? (await fetchAuthUser().catch(() => null))
+  if (!currentUser?.id) return
+
+  if (inboxBroadcastChannel) return
+  inboxBroadcastChannel = supabase
+    .channel(getUserBroadcastTopic(currentUser.id))
+    .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .subscribe((status, error) => logRealtimeStatus("inbox broadcast", status, error))
+}
+
+const setupActiveBroadcast = async (conversationId: string | null) => {
+  const generation = ++activeBroadcastGeneration
+  await stopActiveBroadcast()
+
+  if (generation !== activeBroadcastGeneration || !conversationId) {
+    return
+  }
+
+  activeBroadcastChannel = supabase
+    .channel(getConversationBroadcastTopic(conversationId))
+    .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .subscribe((status, error) => logRealtimeStatus("active broadcast", status, error))
+}
+
+const setupInboxRealtime = async () => {
+  if (inboxRealtimeChannel) return
+
+  if (!(await ensureRealtimeAuth())) return
+  if (inboxRealtimeChannel) return
+
+  inboxRealtimeChannel = supabase
+    .channel(`chat-inbox-messages-${realtimeChannelId}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) =>
+      handleInboxRealtimeMessage(payload, "INSERT"),
+    )
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) =>
+      handleInboxRealtimeMessage(payload, "UPDATE"),
+    )
+    .subscribe((status, error) => logRealtimeStatus("inbox", status, error))
+}
+
+const setupActiveRealtime = async (conversationId: string | null) => {
+  const generation = ++activeRealtimeGeneration
+  await stopActiveRealtime()
+
+  if (generation !== activeRealtimeGeneration || !conversationId) {
+    return
+  }
+
+  if (!(await ensureRealtimeAuth())) return
+  if (generation !== activeRealtimeGeneration) {
+    return
+  }
+
+  activeRealtimeChannel = supabase
+    .channel(`chat-active-${realtimeChannelId}-${conversationId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => handleActiveRealtimeMessage(payload, "INSERT"),
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => handleActiveRealtimeMessage(payload, "UPDATE"),
+    )
+    .subscribe((status, error) => logRealtimeStatus("active", status, error))
+}
+
+const stopRealtime = () => {
+  activeRealtimeGeneration += 1
+  activeBroadcastGeneration += 1
+  void stopActiveRealtime()
+  void stopActiveBroadcast()
+
+  if (inboxRealtimeChannel) {
+    void supabase.removeChannel(inboxRealtimeChannel)
+    inboxRealtimeChannel = null
+  }
+
+  if (inboxBroadcastChannel) {
+    void supabase.removeChannel(inboxBroadcastChannel)
+    inboxBroadcastChannel = null
+  }
+}
+
+watch(
+  messages,
+  (nextMessages, previousMessages) => {
+    const latestMessage = nextMessages.at(-1)
+    const isNewOutgoingMessage =
+      latestMessage &&
+      latestMessage.id !== previousMessages.at(-1)?.id &&
+      latestMessage.senderUserId !== activeConversation.value?.otherParticipant?.id
+
+    if (previousMessages.length === 0 || shouldStickToBottom.value || isNewOutgoingMessage) {
+      scrollToBottom()
+    }
+  },
+  { deep: true },
+)
 watch([newMessage, pendingImagePreviewUrl], () => nextTick(adjustTextareaHeight))
 watch(
   () => activeConversation.value?.isExpired,
@@ -443,43 +883,67 @@ watch(
 
 watch(routeTransactionId, async (transactionId, previousTransactionId) => {
   resetComposer()
+  shouldStickToBottom.value = true
 
   if (transactionId) {
+    pendingConversationTransactionId.value = transactionId
     await openConversationFromRoute(transactionId)
     return
   }
+
+  pendingConversationTransactionId.value = null
 
   if (previousTransactionId) {
     closeConversation()
   }
 })
 
+watch(
+  activeConversationId,
+  (conversationId, previousConversationId) => {
+    if (conversationId && conversationId !== previousConversationId) {
+      shouldStickToBottom.value = true
+      scrollToBottom()
+    }
+
+    void setupActiveBroadcast(conversationId)
+    void setupActiveRealtime(conversationId)
+  },
+  { immediate: true },
+)
+
 onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
   document.addEventListener("click", handleDocumentClick)
+  setupRealtimeAuthListener()
+  void setupInboxBroadcast()
+  void setupInboxRealtime()
 
-  await Promise.all([loadNotifications(), loadConversations(), loadUnreadCount()])
+  await loadConversations({ background: sortedConversations.value.length > 0 })
 
   if (routeTransactionId.value) {
     await openConversationFromRoute(routeTransactionId.value)
+  } else if (sortedConversations.value[0]) {
+    await openConversationFromRoute(sortedConversations.value[0].transactionId)
   }
 
-  startPolling()
   nextTick(adjustTextareaHeight)
 })
 
 onUnmounted(() => {
   window.removeEventListener("resize", checkMobile)
   document.removeEventListener("click", handleDocumentClick)
-  stopPolling()
+  realtimeAuthSubscription?.unsubscribe()
+  realtimeAuthSubscription = null
+  stopRealtime()
   clearComposerImage()
 })
 </script>
 
 <template>
-  <div class="h-screen flex flex-col overflow-hidden bg-white pt-16 font-geist text-noble-black">
-    <Header :notifications="notifications" />
+  <div class="h-screen flex flex-col overflow-hidden bg-white pt-14 font-geist text-noble-black">
+    <Header />
 
     <div class="relative flex flex-1 overflow-hidden">
       <aside
@@ -517,8 +981,8 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="custom-chat-scrollbar flex-1 overflow-y-auto">
-          <div v-if="isLoadingConversations" class="space-y-4 p-4">
+        <div ref="sidebarScrollRef" class="custom-chat-scrollbar flex-1 overflow-y-auto">
+          <div v-if="isLoadingConversations && !sortedConversations.length" class="space-y-4 p-4">
             <div v-for="index in 6" :key="index" class="flex animate-pulse gap-3">
               <div class="h-12 w-12 rounded-full bg-noble-black/10"></div>
               <div class="flex-1 space-y-2 py-1">
@@ -540,7 +1004,7 @@ onUnmounted(() => {
             <p class="mb-4 text-sm font-medium text-noble-black/60">Failed to load conversations</p>
             <button
               class="text-xs font-bold uppercase tracking-wider text-blue-estate transition-colors hover:text-burning-orange"
-              @click="loadConversations"
+              @click="() => loadConversations()"
             >
               Retry
             </button>
@@ -561,8 +1025,7 @@ onUnmounted(() => {
               :key="conversation.conversationId"
               class="group relative cursor-pointer px-4 py-3 transition-all duration-200"
               :class="[
-                routeTransactionId === conversation.transactionId ||
-                activeConversation?.transactionId === conversation.transactionId
+                selectedConversationTransactionId === conversation.transactionId
                   ? 'bg-cream'
                   : 'hover:bg-cream/40',
               ]"
@@ -632,10 +1095,7 @@ onUnmounted(() => {
         ]"
       >
         <div
-          v-if="
-            (isOpeningConversation && !activeConversation) ||
-            (isLoadingMessages && !messages.length)
-          "
+          v-if="shouldShowConversationSkeleton"
           class="flex flex-1 flex-col p-6 gap-6 animate-pulse bg-cream"
         >
           <div class="flex items-center gap-4 mb-4">
@@ -779,6 +1239,7 @@ onUnmounted(() => {
           <div
             ref="chatAreaRef"
             class="custom-chat-scrollbar flex flex-1 flex-col gap-6 overflow-y-auto p-6"
+            @scroll="updateStickToBottom"
           >
             <div v-if="hasMoreMessages" class="flex justify-center">
               <button
@@ -832,6 +1293,7 @@ onUnmounted(() => {
                     :src="message.imageUrl"
                     alt="Chat attachment"
                     class="mb-3 max-h-64 w-full rounded-2xl object-cover"
+                    @load="handleMessageImageLoad"
                   />
                   <p
                     v-if="message.body.trim()"

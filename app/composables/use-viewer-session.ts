@@ -2,8 +2,18 @@ type CachedViewerSession = Awaited<
   ReturnType<ReturnType<typeof useSupabaseClient>["auth"]["getSession"]>
 >["data"]["session"]
 type ViewerAuthHeaders = Record<string, string> | undefined
+type GetViewerSessionOptions = {
+  force?: boolean
+}
 
 let inflightSessionRequest: Promise<CachedViewerSession> | null = null
+const SESSION_EXPIRY_BUFFER_SECONDS = 30
+
+const hasUsableCachedSession = (cachedSession: CachedViewerSession | null) => {
+  if (!cachedSession?.expires_at) return true
+
+  return cachedSession.expires_at > Math.floor(Date.now() / 1000) + SESSION_EXPIRY_BUFFER_SECONDS
+}
 
 export const useViewerSession = () => {
   const session = useState<CachedViewerSession | null>("viewer-session-cache", () => null)
@@ -15,12 +25,12 @@ export const useViewerSession = () => {
     inflightSessionRequest = null
   }
 
-  const getSession = async () => {
+  const getSession = async (options: GetViewerSessionOptions = {}) => {
     if (import.meta.server) {
       return null
     }
 
-    if (loadedSession.value) {
+    if (!options.force && loadedSession.value && hasUsableCachedSession(session.value)) {
       return session.value
     }
 
@@ -43,8 +53,8 @@ export const useViewerSession = () => {
     return inflightSessionRequest
   }
 
-  const getAccessToken = async () => {
-    const activeSession = await getSession()
+  const getAccessToken = async (options: GetViewerSessionOptions = {}) => {
+    const activeSession = await getSession(options)
     return activeSession?.access_token
   }
 
