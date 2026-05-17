@@ -15,7 +15,6 @@ const {
   topUpPseudo,
   formattedBalance,
   maskedBalance,
-  isInitialLoading,
 } = useWallet()
 </script>
 
