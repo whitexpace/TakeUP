@@ -8,8 +8,6 @@ definePageMeta({
   middleware: "account-auth",
 })
 
-const router = useRouter()
-
 const activeStatus = ref<BookingStatus | null>("PENDING")
 const lenderRole = ref<"LENDER">("LENDER")
 const searchQuery = ref("")
