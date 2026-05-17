@@ -22,7 +22,7 @@ definePageMeta({
   middleware: "admin-auth",
 })
 
-const { data, pending, error, refresh } = await useAsyncData<UsersListResponse>(
+const { data, pending, error, refresh } = useLazyAsyncData<UsersListResponse>(
   () =>
     `admin:users:${searchQuery.value}:${selectedRole.value}:${selectedStatus.value}:${currentPage.value}`,
   async () => {
@@ -202,7 +202,7 @@ const clearFilters = () => {
         </div>
 
         <div v-if="pending && !users.length">
-          <TableSkeleton />
+          <UserTableSkeleton />
         </div>
 
         <div v-else-if="error" class="p-20 text-center">

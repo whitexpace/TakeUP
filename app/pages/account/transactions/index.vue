@@ -444,7 +444,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <TransactionHistorySkeleton v-if="isInitialLoading" />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <section class="space-y-3">
         <div class="space-y-2">
@@ -455,35 +457,32 @@ onBeforeUnmount(() => {
           Review your borrowing and lending history
         </p>
       </section>
-
-      <NuxtLink
-        to="/account/requests"
-        class="inline-flex h-11 shrink-0 items-center gap-2 rounded-[12px] border-[1.5px] border-burning-orange px-6 text-[13px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
-      >
-        View Requests
-      </NuxtLink>
     </div>
 
     <!-- Search bar -->
     <div
       class="flex items-center gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-12 px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
     >
-      <Icon name="ph:magnifying-glass" class="w-5 h-5 text-gray-400 shrink-0" />
+      <button
+        v-if="searchQuery"
+        type="button"
+        class="flex h-10 w-10 items-center justify-center -ml-2.5 text-noble-black/30 hover:text-burning-orange transition-colors"
+        title="Clear search"
+        @click="searchQuery = ''"
+      >
+        <Icon name="ph:x" class="w-5 h-5" />
+      </button>
+      <Icon
+        v-else
+        name="ph:magnifying-glass"
+        class="w-5 h-5 text-gray-400 shrink-0 transition-colors"
+      />
       <input
         v-model="searchQuery"
         type="text"
         placeholder="Search transactions..."
         class="flex-1 bg-transparent outline-none text-noble-black text-[15px] font-medium placeholder:text-gray-400 min-w-0"
       />
-      <!-- Clear Search Button -->
-      <button
-        v-if="searchQuery"
-        class="text-gray-400 hover:text-noble-black transition-colors"
-        title="Clear search"
-        @click="searchQuery = ''"
-      >
-        <Icon name="ph:x" class="w-[18px] h-[18px]" />
-      </button>
     </div>
 
     <!-- Tab bar -->
@@ -551,18 +550,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Loading skeletons -->
-      <template v-if="isInitialLoading">
-        <div class="flex flex-col gap-4">
-          <TransactionCardSkeleton />
-          <BorrowerRequestCardSkeleton />
-          <TransactionCardSkeleton />
-        </div>
-      </template>
-
       <!-- Error state -->
       <div
-        v-else-if="hasInitialError"
+        v-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
         <Icon name="ph:warning-circle" class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4" />
@@ -670,3 +660,19 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+</style>

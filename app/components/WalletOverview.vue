@@ -22,10 +22,12 @@ const props = withDefaults(
     memberSinceLabel?: string
     readOnlyBadgeLabel?: string | null
     topUpNotice?: string
+    withdrawNotice?: string
     gradient?: string
     isSystemWallet?: boolean
     onToggleBalance: () => void
     onTopUp?: (amount: number) => Promise<unknown>
+    onWithdraw?: (amount: number) => Promise<unknown>
   }>(),
   {
     linkedAccounts: () => [],
@@ -41,26 +43,35 @@ const props = withDefaults(
     memberSinceLabel: "TakeUP Member since 2026",
     readOnlyBadgeLabel: null,
     topUpNotice: "This is a pseudo top-up for demo purposes. No real money will be charged.",
+    withdrawNotice:
+      "This is a pseudo withdrawal for demo purposes. No real money will be transferred.",
     gradient: "linear-gradient(135deg, #1a2340 0%, #2d3f6b 50%, #1e3a5f 100%)",
     isSystemWallet: false,
     onTopUp: undefined,
+    onWithdraw: undefined,
   },
 )
 
 const showTopUpModal = ref(false)
 const topUpAmountDisplay = ref("")
+const showWithdrawModal = ref(false)
+const withdrawAmountDisplay = ref("")
 const isSubmitting = ref(false)
 
 const gridClass = computed(() => (props.showLinkedAccounts ? "lg:grid-cols-2" : "lg:grid-cols-1"))
 
-const handleAmountInput = (event: Event) => {
+const handleAmountInput = (event: Event, type: "topup" | "withdraw" = "topup") => {
   const target = event.target as HTMLInputElement
   let value = target.value.replace(/[^0-9.]/g, "")
   const parts = value.split(".")
   if (parts.length > 2) {
     value = `${parts[0]}.${parts.slice(1).join("")}`
   }
-  topUpAmountDisplay.value = value
+  if (type === "topup") {
+    topUpAmountDisplay.value = value
+  } else {
+    withdrawAmountDisplay.value = value
+  }
 }
 
 const handleTopUp = async () => {
@@ -78,6 +89,30 @@ const handleTopUp = async () => {
     await props.onTopUp(amount)
     showTopUpModal.value = false
     topUpAmountDisplay.value = ""
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const handleWithdraw = async () => {
+  if (!props.onWithdraw) {
+    return
+  }
+
+  const amount = parseFloat(withdrawAmountDisplay.value)
+  if (Number.isNaN(amount) || amount <= 0) {
+    return
+  }
+
+  isSubmitting.value = true
+  try {
+    await props.onWithdraw(amount)
+    showWithdrawModal.value = false
+    withdrawAmountDisplay.value = ""
+  } catch (error: unknown) {
+    // Basic error handling for UI (e.g., insufficient funds)
+    const err = error as { data?: { message?: string } }
+    alert(err?.data?.message || "Withdrawal failed. Please check your balance.")
   } finally {
     isSubmitting.value = false
   }
@@ -103,7 +138,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
     case "COMMISSION":
       return "Commission"
     case "ADJUSTMENT":
-      return "Adjustment"
+      return "Withdrawal"
     default:
       return "Payment"
   }
@@ -174,7 +209,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             </div>
             <div class="flex items-center gap-2">
               <button
-                class="p-2 hover:bg-white/10 rounded-full transition-colors shrink-0"
+                class="flex h-10 w-10 items-center justify-center hover:bg-white/10 rounded-full transition-colors shrink-0"
                 title="Toggle Balance Visibility"
                 @click="onToggleBalance"
               >
@@ -201,6 +236,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             <button
               v-if="allowWithdraw"
               class="px-8 py-2.5 bg-white/10 text-white border-[1.5px] border-white/40 font-semibold rounded-[12px] hover:bg-white/20 transition-all active:scale-95 backdrop-blur-sm"
+              @click="showWithdrawModal = true"
             >
               Withdraw
             </button>
@@ -275,9 +311,9 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
               </div>
             </div>
             <button
-              class="p-2 text-noble-black/30 hover:text-noble-black hover:bg-neutral-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+              class="flex h-9 w-9 items-center justify-center text-noble-black/30 hover:text-noble-black hover:bg-neutral-50 rounded-lg transition-all"
             >
-              <Icon name="ph:dots-three-vertical" class="w-5 h-5" />
+              <Icon name="ph:dots-three-vertical" class="w-5 h-5 shrink-0" />
             </button>
           </div>
         </div>
@@ -462,7 +498,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             </div>
             <button
               type="button"
-              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="showTopUpModal = false"
             >
               <Icon name="ph:x" class="w-5 h-5" />
@@ -497,11 +533,11 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                     inputmode="decimal"
                     placeholder=" "
                     class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[18px] font-bold text-noble-black transition-all duration-300"
-                    @input="handleAmountInput"
+                    @input="handleAmountInput($event, 'topup')"
                   />
                   <label
                     for="top-up-amount"
-                    class="absolute left-12 top-4 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-4 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    class="absolute left-12 top-[18px] text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
                     >Enter Amount (PHP)</label
                   >
                 </div>
@@ -512,7 +548,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                     v-for="amount in [500, 1000, 2000]"
                     :key="amount"
                     type="button"
-                    class="py-3 rounded-[10px] bg-cream hover:bg-pale-cashmere/30 border border-cinnamon-ice/20 font-bold text-noble-black/70 transition-all active:scale-[0.98]"
+                    class="py-3 rounded-[12px] bg-white border border-gray-100 font-bold text-noble-black/60 shadow-sm transition-all hover:border-burning-orange/30 hover:bg-burning-orange/[0.02] hover:text-burning-orange active:scale-[0.98]"
                     @click="topUpAmountDisplay = amount.toString()"
                   >
                     ₱{{ amount.toLocaleString() }}
@@ -543,6 +579,108 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
         </div>
       </div>
     </Teleport>
+
+    <!-- Withdraw Modal -->
+    <Teleport to="body">
+      <div
+        v-if="allowWithdraw && showWithdrawModal"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
+      >
+        <div
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
+          @click="showWithdrawModal = false"
+        ></div>
+        <div
+          class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
+        >
+          <!-- Header -->
+          <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+            <div>
+              <h2 class="text-[24px] font-bold text-noble-black">Withdraw Funds</h2>
+              <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                Transfer money from your TakeUP balance.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+              @click="showWithdrawModal = false"
+            >
+              <Icon name="ph:x" class="w-5 h-5" />
+            </button>
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+            <div class="py-6">
+              <div class="bg-blue-estate/[0.03] p-4 rounded-[16px] mb-8 flex items-start gap-3">
+                <Icon name="ph:info" class="text-blue-estate mt-0.5 shrink-0 w-[18px] h-[18px]" />
+                <p class="text-[13px] font-bold text-blue-estate/80 leading-relaxed">
+                  {{ withdrawNotice }}
+                </p>
+              </div>
+
+              <div class="space-y-6 pb-8">
+                <!-- Amount Input -->
+                <div class="relative group">
+                  <div
+                    class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
+                  >
+                    <span class="text-[18px] font-bold">₱</span>
+                  </div>
+                  <input
+                    id="withdraw-amount"
+                    v-model="withdrawAmountDisplay"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder=" "
+                    class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[18px] font-bold text-noble-black transition-all duration-300"
+                    @input="handleAmountInput($event, 'withdraw')"
+                  />
+                  <label
+                    for="withdraw-amount"
+                    class="absolute left-12 top-[18px] text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >Enter Amount (PHP)</label
+                  >
+                </div>
+
+                <!-- Quick Select -->
+                <div class="grid grid-cols-3 gap-3">
+                  <button
+                    v-for="amount in [500, 1000, 2000]"
+                    :key="amount"
+                    type="button"
+                    class="py-3 rounded-[12px] bg-white border border-gray-100 font-bold text-noble-black/60 shadow-sm transition-all hover:border-burning-orange/30 hover:bg-burning-orange/[0.02] hover:text-burning-orange active:scale-[0.98]"
+                    @click="withdrawAmountDisplay = amount.toString()"
+                  >
+                    ₱{{ amount.toLocaleString() }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex gap-3 shrink-0">
+            <button
+              type="button"
+              class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+              @click="showWithdrawModal = false"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              :disabled="isSubmitting || !withdrawAmountDisplay"
+              @click="handleWithdraw"
+            >
+              {{ isSubmitting ? "Processing..." : "Confirm Withdrawal" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -560,18 +698,5 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(-8px);
-}
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 40%");
-  border-radius: 20px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.cinnamon-ice / 60%");
 }
 </style>

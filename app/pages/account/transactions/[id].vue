@@ -35,14 +35,11 @@ const { authUser } = useAuthUser()
 const currentUserId = computed(() => authUser.value?.id ?? null)
 const shouldBypassPrefetchedBookingDetail = ref(false)
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = useLazyAsyncData(
   () => `booking:${bookingId.value || "missing"}`,
   async () => {
     if (!bookingId.value) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: "Booking request not found.",
-      })
+      return null
     }
 
     if (!shouldBypassPrefetchedBookingDetail.value) {
@@ -67,22 +64,10 @@ const { data, pending, error, refresh } = await useAsyncData(
 
     return bookingDetail
   },
-  { watch: [bookingId] },
+  { watch: [bookingId], default: () => null },
 )
 
-if (error.value) {
-  throw error.value
-}
-
-const booking = computed(() => {
-  if (!data.value) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: "Booking request not found.",
-    })
-  }
-  return data.value
-})
+const booking = computed(() => data.value)
 
 const isActing = ref(false)
 const isDisputeDescriptionExpanded = ref(false)
@@ -103,35 +88,33 @@ const refreshBookingDetail = async () => {
   }
 }
 
-const isLender = computed(() => booking.value.lenderId === currentUserId.value)
+const isLender = computed(() => booking.value?.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
-const canRespond = computed(() => isLender.value && booking.value.status === "PENDING")
-const canConfirmReceipt = computed(() => isLender.value && booking.value.status === "RETURNED")
+const canRespond = computed(() => isLender.value && booking.value?.status === "PENDING")
+const canConfirmReceipt = computed(() => isLender.value && booking.value?.status === "RETURNED")
 const canUploadHandoffProof = computed(
   () =>
     isLender.value &&
-    booking.value.status === "CONFIRMED" &&
-    !booking.value.lenderHandoffProofUploadedAt,
+    booking.value?.status === "CONFIRMED" &&
+    !booking.value?.lenderHandoffProofUploadedAt,
 )
 const canOpenChat = computed(
   () =>
-    Boolean(booking.value.transactionId) && isChatAvailableForBookingStatus(booking.value.status),
+    Boolean(booking.value?.transactionId) &&
+    booking.value &&
+    isChatAvailableForBookingStatus(booking.value.status),
 )
-const isPendingRequest = computed(() => booking.value.status === "PENDING")
-const canCancelRequest = computed(() => !isLender.value && booking.value.status === "PENDING")
+const isPendingRequest = computed(() => booking.value?.status === "PENDING")
+const canCancelRequest = computed(() => !isLender.value && booking.value?.status === "PENDING")
 const canBorrowerReturnItem = computed(
   () =>
     !isLender.value &&
-    booking.value.status === "CONFIRMED" &&
-    Boolean(booking.value.lenderHandoffProofUploadedAt),
-)
-const requestStageMessage = computed(() =>
-  isLender.value
-    ? "Requested - waiting for you to accept the booking"
-    : "Requested - waiting for lender to accept the booking",
+    booking.value?.status === "CONFIRMED" &&
+    Boolean(booking.value?.lenderHandoffProofUploadedAt),
 )
 
 const mappedStatus = computed(() => {
+  if (!booking.value) return "PENDING"
   switch (booking.value.status) {
     case "PENDING":
       return "PENDING"
@@ -192,20 +175,25 @@ const computeDuration = (startDate: Date | string, endDate: Date | string): stri
   return `${weekPart} and ${dayPart}`
 }
 
-const duration = computed(() => computeDuration(booking.value.startDate, booking.value.endDate))
+const duration = computed(() => {
+  if (!booking.value) return ""
+  return computeDuration(booking.value.startDate, booking.value.endDate)
+})
 
-const itemDetailPath = computed(() =>
-  buildItemDetailPath({
+const itemDetailPath = computed(() => {
+  if (!booking.value) return ""
+  return buildItemDetailPath({
     id: booking.value.item.id,
     name: booking.value.item.name,
-  }),
-)
+  })
+})
 
 const backToTransactionsPath = computed(() => {
   return `/account/transactions?role=${userRole.value}`
 })
 
 const timeline = computed(() => {
+  if (!booking.value) return []
   const entries = booking.value.timeline ?? []
   return entries.map((entry, index) => {
     let description = entry.description
@@ -214,15 +202,15 @@ const timeline = computed(() => {
 
     if (entry.label === "In use") {
       description = "Item picked up by borrower"
-      if (booking.value.lenderHandoffProofUrl) {
+      if (booking.value?.lenderHandoffProofUrl) {
         proofUrl = booking.value.lenderHandoffProofUrl
         proofLabel = "View lending proof"
       }
     } else if (entry.label === "Returned") {
-      if (booking.value.refundAmount > 0) {
+      if (booking.value && booking.value.refundAmount > 0) {
         description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
       }
-      if (booking.value.borrowerReturnProofUrl) {
+      if (booking.value?.borrowerReturnProofUrl) {
         proofUrl = booking.value.borrowerReturnProofUrl
         proofLabel = "View return proof"
       }
@@ -294,8 +282,11 @@ const parsedDisputeDescription = computed(() => {
 })
 
 const handoffProofFile = ref<File | null>(null)
+const handoffProofPreview = ref<string | null>(null)
 const returnProofFile = ref<File | null>(null)
+const returnProofPreview = ref<string | null>(null)
 const earlyReturnProofFile = ref<File | null>(null)
+const earlyReturnProofPreview = ref<string | null>(null)
 
 type ProofUploadType = "HANDOFF" | "RETURN"
 type ProofUploadUrlResponse = {
@@ -321,6 +312,10 @@ const getFetchErrorMessage = (err: unknown, fallback: string) => {
 const setProofFile = (
   event: Event,
   target: typeof handoffProofFile | typeof returnProofFile | typeof earlyReturnProofFile,
+  previewTarget:
+    | typeof handoffProofPreview
+    | typeof returnProofPreview
+    | typeof earlyReturnProofPreview,
 ) => {
   proofUploadErrorMessage.value = ""
   const input = event.target as HTMLInputElement
@@ -328,19 +323,48 @@ const setProofFile = (
 
   if (file && !file.type.startsWith("image/")) {
     target.value = null
+    previewTarget.value = null
     input.value = ""
     proofUploadErrorMessage.value = "Please upload an image file as proof."
     return
   }
 
   target.value = file
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      previewTarget.value = (e.target?.result as string) ?? null
+    }
+    reader.readAsDataURL(file)
+  } else {
+    previewTarget.value = null
+  }
 }
 
-const setHandoffProofFile = (event: Event) => setProofFile(event, handoffProofFile)
-const setReturnProofFile = (event: Event) => setProofFile(event, returnProofFile)
-const setEarlyReturnProofFile = (event: Event) => setProofFile(event, earlyReturnProofFile)
+const setHandoffProofFile = (event: Event) =>
+  setProofFile(event, handoffProofFile, handoffProofPreview)
+const setReturnProofFile = (event: Event) =>
+  setProofFile(event, returnProofFile, returnProofPreview)
+const setEarlyReturnProofFile = (event: Event) =>
+  setProofFile(event, earlyReturnProofFile, earlyReturnProofPreview)
+
+const clearHandoffProof = () => {
+  handoffProofFile.value = null
+  handoffProofPreview.value = null
+}
+
+const clearReturnProof = () => {
+  returnProofFile.value = null
+  returnProofPreview.value = null
+}
+
+const clearEarlyReturnProof = () => {
+  earlyReturnProofFile.value = null
+  earlyReturnProofPreview.value = null
+}
 
 const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
+  if (!booking.value) throw new Error("Booking data missing.")
   const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
     method: "POST",
     body: {
@@ -367,14 +391,14 @@ const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
 const handleReturn = () => {
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
-  returnProofFile.value = null
+  clearReturnProof()
   isReturnModalOpen.value = true
 }
 
 const handleHandoffProof = () => {
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
-  handoffProofFile.value = null
+  clearHandoffProof()
   if (!isRentalPeriodStarted.value) {
     isTooEarlyForHandoffOpen.value = true
     return
@@ -383,6 +407,7 @@ const handleHandoffProof = () => {
 }
 
 const isRentalPeriodStarted = computed(() => {
+  if (!booking.value) return false
   const now = new Date()
   const start = new Date(booking.value.transactionStartDate ?? booking.value.startDate)
   return now >= start
@@ -391,7 +416,7 @@ const isRentalPeriodStarted = computed(() => {
 const isTooEarlyForHandoffOpen = ref(false)
 
 const isEarlyReturnEligible = computed(() => {
-  if (isLender.value || booking.value.status !== "CONFIRMED") return false
+  if (!booking.value || isLender.value || booking.value.status !== "CONFIRMED") return false
   const now = new Date()
   const end = new Date(booking.value.endDate)
   return now < end
@@ -421,9 +446,10 @@ const earlyReturnPreviewData = ref<EarlyReturnPreviewData | null>(null)
 const isFetchingPreview = ref(false)
 
 const handleEarlyReturn = async () => {
+  if (!booking.value) return
   actionErrorMessage.value = ""
   proofUploadErrorMessage.value = ""
-  earlyReturnProofFile.value = null
+  clearEarlyReturnProof()
   isFetchingPreview.value = true
   try {
     const data = await $fetch<EarlyReturnPreviewData>(
@@ -451,6 +477,7 @@ const handleEarlyReturn = async () => {
 }
 
 const confirmEarlyReturn = async () => {
+  if (!booking.value) return
   if (!earlyReturnProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of return before submitting."
     return
@@ -483,6 +510,7 @@ const confirmEarlyReturn = async () => {
 }
 
 const confirmReturn = async () => {
+  if (!booking.value) return
   if (!returnProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of return before submitting."
     return
@@ -513,6 +541,7 @@ const confirmReturn = async () => {
 }
 
 const confirmHandoffProof = async () => {
+  if (!booking.value) return
   if (!handoffProofFile.value) {
     proofUploadErrorMessage.value = "Upload proof of handoff before marking the item in use."
     return
@@ -543,6 +572,7 @@ const confirmHandoffProof = async () => {
 }
 
 const confirmReceipt = async () => {
+  if (!booking.value) return
   isActing.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
@@ -574,6 +604,7 @@ const confirmReceipt = async () => {
 }
 
 const cancelRequest = async () => {
+  if (!booking.value) return
   isActing.value = true
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
@@ -611,8 +642,12 @@ const copyOrderId = () => {
   navigator.clipboard.writeText(bookingId.value)
 }
 
+const actingStatus = ref<"CONFIRMED" | "CANCELLED" | null>(null)
+
 const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
+  if (!booking.value) return
   isActing.value = true
+  actingStatus.value = status
   actionErrorMessage.value = ""
   actionSuccessMessage.value = ""
 
@@ -642,23 +677,24 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
       "Unable to update the request right now."
   } finally {
     isActing.value = false
+    actingStatus.value = null
   }
 }
 
-const latestDispute = computed(() => booking.value.latestDispute)
-const canRaiseDispute = computed(() => booking.value.canRaiseDispute)
+const latestDispute = computed(() => booking.value?.latestDispute ?? null)
+const canRaiseDispute = computed(() => booking.value?.canRaiseDispute ?? false)
 const canSubmitRebuttal = computed(() => Boolean(latestDispute.value?.canSubmitRebuttal))
 const isLatestDisputeRaisedByCurrentUser = computed(
   () => latestDispute.value?.raisedById === currentUserId.value,
 )
 const isReviewBlockedByDispute = computed(
-  () => booking.value.status === "COMPLETED" && !booking.value.reviewState.isCompleted,
+  () => booking.value?.status === "COMPLETED" && !booking.value?.reviewState.isCompleted,
 )
 const showReviewBonusSection = computed(
-  () => booking.value.status === "COMPLETED" && booking.value.reviewState.isCompleted,
+  () => booking.value?.status === "COMPLETED" && booking.value?.reviewState.isCompleted,
 )
 const disputeReportPath = computed(() =>
-  booking.value.transactionId
+  booking.value?.transactionId
     ? {
         path: "/account/disputes",
         query: {
@@ -733,13 +769,16 @@ const disputeStatusDescription = computed(() => {
   }
 })
 
+const disputeRaiser = computed(() => {
+  if (!latestDispute.value || !booking.value) return null
+  return latestDispute.value.raisedById === booking.value.borrowerId
+    ? booking.value.borrower.user
+    : booking.value.lender.user
+})
+
 const disputeRaisedByName = computed(() => {
-  if (!latestDispute.value) return null
-  const user =
-    latestDispute.value.raisedById === booking.value.borrowerId
-      ? booking.value.borrower.user
-      : booking.value.lender.user
-  return `${user.firstName} ${user.lastName[0]}.`
+  if (!disputeRaiser.value) return null
+  return `${disputeRaiser.value.firstName} ${disputeRaiser.value.lastName[0]}.`
 })
 
 const rebuttalSubmittedByName = computed(() => {
@@ -877,7 +916,7 @@ const submitRebuttal = async () => {
 }
 
 const openChat = async () => {
-  if (!booking.value.transactionId || !canOpenChat.value) return
+  if (!booking.value?.transactionId || !canOpenChat.value) return
 
   await router.push({
     path: "/chat",
@@ -886,12 +925,13 @@ const openChat = async () => {
 }
 
 const reviewCounterpartName = computed(() => {
+  if (!booking.value) return ""
   const user = isLender.value ? booking.value.borrower.user : booking.value.lender.user
   return `${user.firstName} ${user.lastName[0]}.`
 })
 
 const reviewContext = computed(() => {
-  if (!booking.value.transactionId || !selectedReviewType.value) return null
+  if (!booking.value?.transactionId || !selectedReviewType.value || !booking.value) return null
 
   return {
     transactionId: booking.value.transactionId,
@@ -911,7 +951,7 @@ const reviewContext = computed(() => {
 
 const openReviewModal = (reviewType: ReviewType) => {
   selectedReviewType.value = reviewType
-  const action = booking.value.reviewState.actions.find((entry) => entry.reviewType === reviewType)
+  const action = booking.value?.reviewState.actions.find((entry) => entry.reviewType === reviewType)
   if (!action?.canSubmit) return
   isReviewModalOpen.value = true
 }
@@ -966,35 +1006,98 @@ const handleReviewSubmitted = async () => {
 <template>
   <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
-    <NuxtLink
-      :to="backToTransactionsPath"
-      class="flex items-center gap-3 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
-    >
-      <Icon
-        name="ph:caret-left"
-        class="w-[18px] h-[18px] shrink-0 transition-transform group-hover:-translate-x-1"
-      />
-      <span class="text-[15px] font-bold leading-none">Back to My Transactions</span>
-    </NuxtLink>
+    <div class="relative group/tooltip w-fit mb-8">
+      <NuxtLink
+        :to="backToTransactionsPath"
+        class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
+      >
+        <Icon
+          name="ph:caret-left"
+          class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+        />
+      </NuxtLink>
+      <div class="custom-tooltip">
+        Back to My Transactions
+        <div class="tooltip-arrow"></div>
+      </div>
+    </div>
 
-    <template v-if="pending">
+    <template v-if="pending && !booking">
       <div class="flex flex-col gap-8 animate-pulse">
+        <!-- Header Skeleton -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="space-y-3">
+          <div class="space-y-4">
             <div class="h-10 w-64 bg-noble-black/20 rounded-xl"></div>
-            <div class="h-4 w-48 bg-noble-black/10 rounded-lg"></div>
+            <div class="h-4 w-40 bg-noble-black/10 rounded-lg"></div>
           </div>
-          <div class="h-8 w-32 bg-noble-black/10 rounded-full"></div>
+          <div class="h-8 w-24 bg-noble-black/10 rounded-full"></div>
         </div>
 
+        <!-- Content Grid Skeleton -->
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <!-- Left Column Skeletons -->
           <div class="lg:col-span-3 space-y-8">
-            <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
-            <div class="h-96 bg-noble-black/5 rounded-[24px]"></div>
+            <!-- Item Detail Card Skeleton -->
+            <div class="bg-white border border-cinnamon-ice/10 rounded-[24px] p-6 shadow-sm">
+              <div class="h-6 w-32 bg-noble-black/20 rounded mb-6"></div>
+              <div class="flex gap-6">
+                <div class="w-24 h-24 rounded-xl bg-noble-black/10 shrink-0"></div>
+                <div class="space-y-3 flex-1">
+                  <div class="h-5 w-3/4 bg-noble-black/20 rounded"></div>
+                  <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
+                  <div class="h-8 w-40 bg-noble-black/5 rounded-full mt-2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Timeline Section Skeleton -->
+            <div class="bg-cream/50 border border-cinnamon-ice/15 rounded-[24px] p-8 h-[400px]">
+              <div class="h-6 w-40 bg-noble-black/20 rounded mb-10"></div>
+              <div class="space-y-8">
+                <div v-for="i in 3" :key="i" class="flex gap-6">
+                  <div class="w-8 h-8 rounded-full bg-noble-black/10 shrink-0"></div>
+                  <div class="space-y-2 flex-1 pt-1">
+                    <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+                    <div class="h-3 w-48 bg-noble-black/10 rounded"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <!-- Right Column Skeletons -->
           <div class="lg:col-span-2 space-y-8">
-            <div class="h-80 bg-noble-black/5 rounded-[24px]"></div>
-            <div class="h-64 bg-noble-black/5 rounded-[24px]"></div>
+            <!-- Payment Summary Skeleton -->
+            <div
+              class="bg-white border border-cinnamon-ice/10 rounded-[16px] p-6 shadow-sm space-y-6"
+            >
+              <div class="h-5 w-32 bg-noble-black/20 rounded"></div>
+              <div class="space-y-4">
+                <div v-for="i in 2" :key="i" class="flex justify-between">
+                  <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
+                  <div class="h-4 w-16 bg-noble-black/10 rounded"></div>
+                </div>
+                <div class="pt-5 border-t border-dashed border-gray-100 flex justify-between">
+                  <div class="h-6 w-20 bg-noble-black/20 rounded"></div>
+                  <div class="h-6 w-24 bg-noble-black/20 rounded"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Counterpart Info Skeleton -->
+            <div
+              class="bg-white border border-cinnamon-ice/10 rounded-[12px] p-5 shadow-sm space-y-4"
+            >
+              <div class="h-3 w-16 bg-noble-black/10 rounded mb-4"></div>
+              <div class="flex items-center gap-4">
+                <div class="h-12 w-12 rounded-full bg-noble-black/10 shrink-0"></div>
+                <div class="space-y-2 flex-1">
+                  <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+                  <div class="h-3 w-24 bg-noble-black/10 rounded"></div>
+                </div>
+              </div>
+              <div class="h-10 w-full bg-noble-black/5 rounded-[10px] mt-2"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1023,8 +1126,6 @@ const handleReviewSubmitted = async () => {
                 <Icon name="ph:copy" class="w-3 h-3 shrink-0" />
               </button>
             </div>
-            <span class="opacity-30 select-none">·</span>
-            <span class="leading-none">Placed on {{ formatDateTime(booking.requestedAt) }}</span>
           </div>
         </div>
 
@@ -1048,14 +1149,6 @@ const handleReviewSubmitted = async () => {
       <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
         <!-- Left Column (60%) -->
         <div class="lg:col-span-3 space-y-8">
-          <div
-            v-if="isPendingRequest"
-            class="rounded-[20px] border border-burning-orange/10 bg-burning-orange/[0.03] px-5 py-4 text-[14px] font-bold text-noble-black flex items-start gap-3"
-          >
-            <Icon name="ph:info" class="w-[18px] h-[18px] text-burning-orange mt-0.5 shrink-0" />
-            {{ requestStageMessage }}
-          </div>
-
           <!-- Section 1: Item Details -->
           <div
             class="bg-white border border-[#F0EDE8] rounded-[24px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] relative group"
@@ -1073,7 +1166,7 @@ const handleReviewSubmitted = async () => {
             <div class="flex flex-col sm:flex-row gap-6">
               <div class="shrink-0 relative">
                 <img
-                  v-if="booking.item.thumbnailImage"
+                  v-if="booking.item?.thumbnailImage"
                   :src="booking.item.thumbnailImage"
                   :alt="booking.item.name"
                   class="w-24 h-24 object-cover rounded-[12px] border border-gray-100 shadow-sm"
@@ -1087,12 +1180,12 @@ const handleReviewSubmitted = async () => {
               </div>
               <div class="flex flex-col justify-center min-w-0">
                 <h3 class="text-[18px] font-semibold text-noble-black leading-tight mb-1 truncate">
-                  {{ booking.item.name }}
+                  {{ booking.item?.name }}
                 </h3>
                 <p class="text-[13px] text-gray-500 font-medium mb-4">
                   Condition:
                   {{
-                    booking.item.condition
+                    booking.item?.condition
                       ?.replace("_", " ")
                       .toLowerCase()
                       .replace(/\b\w/g, (l) => l.toUpperCase())
@@ -1293,6 +1386,13 @@ const handleReviewSubmitted = async () => {
               </span>
             </div>
 
+            <!-- Empty State Message -->
+            <div v-if="!latestDispute" class="mb-4">
+              <p class="text-[14px] text-noble-black/40 italic">
+                No concerns or disputes have been raised for this transaction yet.
+              </p>
+            </div>
+
             <!-- Redesigned Dispute Metadata Grid -->
             <div v-if="latestDispute" class="space-y-6">
               <div class="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-8">
@@ -1446,14 +1546,14 @@ const handleReviewSubmitted = async () => {
                 class="h-12 bg-gradient-to-br from-burning-orange to-orange-500 text-white rounded-[12px] font-bold text-[14px] hover:brightness-105 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
                 @click="respondToBooking('CONFIRMED')"
               >
-                Approve
+                {{ actingStatus === "CONFIRMED" ? "Approving..." : "Approve" }}
               </button>
               <button
                 :disabled="isActing"
-                class="h-12 bg-white border-2 border-gray-200 text-noble-black/60 rounded-[12px] font-bold text-[14px] hover:bg-gray-50 transition-all disabled:opacity-50"
+                class="h-12 bg-white border-2 border-burning-orange text-burning-orange rounded-[12px] font-bold text-[14px] hover:bg-burning-orange/5 transition-all disabled:opacity-50"
                 @click="respondToBooking('CANCELLED')"
               >
-                Decline
+                {{ actingStatus === "CANCELLED" ? "Declining..." : "Decline" }}
               </button>
             </div>
 
@@ -1586,18 +1686,30 @@ const handleReviewSubmitted = async () => {
               {{ isLender ? "Borrower" : "Lender" }}
             </p>
             <div class="flex flex-col gap-5">
-              <div class="flex items-center gap-4 min-w-0">
+              <NuxtLink
+                :to="`/profile/${
+                  isLender ? booking.borrower.user.username : booking.lender.user.username
+                }`"
+                class="flex items-center gap-4 min-w-0 group/counterpart"
+              >
                 <UserAvatar
                   :user-name="
                     isLender
                       ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
                       : `${booking.lender.user.firstName} ${booking.lender.user.lastName}`
                   "
+                  :avatar-url="
+                    isLender
+                      ? (booking.borrower.user as any).avatarUrl
+                      : (booking.lender.user as any).avatarUrl
+                  "
                   size="lg"
-                  class="shrink-0 ring-4 ring-gray-50"
+                  class="shrink-0 ring-4 ring-gray-50 transition-transform group-hover/counterpart:scale-105"
                 />
                 <div class="min-w-0 flex-1">
-                  <h3 class="font-semibold text-noble-black text-[15px] truncate">
+                  <h3
+                    class="font-semibold text-noble-black text-[15px] truncate group-hover/counterpart:text-burning-orange transition-colors"
+                  >
                     {{
                       isLender
                         ? `${booking.borrower.user.firstName} ${booking.borrower.user.lastName}`
@@ -1621,7 +1733,7 @@ const handleReviewSubmitted = async () => {
                     >
                   </div>
                 </div>
-              </div>
+              </NuxtLink>
 
               <button
                 v-if="canOpenChat"
@@ -1675,7 +1787,7 @@ const handleReviewSubmitted = async () => {
       <Teleport to="body">
         <div
           v-if="isHandoffProofModalOpen"
-          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <div
             class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
@@ -1683,54 +1795,121 @@ const handleReviewSubmitted = async () => {
           ></div>
 
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
-            <div class="text-center">
-              <div
-                class="w-20 h-20 bg-blue-estate/10 rounded-full flex items-center justify-center mx-auto mb-6"
-              >
-                <Icon name="ph:upload-simple" class="w-10 h-10" style="color: #1f3a5f" />
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Upload Handoff Proof</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Show the item handoff to update the status to "In Use".
+                </p>
               </div>
-              <h3 class="text-2xl font-bold text-noble-black mb-2">Upload Handoff Proof</h3>
-              <p class="text-noble-black/60 mb-6 leading-relaxed">
-                Upload proof that you have given the item to the borrower. This will mark the
-                transaction as in use.
-              </p>
-
-              <label
-                class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="isHandoffProofModalOpen = false"
               >
-                <span class="block text-sm font-bold text-noble-black">Proof image</span>
-                <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                  {{ handoffProofFile?.name || "Choose an image file" }}
+                <Icon name="ph:x" class="w-5 h-5" />
+              </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6">
+                <!-- Unified Dropzone -->
+                <div class="relative group">
+                  <label
+                    class="block w-full aspect-square max-w-[140px] mx-auto rounded-[20px] border-2 border-dashed border-cinnamon-ice bg-cream/50 overflow-hidden cursor-pointer hover:border-burning-orange hover:bg-burning-orange/[0.02] transition-all duration-300"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="setHandoffProofFile"
+                    />
+
+                    <!-- Empty State -->
+                    <div
+                      v-if="!handoffProofPreview"
+                      class="h-full w-full flex flex-col items-center justify-center gap-2 p-4 text-center"
+                    >
+                      <div
+                        class="w-9 h-9 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/20 group-hover:text-burning-orange group-hover:bg-burning-orange/10 transition-colors"
+                      >
+                        <Icon name="ph:plus" class="w-5 h-5" />
+                      </div>
+                      <span
+                        class="text-[12px] font-bold text-noble-black/40 group-hover:text-burning-orange/70 transition-colors"
+                        >Add image</span
+                      >
+                    </div>
+
+                    <!-- Selected State (Preview) -->
+                    <div v-else class="relative h-full w-full group/preview">
+                      <img
+                        :src="handoffProofPreview"
+                        class="h-full w-full object-cover"
+                        alt="Handoff proof"
+                      />
+                      <div
+                        class="absolute inset-0 bg-noble-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <div
+                          class="flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-noble-black text-[12px] font-bold shadow-lg"
+                        >
+                          <Icon name="ph:arrows-clockwise" class="w-4 h-4" />
+                          Replace Image
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <!-- Remove Button (Corner) -->
+                  <button
+                    v-if="handoffProofPreview"
+                    type="button"
+                    class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white border border-gray-100 shadow-md flex items-center justify-center text-cinnabar-red hover:scale-110 transition-transform z-10"
+                    title="Remove Image"
+                    @click.prevent="clearHandoffProof"
+                  >
+                    <Icon name="ph:trash" class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p
+                  v-if="proofUploadErrorMessage"
+                  class="mt-6 text-sm text-red-600 font-medium text-center"
+                >
+                  {{ proofUploadErrorMessage }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex gap-3 shrink-0">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                @click="isHandoffProofModalOpen = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                :disabled="isSubmittingHandoffProof || !handoffProofFile"
+                @click="confirmHandoffProof"
+              >
+                <span
+                  v-if="isSubmittingHandoffProof"
+                  class="flex items-center justify-center gap-2"
+                >
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
+                  Confirming...
                 </span>
-                <input type="file" accept="image/*" class="sr-only" @change="setHandoffProofFile" />
-              </label>
-
-              <p v-if="proofUploadErrorMessage" class="mt-3 text-sm text-red-600">
-                {{ proofUploadErrorMessage }}
-              </p>
-
-              <div class="flex flex-col gap-3 mt-6">
-                <button
-                  :disabled="isSubmittingHandoffProof"
-                  class="w-full bg-blue-estate text-white py-4 rounded-2xl font-bold hover:bg-burning-orange transition-colors flex items-center justify-center disabled:opacity-50"
-                  @click="confirmHandoffProof"
-                >
-                  <Icon
-                    v-if="isSubmittingHandoffProof"
-                    name="ph:circle-notch"
-                    class="w-5 h-5 animate-spin mr-2"
-                  />
-                  {{ isSubmittingHandoffProof ? "Uploading..." : "Upload proof and mark in use" }}
-                </button>
-                <button
-                  class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
-                  @click="isHandoffProofModalOpen = false"
-                >
-                  Cancel
-                </button>
-              </div>
+                <span v-else>Confirm Handoff</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1769,7 +1948,7 @@ const handleReviewSubmitted = async () => {
               <p class="text-noble-black/60 mb-2 leading-relaxed">
                 You can only lend the item within the agreed rental period.
               </p>
-              <p class="text-[13px] text-noble-black/40 font-medium mb-8">
+              <p v-if="booking" class="text-[13px] text-noble-black/40 font-medium mb-8">
                 Rental period:
                 <span class="font-bold text-noble-black/60">{{
                   formatDateTime(booking.transactionStartDate ?? booking.startDate)
@@ -1804,7 +1983,7 @@ const handleReviewSubmitted = async () => {
       <Teleport to="body">
         <div
           v-if="isReturnModalOpen"
-          class="fixed inset-0 z-[1300] flex items-center justify-center p-4"
+          class="fixed inset-0 z-[1300] flex items-center justify-center p-4 font-geist"
         >
           <!-- Backdrop -->
           <div
@@ -1814,54 +1993,118 @@ const handleReviewSubmitted = async () => {
 
           <!-- Modal -->
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
-            <div class="text-center">
-              <div
-                class="w-20 h-20 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-6"
-              >
-                <Icon name="ph:package" class="w-10 h-10" style="color: #ff7124" />
+            <!-- Header -->
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Confirm Item Return</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Provide proof that you have returned the item to the lender.
+                </p>
               </div>
-              <h3 class="text-2xl font-bold text-noble-black mb-2">Confirm Return</h3>
-              <p class="text-noble-black/60 mb-8 leading-relaxed">
-                Upload proof that the item has been returned. The return timestamp will be recorded
-                when this proof is submitted.
-              </p>
-
-              <label
-                class="mb-4 block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 text-left cursor-pointer hover:border-burning-orange transition-colors"
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="isReturnModalOpen = false"
               >
-                <span class="block text-sm font-bold text-noble-black">Return proof image</span>
-                <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                  {{ returnProofFile?.name || "Choose an image file" }}
+                <Icon name="ph:x" class="w-5 h-5" />
+              </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6">
+                <!-- Unified Dropzone -->
+                <div class="relative group">
+                  <label
+                    class="block w-full aspect-square max-w-[140px] mx-auto rounded-[20px] border-2 border-dashed border-cinnamon-ice bg-cream/50 overflow-hidden cursor-pointer hover:border-burning-orange hover:bg-burning-orange/[0.02] transition-all duration-300"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="setReturnProofFile"
+                    />
+
+                    <!-- Empty State -->
+                    <div
+                      v-if="!returnProofPreview"
+                      class="h-full w-full flex flex-col items-center justify-center gap-2 p-4 text-center"
+                    >
+                      <div
+                        class="w-9 h-9 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/20 group-hover:text-burning-orange group-hover:bg-burning-orange/10 transition-colors"
+                      >
+                        <Icon name="ph:plus" class="w-5 h-5" />
+                      </div>
+                      <span
+                        class="text-[12px] font-bold text-noble-black/40 group-hover:text-burning-orange/70 transition-colors"
+                        >Add image</span
+                      >
+                    </div>
+
+                    <!-- Selected State (Preview) -->
+                    <div v-else class="relative h-full w-full group/preview">
+                      <img
+                        :src="returnProofPreview"
+                        class="h-full w-full object-cover"
+                        alt="Return proof"
+                      />
+                      <div
+                        class="absolute inset-0 bg-noble-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <div
+                          class="flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-noble-black text-[12px] font-bold shadow-lg"
+                        >
+                          <Icon name="ph:arrows-clockwise" class="w-4 h-4" />
+                          Replace Image
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <!-- Remove Button (Corner) -->
+                  <button
+                    v-if="returnProofPreview"
+                    type="button"
+                    class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white border border-gray-100 shadow-md flex items-center justify-center text-cinnabar-red hover:scale-110 transition-transform z-10"
+                    title="Remove Image"
+                    @click.prevent="clearReturnProof"
+                  >
+                    <Icon name="ph:trash" class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p
+                  v-if="proofUploadErrorMessage"
+                  class="mt-6 text-sm text-red-600 font-medium text-center"
+                >
+                  {{ proofUploadErrorMessage }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex gap-3 shrink-0">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
+                @click="isReturnModalOpen = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                :disabled="isSubmittingReturn || !returnProofFile"
+                @click="confirmReturn"
+              >
+                <span v-if="isSubmittingReturn" class="flex items-center justify-center gap-2">
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
+                  Confirming...
                 </span>
-                <input type="file" accept="image/*" class="sr-only" @change="setReturnProofFile" />
-              </label>
-
-              <p v-if="proofUploadErrorMessage" class="mb-4 text-sm text-red-600">
-                {{ proofUploadErrorMessage }}
-              </p>
-
-              <div class="flex flex-col gap-3">
-                <button
-                  :disabled="isSubmittingReturn"
-                  class="w-full bg-burning-orange text-white py-4 rounded-2xl font-bold hover:bg-blue-estate transition-colors flex items-center justify-center"
-                  @click="confirmReturn"
-                >
-                  <Icon
-                    v-if="isSubmittingReturn"
-                    name="ph:circle-notch"
-                    class="w-5 h-5 animate-spin mr-2"
-                  />
-                  {{ isSubmittingReturn ? "Uploading..." : "Upload proof and submit return" }}
-                </button>
-                <button
-                  class="w-full bg-cream text-noble-black py-4 rounded-2xl font-bold hover:bg-pale-cashmere transition-colors"
-                  @click="isReturnModalOpen = false"
-                >
-                  Not yet
-                </button>
-              </div>
+                <span v-else>Confirm Return</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1888,135 +2131,178 @@ const handleReviewSubmitted = async () => {
           ></div>
 
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
           >
             <!-- Header -->
-            <div class="px-8 pt-8 pb-4 shrink-0">
-              <div
-                class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-5"
-              >
-                <Icon name="ph:package" class="w-8 h-8" style="color: #e8650a" />
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div>
+                <h2 class="text-[24px] font-bold text-noble-black">Confirm Early Return</h2>
+                <p class="mt-1 text-[13px] font-medium text-noble-black/40">
+                  Submit proof to finalize your early return and refund.
+                </p>
               </div>
-              <h3 class="text-[22px] font-bold text-noble-black text-center">
-                Confirm Early Return
-              </h3>
-              <p
-                class="mt-1.5 text-[13px] text-noble-black/50 font-medium text-center leading-relaxed"
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
+                @click="isEarlyReturnModalOpen = false"
               >
-                Attach proof of return to complete the early return request.
-              </p>
+                <Icon name="ph:x" class="w-5 h-5" />
+              </button>
             </div>
 
-            <!-- Scrollable body -->
-            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-8 py-4 space-y-5">
-              <!-- Refund breakdown -->
-              <div
-                v-if="earlyReturnPreviewData"
-                class="rounded-[16px] border border-cinnamon-ice bg-cream p-5 space-y-3"
-              >
-                <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/40">
-                  Refund Breakdown
-                </p>
-
-                <div class="space-y-2">
-                  <div class="flex justify-between text-[13px]">
-                    <span class="text-noble-black/60 font-medium">Usage</span>
-                    <span class="font-bold text-noble-black">
-                      {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
-                    </span>
-                  </div>
-                  <div class="flex justify-between text-[13px]">
-                    <span class="text-noble-black/60 font-medium">Unused rental value</span>
-                    <span class="font-semibold text-noble-black">
-                      {{ formatPeso(earlyReturnPreviewData.refund.unusedRentalValue) }}
-                    </span>
-                  </div>
-                  <div class="flex justify-between text-[13px]">
-                    <span class="text-noble-black/60 font-medium">Early return penalty (30%)</span>
-                    <span class="font-semibold text-cinnabar-red">
-                      -{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}
-                    </span>
-                  </div>
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6 space-y-6">
+                <div
+                  class="w-16 h-16 bg-burning-orange/10 rounded-full flex items-center justify-center mx-auto mb-4"
+                >
+                  <Icon name="ph:package" class="w-8 h-8" style="color: #e8650a" />
                 </div>
 
-                <div class="border-t border-cinnamon-ice/50 pt-3 flex justify-between items-center">
-                  <span class="text-[14px] font-bold text-noble-black">
-                    {{ earlyReturnPreviewData.refund.eligible ? "Refund Amount" : "No Refund" }}
-                  </span>
-                  <span
-                    class="text-[16px] font-bold"
-                    :class="
-                      earlyReturnPreviewData.refund.eligible
-                        ? 'text-success-green'
-                        : 'text-noble-black/40'
-                    "
+                <!-- Refund breakdown -->
+                <div
+                  v-if="earlyReturnPreviewData"
+                  class="rounded-[16px] border border-cinnamon-ice/30 bg-cream/50 p-5 space-y-3"
+                >
+                  <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/40">
+                    Refund Breakdown
+                  </p>
+
+                  <div class="space-y-2">
+                    <div class="flex justify-between text-[13px]">
+                      <span class="text-noble-black/60 font-medium">Usage</span>
+                      <span class="font-bold text-noble-black">
+                        {{ Math.round(earlyReturnPreviewData.refund.usagePercentage * 100) }}%
+                      </span>
+                    </div>
+                    <div class="flex justify-between text-[13px]">
+                      <span class="text-noble-black/60 font-medium">Unused rental value</span>
+                      <span class="font-semibold text-noble-black">
+                        {{ formatPeso(earlyReturnPreviewData.refund.unusedRentalValue) }}
+                      </span>
+                    </div>
+                    <div class="flex justify-between text-[13px]">
+                      <span class="text-noble-black/60 font-medium"
+                        >Early return penalty (30%)</span
+                      >
+                      <span class="font-semibold text-cinnabar-red">
+                        -{{ formatPeso(earlyReturnPreviewData.refund.penaltyAmount) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    class="border-t border-cinnamon-ice/50 pt-3 flex justify-between items-center"
                   >
-                    {{
-                      earlyReturnPreviewData.refund.eligible
-                        ? formatPeso(earlyReturnPreviewData.refund.refundAmount)
-                        : "₱0"
-                    }}
-                  </span>
+                    <span class="text-[14px] font-bold text-noble-black">
+                      {{ earlyReturnPreviewData.refund.eligible ? "Refund Amount" : "No Refund" }}
+                    </span>
+                    <span
+                      class="text-[16px] font-bold"
+                      :class="
+                        earlyReturnPreviewData.refund.eligible
+                          ? 'text-success-green'
+                          : 'text-noble-black/40'
+                      "
+                    >
+                      {{
+                        earlyReturnPreviewData.refund.eligible
+                          ? formatPeso(earlyReturnPreviewData.refund.refundAmount)
+                          : "₱0"
+                      }}
+                    </span>
+                  </div>
                 </div>
 
-                <p
-                  v-if="!earlyReturnPreviewData.refund.eligible"
-                  class="text-[12px] text-noble-black/40 font-medium leading-relaxed"
-                >
-                  {{
-                    earlyReturnPreviewData.refund.reason ?? "Usage exceeded the refund threshold."
-                  }}
-                </p>
-              </div>
+                <!-- Unified Dropzone -->
+                <div class="relative group">
+                  <label
+                    class="block w-full aspect-square max-w-[140px] mx-auto rounded-[20px] border-2 border-dashed border-cinnamon-ice bg-cream/50 overflow-hidden cursor-pointer hover:border-burning-orange hover:bg-burning-orange/[0.02] transition-all duration-300"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="setEarlyReturnProofFile"
+                    />
 
-              <!-- Proof upload -->
-              <div>
-                <p class="text-[13px] font-bold text-noble-black mb-2">
-                  Proof of Return <span class="text-cinnabar-red">*</span>
-                </p>
-                <label
-                  class="block w-full rounded-2xl border border-dashed border-cinnamon-ice bg-cream p-4 cursor-pointer hover:border-burning-orange transition-colors"
-                >
-                  <span class="block text-sm font-bold text-noble-black">Attach image</span>
-                  <span class="mt-1 block text-xs text-noble-black/50 truncate">
-                    {{ earlyReturnProofFile?.name || "Choose an image file" }}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    class="sr-only"
-                    @change="setEarlyReturnProofFile"
-                  />
-                </label>
+                    <!-- Empty State -->
+                    <div
+                      v-if="!earlyReturnProofPreview"
+                      class="h-full w-full flex flex-col items-center justify-center gap-2 p-4 text-center"
+                    >
+                      <div
+                        class="w-9 h-9 rounded-full bg-noble-black/5 flex items-center justify-center text-noble-black/20 group-hover:text-burning-orange group-hover:bg-burning-orange/10 transition-colors"
+                      >
+                        <Icon name="ph:plus" class="w-5 h-5" />
+                      </div>
+                      <span
+                        class="text-[12px] font-bold text-noble-black/40 group-hover:text-burning-orange/70 transition-colors"
+                        >Add image</span
+                      >
+                    </div>
+
+                    <!-- Selected State (Preview) -->
+                    <div v-else class="relative h-full w-full group/preview">
+                      <img
+                        :src="earlyReturnProofPreview"
+                        class="h-full w-full object-cover"
+                        alt="Early return proof"
+                      />
+                      <div
+                        class="absolute inset-0 bg-noble-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <div
+                          class="flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 text-noble-black text-[12px] font-bold shadow-lg"
+                        >
+                          <Icon name="ph:arrows-clockwise" class="w-4 h-4" />
+                          Replace Image
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <!-- Remove Button (Corner) -->
+                  <button
+                    v-if="earlyReturnProofPreview"
+                    type="button"
+                    class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white border border-gray-100 shadow-md flex items-center justify-center text-cinnabar-red hover:scale-110 transition-transform z-10"
+                    title="Remove Image"
+                    @click.prevent="clearEarlyReturnProof"
+                  >
+                    <Icon name="ph:trash" class="w-4 h-4" />
+                  </button>
+                </div>
+
                 <p
                   v-if="proofUploadErrorMessage"
-                  class="mt-2 text-[13px] text-cinnabar-red font-medium"
+                  class="mt-2 text-sm text-red-600 font-medium text-center"
                 >
                   {{ proofUploadErrorMessage }}
                 </p>
               </div>
             </div>
 
-            <!-- Footer actions -->
-            <div class="px-8 pb-8 pt-4 shrink-0 flex flex-col gap-3">
+            <!-- Footer -->
+            <div class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex gap-3 shrink-0">
               <button
-                :disabled="isSubmittingReturn || !earlyReturnProofFile"
-                class="w-full h-12 bg-burning-orange text-white rounded-[14px] font-bold text-[14px] hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                @click="confirmEarlyReturn"
-              >
-                <Icon
-                  v-if="isSubmittingReturn"
-                  name="ph:circle-notch"
-                  class="w-4 h-4 animate-spin"
-                />
-                {{ isSubmittingReturn ? "Submitting..." : "Confirm Early Return" }}
-              </button>
-              <button
-                :disabled="isSubmittingReturn"
-                class="w-full h-12 bg-cream text-noble-black rounded-[14px] font-bold text-[14px] hover:bg-pale-cashmere transition-all disabled:opacity-50"
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-bold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
                 @click="isEarlyReturnModalOpen = false"
               >
                 Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                :disabled="isSubmittingReturn || !earlyReturnProofFile"
+                @click="confirmEarlyReturn"
+              >
+                <span v-if="isSubmittingReturn" class="flex items-center justify-center gap-2">
+                  <Icon name="ph:circle-notch" class="w-4 h-4 animate-spin" />
+                  Confirming...
+                </span>
+                <span v-else>Confirm & Refund</span>
               </button>
             </div>
           </div>
@@ -2433,6 +2719,61 @@ const handleReviewSubmitted = async () => {
 </template>
 
 <style scoped>
+/* Custom Tooltip Styling matching Header.vue */
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+
 .custom-modal-scrollbar::-webkit-scrollbar {
   width: 5px;
 }

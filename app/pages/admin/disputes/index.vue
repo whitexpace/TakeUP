@@ -187,8 +187,8 @@ const navigateToDetail = (id: string) => {
       </div>
 
       <div class="min-h-[400px]">
-        <div v-if="pending && !queue.length" class="p-8 space-y-6">
-          <AdminListRecordSkeleton v-for="index in 4" :key="index" />
+        <div v-if="pending && !queue.length" class="flex flex-col">
+          <AdminDisputeRecordSkeleton v-for="index in 6" :key="index" />
         </div>
 
         <div

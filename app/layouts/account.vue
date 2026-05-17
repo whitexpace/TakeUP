@@ -474,31 +474,6 @@ const navGroups = computed(() => {
 </template>
 
 <style scoped>
-.custom-sidebar-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-sidebar-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice");
-  border-radius: 10px;
-}
-
-.custom-account-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-account-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-account-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice");
-  border-radius: 10px;
-}
-.custom-account-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.burning-orange");
-}
-
 .custom-tooltip {
   position: absolute;
   top: 100%;

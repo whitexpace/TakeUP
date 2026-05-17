@@ -12,6 +12,7 @@ const activeStatus = ref<BookingStatus | null>("PENDING")
 const lenderRole = ref<"LENDER">("LENDER")
 const searchQuery = ref("")
 const actingBookingId = ref<string | null>(null)
+const actingStatus = ref<"CONFIRMED" | "CANCELLED" | null>(null)
 const actionError = ref<string | null>(null)
 
 const { filteredBookings, isLoading, hasMore, loadMore, refresh, fetchPage } = useBookings({
@@ -46,14 +47,14 @@ const formatPesoAmount = (value: number) =>
 
 const statusBadgeClass = (status: BookingStatus) => {
   if (status === "PENDING")
-    return "bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
+    return "bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20"
   if (status === "CONFIRMED")
-    return "bg-success-green/[0.08] text-success-green border-success-green/20"
+    return "bg-success-green/[0.08] text-success-green border border-success-green/20"
   if (status === "CANCELLED")
-    return "bg-cinnabar-red/[0.08] text-cinnabar-red border-cinnabar-red/20"
+    return "bg-cinnabar-red/[0.08] text-cinnabar-red border border-cinnabar-red/20"
   if (status === "COMPLETED")
-    return "bg-success-green/[0.08] text-success-green border-success-green/20"
-  return "bg-gray-100 text-gray-500 border-gray-200"
+    return "bg-success-green/[0.08] text-success-green border border-success-green/20"
+  return "bg-gray-100 text-gray-500 border border-gray-200"
 }
 
 const pageTitle = computed(() => {
@@ -86,6 +87,7 @@ const handleBookingDecision = async (
   if (actingBookingId.value) return
 
   actingBookingId.value = bookingId
+  actingStatus.value = nextStatus
   actionError.value = null
 
   try {
@@ -110,23 +112,31 @@ const handleBookingDecision = async (
       "Unable to update this booking request."
   } finally {
     actingBookingId.value = null
+    actingStatus.value = null
   }
 }
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
+  <BookingRequestsSkeleton v-if="isLoading && filteredBookings.length === 0" />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
-    <NuxtLink
-      to="/account/listings"
-      class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
-    >
-      <Icon
-        name="ph:caret-left"
-        class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1"
-      />
-      <span class="text-[15px] font-bold">Back to My Listings</span>
-    </NuxtLink>
+    <div class="relative group/tooltip w-fit mb-8">
+      <NuxtLink
+        to="/account/listings"
+        class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
+      >
+        <Icon
+          name="ph:caret-left"
+          class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+        />
+      </NuxtLink>
+      <div class="custom-tooltip">
+        Back to My Listings
+        <div class="tooltip-arrow"></div>
+      </div>
+    </div>
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
       <section class="space-y-3">
@@ -171,18 +181,9 @@ const handleBookingDecision = async (
         </div>
       </div>
 
-      <!-- Loading skeletons -->
-      <template v-if="isLoading && filteredBookings.length === 0">
-        <div
-          v-for="i in 3"
-          :key="i"
-          class="animate-pulse bg-cinnamon-ice/20 rounded-2xl h-32 mb-4"
-        />
-      </template>
-
       <!-- Empty state -->
       <div
-        v-else-if="!isLoading && filteredBookings.length === 0"
+        v-if="filteredBookings.length === 0"
         class="flex flex-col items-center justify-center py-16 sm:py-20 text-center"
       >
         <div
@@ -267,14 +268,22 @@ const handleBookingDecision = async (
                   :disabled="actingBookingId === booking.id"
                   @click.stop="handleBookingDecision(booking.id, 'CANCELLED')"
                 >
-                  {{ actingBookingId === booking.id ? "Processing..." : "Decline" }}
+                  {{
+                    actingBookingId === booking.id && actingStatus === "CANCELLED"
+                      ? "Declining..."
+                      : "Decline"
+                  }}
                 </button>
                 <button
                   class="px-4 py-1.5 rounded-[8px] bg-burning-orange text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-burning-orange/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="actingBookingId === booking.id"
                   @click.stop="handleBookingDecision(booking.id, 'CONFIRMED')"
                 >
-                  {{ actingBookingId === booking.id ? "Processing..." : "Accept Request" }}
+                  {{
+                    actingBookingId === booking.id && actingStatus === "CONFIRMED"
+                      ? "Accepting..."
+                      : "Accept Request"
+                  }}
                 </button>
               </div>
             </div>
@@ -318,25 +327,66 @@ const handleBookingDecision = async (
 </template>
 
 <style scoped>
+/* Custom Tooltip Styling matching Header.vue */
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%");
-  border-radius: 20px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
 }
 </style>

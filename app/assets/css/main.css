@@ -97,6 +97,49 @@
   body {
     @apply font-geist bg-white m-0;
   }
+
+  /* Global Minimalist Luxury Scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme("colors.noble-black / 15%") transparent;
+  }
+
+  /* Webkit Browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: theme("colors.noble-black / 10%");
+    border-radius: 20px;
+    border: 1px solid transparent;
+    background-clip: content-box;
+    transition: background 0.3s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: theme("colors.noble-black / 25%");
+    background-clip: content-box;
+  }
+
+  /* Luxury touch: hide scrollbar arrows/buttons */
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  /* For Horizontal Scrollbars in cards/feeds */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @layer components {

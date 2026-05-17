@@ -81,12 +81,14 @@ const totalLabel = computed(() =>
 )
 
 const actingBookingId = ref<string | null>(null)
+const actingStatus = ref<"CONFIRMED" | "CANCELLED" | null>(null)
 const actionError = ref<string | null>(null)
 
 const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLED", string>) => {
   if (actingBookingId.value) return
 
   actingBookingId.value = props.request.id
+  actingStatus.value = nextStatus
   actionError.value = null
 
   try {
@@ -112,6 +114,7 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
       "Unable to update this booking request."
   } finally {
     actingBookingId.value = null
+    actingStatus.value = null
   }
 }
 
@@ -207,14 +210,14 @@ const warmOrderDetailsImmediately = () => {
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CANCELLED')"
           >
-            {{ actingBookingId === request.id ? "Processing..." : "Decline" }}
+            {{ actingStatus === "CANCELLED" ? "Declining..." : "Decline" }}
           </button>
           <button
             class="px-4 py-1.5 rounded-[8px] bg-burning-orange text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-burning-orange/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CONFIRMED')"
           >
-            {{ actingBookingId === request.id ? "Processing..." : "Accept Request" }}
+            {{ actingStatus === "CONFIRMED" ? "Accepting..." : "Accept Request" }}
           </button>
         </div>
 

@@ -916,29 +916,6 @@ const changeMonth = (delta: number) => {
   scrollbar-width: none;
 }
 
-.custom-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%");
-  border-radius: 20px;
-}
-
-.custom-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
-}
-
-/* Firefox support */
-.custom-main-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.noble-black / 10%") transparent;
-}
-
 /* Tooltip Styles mirroring [slug].vue */
 .group\/tooltip:hover .custom-tooltip {
   opacity: 1;

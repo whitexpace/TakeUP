@@ -259,7 +259,7 @@ const warmedDashboardCardPaths = new Set<string>()
 const { warmDestination } = useDestinationImagePrefetch()
 
 // User Search Logic
-const { data: topMatchingUsers, pending: isSearchingUsers } = await useAsyncData(
+const { data: topMatchingUsers, pending: isSearchingUsers } = useLazyAsyncData(
   () => `user-search-${serverSearchQuery.value}`,
   async () => {
     if (!serverSearchQuery.value) return [] as UserSearchResult[]
@@ -526,7 +526,7 @@ const scheduleReload = () => {
   })
 }
 
-const { data: initialDashboardItemsLoaded } = await useAsyncData(
+const { data: initialDashboardItemsLoaded } = useLazyAsyncData(
   "dashboard-initial-listed-items",
   async () => {
     if (hasCachedState.value && hasCachedCount.value) {

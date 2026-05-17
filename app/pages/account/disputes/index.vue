@@ -131,31 +131,17 @@ const statusClasses = (status: MyDispute["status"]) => {
       return "bg-success-green/[0.08] text-success-green border border-success-green/20"
   }
 }
-
 const {
   data: reportableData,
   pending: reportablePending,
-  error: reportableError,
   refresh: refreshReportableTransactions,
-} = await useAsyncData("dispute:reportable-transactions", () =>
-  fetchDisputeReportableTransactions(),
-)
-
-if (reportableError.value) {
-  throw reportableError.value
-}
+} = useLazyAsyncData("dispute:reportable-transactions", () => fetchDisputeReportableTransactions())
 
 const {
   data: disputesData,
   pending: disputesPending,
-  error: disputesError,
   refresh: refreshDisputes,
-} = await useAsyncData("dispute:mine", () => fetchMyDisputes())
-
-if (disputesError.value) {
-  throw disputesError.value
-}
-
+} = useLazyAsyncData("dispute:mine", () => fetchMyDisputes())
 const reportableTransactions = computed(() => reportableData.value?.transactions ?? [])
 const myDisputes = computed(() => disputesData.value?.disputes ?? [])
 const recentAppealableDisputes = computed(() =>
@@ -413,7 +399,9 @@ const prevStep = () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <MyDisputesSkeleton v-if="reportablePending || disputesPending" :active-tab="activeTab" />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <!-- Page Header -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-10">
       <section class="space-y-3">
@@ -513,12 +501,8 @@ const prevStep = () => {
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start mt-16">
           <!-- Left Column: Form Steps (60%) -->
           <div class="lg:col-span-3 space-y-8 min-h-[400px]">
-            <div v-if="reportablePending" class="space-y-6">
-              <AdminListRecordSkeleton v-for="i in 3" :key="i" />
-            </div>
-
             <div
-              v-else-if="!reportableTransactions.length"
+              v-if="!reportableTransactions.length"
               class="rounded-[32px] border border-dashed border-cinnamon-ice bg-cream px-6 py-16 text-center"
             >
               <div
@@ -1043,12 +1027,8 @@ const prevStep = () => {
             </p>
           </div>
 
-          <div v-if="disputesPending" class="space-y-6">
-            <AdminListRecordSkeleton v-for="index in 3" :key="index" />
-          </div>
-
           <div
-            v-else-if="!myDisputes.length"
+            v-if="!myDisputes.length"
             class="rounded-[24px] border border-dashed border-cinnamon-ice/40 bg-white/40 px-6 py-14 text-center"
           >
             <div

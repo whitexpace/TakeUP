@@ -38,7 +38,7 @@ const {
   data: userDetail,
   pending: loadingDetail,
   refresh: refreshDetail,
-} = await useAsyncData<UserDetailResponse>(
+} = useLazyAsyncData<UserDetailResponse>(
   () => `admin:user:${userId}`,
   () => $trpc.admin.users.detail.query({ userId }),
   { server: false },
@@ -48,7 +48,7 @@ const {
   data: listingsMetadata,
   pending: loadingListings,
   refresh: refreshListings,
-} = await useAsyncData(
+} = useLazyAsyncData(
   () => `admin:user:${userId}:listings:${listingsPage.value}`,
   async () => {
     const res = await $trpc.admin.users.listings.query({
@@ -67,7 +67,7 @@ const {
   data: transactionsMetadata,
   pending: loadingTransactions,
   refresh: refreshTransactions,
-} = await useAsyncData(
+} = useLazyAsyncData(
   () => `admin:user:${userId}:transactions:${transactionsPage.value}`,
   async () => {
     const res = await $trpc.admin.users.transactions.query({
@@ -82,11 +82,15 @@ const {
   { server: false },
 )
 
-const user = computed(() => userDetail.value)
+const user = computed<UserDetailResponse | null>(() => userDetail.value ?? null)
 const listings = computed(() => allListings.value)
-const totalListings = computed(() => listingsMetadata.value?.totalCount ?? 0)
+const totalListings = computed(
+  () => (listingsMetadata.value as UserListingsResponse | null)?.totalCount ?? 0,
+)
 const transactions = computed(() => allTransactions.value)
-const totalTransactions = computed(() => transactionsMetadata.value?.totalCount ?? 0)
+const totalTransactions = computed(
+  () => (transactionsMetadata.value as UserTransactionsResponse | null)?.totalCount ?? 0,
+)
 
 const hasMoreListings = computed(() => listings.value.length < totalListings.value)
 const hasMoreTransactions = computed(() => transactions.value.length < totalTransactions.value)
@@ -179,26 +183,7 @@ const performBanUser = async () => {
       <Icon name="ph:caret-left" class="w-6 h-6" />
     </button>
 
-    <div v-if="loadingDetail" class="space-y-10 animate-pulse">
-      <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-        <div class="flex items-center gap-6">
-          <div class="h-20 w-20 rounded-2xl bg-noble-black/10"></div>
-          <div class="space-y-3">
-            <div class="h-8 w-48 bg-noble-black/20 rounded"></div>
-            <div class="flex gap-2">
-              <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
-              <div class="h-4 w-12 bg-noble-black/10 rounded"></div>
-            </div>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <div class="h-14 w-24 rounded-2xl bg-noble-black/10"></div>
-          <div class="h-14 w-24 rounded-2xl bg-noble-black/10"></div>
-        </div>
-      </div>
-      <div class="h-16 w-1/3 bg-noble-black/10 rounded-2xl"></div>
-      <div class="h-96 w-full bg-noble-black/5 rounded-[32px]"></div>
-    </div>
+    <AdminUserDetailSkeleton v-if="loadingDetail" />
 
     <div v-else-if="!user" class="flex flex-col items-center justify-center py-20 text-center">
       <div
@@ -218,30 +203,30 @@ const performBanUser = async () => {
         <!-- Left Side: Compact Profile Strip -->
         <div class="flex items-center gap-6">
           <UserAvatar
-            :user-name="`${user.firstName} ${user.lastName}`"
-            :avatar-url="user.avatarUrl"
+            :user-name="`${user?.firstName} ${user?.lastName}`"
+            :avatar-url="user?.avatarUrl"
             size="lg"
             class="!w-20 !h-20 border-[3px] border-white shadow-md rounded-2xl"
           />
           <div class="space-y-2">
             <div class="space-y-1">
               <h1 class="font-montravia text-[32px] font-medium text-noble-black leading-none">
-                {{ user.firstName }} {{ user.lastName }}
+                {{ user?.firstName }} {{ user?.lastName }}
               </h1>
               <div class="w-8 h-0.5 bg-burning-orange"></div>
             </div>
             <div class="flex flex-wrap items-center gap-3">
               <p class="text-[14px] font-bold text-noble-black/60 tracking-tight">
-                @{{ user.username }}
+                @{{ user?.username }}
               </p>
               <div class="flex items-center gap-2">
                 <span
                   class="px-2.5 py-0.5 rounded-full bg-noble-black text-white text-[9px] font-black tracking-widest uppercase"
                 >
-                  {{ user.accountType }}
+                  {{ user?.accountType }}
                 </span>
                 <span
-                  v-if="user.status === 'ACTIVE'"
+                  v-if="user?.status === 'ACTIVE'"
                   class="px-2.5 py-0.5 rounded-full bg-success-green/10 text-success-green text-[9px] font-black tracking-widest uppercase"
                 >
                   ACTIVE
@@ -250,18 +235,18 @@ const performBanUser = async () => {
                   v-else
                   class="px-2.5 py-0.5 rounded-full bg-red-50 text-cinnabar-red text-[9px] font-black tracking-widest uppercase"
                 >
-                  {{ user.status }}
+                  {{ user?.status }}
                 </span>
               </div>
             </div>
             <div class="flex items-center gap-4 text-noble-black/40 text-[13px] font-medium">
-              <div v-if="user.location" class="flex items-center gap-1">
+              <div v-if="user?.location" class="flex items-center gap-1">
                 <Icon name="ph:map-pin" class="w-3.5 h-3.5" />
-                {{ user.location }}
+                {{ user?.location }}
               </div>
               <div class="flex items-center gap-1">
                 <Icon name="ph:envelope-simple" class="w-3.5 h-3.5" />
-                {{ user.email }}
+                {{ user?.email }}
               </div>
             </div>
           </div>
@@ -280,7 +265,7 @@ const performBanUser = async () => {
               >
               <div class="flex items-center gap-1.5">
                 <span class="text-[15px] font-black text-noble-black">{{
-                  user.lender?.lenderRating?.toFixed(1) ?? "0.0"
+                  user?.lender?.lenderRating?.toFixed(1) ?? "0.0"
                 }}</span>
                 <Icon name="ph:star-fill" class="w-3.5 h-3.5 text-burning-orange" />
               </div>
@@ -299,7 +284,7 @@ const performBanUser = async () => {
               >
               <div class="flex items-center gap-1.5">
                 <span class="text-[15px] font-black text-noble-black">{{
-                  user.borrower?.borrowerRating?.toFixed(1) ?? "0.0"
+                  user?.borrower?.borrowerRating?.toFixed(1) ?? "0.0"
                 }}</span>
                 <Icon name="ph:star-fill" class="w-3.5 h-3.5 text-wahoo" />
               </div>
@@ -311,7 +296,7 @@ const performBanUser = async () => {
           </div>
 
           <button
-            v-if="user.status !== 'BANNED'"
+            v-if="user?.status !== 'BANNED'"
             class="h-10 px-6 rounded-xl border-2 border-cinnabar-red/20 text-cinnabar-red text-[11px] font-black uppercase tracking-widest transition-all hover:bg-cinnabar-red hover:text-white active:scale-95"
             @click="showBanModal = true"
           >
@@ -343,7 +328,7 @@ const performBanUser = async () => {
           </div>
           <div class="px-8 py-4 text-center">
             <p class="text-[20px] font-black text-burning-orange leading-none mb-1.5">
-              {{ user.points }}
+              {{ user?.points }}
             </p>
             <p class="text-[9px] font-bold uppercase tracking-widest text-noble-black/25">
               Loyalty Points

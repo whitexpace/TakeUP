@@ -695,18 +695,4 @@ const clearAll = () => {
   opacity: 0;
   transform: translateY(-8px);
 }
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 50%");
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.burning-orange");
-}
 </style>

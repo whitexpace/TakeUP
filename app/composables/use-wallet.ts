@@ -368,6 +368,26 @@ export const useWallet = (options: UseWalletOptions = {}) => {
     }
   }
 
+  const withdrawPseudo = async (amount: number) => {
+    isLoading.value = true
+    try {
+      const result = await $fetch<{ wallet: Wallet; transaction: WalletTransaction }>(
+        `${basePath}/withdraw`,
+        {
+          method: "POST",
+          body: { amount },
+        },
+      )
+      applyWalletMutation(result)
+      return result
+    } catch (error) {
+      console.error("Withdrawal failed:", error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   const payWithWallet = async (
     amount: number,
     relatedEntityType: string,
@@ -430,6 +450,7 @@ export const useWallet = (options: UseWalletOptions = {}) => {
     linkedAccounts,
     toggleBalanceVisibility,
     topUpPseudo,
+    withdrawPseudo,
     payWithWallet,
     formattedBalance,
     maskedBalance,

@@ -266,11 +266,12 @@ const mergeUniqueTransactions = (
 
 export const useTransactions = ({ role, status, searchQuery }: UseTransactionsOptions) => {
   const transactions = ref<TransactionListItem[]>([])
-  const isLoading = ref(false)
+  const isLoading = ref(true)
   const error = ref<string | null>(null)
   const nextCursor = ref<PaginationCursor>(null)
   const requestVersion = ref(0)
   const hasMore = computed(() => nextCursor.value !== null)
+  let isInitialFetch = true
 
   const reset = () => {
     requestVersion.value += 1
@@ -278,6 +279,7 @@ export const useTransactions = ({ role, status, searchQuery }: UseTransactionsOp
     nextCursor.value = null
     error.value = null
     isLoading.value = false
+    isInitialFetch = false
   }
 
   const applyResponse = (
@@ -295,7 +297,7 @@ export const useTransactions = ({ role, status, searchQuery }: UseTransactionsOp
   }
 
   const fetchPage = async (cursor: PaginationCursor = null, options: { force?: boolean } = {}) => {
-    if (isLoading.value) return
+    if (isLoading.value && !isInitialFetch) return
 
     const version = requestVersion.value
     const query: TransactionQuery = {
@@ -310,10 +312,13 @@ export const useTransactions = ({ role, status, searchQuery }: UseTransactionsOp
 
     if (cachedResponse) {
       applyResponse(cachedResponse, cursor, version)
+      isLoading.value = false
+      isInitialFetch = false
       return
     }
 
     isLoading.value = true
+    isInitialFetch = false
     error.value = null
 
     try {
