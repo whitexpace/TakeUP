@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
-import {
-  ALLOWED_REVIEW_IMAGE_TYPES,
-  MAX_REVIEW_IMAGES,
-  MAX_REVIEW_IMAGE_BYTES,
-  type ReviewType,
-} from "#shared/schemas/review"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { MAX_REVIEW_IMAGES, MAX_REVIEW_IMAGE_BYTES, type ReviewType } from "#shared/schemas/review"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 import { normalizeReviewImageUrl } from "../utils/review-image"
 
 type ReviewContext = {
@@ -107,6 +103,10 @@ const resetState = () => {
   persistedDraftImages.value = []
 }
 
+onBeforeUnmount(() => {
+  resetState()
+})
+
 const getSafeFileName = (fileName: string) =>
   fileName
     .toLowerCase()
@@ -182,10 +182,8 @@ const validateFiles = (files: File[]) => {
   }
 
   for (const file of files) {
-    if (
-      !ALLOWED_REVIEW_IMAGE_TYPES.includes(file.type as (typeof ALLOWED_REVIEW_IMAGE_TYPES)[number])
-    ) {
-      errorMessage.value = "Only JPG, PNG, and WebP images are supported."
+    if (!file.type.startsWith("image/")) {
+      errorMessage.value = "Only image files are supported."
       return false
     }
 
@@ -336,8 +334,9 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
   const total = files.length
 
   for (const [index, file] of files.entries()) {
+    const uploadFile = await convertImageFileToWebP(file)
     const datePrefix = new Date().toISOString().slice(0, 10)
-    const storagePath = `items/${userId}/reviews/${datePrefix}/${crypto.randomUUID()}-${getSafeFileName(file.name)}`
+    const storagePath = `items/${userId}/reviews/${datePrefix}/${crypto.randomUUID()}-${getSafeFileName(uploadFile.name)}`
     const uploadId = storagePath
 
     await new Promise<void>((resolve, reject) => {
@@ -349,7 +348,7 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
       )
       xhr.setRequestHeader("apikey", supabaseKey)
       if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`)
-      xhr.setRequestHeader("content-type", file.type || "application/octet-stream")
+      xhr.setRequestHeader("content-type", uploadFile.type || "application/octet-stream")
 
       xhr.upload.onprogress = (progressEvent) => {
         if (!progressEvent.lengthComputable) return
@@ -362,9 +361,9 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
         const message = "Review image upload failed because the network request did not complete."
         console.error("[TransactionReviewModal] review image upload network error", {
           storagePath,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
+          fileName: uploadFile.name,
+          fileType: uploadFile.type,
+          fileSize: uploadFile.size,
         })
         reject(new Error(message))
       }
@@ -376,9 +375,9 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
             status: xhr.status,
             responseText: xhr.responseText,
             storagePath,
-            fileName: file.name,
-            fileType: file.type,
-            fileSize: file.size,
+            fileName: uploadFile.name,
+            fileType: uploadFile.type,
+            fileSize: uploadFile.size,
           })
           reject(new Error(message))
           return
@@ -391,7 +390,7 @@ const uploadReviewImages = async (files: File[]): Promise<string[]> => {
         resolve()
       }
 
-      xhr.send(file)
+      xhr.send(uploadFile)
     })
   }
 
@@ -726,7 +725,7 @@ const submitReview = async () => {
                     </span>
                     <input
                       type="file"
-                      accept="image/jpeg,image/png,image/webp"
+                      accept="image/*"
                       multiple
                       class="sr-only"
                       @change="handleImageSelection"

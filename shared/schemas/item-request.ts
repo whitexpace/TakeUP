@@ -88,6 +88,7 @@ export const listItemRequestsSchema = z
     status: itemRequestStatusSchema.optional(),
     borrowerOnly: z.coerce.boolean().optional(),
     includeCancelledOffers: z.coerce.boolean().optional(),
+    offersLimit: z.coerce.number().int().min(0).max(20).default(5),
   })
   .default({})
 
@@ -134,6 +135,14 @@ export const listRequestOffersSchema = z
     sentOnly: z.coerce.boolean().optional(),
     receivedOnly: z.coerce.boolean().optional(),
     status: requestOfferStatusSchema.optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(5),
+    skip: z.coerce.number().int().min(0).default(0),
+  })
+  .default({})
+
+export const listRequestOfferNotificationsSchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(20),
   })
   .default({})
 
@@ -147,3 +156,4 @@ export type ListItemRequestsInput = z.infer<typeof listItemRequestsSchema>
 export type CreateRequestOfferInput = z.infer<typeof createRequestOfferSchema>
 export type UpdateRequestOfferInput = z.infer<typeof updateRequestOfferSchema>
 export type ListRequestOffersInput = z.infer<typeof listRequestOffersSchema>
+export type ListRequestOfferNotificationsInput = z.infer<typeof listRequestOfferNotificationsSchema>

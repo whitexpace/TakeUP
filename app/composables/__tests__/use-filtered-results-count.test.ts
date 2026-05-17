@@ -1,4 +1,4 @@
-import { ref } from "vue"
+import { effectScope, ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   resetFilteredResultsCountCache,
@@ -96,6 +96,35 @@ describe("useFilteredResultsCount", () => {
       },
     })
     expect(resultsCount.totalResultsCount.value).toBe(12)
+  })
+
+  it("cancels pending debounced refreshes when the scope is disposed", async () => {
+    vi.useFakeTimers()
+
+    const fetchMock = vi.fn().mockResolvedValue({ count: 12 })
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const searchQuery = ref("camera")
+    const filterParams = ref<Record<string, string | undefined>>({ freeToBorrow: "true" })
+    const scope = effectScope()
+    const resultsCount = scope.run(() =>
+      useFilteredResultsCount({
+        searchQuery,
+        filterParams,
+        debounceMs: 200,
+      }),
+    )
+
+    if (!resultsCount) {
+      throw new Error("Failed to initialize scoped results count")
+    }
+
+    resultsCount.scheduleResultsCountRefresh()
+    scope.stop()
+
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("ignores stale responses from older count requests", async () => {

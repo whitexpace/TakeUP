@@ -8,6 +8,8 @@ import { router } from "../init"
 import { adminProcedure, protectedProcedure } from "../procedures"
 import {
   listAdminTransactionsSchema,
+  listReviewDraftsSchema,
+  listSubmittedReviewsSchema,
   listTransactionsSchema,
   type TransactionStatus as UiTransactionStatus,
 } from "#shared/schemas/transaction"
@@ -837,32 +839,74 @@ export const transactionRouter = router({
         throw error
       }
     }),
-  listReviewDrafts: protectedProcedure.query(async ({ ctx }) => {
-    if (!hasReviewDraftDelegate(ctx.prisma)) {
-      return []
-    }
+  listReviewDrafts: protectedProcedure
+    .input(listReviewDraftsSchema)
+    .query(async ({ ctx, input }) => {
+      if (!hasReviewDraftDelegate(ctx.prisma)) {
+        return { items: [], nextCursor: null }
+      }
 
-    const drafts = await ctx.prisma.transactionReviewDraft.findMany({
-      where: {
-        reviewerUserId: ctx.user.id,
-      },
-      select: reviewDraftSelect,
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    })
+      const cursorWhere = input.cursor
+        ? {
+            OR: [
+              { updatedAt: { lt: input.cursor.updatedAt } },
+              { updatedAt: input.cursor.updatedAt, id: { lt: input.cursor.id } },
+            ],
+          }
+        : {}
 
-    return drafts.map((draft) => mapReviewDraftListItem(draft, ctx.user.id))
-  }),
-  listSubmittedReviews: protectedProcedure.query(async ({ ctx }) => {
-    const reviews = await ctx.prisma.transactionReview.findMany({
-      where: {
-        reviewerUserId: ctx.user.id,
-      },
-      select: submittedReviewSelect,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    })
+      const drafts = await ctx.prisma.transactionReviewDraft.findMany({
+        where: {
+          reviewerUserId: ctx.user.id,
+          ...cursorWhere,
+        },
+        select: reviewDraftSelect,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        take: input.limit + 1,
+      })
 
-    return reviews.map((review) => mapSubmittedReviewListItem(review, ctx.user.id))
-  }),
+      const hasMore = drafts.length > input.limit
+      const pageDrafts = hasMore ? drafts.slice(0, input.limit) : drafts
+      const lastDraft = pageDrafts.at(-1)
+
+      return {
+        items: pageDrafts.map((draft) => mapReviewDraftListItem(draft, ctx.user.id)),
+        nextCursor:
+          hasMore && lastDraft ? { id: lastDraft.id, updatedAt: lastDraft.updatedAt } : null,
+      }
+    }),
+  listSubmittedReviews: protectedProcedure
+    .input(listSubmittedReviewsSchema)
+    .query(async ({ ctx, input }) => {
+      const cursorWhere = input.cursor
+        ? {
+            OR: [
+              { createdAt: { lt: input.cursor.createdAt } },
+              { createdAt: input.cursor.createdAt, id: { lt: input.cursor.id } },
+            ],
+          }
+        : {}
+
+      const reviews = await ctx.prisma.transactionReview.findMany({
+        where: {
+          reviewerUserId: ctx.user.id,
+          ...cursorWhere,
+        },
+        select: submittedReviewSelect,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: input.limit + 1,
+      })
+
+      const hasMore = reviews.length > input.limit
+      const pageReviews = hasMore ? reviews.slice(0, input.limit) : reviews
+      const lastReview = pageReviews.at(-1)
+
+      return {
+        items: pageReviews.map((review) => mapSubmittedReviewListItem(review, ctx.user.id)),
+        nextCursor:
+          hasMore && lastReview ? { id: lastReview.id, createdAt: lastReview.createdAt } : null,
+      }
+    }),
   getReviewDraft: protectedProcedure
     .input(transactionReviewDraftKeySchema)
     .query(async ({ ctx, input }) => {

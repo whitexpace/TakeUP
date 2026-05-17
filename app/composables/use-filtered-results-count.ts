@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from "vue"
+import { computed, getCurrentScope, onScopeDispose, ref, type Ref } from "vue"
 import { usePersistedSessionState } from "./use-persisted-session-state"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 import { useViewerSession } from "./use-viewer-session"
@@ -188,6 +188,10 @@ export const useFilteredResultsCount = ({
       pendingRefreshTimeout = null
       void fetchResultsCount(version)
     }, delayMs)
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(cancelPendingResultsCountRefresh)
   }
 
   return {

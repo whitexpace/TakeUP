@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, watch } from "vue"
 import type { LinkedAccount, WalletTransaction } from "~/types/wallet"
 
 const props = withDefaults(
@@ -52,13 +52,44 @@ const props = withDefaults(
   },
 )
 
+const TRANSACTION_PAGE_SIZE = 10
+
 const showTopUpModal = ref(false)
 const topUpAmountDisplay = ref("")
 const showWithdrawModal = ref(false)
 const withdrawAmountDisplay = ref("")
 const isSubmitting = ref(false)
+const transactionPage = ref(1)
 
 const gridClass = computed(() => (props.showLinkedAccounts ? "lg:grid-cols-2" : "lg:grid-cols-1"))
+const transactionPageCount = computed(() =>
+  Math.max(1, Math.ceil(props.transactions.length / TRANSACTION_PAGE_SIZE)),
+)
+const transactionPageStart = computed(() => (transactionPage.value - 1) * TRANSACTION_PAGE_SIZE)
+const transactionPageEnd = computed(() =>
+  Math.min(transactionPageStart.value + TRANSACTION_PAGE_SIZE, props.transactions.length),
+)
+const visibleTransactions = computed(() =>
+  props.transactions.slice(transactionPageStart.value, transactionPageEnd.value),
+)
+const transactionRangeLabel = computed(() =>
+  props.transactions.length === 0
+    ? ""
+    : `${transactionPageStart.value + 1}-${transactionPageEnd.value} of ${props.transactions.length}`,
+)
+const hasPreviousTransactionPage = computed(() => transactionPage.value > 1)
+const hasNextTransactionPage = computed(() => transactionPage.value < transactionPageCount.value)
+
+const setTransactionPage = (page: number) => {
+  transactionPage.value = Math.min(Math.max(1, page), transactionPageCount.value)
+}
+
+watch(
+  () => props.transactions.length,
+  () => {
+    setTransactionPage(transactionPage.value)
+  },
+)
 
 const handleAmountInput = (event: Event, type: "topup" | "withdraw" = "topup") => {
   const target = event.target as HTMLInputElement
@@ -399,7 +430,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             </thead>
             <tbody class="divide-y divide-gray-50">
               <tr
-                v-for="tx in transactions"
+                v-for="tx in visibleTransactions"
                 :key="tx.id"
                 class="h-[56px] hover:bg-gray-50/50 transition-colors"
               >
@@ -423,7 +454,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
 
           <div v-else class="space-y-0 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
             <div
-              v-for="tx in transactions"
+              v-for="tx in visibleTransactions"
               :key="tx.id"
               class="flex items-center justify-between py-4 border-b border-neutral-100 last:border-0"
             >
@@ -469,6 +500,38 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                   }}
                 </p>
               </div>
+            </div>
+          </div>
+
+          <div
+            v-if="transactions.length > TRANSACTION_PAGE_SIZE"
+            class="mt-5 flex flex-col gap-3 border-t border-noble-black/5 pt-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p class="text-[12px] font-medium text-noble-black/40">
+              Showing {{ transactionRangeLabel }}
+            </p>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+                :disabled="!hasPreviousTransactionPage"
+                aria-label="Previous transaction page"
+                @click="setTransactionPage(transactionPage - 1)"
+              >
+                <Icon name="ph:caret-left" class="mx-auto h-4 w-4" />
+              </button>
+              <span class="text-[12px] font-semibold text-noble-black/50">
+                {{ transactionPage }} / {{ transactionPageCount }}
+              </span>
+              <button
+                type="button"
+                class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+                :disabled="!hasNextTransactionPage"
+                aria-label="Next transaction page"
+                @click="setTransactionPage(transactionPage + 1)"
+              >
+                <Icon name="ph:caret-right" class="mx-auto h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>

@@ -4,6 +4,10 @@ export const itemIdSchema = z.object({
   id: z.string().uuid(),
 })
 
+export const itemDetailSchema = itemIdSchema.extend({
+  reviewsLimit: z.coerce.number().int().min(1).max(50).default(5),
+})
+
 export const itemConditionSchema = z.enum(["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"])
 
 export const itemCategorySchema = z.enum([

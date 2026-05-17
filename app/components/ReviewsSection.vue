@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue"
+import { ref, computed, onMounted, onUnmounted, watch } from "vue"
 import { normalizeReviewImageUrl } from "../utils/review-image"
 
 type ReviewEntry = {
@@ -56,7 +56,8 @@ const filters = [
 const selectedFilter = ref("all")
 const sortBy = ref("Most Recent")
 const isSortOpen = ref(false)
-const visibleReviewsCount = ref(5)
+const REVIEW_PAGE_SIZE = 5
+const reviewPage = ref(1)
 
 // Lightbox logic
 const isLightboxOpen = ref(false)
@@ -130,16 +131,26 @@ const filteredReviews = computed(() => {
   return reviews
 })
 
-const displayedReviews = computed(() => {
-  return filteredReviews.value.slice(0, visibleReviewsCount.value)
-})
+const reviewPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredReviews.value.length / REVIEW_PAGE_SIZE)),
+)
+const reviewPageStart = computed(() => (reviewPage.value - 1) * REVIEW_PAGE_SIZE)
+const reviewPageEnd = computed(() =>
+  Math.min(reviewPageStart.value + REVIEW_PAGE_SIZE, filteredReviews.value.length),
+)
+const displayedReviews = computed(() =>
+  filteredReviews.value.slice(reviewPageStart.value, reviewPageEnd.value),
+)
+const reviewRangeLabel = computed(() =>
+  filteredReviews.value.length === 0
+    ? ""
+    : `${reviewPageStart.value + 1}-${reviewPageEnd.value} of ${filteredReviews.value.length}`,
+)
+const hasPreviousReviewPage = computed(() => reviewPage.value > 1)
+const hasNextReviewPage = computed(() => reviewPage.value < reviewPageCount.value)
 
-const hasMore = computed(() => {
-  return visibleReviewsCount.value < filteredReviews.value.length
-})
-
-const loadMore = () => {
-  visibleReviewsCount.value += 5
+const setReviewPage = (page: number) => {
+  reviewPage.value = Math.min(Math.max(1, page), reviewPageCount.value)
 }
 
 const toggleSort = () => {
@@ -150,6 +161,17 @@ const selectSort = (option: string) => {
   sortBy.value = option
   isSortOpen.value = false
 }
+
+watch([selectedFilter, sortBy], () => {
+  reviewPage.value = 1
+})
+
+watch(
+  () => filteredReviews.value.length,
+  () => {
+    setReviewPage(reviewPage.value)
+  },
+)
 
 const formatDate = (value: Date | string) => {
   const date = new Date(value)
@@ -319,6 +341,8 @@ const initialsFor = (name: string) =>
                 v-if="review.reviewer.avatarUrl"
                 :src="review.reviewer.avatarUrl"
                 :alt="review.reviewer.displayName"
+                loading="lazy"
+                decoding="async"
                 class="w-full h-full object-cover"
               />
               <div
@@ -370,7 +394,12 @@ const initialsFor = (name: string) =>
             class="w-20 h-20 rounded-xl overflow-hidden shadow-sm cursor-pointer border border-cinnamon-ice/15"
             @click="openLightbox(review, idx)"
           >
-            <img :src="getReviewImageUrl(img)" class="w-full h-full object-cover" />
+            <img
+              :src="getReviewImageUrl(img)"
+              loading="lazy"
+              decoding="async"
+              class="w-full h-full object-cover"
+            />
           </div>
         </div>
       </div>
@@ -387,15 +416,35 @@ const initialsFor = (name: string) =>
       </p>
     </div>
 
-    <!-- View More -->
-    <div v-if="hasMore" class="mt-12 flex justify-center pb-12">
-      <button
-        class="px-10 py-4 text-sm font-bold text-noble-black hover:text-burning-orange transition-colors flex items-center gap-2 active:scale-95"
-        @click="loadMore"
-      >
-        View more reviews
-        <Icon name="ph:caret-down" class="w-4 h-4" />
-      </button>
+    <!-- Review Pagination -->
+    <div
+      v-if="filteredReviews.length > REVIEW_PAGE_SIZE"
+      class="mt-12 flex flex-col gap-4 pb-12 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p class="text-sm font-medium text-noble-black/50">Showing {{ reviewRangeLabel }}</p>
+      <div class="flex items-center justify-center gap-3">
+        <button
+          type="button"
+          class="h-10 w-10 rounded-xl border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+          :disabled="!hasPreviousReviewPage"
+          aria-label="Previous reviews"
+          @click="setReviewPage(reviewPage - 1)"
+        >
+          <Icon name="ph:caret-left" class="mx-auto h-4 w-4" />
+        </button>
+        <span class="text-sm font-semibold text-noble-black/50">
+          {{ reviewPage }} / {{ reviewPageCount }}
+        </span>
+        <button
+          type="button"
+          class="h-10 w-10 rounded-xl border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+          :disabled="!hasNextReviewPage"
+          aria-label="Next reviews"
+          @click="setReviewPage(reviewPage + 1)"
+        >
+          <Icon name="ph:caret-right" class="mx-auto h-4 w-4" />
+        </button>
+      </div>
     </div>
 
     <Teleport to="body">

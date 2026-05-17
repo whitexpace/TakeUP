@@ -16,8 +16,13 @@ type SupabaseSessionBridgeResponse = {
   user?: AuthMeUser
 }
 
-// Client-only in-flight promise so concurrent callers share one bridge request
-let inflightBridge: Promise<boolean> | null = null
+type InflightBridge = {
+  accessToken: string
+  request: Promise<boolean>
+}
+
+// Client-only in-flight promise so concurrent callers for the same token share one request
+let inflightBridge: InflightBridge | null = null
 
 export const useSessionBridge = () => {
   const bridgedAccessToken = useState<string | null>("session-bridged-access-token", () => null)
@@ -32,6 +37,10 @@ export const useSessionBridge = () => {
   const ensureBridged = async (accessToken: string): Promise<boolean> => {
     if (bridgedAccessToken.value === accessToken) return true
 
+    if (inflightBridge && inflightBridge.accessToken !== accessToken) {
+      inflightBridge = null
+    }
+
     // SSR confirmed a valid cookie — skip POST if it belongs to the same user
     if (cookieEmail.value) {
       const tokenEmail = decodeJwtEmail(accessToken)
@@ -44,13 +53,17 @@ export const useSessionBridge = () => {
     }
 
     // Deduplicate concurrent bridge calls
-    if (inflightBridge) return inflightBridge
+    if (inflightBridge) return inflightBridge.request
 
-    inflightBridge = $fetch<SupabaseSessionBridgeResponse>("/api/auth/supabase-session", {
+    const request = $fetch<SupabaseSessionBridgeResponse>("/api/auth/supabase-session", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then((response) => {
+        if (inflightBridge?.request !== request || !response.ok) {
+          return false
+        }
+
         bridgedAccessToken.value = accessToken
         cookieAccountType.value = response.user?.accountType ?? null
         if (response.user) {
@@ -61,10 +74,14 @@ export const useSessionBridge = () => {
       })
       .catch(() => false)
       .finally(() => {
-        inflightBridge = null
+        if (inflightBridge?.request === request) {
+          inflightBridge = null
+        }
       })
 
-    return inflightBridge
+    inflightBridge = { accessToken, request }
+
+    return request
   }
 
   /** Clear bridge state (call on logout / user switch). */

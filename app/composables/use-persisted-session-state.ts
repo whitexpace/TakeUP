@@ -1,4 +1,4 @@
-import { useState } from "#app"
+import { useNuxtApp, useState } from "#app"
 import { watch, type Ref } from "vue"
 import { recordPerfEvent } from "../utils/performance-telemetry"
 
@@ -37,17 +37,26 @@ export const usePersistedSessionState = <T>(
   if (canUseSessionStorage() && !restoredSessionStateKeys.has(storageKey)) {
     restoredSessionStateKeys.add(storageKey)
 
-    try {
-      const storedValue = window.sessionStorage.getItem(storageKey)
-      if (storedValue !== null) {
-        state.value = deserialize(storedValue)
-        recordPerfEvent("session-state", key, "persist-restore-hit")
-      } else {
-        recordPerfEvent("session-state", key, "persist-restore-miss")
+    const restoreFromSessionStorage = () => {
+      try {
+        const storedValue = window.sessionStorage.getItem(storageKey)
+        if (storedValue !== null) {
+          state.value = deserialize(storedValue)
+          recordPerfEvent("session-state", key, "persist-restore-hit")
+        } else {
+          recordPerfEvent("session-state", key, "persist-restore-miss")
+        }
+      } catch {
+        window.sessionStorage.removeItem(storageKey)
+        recordPerfEvent("session-state", key, "persist-restore-error")
       }
-    } catch {
-      window.sessionStorage.removeItem(storageKey)
-      recordPerfEvent("session-state", key, "persist-restore-error")
+    }
+
+    const nuxtApp = useNuxtApp()
+    if (nuxtApp.isHydrating) {
+      nuxtApp.hook("app:mounted", restoreFromSessionStorage)
+    } else {
+      restoreFromSessionStorage()
     }
   }
 

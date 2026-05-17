@@ -24,6 +24,7 @@ const route = useRoute()
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type ItemDetail = RouterOutputs["item"]["byId"]
+const ITEM_DETAIL_REVIEW_FETCH_LIMIT = 5
 
 const monthNames = [
   "January",
@@ -124,7 +125,9 @@ const loadFullItemDetails = async () => {
   isLoadingFullItem.value = true
 
   try {
-    const fullItem = await $fetch<ItemDetail>(`/api/items/${itemId.value}`)
+    const fullItem = await $fetch<ItemDetail>(`/api/items/${itemId.value}`, {
+      query: { reviewsLimit: ITEM_DETAIL_REVIEW_FETCH_LIMIT },
+    })
     if (requestVersion === fullItemRequestVersion) {
       data.value = fullItem
     }

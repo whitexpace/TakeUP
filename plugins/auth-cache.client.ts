@@ -7,31 +7,42 @@ export default defineNuxtPlugin(() => {
   if (import.meta.server) return
 
   const supabase = useSupabaseClient()
-  const { clear } = useAuthUser()
-  const { clear: clearBridge } = useSessionBridge()
+  const { authUser, clear } = useAuthUser()
+  const { bridgedAccessToken, clear: clearBridge } = useSessionBridge()
   const { clear: clearViewerSession } = useViewerSession()
 
-  supabase.auth.onAuthStateChange((event, session) => {
+  const clearAuthCaches = () => {
+    clear()
+    clearBridge()
+    clearViewerSession()
+  }
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
     const nextUserId = session?.user?.id ?? null
 
     if (event === "SIGNED_OUT") {
-      clear()
-      clearBridge()
-      clearViewerSession()
+      clearAuthCaches()
       return
     }
 
     if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-      clear()
-      clearBridge()
-      clearViewerSession()
+      clearAuthCaches()
       return
     }
 
-    if (event === "SIGNED_IN" && !nextUserId) {
-      clear()
-      clearBridge()
-      clearViewerSession()
+    if (
+      event === "SIGNED_IN" &&
+      (!nextUserId ||
+        (authUser.value?.id && authUser.value.id !== nextUserId) ||
+        (bridgedAccessToken.value && bridgedAccessToken.value !== session?.access_token))
+    ) {
+      clearAuthCaches()
     }
+  })
+
+  import.meta.hot?.dispose(() => {
+    subscription.unsubscribe()
   })
 })

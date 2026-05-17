@@ -12,8 +12,8 @@ export const payWithWalletSchema = z.object({
 })
 
 export const listTransactionsSchema = z.object({
-  skip: z.number().optional(),
-  take: z.number().optional().default(20),
+  skip: z.coerce.number().int().min(0).optional(),
+  take: z.coerce.number().int().min(1).max(50).optional().default(20),
 })
 
 const commissionRecordCursorSchema = z.object({

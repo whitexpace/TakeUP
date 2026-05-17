@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref, watch } from "vue"
 import { normalizeReviewImageUrl } from "../utils/review-image"
 
 type ReviewEntry = {
@@ -34,6 +35,37 @@ const props = withDefaults(
 const runtimeConfig = useRuntimeConfig()
 const reviewImageBucket = runtimeConfig.public.itemImageBucket
 const supabaseUrl = runtimeConfig.public.supabase.url
+const REVIEW_PAGE_SIZE = 5
+const reviewPage = ref(1)
+
+const reviewPageCount = computed(() =>
+  Math.max(1, Math.ceil(props.reviews.length / REVIEW_PAGE_SIZE)),
+)
+const reviewPageStart = computed(() => (reviewPage.value - 1) * REVIEW_PAGE_SIZE)
+const reviewPageEnd = computed(() =>
+  Math.min(reviewPageStart.value + REVIEW_PAGE_SIZE, props.reviews.length),
+)
+const visibleReviews = computed(() =>
+  props.reviews.slice(reviewPageStart.value, reviewPageEnd.value),
+)
+const reviewRangeLabel = computed(() =>
+  props.reviews.length === 0
+    ? ""
+    : `${reviewPageStart.value + 1}-${reviewPageEnd.value} of ${props.reviews.length}`,
+)
+const hasPreviousReviewPage = computed(() => reviewPage.value > 1)
+const hasNextReviewPage = computed(() => reviewPage.value < reviewPageCount.value)
+
+const setReviewPage = (page: number) => {
+  reviewPage.value = Math.min(Math.max(1, page), reviewPageCount.value)
+}
+
+watch(
+  () => props.reviews.length,
+  () => {
+    setReviewPage(reviewPage.value)
+  },
+)
 
 const formatDate = (value: Date | string) =>
   new Date(value).toLocaleDateString("en-US", {
@@ -65,7 +97,7 @@ const getReviewImageUrl = (image: string) =>
 
     <div v-else class="space-y-4">
       <article
-        v-for="review in props.reviews"
+        v-for="review in visibleReviews"
         :key="review.id"
         class="rounded-[16px] bg-white border border-gray-100 p-6 shadow-sm hover:shadow-md transition-all duration-300"
       >
@@ -127,6 +159,36 @@ const getReviewImageUrl = (image: string) =>
           />
         </div>
       </article>
+
+      <div
+        v-if="props.reviews.length > REVIEW_PAGE_SIZE"
+        class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p class="text-[12px] font-medium text-noble-black/40">Showing {{ reviewRangeLabel }}</p>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+            :disabled="!hasPreviousReviewPage"
+            aria-label="Previous reviews"
+            @click="setReviewPage(reviewPage - 1)"
+          >
+            <Icon name="ph:caret-left" class="mx-auto h-4 w-4" />
+          </button>
+          <span class="text-[12px] font-semibold text-noble-black/50">
+            {{ reviewPage }} / {{ reviewPageCount }}
+          </span>
+          <button
+            type="button"
+            class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
+            :disabled="!hasNextReviewPage"
+            aria-label="Next reviews"
+            @click="setReviewPage(reviewPage + 1)"
+          >
+            <Icon name="ph:caret-right" class="mx-auto h-4 w-4" />
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

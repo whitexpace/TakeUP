@@ -116,11 +116,47 @@ describe("useChat", () => {
     ).toEqual([CONV_ID_1, CONV_ID_2])
   })
 
+  it("refreshes conversations in the background without showing the loading state", async () => {
+    let resolveConversations!: (value: ConversationSummary[]) => void
+    fetchMock.mockReturnValue(
+      new Promise<ConversationSummary[]>((resolve) => {
+        resolveConversations = resolve
+      }),
+    )
+
+    const chat = useChat()
+    const pendingRefresh = chat.loadConversations({ background: true })
+
+    expect(chat.isLoadingConversations.value).toBe(false)
+
+    resolveConversations([makeConversationSummary(CONV_ID_1)])
+    await pendingRefresh
+
+    expect(chat.conversations.value.map((conversation) => conversation.conversationId)).toEqual([
+      CONV_ID_1,
+    ])
+    expect(chat.isLoadingConversations.value).toBe(false)
+  })
+
+  it("keeps the current sidebar conversations when a background refresh fails", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("Network error"))
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+
+    await chat.loadConversations({ background: true })
+
+    expect(chat.error.value).toBeNull()
+    expect(chat.conversations.value.map((conversation) => conversation.conversationId)).toEqual([
+      CONV_ID_1,
+    ])
+  })
+
   it("opens a conversation, loads the first messages page, and marks it as read", async () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))
       .mockResolvedValueOnce({
-        messages: [makeMessage("msg-1")],
+        messages: [makeMessage("msg-1", { senderUserId: "user-conv-1" })],
         nextCursor: "cursor-1",
         hasMore: true,
       })
@@ -142,11 +178,70 @@ describe("useChat", () => {
     })
   })
 
+  it("opens sidebar conversations from cached summaries without refetching details first", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        messages: [makeMessage("msg-1", { senderUserId: "user-conv-1" })],
+        nextCursor: null,
+        hasMore: false,
+      })
+      .mockResolvedValueOnce(undefined)
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+
+    await chat.openConversation(TX_ID_1)
+    await flushPromises()
+
+    expect(chat.activeConversation.value?.conversationId).toBe(CONV_ID_1)
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-1"])
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/chat/messages", {
+      params: { conversationId: CONV_ID_1 },
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/chat/mark-read", {
+      method: "POST",
+      body: { conversationId: CONV_ID_1 },
+    })
+
+    fetchMock.mockClear()
+    await chat.openConversation(TX_ID_1)
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("prefetches recent messages for the first eight inbox conversations first", async () => {
+    fetchMock.mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
+
+    const chat = useChat()
+    chat.conversations.value = Array.from({ length: 10 }, (_value, index) =>
+      makeConversationSummary(`conv-${index + 1}`),
+    )
+
+    chat.prefetchConversationMessagesForInbox({ initialCount: 8 })
+    for (let index = 0; index < 30; index += 1) {
+      await Promise.resolve()
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(8)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/chat/messages", {
+      params: { conversationId: "conv-1" },
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(8, "/api/chat/messages", {
+      params: { conversationId: "conv-8" },
+    })
+  })
+
   it("loads more messages and prepends older pages", async () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))
       .mockResolvedValueOnce({
-        messages: [makeMessage("msg-2", { createdAt: "2026-04-20T10:01:00.000Z" })],
+        messages: [
+          makeMessage("msg-2", {
+            senderUserId: "user-conv-1",
+            createdAt: "2026-04-20T10:01:00.000Z",
+          }),
+        ],
         nextCursor: "cursor-older",
         hasMore: true,
       })
@@ -253,7 +348,6 @@ describe("useChat", () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))
       .mockResolvedValueOnce({ messages: [], nextCursor: null, hasMore: false })
-      .mockResolvedValueOnce({ markedCount: 0 })
       .mockResolvedValueOnce({
         id: "report-1",
         transactionId: TX_ID_1,
@@ -267,7 +361,7 @@ describe("useChat", () => {
     await chat.openConversationById(CONV_ID_1)
     await chat.reportConversation("Threatening language")
 
-    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/chat/report", {
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/chat/report", {
       method: "POST",
       body: {
         conversationId: CONV_ID_1,
@@ -313,13 +407,24 @@ describe("useChat", () => {
       }),
     ]
     chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
-    chat.messages.value = [makeMessage("existing")]
+    await chat.mergeActiveConversationMessages([makeMessage("existing")])
 
-    chat.onIncomingMessage(makeMessage("incoming-1", { conversationId: CONV_ID_1 }))
-    chat.onIncomingMessage(makeMessage("incoming-1", { conversationId: CONV_ID_1 }))
+    chat.onIncomingMessage(
+      makeMessage("incoming-1", {
+        conversationId: CONV_ID_1,
+        senderUserId: "user-conv-1",
+      }),
+    )
+    chat.onIncomingMessage(
+      makeMessage("incoming-1", {
+        conversationId: CONV_ID_1,
+        senderUserId: "user-conv-1",
+      }),
+    )
     chat.onIncomingMessage(
       makeMessage("incoming-2", {
         conversationId: CONV_ID_2,
+        senderUserId: "user-conv-2",
         createdAt: "2026-04-20T13:00:00.000Z",
       }),
     )
@@ -333,5 +438,38 @@ describe("useChat", () => {
       method: "POST",
       body: { conversationId: CONV_ID_1 },
     })
+  })
+
+  it("does not count realtime echoes from the current user as unread", async () => {
+    fetchMock.mockResolvedValue(undefined)
+
+    const chat = useChat()
+    chat.totalUnreadCount.value = 1
+    chat.conversations.value = [
+      makeConversationSummary(CONV_ID_2, {
+        unreadCount: 2,
+        lastMessage: {
+          id: "old-last",
+          body: "Old",
+          senderUserId: "user-conv-2",
+          createdAt: "2026-04-20T08:00:00.000Z",
+          isRead: false,
+        },
+      }),
+    ]
+
+    chat.onIncomingMessage(
+      makeMessage("own-message", {
+        conversationId: CONV_ID_2,
+        senderUserId: "current-user",
+        createdAt: "2026-04-20T13:00:00.000Z",
+      }),
+    )
+    await flushPromises()
+
+    expect(chat.totalUnreadCount.value).toBe(1)
+    expect(chat.conversations.value[0]?.unreadCount).toBe(2)
+    expect(chat.conversations.value[0]?.lastMessage?.id).toBe("own-message")
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

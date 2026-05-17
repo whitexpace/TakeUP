@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, reactive } from "vue"
 import type { AuthMeUser } from "~/composables/use-auth-user"
+import { convertImageFileToWebP } from "~/utils/image-upload"
 
 definePageMeta({
   layout: "account",
@@ -339,13 +340,14 @@ const saveProfile = async () => {
     let avatarUrl = authData.value?.user.avatarUrl || null
 
     if (currentAvatarFile.value) {
-      const fileExt = currentAvatarFile.value.name.split(".").pop()
+      const avatarFile = await convertImageFileToWebP(currentAvatarFile.value)
+      const fileExt = avatarFile.name.split(".").pop()
       const fileName = `${authData.value?.user.id}-${Math.random().toString(36).substring(7)}.${fileExt}`
       const filePath = `avatars/${fileName}`
 
       const { error: uploadError } = await supabase.storage
         .from(avatarBucket)
-        .upload(filePath, currentAvatarFile.value)
+        .upload(filePath, avatarFile)
 
       if (uploadError) throw uploadError
 

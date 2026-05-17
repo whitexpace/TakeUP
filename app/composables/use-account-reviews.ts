@@ -5,10 +5,12 @@ import { useAccountPrefetch } from "./use-account-prefetch"
 import { usePersistedSessionState } from "./use-persisted-session-state"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
-type TransactionListResponse = RouterOutputs["transaction"]["list"]
-export type ReviewTransactionListItem = TransactionListResponse["transactions"][number]
-export type ReviewDraftListItem = RouterOutputs["transaction"]["listReviewDrafts"][number]
-export type SubmittedReviewListItem = RouterOutputs["transaction"]["listSubmittedReviews"][number]
+export type ReviewTransactionListPage = RouterOutputs["transaction"]["list"]
+export type ReviewDraftListPage = RouterOutputs["transaction"]["listReviewDrafts"]
+export type SubmittedReviewListPage = RouterOutputs["transaction"]["listSubmittedReviews"]
+export type ReviewTransactionListItem = ReviewTransactionListPage["transactions"][number]
+export type ReviewDraftListItem = ReviewDraftListPage["items"][number]
+export type SubmittedReviewListItem = SubmittedReviewListPage["items"][number]
 export type ReviewLeaderboardEntry =
   RouterOutputs["review"]["borrowerLeaderboard"]["leaderboard"][number]
 export type ReviewLeaderboards = {
@@ -18,11 +20,12 @@ export type ReviewLeaderboards = {
 
 const ACCOUNT_REVIEWS_CACHE_TTL_MS = 2 * 60_000
 const ACCOUNT_REVIEWS_SECONDARY_PREFETCH_DELAY_MS = 120
+const ACCOUNT_REVIEWS_PAGE_SIZE = 10
 const ANONYMOUS_VIEWER_KEY = "anonymous"
 
-const pendingReviewTransactionsRequests = new Map<string, Promise<ReviewTransactionListItem[]>>()
-const pendingReviewDraftsRequests = new Map<string, Promise<ReviewDraftListItem[]>>()
-const pendingSubmittedReviewsRequests = new Map<string, Promise<SubmittedReviewListItem[]>>()
+const pendingReviewTransactionsRequests = new Map<string, Promise<ReviewTransactionListPage>>()
+const pendingReviewDraftsRequests = new Map<string, Promise<ReviewDraftListPage>>()
+const pendingSubmittedReviewsRequests = new Map<string, Promise<SubmittedReviewListPage>>()
 const pendingReviewLeaderboardsRequests = new Map<string, Promise<ReviewLeaderboards>>()
 let secondaryReviewsPrefetchTimer: ReturnType<typeof setTimeout> | null = null
 let hasRevalidatedReviewsOnThisPage = false
@@ -47,15 +50,15 @@ const clearSecondaryReviewsPrefetchTimer = () => {
 }
 
 export const useAccountReviews = () => {
-  const transactionsData = usePersistedSessionState<ReviewTransactionListItem[] | null>(
+  const transactionsData = usePersistedSessionState<ReviewTransactionListPage | null>(
     "account-reviews:transactions",
     () => null,
   )
-  const draftsData = usePersistedSessionState<ReviewDraftListItem[] | null>(
+  const draftsData = usePersistedSessionState<ReviewDraftListPage | null>(
     "account-reviews:drafts",
     () => null,
   )
-  const historyData = usePersistedSessionState<SubmittedReviewListItem[] | null>(
+  const historyData = usePersistedSessionState<SubmittedReviewListPage | null>(
     "account-reviews:history",
     () => null,
   )
@@ -130,13 +133,19 @@ export const useAccountReviews = () => {
     () =>
       hasFreshDraftsCache.value && hasFreshHistoryCache.value && hasFreshLeaderboardsCache.value,
   )
+  const emptyTransactionsPage = (): ReviewTransactionListPage => ({
+    transactions: [],
+    nextCursor: null,
+  })
+  const emptyDraftsPage = (): ReviewDraftListPage => ({ items: [], nextCursor: null })
+  const emptyHistoryPage = (): SubmittedReviewListPage => ({ items: [], nextCursor: null })
 
   const fetchReviewTransactions = async (options: { force?: boolean } = {}) => {
     const viewerKey = getViewerKey()
     applyViewerKey(viewerKey)
 
     if (!options.force && hasFreshTransactionsCache.value) {
-      return transactionsData.value ?? []
+      return transactionsData.value ?? emptyTransactionsPage()
     }
 
     const pendingRequest = pendingReviewTransactionsRequests.get(viewerKey)
@@ -144,25 +153,25 @@ export const useAccountReviews = () => {
       transactionsPending.value = true
       try {
         transactionsData.value = await pendingRequest
-        return transactionsData.value ?? []
+        return transactionsData.value ?? emptyTransactionsPage()
       } finally {
         transactionsPending.value = false
       }
     }
 
-    const request = $fetch<TransactionListResponse>("/api/transactions", {
+    const request = $fetch<ReviewTransactionListPage>("/api/transactions", {
       query: {
         status: "COMPLETED",
-        limit: 100,
+        limit: ACCOUNT_REVIEWS_PAGE_SIZE,
       },
       credentials: "same-origin",
     })
       .then((response) => {
         applyViewerKey(viewerKey)
-        transactionsData.value = response.transactions
+        transactionsData.value = response
         transactionsLoadedAt.value = Date.now()
         transactionsError.value = null
-        return response.transactions
+        return response
       })
       .catch(async (error: unknown) => {
         const httpStatus = (error as { statusCode?: number })?.statusCode
@@ -171,7 +180,7 @@ export const useAccountReviews = () => {
         }
 
         transactionsError.value = error
-        return transactionsData.value ?? []
+        return transactionsData.value ?? emptyTransactionsPage()
       })
       .finally(() => {
         if (pendingReviewTransactionsRequests.get(viewerKey) === request) {
@@ -193,20 +202,23 @@ export const useAccountReviews = () => {
     const viewerKey = getViewerKey()
     applyViewerKey(viewerKey)
 
-    if (!options.force && hasFreshDraftsCache.value) return draftsData.value ?? []
+    if (!options.force && hasFreshDraftsCache.value) return draftsData.value ?? emptyDraftsPage()
 
     const pendingRequest = pendingReviewDraftsRequests.get(viewerKey)
     if (!options.force && pendingRequest) {
       draftsPending.value = true
       try {
         draftsData.value = await pendingRequest
-        return draftsData.value ?? []
+        return draftsData.value ?? emptyDraftsPage()
       } finally {
         draftsPending.value = false
       }
     }
 
-    const request = $fetch<ReviewDraftListItem[]>("/api/my-reviews/drafts", {
+    const request = $fetch<ReviewDraftListPage>("/api/my-reviews/drafts", {
+      query: {
+        limit: ACCOUNT_REVIEWS_PAGE_SIZE,
+      },
       credentials: "same-origin",
     })
       .then((response) => {
@@ -218,7 +230,7 @@ export const useAccountReviews = () => {
       })
       .catch((error: unknown) => {
         draftsError.value = error
-        return draftsData.value ?? []
+        return draftsData.value ?? emptyDraftsPage()
       })
       .finally(() => {
         if (pendingReviewDraftsRequests.get(viewerKey) === request) {
@@ -240,20 +252,23 @@ export const useAccountReviews = () => {
     const viewerKey = getViewerKey()
     applyViewerKey(viewerKey)
 
-    if (!options.force && hasFreshHistoryCache.value) return historyData.value ?? []
+    if (!options.force && hasFreshHistoryCache.value) return historyData.value ?? emptyHistoryPage()
 
     const pendingRequest = pendingSubmittedReviewsRequests.get(viewerKey)
     if (!options.force && pendingRequest) {
       historyPending.value = true
       try {
         historyData.value = await pendingRequest
-        return historyData.value ?? []
+        return historyData.value ?? emptyHistoryPage()
       } finally {
         historyPending.value = false
       }
     }
 
-    const request = $fetch<SubmittedReviewListItem[]>("/api/my-reviews/submitted", {
+    const request = $fetch<SubmittedReviewListPage>("/api/my-reviews/submitted", {
+      query: {
+        limit: ACCOUNT_REVIEWS_PAGE_SIZE,
+      },
       credentials: "same-origin",
     })
       .then((response) => {
@@ -265,7 +280,7 @@ export const useAccountReviews = () => {
       })
       .catch((error: unknown) => {
         historyError.value = error
-        return historyData.value ?? []
+        return historyData.value ?? emptyHistoryPage()
       })
       .finally(() => {
         if (pendingSubmittedReviewsRequests.get(viewerKey) === request) {

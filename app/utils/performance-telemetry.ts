@@ -37,13 +37,15 @@ type PerfSummary = {
 type PerfStore = {
   events: PerfEvent[]
   summary: Record<string, PerfSummary>
+  summaryKeys: string[]
   printSummary: () => void
 }
 
 const PERF_STORE_KEY = "__UPERF__"
 const MAX_EVENTS = 500
+const MAX_SUMMARIES = 200
 
-const isPerfEnabled = () => import.meta.dev
+const isPerfEnabled = () => import.meta.env.DEV || import.meta.env.MODE === "test"
 
 const createEmptySummary = (): PerfSummary => ({
   hits: 0,
@@ -76,6 +78,7 @@ const getPerfStore = (): PerfStore | null => {
     host[PERF_STORE_KEY] = {
       events: [],
       summary: {},
+      summaryKeys: [],
       printSummary: () => {
         const currentStore = getPerfStore()
         if (!currentStore) {
@@ -97,7 +100,42 @@ const getPerfStore = (): PerfStore | null => {
     }
   }
 
-  return host[PERF_STORE_KEY] ?? null
+  const store = host[PERF_STORE_KEY] ?? null
+  if (!store) {
+    return null
+  }
+
+  if (!Array.isArray(store.summaryKeys)) {
+    store.summaryKeys = Object.keys(store.summary)
+  }
+
+  while (store.summaryKeys.length > MAX_SUMMARIES) {
+    const evictedKey = store.summaryKeys.shift()
+    if (evictedKey) {
+      Reflect.deleteProperty(store.summary, evictedKey)
+    }
+  }
+
+  return store
+}
+
+const storeSummary = (store: PerfStore, summaryKey: string, event: PerfEvent) => {
+  let summary = store.summary[summaryKey]
+
+  if (!summary) {
+    if (store.summaryKeys.length >= MAX_SUMMARIES) {
+      const evictedKey = store.summaryKeys.shift()
+      if (evictedKey) {
+        Reflect.deleteProperty(store.summary, evictedKey)
+      }
+    }
+
+    summary = createEmptySummary()
+    store.summary[summaryKey] = summary
+    store.summaryKeys.push(summaryKey)
+  }
+
+  updateSummary(summary, event)
 }
 
 const updateSummary = (summary: PerfSummary, event: PerfEvent) => {
@@ -171,8 +209,7 @@ export const recordPerfEvent = (
   }
 
   const summaryKey = `${scope}:${key}`
-  const summary = (store.summary[summaryKey] ??= createEmptySummary())
-  updateSummary(summary, event)
+  storeSummary(store, summaryKey, event)
 
   if (options.log) {
     const durationSuffix =
