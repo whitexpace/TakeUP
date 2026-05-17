@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue"
 import type {
   ListingAnalyticsItem,
+  ListingAnalyticsPreviewItem,
   ListingAnalyticsRange,
 } from "../../../composables/use-listing-analytics"
 import { buildItemDetailPath } from "~/utils/item-detail-route"
@@ -9,13 +10,19 @@ import { buildItemDetailPath } from "~/utils/item-detail-route"
 const {
   selectedRange,
   summary,
+  listingCount,
   listings,
+  previewChartItems,
+  previewTopItems,
   categoryBreakdown,
   error,
   hasFetched,
+  hasTopFetched,
   hasFreshCache,
+  hasFreshTopCache,
   hasListings,
   hasActivity,
+  fetchAnalyticsTop,
   fetchAnalytics,
   refresh,
   setRange,
@@ -65,7 +72,7 @@ const getInitials = (name: string) =>
     .map((word) => word.charAt(0).toUpperCase())
     .join("") || "IT"
 
-const getItemDetailPath = (item: ListingAnalyticsItem) =>
+const getItemDetailPath = (item: ListingAnalyticsItem | ListingAnalyticsPreviewItem) =>
   buildItemDetailPath({
     id: item.listingId,
     name: item.itemName,
@@ -77,7 +84,7 @@ const statCards = computed(() => {
   return [
     {
       label: "Listings",
-      value: formatNumber(listings.value.length),
+      value: formatNumber(listingCount.value),
       helper: "Total active listings",
       icon: "ph:squares-four",
     },
@@ -144,22 +151,42 @@ const activityItems = computed(() =>
 )
 
 const topItems = computed(() =>
-  [...activityItems.value]
-    .sort(
-      (left, right) =>
-        right.totalViews - left.totalViews ||
-        right.totalBookings - left.totalBookings ||
-        right.totalRevenue - left.totalRevenue,
-    )
-    .slice(0, 5),
+  listings.value.length
+    ? [...activityItems.value]
+        .sort(
+          (left, right) =>
+            right.totalViews - left.totalViews ||
+            right.totalBookings - left.totalBookings ||
+            right.totalRevenue - left.totalRevenue,
+        )
+        .slice(0, 5)
+    : previewTopItems.value,
 )
 
 const chartItems = computed(() =>
-  [...listings.value]
-    .filter((item) => item.totalViews > 0)
-    .sort((left, right) => right.totalViews - left.totalViews)
-    .slice(0, 6),
+  listings.value.length
+    ? [...listings.value]
+        .filter((item) => item.totalViews > 0)
+        .sort((left, right) => right.totalViews - left.totalViews)
+        .slice(0, 6)
+    : previewChartItems.value,
 )
+
+const hasVisibleListings = computed(() => listingCount.value > 0)
+
+const loadAnalytics = async () => {
+  if (!hasTopFetched.value || !hasFreshTopCache.value) {
+    await fetchAnalyticsTop()
+  }
+
+  if (!hasFetched.value || !hasFreshCache.value) {
+    void fetchAnalytics()
+  }
+}
+
+const refreshAnalytics = () => {
+  void refresh()
+}
 
 const maxViews = computed(() => Math.max(...chartItems.value.map((item) => item.totalViews), 1))
 const maxCategoryCount = computed(() =>
@@ -228,14 +255,7 @@ const filteredAndSortedListings = computed(() => {
 })
 
 onMounted(() => {
-  if (!hasFetched.value) {
-    void fetchAnalytics()
-    return
-  }
-
-  if (!hasFreshCache.value) {
-    void fetchAnalytics()
-  }
+  void loadAnalytics()
 })
 </script>
 
@@ -276,7 +296,7 @@ onMounted(() => {
     </header>
 
     <!-- Tier 1: Top strip (KPI stat chips) -->
-    <template v-if="!hasFetched && !error">
+    <template v-if="!hasTopFetched && !hasFetched && !error">
       <section class="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-8 animate-pulse">
         <AdminKpiCardSkeleton v-for="index in 6" :key="index" class="!rounded-[14px]" />
       </section>
@@ -300,7 +320,7 @@ onMounted(() => {
         <button
           class="mt-5 rounded-[12px] bg-burning-orange px-5 py-3 text-[14px] font-bold text-white transition hover:brightness-110 active:scale-95"
           type="button"
-          @click="refresh"
+          @click="refreshAnalytics"
         >
           Retry
         </button>
@@ -332,7 +352,7 @@ onMounted(() => {
       </section>
 
       <section
-        v-if="hasFetched && !hasListings"
+        v-if="(hasTopFetched || hasFetched) && !hasVisibleListings"
         class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-8 text-center mb-8"
       >
         <div
@@ -358,7 +378,7 @@ onMounted(() => {
         <!-- Left 65%: Main charts -->
         <div class="w-full lg:w-[65%] space-y-6">
           <div
-            v-if="hasFetched && !hasActivity"
+            v-if="(hasTopFetched || hasFetched) && !hasActivity"
             class="rounded-[24px] border border-cinnamon-ice/20 bg-cream p-6"
           >
             <p class="text-[18px] font-semibold text-noble-black">No data yet</p>

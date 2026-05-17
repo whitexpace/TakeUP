@@ -5,6 +5,12 @@ import type { AppRouter } from "../../../../server/trpc/routers"
 import type { ReviewType } from "#shared/schemas/review"
 import { isChatAvailableForBookingStatus } from "#shared/chat-rules"
 import { buildItemDetailPath } from "../../../utils/item-detail-route"
+import {
+  clearPrefetchedBookingDetail,
+  getPrefetchedBookingDetail,
+  prefetchBookingDetail,
+  seedPrefetchedBookingDetail,
+} from "../../../composables/use-booking-detail-prefetch"
 
 definePageMeta({
   layout: "account",
@@ -27,6 +33,7 @@ const orderIdForDisplay = computed(() => bookingId.value.slice(0, 16).toUpperCas
 
 const { authUser } = useAuthUser()
 const currentUserId = computed(() => authUser.value?.id ?? null)
+const shouldBypassPrefetchedBookingDetail = ref(false)
 
 const { data, pending, error, refresh } = await useAsyncData(
   () => `booking:${bookingId.value || "missing"}`,
@@ -37,7 +44,28 @@ const { data, pending, error, refresh } = await useAsyncData(
         statusMessage: "Booking request not found.",
       })
     }
-    return await $fetch<BookingDetail | null>(`/api/bookings/${bookingId.value}`)
+
+    if (!shouldBypassPrefetchedBookingDetail.value) {
+      const prefetched = getPrefetchedBookingDetail<BookingDetail>(bookingId.value)
+      if (prefetched) {
+        return prefetched
+      }
+
+      const prioritizedPrefetch = await prefetchBookingDetail(bookingId.value, {
+        immediate: true,
+        priority: true,
+      }).catch(() => null)
+      if (prioritizedPrefetch) {
+        return prioritizedPrefetch
+      }
+    }
+
+    const bookingDetail = await $fetch<BookingDetail | null>(`/api/bookings/${bookingId.value}`)
+    if (bookingDetail) {
+      seedPrefetchedBookingDetail(bookingId.value, bookingDetail)
+    }
+
+    return bookingDetail
   },
   { watch: [bookingId] },
 )
@@ -45,32 +73,6 @@ const { data, pending, error, refresh } = await useAsyncData(
 if (error.value) {
   throw error.value
 }
-
-const { refresh: _refreshReviewState } = await useAsyncData(
-  () => `booking-review:${bookingId.value || "missing"}`,
-  async () => {
-    if (!bookingId.value) {
-      return {
-        canSubmit: false,
-        review: null,
-        transactionId: null,
-      }
-    }
-
-    return await $fetch<{
-      canSubmit: boolean
-      transactionId: string | null
-      review: null | {
-        id: string
-        rating: number
-        reviewText: string | null
-        isAnonymous: boolean
-        createdAt: string | Date
-      }
-    }>(`/api/reviews/booking/${bookingId.value}`)
-  },
-  { watch: [bookingId] },
-)
 
 const booking = computed(() => {
   if (!data.value) {
@@ -87,6 +89,19 @@ const isDisputeDescriptionExpanded = ref(false)
 const actionErrorMessage = ref("")
 const actionSuccessMessage = ref("")
 const proofUploadErrorMessage = ref("")
+
+const refreshBookingDetail = async () => {
+  if (bookingId.value) {
+    clearPrefetchedBookingDetail(bookingId.value)
+  }
+
+  shouldBypassPrefetchedBookingDetail.value = true
+  try {
+    await refresh()
+  } finally {
+    shouldBypassPrefetchedBookingDetail.value = false
+  }
+}
 
 const isLender = computed(() => booking.value.lenderId === currentUserId.value)
 const userRole = computed<"LENDER" | "BORROWER">(() => (isLender.value ? "LENDER" : "BORROWER"))
@@ -456,7 +471,7 @@ const confirmEarlyReturn = async () => {
     isSuccessModalOpen.value = true
     actionSuccessMessage.value =
       "Early return submitted. The lender was notified to confirm receipt."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     proofUploadErrorMessage.value =
       err instanceof Error
@@ -486,7 +501,7 @@ const confirmReturn = async () => {
     isReturnModalOpen.value = false
     isSuccessModalOpen.value = true
     actionSuccessMessage.value = "Return submitted. The lender was notified to confirm receipt."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     actionErrorMessage.value =
       err instanceof Error
@@ -516,7 +531,7 @@ const confirmHandoffProof = async () => {
     })
     isHandoffProofModalOpen.value = false
     actionSuccessMessage.value = "Handoff proof uploaded. The item is now marked as in use."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     actionErrorMessage.value =
       err instanceof Error
@@ -537,7 +552,7 @@ const confirmReceipt = async () => {
       method: "PATCH",
       body: { status: "COMPLETED" },
     })
-    await refresh()
+    await refreshBookingDetail()
     actionSuccessMessage.value = "Return confirmed. The transaction is now complete."
   } catch (err: unknown) {
     const errorData = (
@@ -571,7 +586,7 @@ const cancelRequest = async () => {
         cancellationReason: "Cancelled by borrower.",
       },
     })
-    await refresh()
+    await refreshBookingDetail()
     actionSuccessMessage.value = "Booking request cancelled."
   } catch (err: unknown) {
     const errorData = (
@@ -606,7 +621,7 @@ const respondToBooking = async (status: "CONFIRMED" | "CANCELLED") => {
       method: "PATCH",
       body: { status },
     })
-    await refresh()
+    await refreshBookingDetail()
     actionSuccessMessage.value =
       status === "CONFIRMED"
         ? "Booking request approved. The listing status was updated."
@@ -840,7 +855,7 @@ const submitRebuttal = async () => {
     isRebuttalModalOpen.value = false
     resetRebuttalForm()
     actionSuccessMessage.value = "Your rebuttal has been submitted."
-    await refresh()
+    await refreshBookingDetail()
   } catch (err: unknown) {
     const errorData = (
       err as {
@@ -943,7 +958,7 @@ watch(
 )
 
 const handleReviewSubmitted = async () => {
-  await refresh()
+  await refreshBookingDetail()
   actionSuccessMessage.value = "Thanks for your feedback. Your review is now visible here."
 }
 </script>

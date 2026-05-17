@@ -39,6 +39,7 @@ const activeStatus = computed(() => {
 
 const requestFetch = useRequestFetch()
 const nuxtApp = useNuxtApp()
+const { warmDisputeDetail } = useDisputeDetailPrefetch()
 
 // Counts
 const { data: countsData } = useLazyAsyncData("admin:dispute:counts", () =>
@@ -113,7 +114,12 @@ const queue = computed<DisputeListItem[]>(
   () => (queueData.value?.disputes as DisputeListItem[]) ?? [],
 )
 
+const warmDisputeCardDetail = (id: string, options: { immediate?: boolean } = {}) => {
+  void warmDisputeDetail(id, { priority: true, ...options }).catch(() => {})
+}
+
 const navigateToDetail = (id: string) => {
+  warmDisputeCardDetail(id, { immediate: true })
   navigateTo(`/admin/disputes/${id}`)
 }
 </script>
@@ -207,6 +213,11 @@ const navigateToDetail = (id: string) => {
               :key="dispute.id"
               type="button"
               class="flex w-full h-[100px] items-center px-10 transition-all duration-300 text-left group hover:bg-gray-50"
+              @pointerenter="warmDisputeCardDetail(dispute.id)"
+              @pointerover.passive="warmDisputeCardDetail(dispute.id)"
+              @focus="warmDisputeCardDetail(dispute.id)"
+              @touchstart.passive="warmDisputeCardDetail(dispute.id)"
+              @mousedown.left="warmDisputeCardDetail(dispute.id, { immediate: true })"
               @click="navigateToDetail(dispute.id)"
             >
               <div class="flex-1 min-w-0">

@@ -1,0 +1,107 @@
+import { useAccountPrefetch } from "../composables/use-account-prefetch"
+import { useAccountDisputesPrefetch } from "../composables/use-account-disputes-prefetch"
+import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
+import { useBookingDetailPrefetch } from "../composables/use-booking-detail-prefetch"
+import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
+import { useMyListingsPrefetch } from "../composables/use-my-listings"
+import { usePublicProfilePrefetch } from "../composables/use-public-profile-prefetch"
+import { useRewardsPrefetch } from "../composables/use-rewards"
+import { useTransactionHistoryPrefetch } from "../composables/use-transactions"
+import { useWallet } from "../composables/use-wallet"
+
+export default defineNuxtPlugin(() => {
+  const { warmAccount } = useAccountPrefetch()
+  const { warmAccountDisputes } = useAccountDisputesPrefetch()
+  const { warmAccountReviews } = useAccountReviewsPrefetch()
+  const { warmBookingDetail } = useBookingDetailPrefetch()
+  const { warmListingAnalytics } = useListingAnalyticsPrefetch()
+  const { warmMyListings } = useMyListingsPrefetch()
+  const { warmPublicProfilePath } = usePublicProfilePrefetch()
+  const { warmRewards } = useRewardsPrefetch()
+  const { warmTransactionHistory } = useTransactionHistoryPrefetch()
+  const { warmWallet } = useWallet({ immediate: false })
+  let hasObservedPointerMove = false
+
+  const handleInteraction = (event: Event) => {
+    if (event.type === "pointermove") {
+      hasObservedPointerMove = true
+    }
+
+    if (event.type === "pointerover" && !hasObservedPointerMove) {
+      return
+    }
+
+    const target = event.target
+    if (!(target instanceof Element)) return
+
+    const anchor = target.closest<HTMLAnchorElement>("a[href]")
+    if (!anchor) return
+
+    let url: URL
+    try {
+      url = new URL(anchor.href, window.location.origin)
+    } catch {
+      return
+    }
+
+    if (url.origin !== window.location.origin) return
+
+    if (url.pathname.startsWith("/account/transactions/")) {
+      void warmBookingDetail(url.pathname, { priority: true }).catch(() => {})
+      return
+    }
+
+    if (url.pathname === "/account/transactions") {
+      const role = url.searchParams.get("role") === "LENDER" ? "LENDER" : "BORROWER"
+      void warmTransactionHistory(role, {
+        targetPath: `${url.pathname}${url.search}`,
+        priority: role === "LENDER",
+        prefetchNextPage: role === "BORROWER",
+      })
+      return
+    }
+
+    if (url.pathname === "/account/disputes") {
+      void warmAccountDisputes(`${url.pathname}${url.search}`)
+      return
+    }
+
+    if (url.pathname === "/account/listings") {
+      void warmMyListings(`${url.pathname}${url.search}`)
+      return
+    }
+
+    if (url.pathname === "/account/analytics") {
+      void warmListingAnalytics(`${url.pathname}${url.search}`)
+      return
+    }
+
+    if (url.pathname === "/account/rewards") {
+      void warmRewards(`${url.pathname}${url.search}`)
+      return
+    }
+
+    if (url.pathname === "/account/reviews") {
+      void warmAccountReviews(`${url.pathname}${url.search}`)
+      return
+    }
+
+    if (url.pathname === "/account/wallet" || url.pathname.startsWith("/account/wallet/")) {
+      void warmWallet(url.pathname)
+      return
+    }
+
+    if (url.pathname === "/account" || url.pathname.startsWith("/account/")) {
+      void warmAccount(url.pathname)
+      return
+    }
+
+    if (url.pathname.startsWith("/profile/")) {
+      warmPublicProfilePath(url.pathname)
+    }
+  }
+
+  document.addEventListener("pointerover", handleInteraction, { passive: true })
+  document.addEventListener("pointermove", handleInteraction, { passive: true })
+  document.addEventListener("focusin", handleInteraction)
+})

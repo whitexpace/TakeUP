@@ -27,6 +27,7 @@ const {
   refresh,
   toggleStatus,
 } = useMyListings()
+const { warmMyListings } = useMyListingsPrefetch()
 
 const togglingId = ref<string | null>(null)
 const boostErrorMessage = ref("")
@@ -38,7 +39,7 @@ const showBoostToast = ref(false)
 const boostToastTone = ref<"success" | "error">("success")
 let boostToastTimeout: ReturnType<typeof setTimeout> | null = null
 
-const { data: rewardsSummary, refresh: refreshRewards } = await useAsyncData(
+const { data: rewardsSummary, refresh: refreshRewards } = useLazyAsyncData(
   "account:listings:rewards",
   () =>
     $fetch<{
@@ -173,12 +174,12 @@ const handleBoostListing = async (itemId: string) => {
 
 onMounted(() => {
   if (!hasFetched.value) {
-    void refresh()
+    void warmMyListings("/account/listings")
     return
   }
 
   if (!hasFreshCache.value) {
-    void refresh()
+    void warmMyListings("/account/listings")
   }
 })
 

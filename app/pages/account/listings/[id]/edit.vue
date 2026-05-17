@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { useMyListings } from "../../../../composables/use-my-listings"
+import {
+  getPrefetchedMyListingDetail,
+  prefetchMyListingEdit,
+  seedPrefetchedMyListingDetail,
+  useMyListings,
+} from "../../../../composables/use-my-listings"
 import type { MyListingItem } from "../../../../composables/use-my-listings"
 
 definePageMeta({ layout: "account", middleware: "account-auth" })
@@ -32,7 +37,16 @@ onBeforeRouteLeave((to, from, next) => {
 
 onMounted(async () => {
   try {
+    const prefetched =
+      getPrefetchedMyListingDetail<MyListingItem>(id) ?? (await prefetchMyListingEdit(id))
+
+    if (prefetched) {
+      item.value = prefetched as MyListingItem
+      return
+    }
+
     const result = await $fetch<MyListingItem>(`/api/items/${id}`)
+    seedPrefetchedMyListingDetail(result)
     item.value = result
   } catch (err: unknown) {
     const status = (err as { statusCode?: number })?.statusCode

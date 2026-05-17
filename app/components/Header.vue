@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useBag } from "../composables/use-bag"
 import { useChat } from "../composables/use-chat"
+import { useCommunityFeedPrefetch } from "../composables/use-community-feed-cache"
 import { useLikes } from "../composables/use-likes"
 import { useViewerSession } from "../composables/use-viewer-session"
 import { useNotifications } from "../composables/use-notifications"
@@ -40,6 +41,7 @@ const { likesCount, loadLikesCount } = useLikes()
 const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount } = useChat()
 const user = useSupabaseUser()
 const route = useRoute()
+const { warmCommunityFeed } = useCommunityFeedPrefetch()
 const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
 const {
   notifications: globalNotifications,
@@ -83,6 +85,11 @@ const isAccountSectionActive = computed(
 const isAdminSectionActive = computed(
   () => route.path === "/admin" || route.path.startsWith("/admin/"),
 )
+
+const warmCommunityFeedNavigation = () => {
+  if (route.path === "/feed" || route.path.startsWith("/feed/")) return
+  warmCommunityFeed()
+}
 
 const bridgeAndLoadAccountType = async () => {
   if (!user.value) {
@@ -366,8 +373,12 @@ onBeforeUnmount(() => {
         </NuxtLink>
         <NuxtLink
           to="/feed"
+          :prefetch-on="{ interaction: true }"
           class="nav-link flex items-center text-[15px] text-noble-black font-geist font-normal transition-colors duration-300 ease-in-out hover:text-burning-orange"
           active-class="active-nav-link"
+          @pointerenter="warmCommunityFeedNavigation"
+          @focus="warmCommunityFeedNavigation"
+          @touchstart.passive="warmCommunityFeedNavigation"
         >
           Community Feed
         </NuxtLink>
@@ -650,6 +661,7 @@ onBeforeUnmount(() => {
           <div class="relative flex items-stretch group/tooltip">
             <NuxtLink
               to="/account"
+              :prefetch-on="{ interaction: true }"
               class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
               :class="{ 'active-nav-link': isAccountSectionActive }"
               active-class="active-nav-link"

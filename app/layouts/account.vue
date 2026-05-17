@@ -2,11 +2,15 @@
 import { computed, onMounted, ref } from "vue"
 import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
+import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
+import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
+import { useRewardsPrefetch } from "../composables/use-rewards"
 
 const route = useRoute()
 const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const isHeaderVisible = ref(true)
+const hasObservedPointerMove = ref(false)
 
 const hideSidebar = computed(() => route.meta.hideAccountSidebar === true)
 
@@ -20,6 +24,9 @@ const {
 } = useAuthUser()
 const { clear: clearSessionBridge } = useSessionBridge()
 const { clear: clearViewerSession } = useViewerSession()
+const { warmAccountReviews } = useAccountReviewsPrefetch()
+const { warmListingAnalytics } = useListingAnalyticsPrefetch()
+const { warmRewards } = useRewardsPrefetch()
 
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
@@ -42,6 +49,10 @@ onMounted(() => {
   })
 })
 
+const markPointerInteraction = () => {
+  hasObservedPointerMove.value = true
+}
+
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value
 }
@@ -59,6 +70,30 @@ const isActive = (path: string) => {
     return route.path === "/account"
   }
   return route.path.startsWith(path)
+}
+
+const warmNavLink = (path: string, event?: Event) => {
+  if (event?.type === "pointermove") {
+    markPointerInteraction()
+  }
+
+  if (event?.type === "pointerenter" && !hasObservedPointerMove.value) {
+    return
+  }
+
+  if (path === "/account/analytics") {
+    void warmListingAnalytics(path)
+    return
+  }
+
+  if (path === "/account/rewards") {
+    void warmRewards(path)
+    return
+  }
+
+  if (path === "/account/reviews") {
+    void warmAccountReviews(path)
+  }
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -242,6 +277,7 @@ const navGroups = computed(() => {
         <NuxtLink
           v-if="authData?.user.username"
           :to="`/profile/${authData.user.username}`"
+          :prefetch-on="{ interaction: true }"
           class="px-6 pt-4 pb-4 border-b border-cinnamon-ice/30 shrink-0 flex items-center gap-4 hover:bg-pale-cashmere/30 transition-all duration-300 group/profile-link"
         >
           <div class="relative group shrink-0">
@@ -334,12 +370,18 @@ const navGroups = computed(() => {
                 v-for="link in group.links"
                 :key="link.label"
                 :to="link.to"
+                :prefetch-on="{ interaction: true }"
                 class="group flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200"
                 :class="
                   isActive(link.to)
                     ? 'bg-burning-orange/15 text-burning-orange font-semibold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
                     : 'text-noble-black/70 hover:bg-pale-cashmere/50 hover:text-noble-black border-l-4 border-transparent'
                 "
+                @pointerenter="warmNavLink(link.to, $event)"
+                @pointermove.passive="warmNavLink(link.to, $event)"
+                @focus="warmNavLink(link.to, $event)"
+                @touchstart.passive="warmNavLink(link.to, $event)"
+                @mousedown.left="warmNavLink(link.to, $event)"
                 @click="isMobile && (isSidebarOpen = false)"
               >
                 <!-- Icons -->

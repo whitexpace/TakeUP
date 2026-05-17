@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MyListingItem } from "../composables/use-my-listings"
+import { prefetchMyListingEdit, type MyListingItem } from "../composables/use-my-listings"
 
 const props = defineProps<{
   item: MyListingItem
@@ -10,6 +10,10 @@ const emit = defineEmits<{
   toggleStatus: [id: string, status: "AVAILABLE" | "DEACTIVATED"]
   boostListing: [itemId: string]
 }>()
+
+const warmListingEdit = () => {
+  void prefetchMyListingEdit(props.item.id, props.item)
+}
 
 const cardProps = computed(() => {
   const image =
@@ -93,7 +97,15 @@ const statusActionLabel = computed(() => {
 </script>
 
 <template>
-  <ItemCard v-bind="cardProps" class="group/mcard">
+  <ItemCard
+    v-bind="cardProps"
+    class="group/mcard"
+    @pointerenter="warmListingEdit"
+    @pointerover.passive="warmListingEdit"
+    @focusin="warmListingEdit"
+    @touchstart.passive="warmListingEdit"
+    @mousedown.left="warmListingEdit"
+  >
     <template #image-overlay>
       <!-- Dark blurred overlay with a smooth fade-in transition -->
       <div
@@ -102,7 +114,11 @@ const statusActionLabel = computed(() => {
         <!-- Edit Button (Primary) -->
         <NuxtLink
           :to="`/account/listings/${item.id}/edit`"
+          :prefetch-on="{ interaction: true }"
           class="w-full h-10 flex items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[13px] font-bold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:scale-95"
+          @pointerenter="warmListingEdit"
+          @focus="warmListingEdit"
+          @mousedown.left="warmListingEdit"
           @click.stop
         >
           Edit Listing

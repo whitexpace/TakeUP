@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
 import type { LenderItemRequest } from "../composables/use-lender-item-requests"
+import {
+  clearPrefetchedBookingDetail,
+  useBookingDetailPrefetch,
+} from "../composables/use-booking-detail-prefetch"
 
 const props = defineProps<{
   request: LenderItemRequest
@@ -11,6 +15,7 @@ const emit = defineEmits<{
 }>()
 
 const _router = useRouter()
+const { warmBookingDetail } = useBookingDetailPrefetch()
 
 const borrowerName = computed(() => {
   const user = props.request.borrower.user
@@ -90,6 +95,7 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
       body: { status: nextStatus },
     })
 
+    clearPrefetchedBookingDetail(props.request.id)
     emit("refresh")
   } catch (err: unknown) {
     const fetchError = err as {
@@ -108,11 +114,22 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
     actingBookingId.value = null
   }
 }
+
+const warmOrderDetails = () => {
+  void warmBookingDetail(detailPath.value, { priority: true }).catch(() => {})
+}
+
+const warmOrderDetailsImmediately = () => {
+  void warmBookingDetail(detailPath.value, { immediate: true, priority: true }).catch(() => {})
+}
 </script>
 
 <template>
   <div
     class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 cursor-pointer group/card"
+    @pointerenter="warmOrderDetails"
+    @mousedown="warmOrderDetailsImmediately"
+    @touchstart.passive="warmOrderDetails"
   >
     <!-- Header -->
     <div
@@ -160,7 +177,13 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
 
       <!-- Item Details -->
       <div class="flex-1 min-w-0">
-        <NuxtLink :to="detailPath" class="block" @click.stop>
+        <NuxtLink
+          :to="detailPath"
+          :prefetch-on="{ interaction: true }"
+          class="block"
+          @focus="warmOrderDetails"
+          @click.stop
+        >
           <h4
             class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1 group-hover/card:underline"
           >
