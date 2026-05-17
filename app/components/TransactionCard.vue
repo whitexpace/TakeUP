@@ -2,6 +2,7 @@
 import { computed } from "vue"
 import type { AdminTransactionListItem } from "../composables/use-admin-transactions"
 import type { TransactionListItem } from "../composables/use-transactions"
+import { useBookingDetailPrefetch } from "../composables/use-booking-detail-prefetch"
 import type { ReviewType } from "#shared/schemas/review"
 import { isChatAvailableForTransactionStatus } from "#shared/chat-rules"
 
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { warmBookingDetail } = useBookingDetailPrefetch()
 const isAdminVariant = computed(() => props.variant === "admin")
 const userRole = computed(() => (props.activeRole === "LENDER" ? "LENDER" : "BORROWER"))
 const userTransaction = computed(() =>
@@ -161,6 +163,16 @@ const handleWriteReview = (reviewType: ReviewType) => {
   emit("writeReview", { transaction: userTransaction.value, reviewType })
 }
 
+const warmOrderDetails = () => {
+  if (!detailPath.value) return
+  void warmBookingDetail(detailPath.value, { priority: true }).catch(() => {})
+}
+
+const warmOrderDetailsImmediately = () => {
+  if (!detailPath.value) return
+  void warmBookingDetail(detailPath.value, { immediate: true, priority: true }).catch(() => {})
+}
+
 const handleOpenChat = async () => {
   if (!canOpenChat.value) return
 
@@ -173,7 +185,15 @@ const handleOpenChat = async () => {
 
 <template>
   <template v-if="detailPath">
-    <NuxtLink :to="detailPath" :class="rootClass">
+    <NuxtLink
+      :to="detailPath"
+      :class="rootClass"
+      :prefetch-on="{ interaction: true }"
+      @pointerenter="warmOrderDetails"
+      @focus="warmOrderDetails"
+      @mousedown="warmOrderDetailsImmediately"
+      @touchstart.passive="warmOrderDetails"
+    >
       <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
         <div
           v-if="isAdminVariant"

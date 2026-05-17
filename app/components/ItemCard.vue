@@ -2,16 +2,50 @@
   <div
     class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[210px] max-w-[280px] mx-auto relative group"
     :class="canNavigate ? 'cursor-pointer' : ''"
-    @click="navigateToDetails"
+    @pointerenter="warmLinkedDestination"
+    @focusin="warmLinkedDestination"
+    @touchstart.passive="warmLinkedDestination"
+    @click="handleCardClick"
   >
+    <NuxtLink
+      v-if="optimizedNavigation"
+      :to="linkTarget"
+      :prefetch-on="{ interaction: true }"
+      :aria-label="`View ${name}`"
+      class="absolute inset-0 z-20 rounded-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-burning-orange"
+      @pointerenter="warmLinkedDestination"
+      @focus="warmLinkedDestination"
+      @mousedown="startMouseDownNavigation"
+    />
+
     <!-- Image Section (Compact: 180px) -->
     <div class="relative h-[180px] w-full bg-noble-black/5 rounded-t-[14px]">
       <!-- Dedicated container for image scale & rounded top -->
       <div class="absolute inset-0 overflow-hidden rounded-t-[14px]">
-        <img
-          v-if="image"
+        <NuxtImg
+          v-if="image && canOptimizeImage"
           :src="image"
           :alt="name"
+          width="280"
+          height="180"
+          sizes="(min-width: 1536px) 280px, (min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          fit="cover"
+          format="webp"
+          :quality="55"
+          :loading="imageLoading"
+          :fetchpriority="imageFetchPriority"
+          decoding="async"
+          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        <img
+          v-else-if="image"
+          :src="image"
+          :alt="name"
+          width="280"
+          height="180"
+          :loading="imageLoading"
+          :fetchpriority="imageFetchPriority"
+          decoding="async"
           class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div
@@ -30,7 +64,7 @@
         {{ topBadge.label }}
       </div>
 
-      <div v-if="!isManagement" class="absolute top-[10px] right-[10px] z-10">
+      <div v-if="!isManagement" class="absolute top-[10px] right-[10px] z-30">
         <!-- Like Button (Blurred Circle) -->
         <div class="relative group/tooltip">
           <button
@@ -124,31 +158,56 @@ import {
 import { clearPersistedSessionState } from "../composables/use-persisted-session-state"
 import { useLikes } from "../composables/use-likes"
 
-const props = defineProps<{
-  id: string | number
-  type: "Rent" | "Borrow"
-  status?: string
-  isTrending?: boolean
-  image: string | null
-  category: string
-  name: string
-  rating: number | string
-  reviews: number | string
-  price?: string | number
-  priceUnit?: "hour" | "day"
-  owner: string
-  ownerUsername?: string
-  isLiked?: boolean
-  fromPage?: "likes" | "dashboard"
-  isManagement?: boolean
-  allowNavigation?: boolean
-  customPath?: string
-}>()
+type CardImageLoading = "eager" | "lazy"
+type CardImageFetchPriority = "high" | "low" | "auto"
+
+const props = withDefaults(
+  defineProps<{
+    id: string | number
+    type: "Rent" | "Borrow"
+    status?: string
+    isTrending?: boolean
+    image: string | null
+    category: string
+    name: string
+    rating: number | string
+    reviews: number | string
+    price?: string | number
+    priceUnit?: "hour" | "day"
+    owner: string
+    ownerUsername?: string
+    isLiked?: boolean
+    fromPage?: "likes" | "dashboard"
+    isManagement?: boolean
+    allowNavigation?: boolean
+    customPath?: string
+    enableDestinationPrefetch?: boolean
+    imageLoading?: CardImageLoading
+    imageFetchPriority?: CardImageFetchPriority
+    startNavigationOnMouseDown?: boolean
+    prefetchItem?: ListedItem | null
+  }>(),
+  {
+    status: undefined,
+    price: undefined,
+    priceUnit: undefined,
+    ownerUsername: undefined,
+    fromPage: undefined,
+    customPath: undefined,
+    enableDestinationPrefetch: false,
+    imageLoading: "lazy",
+    imageFetchPriority: "auto",
+    startNavigationOnMouseDown: false,
+    prefetchItem: null,
+  },
+)
 const emit = defineEmits<{
   likeChanged: [payload: { itemId: string; isLiked: boolean }]
 }>()
 
 const { incrementLikes, decrementLikes } = useLikes()
+const { warmDestination } = useDestinationImagePrefetch()
+const runtimeConfig = useRuntimeConfig()
 const isLiked = ref(Boolean(props.isLiked))
 const isTogglingLike = ref(false)
 const router = useRouter()
@@ -174,6 +233,33 @@ const itemDetailPath = computed(
 const normalizedStatus = computed(() => props.status?.toUpperCase() ?? "")
 const displayPriceUnit = computed(() => props.priceUnit ?? "day")
 const canNavigate = computed(() => !props.isManagement || props.allowNavigation)
+const optimizedNavigation = computed(() => canNavigate.value && props.enableDestinationPrefetch)
+const optimizedImageDomains = computed(() => {
+  const domains = runtimeConfig.public.optimizedImageDomains
+  return Array.isArray(domains)
+    ? domains.filter((domain): domain is string => typeof domain === "string")
+    : []
+})
+const canOptimizeImage = computed(() => {
+  if (!props.image) return undefined
+
+  try {
+    const imageUrl = new URL(props.image)
+    return optimizedImageDomains.value.includes(imageUrl.hostname)
+  } catch {
+    return false
+  }
+})
+const linkTarget = computed(() => {
+  if (props.fromPage) {
+    return {
+      path: itemDetailPath.value,
+      query: { from: props.fromPage },
+    }
+  }
+
+  return itemDetailPath.value
+})
 
 const hasGoodRating = computed(() => {
   const score = parseFloat(String(props.rating))
@@ -204,15 +290,36 @@ const topBadge = computed(() => {
 const navigateToDetails = () => {
   if (!canNavigate.value) return
 
-  if (props.fromPage) {
-    router.push({
-      path: itemDetailPath.value,
-      query: { from: props.fromPage },
-    })
+  router.push(linkTarget.value)
+}
+
+const handleCardClick = () => {
+  if (optimizedNavigation.value) return
+  navigateToDetails()
+}
+
+const warmLinkedDestination = () => {
+  if (!optimizedNavigation.value) return
+  warmDestination(itemDetailPath.value, props.prefetchItem)
+}
+
+const startMouseDownNavigation = (event: MouseEvent) => {
+  warmLinkedDestination()
+
+  if (
+    !optimizedNavigation.value ||
+    !props.startNavigationOnMouseDown ||
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
     return
   }
 
-  router.push(itemDetailPath.value)
+  void router.push(linkTarget.value)
 }
 
 const toggleLike = async () => {

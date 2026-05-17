@@ -9,12 +9,12 @@ definePageMeta({
 const {
   transactions,
   isBalanceVisible,
+  isInitialLoading,
   linkedAccounts,
   toggleBalanceVisibility,
   topUpPseudo,
   formattedBalance,
   maskedBalance,
-  isInitialLoading,
 } = useWallet()
 </script>
 
@@ -31,6 +31,7 @@ const {
       :formatted-balance="formattedBalance"
       :masked-balance="maskedBalance"
       :linked-accounts="linkedAccounts"
+      :is-activity-loading="isInitialLoading && transactions.length === 0"
       :on-toggle-balance="toggleBalanceVisibility"
       :on-top-up="topUpPseudo"
     />

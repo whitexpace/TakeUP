@@ -3,7 +3,11 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue"
 import type { TransactionStatus } from "#shared/schemas/transaction"
 import type { BookingStatus } from "#shared/schemas/booking"
 import type { ReviewType } from "#shared/schemas/review"
-import { useTransactions, type TransactionListItem } from "../../../composables/use-transactions"
+import {
+  useTransactionHistoryPrefetch,
+  useTransactions,
+  type TransactionListItem,
+} from "../../../composables/use-transactions"
 import {
   useBorrowerItemRequests,
   type BorrowerItemRequest,
@@ -35,6 +39,7 @@ const router = useRouter()
 const activeRole = ref<ActiveRole>((route.query.role as ActiveRole) || "BORROWER")
 const activeStatus = ref<TransactionFilter>(null)
 const searchQuery = ref("")
+const { warmTransactionHistory } = useTransactionHistoryPrefetch()
 
 const { filteredTransactions, isLoading, error, hasMore, loadMore, refresh, fetchPage } =
   useTransactions({
@@ -272,6 +277,13 @@ const setRole = (role: ActiveRole) => {
   router.replace({ query: { ...route.query, role } })
 }
 
+const warmRoleHistory = (role: ActiveRole) => {
+  void warmTransactionHistory(role, {
+    priority: role === "LENDER",
+    prefetchNextPage: role === "BORROWER",
+  })
+}
+
 const setStatus = (status: TransactionFilter) => {
   activeStatus.value = status
 }
@@ -324,7 +336,23 @@ const emptySubtitle = computed(() => {
 })
 
 const refreshAll = async () => {
-  await Promise.all([refresh(), fetchBorrowerRequests(), fetchLenderRequests()])
+  await Promise.all([
+    refresh(),
+    fetchBorrowerRequests({ force: true }),
+    fetchLenderRequests({ force: true }),
+  ])
+}
+
+const loadMoreIfNearBottom = (event: Event) => {
+  const container = event.currentTarget as HTMLElement | null
+  if (!container || !hasMore.value || isLoading.value || visibleTransactions.value.length === 0) {
+    return
+  }
+
+  const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
+  if (remaining <= 180) {
+    void loadMore()
+  }
 }
 
 const reviewContext = computed(() => {
@@ -469,6 +497,9 @@ onBeforeUnmount(() => {
             ? 'text-burning-orange'
             : 'text-noble-black/40 hover:text-noble-black/60'
         "
+        @pointerenter="warmRoleHistory('BORROWER')"
+        @focus="warmRoleHistory('BORROWER')"
+        @touchstart.passive="warmRoleHistory('BORROWER')"
         @click="setRole('BORROWER')"
       >
         Borrow History
@@ -485,6 +516,9 @@ onBeforeUnmount(() => {
             ? 'text-burning-orange'
             : 'text-noble-black/40 hover:text-noble-black/60'
         "
+        @pointerenter="warmRoleHistory('LENDER')"
+        @focus="warmRoleHistory('LENDER')"
+        @touchstart.passive="warmRoleHistory('LENDER')"
         @click="setRole('LENDER')"
       >
         Lend History
@@ -549,7 +583,11 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Transaction list (Grouped & Internal Scroll) -->
-      <div v-else class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10">
+      <div
+        v-else
+        class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10"
+        @scroll.passive="loadMoreIfNearBottom"
+      >
         <div v-for="group in groupedHistoryEntries" :key="group.title" class="space-y-5">
           <div class="flex items-center gap-4 px-2 sticky top-0 bg-cream z-20 py-2">
             <span

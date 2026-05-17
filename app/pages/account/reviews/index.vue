@@ -1,77 +1,51 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue"
-import type { inferRouterOutputs } from "@trpc/server"
-import type { AppRouter } from "~~/server/trpc/routers"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { ReviewType } from "~~/shared/schemas/review"
-import type { TransactionListItem } from "~/composables/use-transactions"
+import {
+  useAccountReviews,
+  type ReviewDraftListItem,
+  type ReviewTransactionListItem,
+} from "../../../composables/use-account-reviews"
 
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
 
-type RouterOutputs = inferRouterOutputs<AppRouter>
-type ReviewDraftListItem = RouterOutputs["transaction"]["listReviewDrafts"][number]
-type SubmittedReviewListItem = RouterOutputs["transaction"]["listSubmittedReviews"][number]
-type ReviewLeaderboardEntry = RouterOutputs["review"]["borrowerLeaderboard"]["leaderboard"][number]
 type ReviewsTab = "PENDING" | "DRAFTS" | "HISTORY"
 
 const activeTab = ref<ReviewsTab>("PENDING")
 const searchQuery = ref("")
 const user = useSupabaseUser()
-
 const {
-  data: transactionsData,
-  pending: transactionsPending,
-  error: transactionsError,
-  refresh: refreshTransactions,
-} = await useAsyncData("account-my-review-transactions", async () => {
-  const transactionResponse = await $fetch<RouterOutputs["transaction"]["list"]>(
-    "/api/transactions",
-    {
-      query: {
-        status: "COMPLETED",
-        limit: 100,
-      },
-    },
-  )
+  transactionsData,
+  draftsData,
+  historyData,
+  leaderboardData,
+  transactionsPending,
+  draftsPending,
+  historyPending,
+  leaderboardPending,
+  transactionsError,
+  draftsError,
+  historyError,
+  hasFreshTransactionsCache,
+  hasFreshDraftsCache,
+  hasFreshHistoryCache,
+  hasFreshLeaderboardsCache,
+  fetchReviewTransactions,
+  fetchReviewDrafts,
+  fetchSubmittedReviews,
+  fetchSecondaryReviewsData,
+  refreshReviewTransactions,
+  refreshReviewDrafts,
+  refreshSubmittedReviews,
+  refreshReviewLeaderboards,
+} = useAccountReviews()
 
-  return transactionResponse.transactions
-})
-
-const {
-  data: draftsData,
-  pending: draftsPending,
-  error: draftsError,
-  refresh: refreshDrafts,
-} = await useAsyncData("account-my-review-drafts", async () => {
-  return await $fetch<ReviewDraftListItem[]>("/api/my-reviews/drafts")
-})
-
-const {
-  data: historyData,
-  pending: historyPending,
-  error: historyError,
-  refresh: refreshHistory,
-} = await useAsyncData("account-my-review-history", async () => {
-  return await $fetch<SubmittedReviewListItem[]>("/api/my-reviews/submitted")
-})
-
-const {
-  data: leaderboardData,
-  pending: leaderboardPending,
-  refresh: refreshLeaderboard,
-} = await useAsyncData("account-review-leaderboards", async () => {
-  const [borrowersResponse, lendersResponse] = await Promise.all([
-    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/borrowers"),
-    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/lenders"),
-  ])
-
-  return {
-    borrowers: borrowersResponse.leaderboard,
-    lenders: lendersResponse.leaderboard,
-  }
-})
+if (import.meta.client && !hasFreshTransactionsCache.value) {
+  void fetchReviewTransactions()
+}
 
 const allTransactions = computed(() => transactionsData.value ?? [])
 const allDrafts = computed(() => draftsData.value ?? [])
@@ -80,9 +54,15 @@ const borrowerLeaderboard = computed(() => leaderboardData.value?.borrowers ?? [
 const lenderLeaderboard = computed(() => leaderboardData.value?.lenders ?? [])
 
 const currentTabPending = computed(() => {
-  if (activeTab.value === "DRAFTS") return draftsPending.value
-  if (activeTab.value === "HISTORY") return historyPending.value
-  return transactionsPending.value
+  if (activeTab.value === "DRAFTS") {
+    return draftsPending.value && draftsData.value === null
+  }
+
+  if (activeTab.value === "HISTORY") {
+    return historyPending.value && historyData.value === null
+  }
+
+  return transactionsPending.value && transactionsData.value === null
 })
 
 const currentTabErrorMessage = computed(() => {
@@ -208,7 +188,7 @@ const formatRoleLabel = (role: string | null) => (role === "LENDER" ? "Lender" :
 const formatReviewCount = (value: number) => `${value} ${value === 1 ? "review" : "reviews"}`
 
 const getCurrentUserRoleForTransaction = (
-  transaction: TransactionListItem,
+  transaction: ReviewTransactionListItem,
 ): "BORROWER" | "LENDER" => {
   if (user.value?.id && transaction.lenderId === user.value.id) {
     return "LENDER"
@@ -217,7 +197,7 @@ const getCurrentUserRoleForTransaction = (
   return "BORROWER"
 }
 
-const getCounterpartNameForTransaction = (transaction: TransactionListItem) => {
+const getCounterpartNameForTransaction = (transaction: ReviewTransactionListItem) => {
   const currentUserRole = getCurrentUserRoleForTransaction(transaction)
   const counterpart =
     currentUserRole === "BORROWER" ? transaction.lender.user : transaction.borrower.user
@@ -226,7 +206,7 @@ const getCounterpartNameForTransaction = (transaction: TransactionListItem) => {
 }
 
 const isReviewModalOpen = ref(false)
-const selectedTransactionForReview = ref<TransactionListItem | null>(null)
+const selectedTransactionForReview = ref<ReviewTransactionListItem | null>(null)
 const selectedReviewType = ref<ReviewType | null>(null)
 const pageActionError = ref("")
 const showRewardPopup = ref(false)
@@ -265,7 +245,7 @@ const reviewContext = computed(() => {
   }
 })
 
-const openReviewModal = (transaction: TransactionListItem, reviewType: ReviewType) => {
+const openReviewModal = (transaction: ReviewTransactionListItem, reviewType: ReviewType) => {
   pageActionError.value = ""
   selectedTransactionForReview.value = transaction
   selectedReviewType.value = reviewType
@@ -332,29 +312,55 @@ const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
     triggerRewardPopup()
   }
   await Promise.all([
-    refreshTransactions(),
-    refreshDrafts(),
-    refreshHistory(),
-    refreshLeaderboard(),
+    refreshReviewTransactions(),
+    refreshReviewDrafts(),
+    refreshSubmittedReviews(),
+    refreshReviewLeaderboards(),
   ])
 }
 
 const refreshCurrentTab = async () => {
   if (activeTab.value === "DRAFTS") {
-    await refreshDrafts()
+    await refreshReviewDrafts()
     return
   }
 
   if (activeTab.value === "HISTORY") {
-    await refreshHistory()
+    await refreshSubmittedReviews()
     return
   }
 
-  await refreshTransactions()
+  await refreshReviewTransactions()
 }
 
 watch(activeTab, async () => {
-  await refreshCurrentTab()
+  if (activeTab.value === "DRAFTS" && !hasFreshDraftsCache.value) {
+    await fetchReviewDrafts()
+    return
+  }
+
+  if (activeTab.value === "HISTORY" && !hasFreshHistoryCache.value) {
+    await fetchSubmittedReviews()
+    return
+  }
+
+  if (activeTab.value === "PENDING" && !hasFreshTransactionsCache.value) {
+    await fetchReviewTransactions()
+  }
+})
+
+onMounted(() => {
+  if (!hasFreshTransactionsCache.value) {
+    void fetchReviewTransactions()
+  }
+
+  if (
+    !hasFreshDraftsCache.value ||
+    !hasFreshHistoryCache.value ||
+    !hasFreshLeaderboardsCache.value
+  ) {
+    void fetchSecondaryReviewsData()
+  }
 })
 
 onBeforeUnmount(() => {

@@ -109,11 +109,22 @@ const actionLabel = (type: ResolutionActionType) => {
   }
 }
 
-const loadDispute = async () => {
+const loadDispute = async (options: { force?: boolean } = {}) => {
   isLoading.value = true
   error.value = null
   try {
-    selectedDispute.value = await $fetch<AdminDisputeDetail>(`/api/disputes/${disputeId}`)
+    if (options.force) {
+      clearPrefetchedDisputeDetail(disputeId)
+    }
+
+    const disputeDetail =
+      (!options.force &&
+        (getPrefetchedDisputeDetail<AdminDisputeDetail>(disputeId) ??
+          (await prefetchDisputeDetail(disputeId, { immediate: true, priority: true })))) ||
+      (await $fetch<AdminDisputeDetail>(`/api/disputes/${disputeId}`))
+
+    seedPrefetchedDisputeDetail(disputeId, disputeDetail)
+    selectedDispute.value = disputeDetail
     resetResolutionForm()
   } catch (err: unknown) {
     const errorWithStatus = err as { statusMessage?: string }
@@ -217,7 +228,7 @@ const resolveAndCloseDispute = async () => {
       },
     })
     await $fetch(`/api/disputes/${disputeId}/close`, { method: "POST" })
-    await loadDispute()
+    await loadDispute({ force: true })
   } finally {
     isResolving.value = false
   }
@@ -244,7 +255,7 @@ const suspendUser = async () => {
       durationDays: suspendDays.value,
     })
     showSuspendModal.value = false
-    await loadDispute()
+    await loadDispute({ force: true })
   } finally {
     isActingOnUser.value = false
   }
@@ -258,7 +269,7 @@ const banUser = async () => {
       reason: banReason.value,
     })
     showBanModal.value = false
-    await loadDispute()
+    await loadDispute({ force: true })
   } finally {
     isActingOnUser.value = false
   }

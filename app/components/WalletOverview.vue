@@ -11,6 +11,7 @@ const props = withDefaults(
     formattedBalance: string
     maskedBalance: string
     linkedAccounts?: LinkedAccount[]
+    isActivityLoading?: boolean
     showLinkedAccounts?: boolean
     allowTopUp?: boolean
     allowWithdraw?: boolean
@@ -28,6 +29,7 @@ const props = withDefaults(
   }>(),
   {
     linkedAccounts: () => [],
+    isActivityLoading: false,
     showLinkedAccounts: true,
     allowTopUp: true,
     allowWithdraw: true,
@@ -301,8 +303,25 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
           <p class="mt-0.5 text-[13px] font-light text-noble-black/50">{{ activitySubtitle }}</p>
         </div>
 
+        <div v-if="isActivityLoading" class="flex-1 space-y-0">
+          <div
+            v-for="index in 4"
+            :key="index"
+            class="flex items-center justify-between py-4 border-b border-neutral-100 last:border-0"
+          >
+            <div class="flex items-center gap-4 min-w-0 flex-1">
+              <div class="w-10 h-10 rounded-full bg-neutral-200/70 animate-pulse shrink-0"></div>
+              <div class="min-w-0 flex-1 space-y-2">
+                <div class="h-3.5 w-28 rounded bg-neutral-200/70 animate-pulse"></div>
+                <div class="h-3 w-36 rounded bg-neutral-200/50 animate-pulse"></div>
+              </div>
+            </div>
+            <div class="h-4 w-20 rounded bg-neutral-200/70 animate-pulse"></div>
+          </div>
+        </div>
+
         <div
-          v-if="transactions.length === 0"
+          v-else-if="transactions.length === 0"
           class="flex-1 flex flex-col items-center justify-center py-12 text-center"
         >
           <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">

@@ -425,7 +425,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue"
-import type { PublicProfile } from "~/types/user"
+import {
+  getCachedPublicProfile,
+  prefetchPublicProfile,
+} from "../../composables/use-public-profile-prefetch"
 
 definePageMeta({
   layout: "dashboard",
@@ -439,9 +442,13 @@ const reviewFilter = ref("All")
 
 const {
   data: profileData,
-  pending: isLoading,
+  pending: isProfilePending,
   error,
-} = await useAsyncData(`profile-${username}`, () => $fetch<PublicProfile>(`/api/users/${username}`))
+} = useAsyncData(`profile-${username}`, () => prefetchPublicProfile(username), {
+  default: () => getCachedPublicProfile(username),
+  lazy: true,
+})
+const isLoading = computed(() => isProfilePending.value && !profileData.value)
 
 const filteredReviews = computed(() => {
   if (!profileData.value?.reviews) return []
@@ -502,7 +509,7 @@ const formatDate = (date: string | Date) => {
 }
 
 .noise-overlay {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 .hero-content {
