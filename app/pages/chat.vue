@@ -15,6 +15,7 @@ definePageMeta({
 
 const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
+const REALTIME_SESSION_WAIT_MS = 5_000
 
 type RealtimeMessagePayload = {
   new: Record<string, unknown>
@@ -533,21 +534,100 @@ const handleDocumentClick = (event: MouseEvent) => {
 let inboxRealtimeChannel: RealtimeChannel | null = null
 let activeRealtimeChannel: RealtimeChannel | null = null
 let activeRealtimeGeneration = 0
+let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
+let hasWarnedMissingRealtimeSession = false
 
-const ensureRealtimeAuth = async () => {
+const getRealtimeAccessToken = async () => {
   const {
     data: { session },
   } = await supabase.auth.getSession()
 
-  if (session?.access_token) {
-    supabase.realtime.setAuth(session.access_token)
+  return session?.access_token ?? null
+}
+
+const waitForRealtimeAccessToken = async () => {
+  const currentAccessToken = await getRealtimeAccessToken()
+  if (currentAccessToken) return currentAccessToken
+
+  if (typeof window === "undefined") return null
+
+  return await new Promise<string | null>((resolve) => {
+    let timeoutId: number | null = null
+    let authSubscription: { unsubscribe: () => void } | null = null
+    let settled = false
+
+    const finish = (accessToken: string | null) => {
+      if (settled) return
+      settled = true
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+      authSubscription?.unsubscribe()
+      resolve(accessToken)
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        finish(session.access_token)
+      }
+    })
+    authSubscription = subscription
+
+    timeoutId = window.setTimeout(() => {
+      void getRealtimeAccessToken()
+        .then(finish)
+        .catch(() => finish(null))
+    }, REALTIME_SESSION_WAIT_MS)
+  })
+}
+
+const ensureRealtimeAuth = async () => {
+  const accessToken = await waitForRealtimeAccessToken()
+
+  if (!accessToken) {
+    if (!hasWarnedMissingRealtimeSession) {
+      console.warn(
+        "[chat realtime] no Supabase auth session; realtime subscriptions were not started",
+      )
+      hasWarnedMissingRealtimeSession = true
+    }
+    return false
   }
+
+  hasWarnedMissingRealtimeSession = false
+  supabase.realtime.setAuth(accessToken)
+  return true
 }
 
 const logRealtimeStatus = (channelName: string, status: string, error?: Error) => {
   if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
     console.warn(`[chat realtime] ${channelName} ${status}`, error)
   }
+}
+
+const setupRealtimeAuthListener = () => {
+  if (realtimeAuthSubscription) return
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    if (session?.access_token) {
+      supabase.realtime.setAuth(session.access_token)
+      void setupInboxRealtime()
+      if (activeConversationId.value) {
+        void setupActiveRealtime(activeConversationId.value)
+      }
+      return
+    }
+
+    if (event === "SIGNED_OUT") {
+      stopRealtime()
+    }
+  })
+
+  realtimeAuthSubscription = subscription
 }
 
 const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null => {
@@ -614,7 +694,7 @@ const stopActiveRealtime = async () => {
 const setupInboxRealtime = async () => {
   if (inboxRealtimeChannel) return
 
-  await ensureRealtimeAuth()
+  if (!(await ensureRealtimeAuth())) return
   if (inboxRealtimeChannel) return
 
   inboxRealtimeChannel = supabase
@@ -636,7 +716,7 @@ const setupActiveRealtime = async (conversationId: string | null) => {
     return
   }
 
-  await ensureRealtimeAuth()
+  if (!(await ensureRealtimeAuth())) return
   if (generation !== activeRealtimeGeneration) {
     return
   }
@@ -735,6 +815,7 @@ onMounted(async () => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
   document.addEventListener("click", handleDocumentClick)
+  setupRealtimeAuthListener()
   void setupInboxRealtime()
 
   await loadConversations({ background: sortedConversations.value.length > 0 })
@@ -751,6 +832,8 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener("resize", checkMobile)
   document.removeEventListener("click", handleDocumentClick)
+  realtimeAuthSubscription?.unsubscribe()
+  realtimeAuthSubscription = null
   stopRealtime()
   clearComposerImage()
 })
