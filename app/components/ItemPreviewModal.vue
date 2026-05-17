@@ -18,8 +18,11 @@ interface PreviewData {
   thumbnailImage?: string
   photos: string[]
   ownerName?: string
+  ownerAvatarUrl?: string | null
   rating?: number
+  lenderRating?: number
   bookingCount?: number
+  lenderBookingCount?: number
 }
 
 const props = defineProps<{
@@ -94,6 +97,16 @@ const updateScrollStatus = () => {
     scrollContainer.value.scrollWidth - 1
 }
 
+const handleScroll = () => updateScrollStatus()
+
+const scrollOnce = (direction: "left" | "right") => {
+  if (!scrollContainer.value) return
+  scrollContainer.value.scrollBy({
+    left: direction === "left" ? -260 : 260,
+    behavior: "smooth",
+  })
+}
+
 const nextImage = () => {
   if (!imageGallery.value.length) return
   currentImageIndex.value = (currentImageIndex.value + 1) % imageGallery.value.length
@@ -133,16 +146,8 @@ const replacementCostLabel = computed(() => {
 const statusLabel = "Available"
 const formattedCondition = computed(() => humanizeEnum(props.data.condition || "GOOD"))
 const formattedCategories = computed(() => props.data.categories.map(humanizeEnum))
-const typeLabel = computed(() => (props.data.freeToBorrow ? "Borrow" : "Rent"))
 
-const availabilityBadge = computed(() => {
-  return {
-    label: typeLabel.value,
-    className: props.data.freeToBorrow
-      ? "bg-blue-estate text-white"
-      : "bg-cinnamon-ice text-noble-black",
-  }
-})
+const isTrending = computed(() => props.data.bookingCount && props.data.bookingCount > 5)
 
 const ownerName = computed(() => props.data.ownerName ?? "You (Preview)")
 const ownerInitials = computed(() => {
@@ -155,10 +160,32 @@ const ownerInitials = computed(() => {
   )
 })
 
-const ratingLabel = computed(() => (props.data.rating ?? 5.0).toFixed(1))
-const bookingCountLabel = computed(() => `${props.data.bookingCount ?? 0} booking(s)`)
+const ratingLabel = computed(() => (props.data.rating ?? 0).toFixed(1))
+const lenderRatingLabel = computed(() => (props.data.lenderRating ?? 0).toFixed(1))
+const bookingCountLabel = computed(() => {
+  const count = props.data.bookingCount ?? 0
+  return `${count.toLocaleString()} ${count === 1 ? "booking" : "bookings"}`
+})
 
-const offerHighlights = computed(() => splitDetailList(props.data.whatItemOffers))
+const lenderBookingCountLabel = computed(() => {
+  const count = props.data.lenderBookingCount ?? 0
+  return `${count.toLocaleString()} ${count === 1 ? "booking" : "bookings"}`
+})
+
+const offerHighlights = computed(() => {
+  const explicitOffers = splitDetailList(props.data.whatItemOffers)
+  if (explicitOffers.length) return explicitOffers
+
+  return [
+    props.data.freeToBorrow
+      ? "Available to borrow for free"
+      : `${priceAmount.value} ${priceUnitLabel.value}`,
+    `${formattedCondition.value} condition`,
+    `Status: ${statusLabel}`,
+    ...formattedCategories.value.slice(0, 2),
+  ].filter(Boolean)
+})
+
 const includedItems = computed(() => splitDetailList(props.data.whatIsIncluded))
 const knownIssuesList = computed(() => splitDetailList(props.data.knownIssues))
 const usageLimitationsList = computed(() => splitDetailList(props.data.usageLimitations))
@@ -190,6 +217,17 @@ watch(
     }
   },
 )
+
+const changeMonth = (delta: number) => {
+  viewMonth.value += delta
+  if (viewMonth.value > 11) {
+    viewMonth.value = 0
+    viewYear.value++
+  } else if (viewMonth.value < 0) {
+    viewMonth.value = 11
+    viewYear.value--
+  }
+}
 </script>
 
 <template>
@@ -204,15 +242,15 @@ watch(
     >
       <div
         v-if="show"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-noble-black/40 p-4 backdrop-blur-sm sm:p-10"
+        class="fixed inset-0 z-[3000] flex items-center justify-center bg-noble-black/40 p-4 backdrop-blur-sm sm:p-10"
       >
         <!-- Modal Container -->
         <div
-          class="relative flex h-full max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl shadow-noble-black/20"
+          class="relative flex h-full max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl shadow-noble-black/20"
         >
           <!-- Floating Close/Header for Preview -->
           <div
-            class="sticky top-0 z-[110] flex items-center justify-between border-b border-cinnamon-ice/10 bg-white/95 px-6 py-4 shadow-sm backdrop-blur-md"
+            class="sticky top-0 z-[110] flex items-center justify-between border-b border-cinnamon-ice/10 bg-white px-6 py-4 shadow-sm backdrop-blur-md"
           >
             <div class="flex items-center gap-3">
               <div
@@ -228,7 +266,7 @@ watch(
               class="p-2 text-noble-black/50 hover:text-noble-black transition-all hover:scale-110 active:scale-95"
               @click="emit('close')"
             >
-              <Icon name="ph:x" class="shrink-0 w-5 h-5" />
+              <Icon name="ph:x" class="shrink-0 w-6 h-6" />
             </button>
           </div>
 
@@ -236,9 +274,15 @@ watch(
           <div class="custom-main-scrollbar flex-1 overflow-y-auto bg-white font-geist">
             <div class="mx-auto max-w-7xl px-4 py-8 sm:px-8">
               <!-- Back Link Placeholder -->
-              <div class="mb-6 flex items-center gap-2 text-noble-black/30">
-                <Icon name="ph:caret-left" class="shrink-0 w-5 h-5" />
-                <span class="text-sm">Back to listings</span>
+              <div
+                class="mb-6 flex items-center gap-2 text-noble-black/70 hover:text-burning-orange transition-colors group cursor-default"
+              >
+                <Icon
+                  name="ph:caret-left"
+                  size="20"
+                  class="transition-transform group-hover:-translate-x-1"
+                />
+                <span class="font-normal">Back to listings</span>
               </div>
 
               <!-- Title & Actions -->
@@ -248,25 +292,60 @@ watch(
                     <span
                       v-for="category in formattedCategories"
                       :key="category"
-                      class="rounded-full border border-cinnamon-ice bg-cream px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-burning-orange"
+                      class="rounded-full border-[0.5px] border-cinnamon-ice/30 bg-noble-black/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-noble-black/70"
                     >
                       {{ category }}
+                    </span>
+                    <span
+                      v-if="isTrending"
+                      class="rounded-full bg-burning-orange px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white"
+                    >
+                      Trending
                     </span>
                   </div>
                   <h1 class="text-3xl font-bold text-noble-black">
                     {{ data.name || "Untitled Item" }}
                   </h1>
                 </div>
-                <div class="flex items-center gap-4 text-noble-black/30">
-                  <Icon name="ph:share-network" class="shrink-0 w-[22px] h-[22px]" />
-                  <Icon name="ph:heart" class="shrink-0 w-[22px] h-[22px]" />
+                <div class="flex items-center gap-4">
+                  <div class="relative flex items-stretch group/tooltip">
+                    <button
+                      class="p-2 text-noble-black/70 hover:text-noble-black transition-all duration-300 ease-in-out group/btn"
+                    >
+                      <Icon
+                        name="ph:share-network"
+                        size="22"
+                        class="group-hover/btn:stroke-[2] transition-all duration-300 ease-in-out"
+                      />
+                    </button>
+                    <div class="custom-tooltip">
+                      Share
+                      <div class="tooltip-arrow"></div>
+                    </div>
+                  </div>
+
+                  <div class="relative flex items-stretch group/tooltip">
+                    <button
+                      class="p-2 text-noble-black/70 hover:text-noble-black transition-all duration-300 ease-in-out group/btn"
+                    >
+                      <Icon
+                        name="ph:heart"
+                        size="22"
+                        class="group-hover/btn:stroke-[2] transition-all duration-300 ease-in-out"
+                      />
+                    </button>
+                    <div class="custom-tooltip">
+                      Like
+                      <div class="tooltip-arrow"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <!-- Rating Row -->
               <div class="mb-8 flex items-center gap-2 text-sm">
                 <div class="flex items-center gap-1 text-burning-orange">
-                  <Icon name="ph:star-fill" class="shrink-0 w-4 h-4 -translate-y-[0.5px]" />
+                  <Icon name="ph:star-fill" size="16" class="-translate-y-[0.5px]" />
                   <span class="font-bold leading-none">{{ ratingLabel }}</span>
                 </div>
                 <span class="text-noble-black/60 leading-none">({{ bookingCountLabel }})</span>
@@ -283,250 +362,329 @@ watch(
                         :src="currentImage"
                         class="h-full w-full object-cover"
                       />
-                      <div
-                        class="absolute left-4 top-4 flex h-[32px] min-w-[80px] items-center justify-center rounded-full px-4 font-geist text-[15px] font-normal tracking-wide shadow-sm"
-                        :class="availabilityBadge.className"
-                      >
-                        {{ availabilityBadge.label }}
-                      </div>
                       <button
-                        class="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        v-if="imageGallery.length > 1"
+                        class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                         @click="prevImage"
                       >
-                        <Icon name="ph:caret-left" class="shrink-0 w-6 h-6" />
+                        <Icon name="ph:caret-left" size="24" />
                       </button>
                       <button
-                        class="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        v-if="imageGallery.length > 1"
+                        class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/80 hover:bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10"
                         @click="nextImage"
                       >
-                        <Icon name="ph:caret-right" class="shrink-0 w-6 h-6" />
+                        <Icon name="ph:caret-right" size="24" />
                       </button>
                       <div
-                        class="absolute bottom-4 left-4 px-3 py-1.5 bg-white/80 backdrop-blur-sm text-[13px] font-medium rounded-full shadow-sm"
+                        class="absolute bottom-4 left-4 px-3 py-1.5 bg-white/80 backdrop-blur-sm text-noble-black text-[13px] font-medium rounded-full shadow-sm"
                       >
-                        {{ currentImageIndex + 1 }} / {{ imageGallery.length }}
+                        {{ imageGallery.length ? currentImageIndex + 1 : 0 }} /
+                        {{ imageGallery.length }}
                       </div>
+                      <button
+                        class="absolute bottom-4 right-4 w-9 h-9 flex items-center justify-center bg-white/80 backdrop-blur-sm text-noble-black rounded-full hover:bg-white transition-colors shadow-sm z-10"
+                      >
+                        <Icon name="ph:arrows-out" size="18" />
+                      </button>
                     </div>
-                    <div v-if="imageGallery.length > 1" class="relative mt-4 overflow-hidden">
+                    <div
+                      v-if="imageGallery.length > 1"
+                      class="relative mt-4 group/scroll overflow-hidden"
+                    >
+                      <div
+                        v-if="!isAtStart"
+                        class="absolute top-0 left-0 h-20 w-16 bg-gradient-to-r from-white via-white/80 to-transparent flex items-center justify-start pl-2 cursor-pointer z-10"
+                        @click="scrollOnce('left')"
+                      >
+                        <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
+                          <Icon name="ph:caret-left" size="20" />
+                        </div>
+                      </div>
                       <div
                         ref="scrollContainer"
-                        class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-4"
+                        class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide scroll-smooth px-4"
                         :style="maskStyle"
-                        @scroll="updateScrollStatus"
+                        @scroll="handleScroll"
                       >
                         <div
                           v-for="(img, idx) in imageGallery"
                           :key="idx"
-                          class="h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-xl border-2 transition-all"
+                          class="w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all duration-300 shrink-0 group/thumb"
                           :class="
                             currentImageIndex === idx
                               ? 'border-burning-orange opacity-100'
-                              : 'border-transparent opacity-40'
+                              : 'border-transparent opacity-40 hover:opacity-100'
                           "
                           @click="currentImageIndex = idx"
                         >
-                          <img :src="img" class="h-full w-full object-cover" />
+                          <img
+                            :src="img"
+                            class="w-full h-full object-cover transition-all duration-300"
+                            :class="
+                              currentImageIndex === idx ? '' : 'blur-[1px] group-hover/thumb:blur-0'
+                            "
+                          />
+                        </div>
+                      </div>
+                      <div
+                        v-if="!isAtEnd"
+                        class="absolute top-0 right-0 h-20 w-24 bg-gradient-to-l from-white via-white/80 to-transparent flex items-center justify-end pr-2 cursor-pointer z-10"
+                        @click="scrollOnce('right')"
+                      >
+                        <div class="text-noble-black/20 group-hover/scroll:text-noble-black/40">
+                          <Icon name="ph:caret-right" size="20" />
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <!-- Unified Metadata Container -->
+                  <!-- Redesigned Metadata Container -->
                   <div
-                    class="mb-10 rounded-2xl border-[0.5px] border-cinnamon-ice bg-white p-7 md:p-8 shadow-sm"
+                    class="mb-10 rounded-[14px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm"
                   >
-                    <div class="grid grid-cols-2 gap-y-8 md:grid-cols-4 md:gap-y-0">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-y-8 md:gap-y-0 items-start">
+                      <!-- Status -->
                       <div
-                        class="flex flex-col gap-3 pr-4 md:border-r-[0.5px] border-cinnamon-ice/60"
+                        class="flex flex-col gap-1 pr-4 md:border-r-[0.5px] border-cinnamon-ice/20"
                       >
                         <span
-                          class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                          class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                           >Status</span
                         >
-                        <div
-                          class="flex w-fit items-center gap-2 rounded-full bg-burning-orange/10 px-3 py-1 text-burning-orange"
-                        >
-                          <div class="h-1.5 w-1.5 rounded-full bg-current" />
-                          <span class="text-xs font-bold">{{ statusLabel }}</span>
-                        </div>
-                      </div>
-                      <div
-                        class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/60"
-                      >
-                        <span
-                          class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
-                          >Condition</span
-                        >
-                        <div
-                          class="flex w-fit items-center rounded-full bg-noble-black/5 px-3 py-1"
-                        >
-                          <span class="text-xs font-bold text-noble-black/70">{{
-                            formattedCondition
+                        <div class="flex items-center gap-2">
+                          <div class="h-1.5 w-1.5 rounded-full bg-success-green" />
+                          <span class="text-[14px] font-semibold text-noble-black">{{
+                            statusLabel
                           }}</span>
                         </div>
                       </div>
+                      <!-- Condition -->
                       <div
-                        class="flex flex-col gap-3 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/60"
+                        class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
                       >
                         <span
-                          class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                          class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                          >Condition</span
+                        >
+                        <span
+                          class="text-[14px] font-semibold"
+                          :class="
+                            props.data.condition === 'POOR'
+                              ? 'text-burning-orange'
+                              : 'text-noble-black'
+                          "
+                          >{{ formattedCondition }}</span
+                        >
+                      </div>
+                      <!-- Replacement Cost -->
+                      <div
+                        class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
+                      >
+                        <span
+                          class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                           >Replacement</span
                         >
-                        <span class="text-base font-semibold text-noble-black">{{
+                        <span class="text-[14px] font-semibold text-noble-black">{{
                           replacementCostLabel
                         }}</span>
                       </div>
-                      <div class="flex flex-col gap-3 pl-0 md:pl-6">
+                      <!-- Tags -->
+                      <div class="flex flex-col gap-1 pl-0 md:pl-6">
                         <span
-                          class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                          class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                           >Tags</span
                         >
                         <div v-if="data.tags.length" class="flex flex-wrap gap-2">
                           <span
                             v-for="tag in data.tags"
                             :key="tag"
-                            class="rounded-full border border-cinnamon-ice/60 bg-cinnamon-ice/10 px-2.5 py-0.5 text-[11px] font-medium text-noble-black/60"
-                            >#{{ tag }}</span
+                            class="rounded-[12px] rounded-tl-[999px] rounded-br-[999px] bg-noble-black/5 px-2.5 py-1 text-[11px] font-medium text-noble-black/60 hover:bg-noble-black/10 transition-colors cursor-default"
                           >
+                            {{ tag }}
+                          </span>
                         </div>
-                        <span v-else class="text-sm italic text-noble-black/30">None</span>
+                        <span v-else class="text-[14px] font-semibold text-noble-black/30"
+                          >None</span
+                        >
                       </div>
                     </div>
-                    <div class="my-8 h-[0.5px] bg-cinnamon-ice/60" />
-                    <div class="grid grid-cols-1 gap-10 md:grid-cols-2">
+
+                    <!-- Horizontal Divider -->
+                    <div class="my-8 h-[0.5px] bg-gray-100" />
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                      <!-- Known Issues -->
                       <div class="flex flex-col gap-3">
                         <span
-                          class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                          class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                           >Known Issues</span
                         >
-                        <div v-if="knownIssuesList.length" class="space-y-2">
+                        <div v-if="knownIssuesList.length" class="space-y-1">
                           <p
                             v-for="issue in knownIssuesList"
                             :key="issue"
-                            class="flex items-start gap-2 text-sm leading-relaxed text-noble-black/80"
+                            class="text-[13px] text-noble-black/70 flex items-start gap-2"
                           >
-                            <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-burning-orange" />
-                            {{ issue }}
+                            <span class="flex items-center justify-center h-6 shrink-0">
+                              <span class="w-1 h-1 rounded-full bg-burning-orange" />
+                            </span>
+                            <span class="leading-6">{{ issue }}</span>
                           </p>
                         </div>
-                        <p v-else class="text-sm italic text-noble-black/40">No known issues</p>
+                        <p
+                          v-else
+                          class="text-[13px] font-medium text-success-green flex items-center gap-1.5"
+                        >
+                          No known issues reported
+                          <Icon name="ph:check-circle-fill" size="14" class="shrink-0" />
+                        </p>
                       </div>
+                      <!-- Usage Limitations -->
                       <div class="flex flex-col gap-3">
                         <span
-                          class="text-[11px] font-bold uppercase tracking-widest text-noble-black/50"
+                          class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                           >Usage Limitations</span
                         >
-                        <div v-if="usageLimitationsList.length" class="space-y-2">
+                        <div v-if="usageLimitationsList.length" class="space-y-1">
                           <p
-                            v-for="lim in usageLimitationsList"
-                            :key="lim"
-                            class="flex items-start gap-2 text-sm leading-relaxed text-noble-black/80"
+                            v-for="limitation in usageLimitationsList"
+                            :key="limitation"
+                            class="text-[13px] text-noble-black/70 flex items-start gap-2"
                           >
-                            <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-burning-orange" />
-                            {{ lim }}
+                            <span class="flex items-center justify-center h-6 shrink-0">
+                              <span class="w-1 h-1 rounded-full bg-burning-orange" />
+                            </span>
+                            <span class="leading-6">{{ limitation }}</span>
                           </p>
                         </div>
-                        <p v-else class="text-sm italic text-noble-black/40">
-                          No usage limitations
+                        <p v-else class="text-[13px] italic text-noble-black/40">
+                          No usage limitations listed
                         </p>
                       </div>
                     </div>
                   </div>
 
                   <!-- Description & Details -->
-                  <div class="border-b border-cinnamon-ice py-8">
-                    <h2 class="mb-3 text-lg font-semibold">Description</h2>
+                  <div class="border-b border-cinnamon-ice/15 py-8">
+                    <div class="border-l-[3px] border-burning-orange pl-4 mb-4">
+                      <h2 class="text-lg font-semibold">Description</h2>
+                    </div>
                     <p class="text-sm leading-relaxed text-noble-black/80 whitespace-pre-wrap">
                       {{ data.description || "No description provided." }}
                     </p>
                   </div>
-                  <div class="border-b border-cinnamon-ice py-8">
-                    <h2 class="mb-3 text-lg font-semibold">What This Item Offers</h2>
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                  <div class="border-b border-cinnamon-ice/15 py-8">
+                    <div class="border-l-[3px] border-burning-orange pl-4 mb-4">
+                      <h2 class="text-lg font-semibold">What This Item Offers</h2>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-x-10">
                       <div
                         v-for="(offer, idx) in offerHighlights"
                         :key="idx"
-                        class="flex items-center gap-2.5 rounded-xl border border-cinnamon-ice/20 bg-cream px-3 py-2"
+                        class="flex items-start gap-3"
                       >
-                        <div class="shrink-0 scale-90 text-burning-orange">
-                          <Icon name="ph:plus" class="shrink-0 w-[18px] h-[18px]" />
+                        <div
+                          class="flex items-center justify-center h-6 shrink-0 text-burning-orange"
+                        >
+                          <Icon name="ph:plus-bold" size="15" />
                         </div>
-                        <span class="text-sm text-noble-black/90">{{ offer }}</span>
+                        <span class="text-sm text-noble-black/90 leading-6">{{ offer }}</span>
                       </div>
                     </div>
                   </div>
-                  <div v-if="includedItems.length" class="border-b border-cinnamon-ice py-8 mb-12">
-                    <h2 class="mb-3 text-lg font-semibold">What's Included</h2>
+                  <div
+                    v-if="includedItems.length"
+                    class="border-b border-cinnamon-ice/15 py-8 mb-12"
+                  >
+                    <div class="border-l-[3px] border-burning-orange pl-4 mb-4">
+                      <h2 class="text-lg font-semibold">What's Included</h2>
+                    </div>
                     <ul class="space-y-2">
                       <li
                         v-for="(included, idx) in includedItems"
                         :key="idx"
-                        class="flex items-center gap-2.5 text-sm text-noble-black/90"
+                        class="flex items-start gap-3"
                       >
-                        <Icon
-                          name="ph:check-circle"
-                          class="shrink-0 w-[18px] h-[18px] text-burning-orange"
-                        />
-                        {{ included }}
+                        <div
+                          class="flex items-center justify-center h-6 shrink-0 text-burning-orange"
+                        >
+                          <Icon name="ph:check-circle-fill" size="17" />
+                        </div>
+                        <span class="text-sm text-noble-black/90 leading-6">{{ included }}</span>
                       </li>
                     </ul>
                   </div>
 
-                  <!-- Seller Card -->
+                  <!-- Redesigned Seller Card -->
                   <div
-                    class="mt-16 flex items-center justify-between gap-4 rounded-3xl border border-cinnamon-ice/30 bg-cream p-5 sm:p-6"
+                    class="bg-white rounded-[16px] p-5 border border-cinnamon-ice/30 flex items-center justify-between mt-16 shadow-sm"
                   >
-                    <div class="flex items-center gap-4 sm:gap-5">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="flex h-12 w-12 items-center justify-center rounded-full bg-cinnamon-ice text-lg font-bold text-white sm:h-16 sm:w-16 sm:text-xl shrink-0"
+                        class="w-[52px] h-[52px] rounded-full border border-cinnamon-ice/40 bg-cinnamon-ice/10 flex items-center justify-center text-noble-black/70 text-lg font-bold shrink-0 overflow-hidden"
                       >
-                        {{ ownerInitials }}
+                        <img
+                          v-if="data.ownerAvatarUrl"
+                          :src="data.ownerAvatarUrl"
+                          class="w-full h-full object-cover"
+                        />
+                        <span v-else>{{ ownerInitials }}</span>
                       </div>
+
                       <div class="flex flex-col">
-                        <h3 class="text-base font-semibold text-noble-black sm:text-lg">
+                        <h3 class="text-[16px] font-semibold text-noble-black leading-tight">
                           {{ ownerName }}
                         </h3>
-                        <div class="flex items-center gap-1.5 text-sm">
+                        <div class="flex items-center gap-1.5 text-[13px] text-noble-black/60 mt-1">
                           <div class="flex items-center gap-1 text-burning-orange">
-                            <Icon
-                              name="ph:star-bold"
-                              class="shrink-0 w-3.5 h-3.5 -translate-y-[0.5px]"
-                            />
-                            <span class="font-bold leading-none">{{ ratingLabel }}</span>
+                            <Icon name="ph:star-fill" size="14" class="fill-current" />
+                            <span class="font-bold">{{ lenderRatingLabel }}</span>
                           </div>
-                          <span class="text-noble-black/60 leading-none"
-                            >({{ bookingCountLabel }})</span
-                          >
+                          <span class="text-noble-black/30">·</span>
+                          <span>{{ lenderBookingCountLabel }}</span>
                         </div>
+                        <p class="text-[12px] text-noble-black/40 mt-0.5">Item owner on TakeUP</p>
                       </div>
                     </div>
-                    <button
-                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-estate shadow-sm"
+
+                    <div
+                      class="text-[14px] font-semibold text-burning-orange hover:underline cursor-default"
                     >
-                      <Icon name="ph:chat-centered-text" class="shrink-0 w-5 h-5 text-white" />
-                    </button>
+                      View Profile →
+                    </div>
                   </div>
                 </div>
 
                 <!-- Sidebar mirroring [slug].vue -->
                 <div class="hidden lg:block space-y-6">
                   <div
-                    class="rounded-3xl border border-cinnamon-ice bg-cream p-6 shadow-sm overflow-hidden"
+                    class="bg-white border border-cinnamon-ice/30 rounded-2xl p-5 shadow-sm overflow-hidden"
                   >
-                    <div class="mb-6 flex items-center justify-between">
-                      <h3 class="font-semibold text-noble-black">
+                    <div class="flex items-center justify-between mb-6">
+                      <h3 class="text-base font-semibold text-noble-black">
                         {{ monthNames[viewMonth] }} {{ viewYear }}
                       </h3>
-                      <div class="flex gap-2 text-noble-black/40">
-                        <Icon name="ph:caret-left" class="shrink-0 w-5 h-5" />
-                        <Icon name="ph:caret-right" class="shrink-0 w-5 h-5" />
+                      <div class="flex gap-1">
+                        <button
+                          class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
+                          @click="changeMonth(-1)"
+                        >
+                          <Icon name="ph:caret-left" size="20" />
+                        </button>
+                        <button
+                          class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-noble-black/60"
+                          @click="changeMonth(1)"
+                        >
+                          <Icon name="ph:caret-right" size="20" />
+                        </button>
                       </div>
                     </div>
                     <div class="grid grid-cols-7 text-center mb-2">
                       <div
                         v-for="day in daysOfWeek"
                         :key="day"
-                        class="text-[10px] font-bold uppercase tracking-wider text-noble-black/40 py-2"
+                        class="text-[11px] uppercase tracking-[1px] text-gray-400 font-bold py-2"
                       >
                         {{ day }}
                       </div>
@@ -539,10 +697,10 @@ watch(
                       >
                         <div
                           v-if="dayObj.day"
-                          class="relative flex h-9 w-9 items-center justify-center rounded-full text-sm transition-all"
+                          class="relative flex h-9 w-9 items-center justify-center rounded-lg text-sm transition-all select-none font-semibold"
                           :class="
                             dayObj.isToday
-                              ? 'text-burning-orange font-bold'
+                              ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                               : 'text-noble-black opacity-40'
                           "
                         >
@@ -552,98 +710,169 @@ watch(
                     </div>
                   </div>
                   <div class="grid grid-cols-2 gap-4">
-                    <div class="flex flex-col gap-1.5">
+                    <div class="relative">
                       <span
-                        class="ml-1 text-[10px] font-bold uppercase tracking-wider text-noble-black/40"
+                        class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                         >Start Time</span
                       >
                       <div
-                        class="flex h-12 w-full items-center justify-between rounded-2xl border border-cinnamon-ice bg-cream px-4 text-sm font-medium text-noble-black/40"
+                        class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between"
                       >
                         09:00 AM
-                        <Icon name="ph:caret-down" class="shrink-0 w-4 h-4" />
+                        <Icon name="ph:caret-down" size="16" class="text-gray-400" />
                       </div>
                     </div>
-                    <div class="flex flex-col gap-1.5">
+                    <div class="relative">
                       <span
-                        class="ml-1 text-[10px] font-bold uppercase tracking-wider text-noble-black/40"
+                        class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px] mb-1.5 block ml-1"
                         >End Time</span
                       >
                       <div
-                        class="flex h-12 w-full items-center justify-between rounded-2xl border border-cinnamon-ice bg-cream px-4 text-sm font-medium text-noble-black/40"
+                        class="w-full bg-white border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-4 py-3 text-[14px] font-semibold text-noble-black flex items-center justify-between"
                       >
                         06:00 PM
-                        <Icon name="ph:caret-down" class="shrink-0 w-4 h-4" />
+                        <Icon name="ph:caret-down" size="16" class="text-gray-400" />
                       </div>
                     </div>
                   </div>
-                  <div class="rounded-3xl border border-cinnamon-ice bg-cream p-6 shadow-sm">
-                    <div class="mb-4 flex items-baseline gap-1">
-                      <span class="text-3xl font-bold text-noble-black">{{ priceAmount }}</span>
-                      <span class="text-sm font-medium text-noble-black/60">{{
+                  <div
+                    class="bg-white border border-cinnamon-ice/30 rounded-[20px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
+                  >
+                    <div class="flex items-baseline gap-1 mb-6">
+                      <span class="text-[32px] font-bold text-noble-black">{{ priceAmount }}</span>
+                      <span class="text-[16px] text-noble-black/40 font-medium">{{
                         priceUnitLabel
                       }}</span>
                     </div>
-                    <div class="relative mb-6 grid grid-cols-2">
-                      <div class="absolute left-1/2 top-1 bottom-1 w-px bg-cinnamon-ice/30" />
+
+                    <div class="grid grid-cols-2 mb-6 relative">
+                      <div class="absolute left-1/2 top-1 bottom-1 w-px bg-gray-100" />
                       <div class="flex flex-col gap-1 pr-4">
-                        <span
-                          class="text-[10px] font-bold uppercase tracking-wider text-noble-black/40"
+                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                           >Start</span
-                        ><span class="text-sm font-semibold text-noble-black/40">Select date</span>
+                        >
+                        <div class="flex flex-col">
+                          <span class="text-[14px] font-semibold text-noble-black/40"
+                            >Select date</span
+                          >
+                        </div>
                       </div>
                       <div class="flex flex-col gap-1 pl-4">
-                        <span
-                          class="text-[10px] font-bold uppercase tracking-wider text-noble-black/40"
+                        <span class="text-[10px] uppercase font-bold text-gray-400 tracking-[1.5px]"
                           >End</span
-                        ><span class="text-sm font-semibold text-noble-black/40">Select date</span>
+                        >
+                        <div class="flex flex-col">
+                          <span class="text-[14px] font-semibold text-noble-black/40"
+                            >Select date</span
+                          >
+                        </div>
                       </div>
                     </div>
+
+                    <div class="space-y-2 mb-4">
+                      <div
+                        class="flex justify-between items-center text-[13px] text-noble-black/60"
+                      >
+                        <span
+                          >Rate ({{
+                            props.data.freeToBorrow
+                              ? "Free"
+                              : formatPesoAmount(props.data.rentalFee)
+                          }}
+                          x 1 {{ props.data.rateOption === "PER_HOUR" ? "hour" : "day" }})</span
+                        >
+                        <span class="font-medium">{{ priceAmount }}</span>
+                      </div>
+                    </div>
+
+                    <div class="border-t border-dashed border-cinnamon-ice/30 my-4" />
+
+                    <div class="flex justify-between items-center mb-6">
+                      <span class="text-[16px] font-bold text-noble-black">Total</span>
+                      <span class="text-[16px] font-bold text-noble-black">{{ priceAmount }}</span>
+                    </div>
+
                     <button
-                      class="mb-2.5 w-full rounded-2xl bg-burning-orange py-3 text-base font-bold text-white shadow-md shadow-burning-orange/10 transition-all hover:bg-blue-estate"
+                      class="mb-2.5 w-full rounded-2xl bg-burning-orange py-3 text-base font-bold text-white shadow-md shadow-burning-orange/10 transition-all hover:brightness-110 active:scale-[0.98]"
                     >
                       Request Booking
                     </button>
-                    <p class="text-center text-[11px] text-noble-black/40">
+                    <button
+                      class="w-full py-3 rounded-2xl border border-burning-orange text-burning-orange font-bold text-base transition-all duration-300 active:scale-[0.98] hover:bg-burning-orange/5"
+                    >
+                      Add to Bag
+                    </button>
+                    <p class="mt-4 text-center text-[11px] text-noble-black/40">
                       You won't be charged yet.
                     </p>
-                    <div class="my-4 h-px bg-cinnamon-ice/30" />
-                    <div class="flex items-center justify-center gap-2 text-noble-black/40">
-                      <Icon
-                        name="ph:shield-check"
-                        class="shrink-0 w-3.5 h-3.5 -translate-y-[0.5px]"
-                      />
-                      <span class="text-[11px] font-normal leading-none"
-                        >Protected by TakeUP Guarantee</span
-                      >
-                    </div>
                   </div>
                 </div>
               </div>
 
               <!-- ReviewsSection Mirror -->
-              <div class="mt-20 border-t border-cinnamon-ice pt-16 pb-20">
-                <div class="flex items-center gap-4 mb-10">
-                  <h2 class="text-2xl font-bold text-noble-black">Reviews</h2>
-                  <div
-                    class="flex items-center gap-1.5 px-3 py-1 bg-burning-orange/10 rounded-full"
-                  >
-                    <Icon
-                      name="ph:star-fill"
-                      class="shrink-0 w-4 h-4 text-burning-orange -translate-y-[0.5px]"
-                    />
-                    <span class="text-sm font-bold text-burning-orange leading-none">{{
-                      ratingLabel
-                    }}</span>
-                    <span class="text-xs text-burning-orange/60 font-medium leading-none"
-                      >({{ bookingCountLabel }})</span
+              <div class="mt-20 border-t border-cinnamon-ice/15 pt-12">
+                <h2 class="text-lg font-semibold mb-6">Ratings & Reviews</h2>
+
+                <!-- Summary Row -->
+                <div
+                  class="grid grid-cols-1 md:grid-cols-2 gap-12 pb-12 mb-8 border-b border-cinnamon-ice/15"
+                >
+                  <!-- Part 1: Rating Overview -->
+                  <div class="flex flex-col items-center md:items-start justify-center">
+                    <div class="text-6xl font-bold text-noble-black mb-2">
+                      {{ ratingLabel }}
+                    </div>
+                    <div class="flex items-center gap-1 text-burning-orange mb-2">
+                      <Icon
+                        v-for="i in 5"
+                        :key="i"
+                        name="ph:star-fill"
+                        class="w-6 h-6 -translate-y-[0.5px]"
+                        :class="
+                          i <= Math.floor(props.data.rating ?? 0) ? 'opacity-100' : 'opacity-20'
+                        "
+                      />
+                    </div>
+
+                    <div class="text-sm text-noble-black/60 font-medium">
+                      Based on {{ bookingCountLabel }}
+                    </div>
+                  </div>
+
+                  <!-- Part 2: Distribution Bars Placeholder -->
+                  <div class="space-y-4">
+                    <div
+                      v-for="star in [5, 4, 3, 2, 1]"
+                      :key="star"
+                      class="flex items-center gap-4"
                     >
+                      <div class="flex items-center gap-1.5 w-10 shrink-0">
+                        <span class="text-sm font-semibold text-noble-black leading-none">{{
+                          star
+                        }}</span>
+                        <Icon
+                          name="ph:star-fill"
+                          class="w-3.5 h-3.5 text-burning-orange -translate-y-[0.5px]"
+                        />
+                      </div>
+                      <div class="flex-1 h-3 bg-cream rounded-full overflow-hidden">
+                        <div
+                          class="h-full bg-gradient-to-r from-burning-orange to-blue-estate rounded-full"
+                          :style="{ width: '0%' }"
+                        />
+                      </div>
+                      <div class="w-8 text-right shrink-0">
+                        <span class="text-xs font-bold text-noble-black/60">0</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+
                 <div
-                  class="rounded-3xl border border-cinnamon-ice/30 bg-cream/30 px-6 py-12 text-center"
+                  class="rounded-3xl border border-dashed border-cinnamon-ice/15 bg-gray-50/50 px-6 py-16 text-center"
                 >
-                  <p class="text-sm text-noble-black/40 italic">
+                  <p class="text-base font-semibold text-noble-black">No reviews found</p>
+                  <p class="mt-2 text-sm text-noble-black/60">
                     No reviews yet for this listing preview.
                   </p>
                 </div>
@@ -652,7 +881,7 @@ watch(
 
             <!-- Mobile Sticky Bottom Bar -->
             <div
-              class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)]"
+              class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice/15 p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
             >
               <div class="flex items-center justify-between gap-4">
                 <div class="flex flex-col">
@@ -687,26 +916,55 @@ watch(
   scrollbar-width: none;
 }
 
-.custom-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
+/* Tooltip Styles mirroring [slug].vue */
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
 }
 
-.custom-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 1200;
+  pointer-events: none;
 }
 
-.custom-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.noble-black / 10%");
-  border-radius: 20px;
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
 }
 
-.custom-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.noble-black / 20%");
-}
-
-/* Firefox support */
-.custom-main-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.noble-black / 10%") transparent;
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
 }
 </style>

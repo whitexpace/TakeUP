@@ -27,27 +27,30 @@ export const useAdminListings = ({
 }: UseAdminListingsOptions) => {
   const summary = ref<AdminListingSummary>(emptySummary())
   const listings = ref<AdminListingRecord[]>([])
-  const isLoading = ref(false)
+  const isLoading = ref(true)
   const error = ref<string | null>(null)
   const nextCursor = ref<AdminListingCursor>(null)
   const hasMore = computed(() => nextCursor.value !== null)
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+  let isInitialFetch = true
 
   const reset = () => {
     listings.value = []
     nextCursor.value = null
     error.value = null
     isLoading.value = false
+    isInitialFetch = false
   }
 
   const fetchPage = async (cursor: AdminListingCursor = null) => {
-    if (isLoading.value) return
+    if (isLoading.value && !isInitialFetch) return
 
     isLoading.value = true
+    isInitialFetch = false
     error.value = null
 
     try {
-      const query: Record<string, string | number | string[]> = { limit: 20 }
+      const query: Record<string, string | number | string[]> = { limit: 10 }
       const trimmedSearch = searchQuery.value.trim()
 
       if (statuses.value.length > 0) query.statuses = statuses.value

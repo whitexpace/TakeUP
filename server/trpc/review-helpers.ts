@@ -88,7 +88,7 @@ const buildPersonName = (user: Pick<ReviewParticipant, "firstName" | "lastName">
 const mapReviewPerson = (user: ReviewParticipant | null | undefined, isAnonymous: boolean) => {
   if (isAnonymous || !user) {
     return {
-      id: user?.id ?? null,
+      id: null,
       displayName: "Anonymous",
       username: null,
       avatarUrl: null,

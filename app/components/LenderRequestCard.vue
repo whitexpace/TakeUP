@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
 import type { BorrowerItemRequest as LenderItemRequest } from "../composables/use-borrower-item-requests"
+import type { LenderItemRequest } from "../composables/use-lender-item-requests"
+import {
+  clearPrefetchedBookingDetail,
+  useBookingDetailPrefetch,
+} from "../composables/use-booking-detail-prefetch"
 
 const props = defineProps<{
   request: LenderItemRequest
@@ -11,6 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const _router = useRouter()
+const { warmBookingDetail } = useBookingDetailPrefetch()
 
 const borrowerName = computed(() => {
   const user = props.request.borrower.user
@@ -49,6 +55,19 @@ const computeDuration = (startDate: Date | string, endDate: Date | string): stri
 
 const duration = computed(() => computeDuration(props.request.startDate, props.request.endDate))
 
+const badgeClass = computed(() => {
+  switch (props.request.requestStatus) {
+    case "PENDING":
+      return "bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
+    case "APPROVED":
+      return "bg-blue-estate/[0.08] text-blue-estate border-blue-estate/20"
+    case "REJECTED":
+      return "bg-cinnabar-red/[0.08] text-cinnabar-red border-cinnabar-red/20"
+    default:
+      return "bg-gray-100 text-gray-500 border-gray-200"
+  }
+})
+
 const formatPeso = (value: number) =>
   `₱${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value)}`
 
@@ -63,12 +82,14 @@ const totalLabel = computed(() =>
 )
 
 const actingBookingId = ref<string | null>(null)
+const actingStatus = ref<"CONFIRMED" | "CANCELLED" | null>(null)
 const actionError = ref<string | null>(null)
 
 const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLED", string>) => {
   if (actingBookingId.value) return
 
   actingBookingId.value = props.request.id
+  actingStatus.value = nextStatus
   actionError.value = null
 
   try {
@@ -77,6 +98,7 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
       body: { status: nextStatus },
     })
 
+    clearPrefetchedBookingDetail(props.request.id)
     emit("refresh")
   } catch (err: unknown) {
     const fetchError = err as {
@@ -93,13 +115,25 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
       "Unable to update this booking request."
   } finally {
     actingBookingId.value = null
+    actingStatus.value = null
   }
+}
+
+const warmOrderDetails = () => {
+  void warmBookingDetail(detailPath.value, { priority: true }).catch(() => {})
+}
+
+const warmOrderDetailsImmediately = () => {
+  void warmBookingDetail(detailPath.value, { immediate: true, priority: true }).catch(() => {})
 }
 </script>
 
 <template>
   <div
     class="block bg-white rounded-[16px] border border-cinnamon-ice/20 overflow-hidden font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-all duration-200 cursor-pointer group/card"
+    @pointerenter="warmOrderDetails"
+    @mousedown="warmOrderDetailsImmediately"
+    @touchstart.passive="warmOrderDetails"
   >
     <!-- Header -->
     <div
@@ -108,7 +142,8 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
       <span class="text-noble-black text-[14px] font-semibold">{{ borrowerName }}</span>
 
       <span
-        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border bg-burning-orange/[0.08] text-burning-orange border-burning-orange/20"
+        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border"
+        :class="badgeClass"
       >
         {{ request.requestStatusLabel }}
       </span>
@@ -146,7 +181,13 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
 
       <!-- Item Details -->
       <div class="flex-1 min-w-0">
-        <NuxtLink :to="detailPath" class="block" @click.stop>
+        <NuxtLink
+          :to="detailPath"
+          :prefetch-on="{ interaction: true }"
+          class="block"
+          @focus="warmOrderDetails"
+          @click.stop
+        >
           <h4
             class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1 group-hover/card:underline"
           >
@@ -170,14 +211,14 @@ const handleBookingDecision = async (nextStatus: Extract<"CONFIRMED" | "CANCELLE
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CANCELLED')"
           >
-            {{ actingBookingId === request.id ? "Processing..." : "Decline" }}
+            {{ actingStatus === "CANCELLED" ? "Declining..." : "Decline" }}
           </button>
           <button
             class="px-4 py-1.5 rounded-[8px] bg-burning-orange text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-burning-orange/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CONFIRMED')"
           >
-            {{ actingBookingId === request.id ? "Processing..." : "Accept Request" }}
+            {{ actingStatus === "CONFIRMED" ? "Accepting..." : "Accept Request" }}
           </button>
         </div>
 

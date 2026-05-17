@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useBag } from "../composables/use-bag"
 import { useChat } from "../composables/use-chat"
+import { useCommunityFeedPrefetch } from "../composables/use-community-feed-cache"
 import { useLikes } from "../composables/use-likes"
 import { useViewerSession } from "../composables/use-viewer-session"
 import { useNotifications } from "../composables/use-notifications"
@@ -40,9 +41,11 @@ const { likesCount, loadLikesCount } = useLikes()
 const { totalUnreadCount: chatUnreadCount, loadUnreadCount: loadChatUnreadCount } = useChat()
 const user = useSupabaseUser()
 const route = useRoute()
+const { warmCommunityFeed } = useCommunityFeedPrefetch()
 const { authUser, hasFreshCache: hasFreshAuthUserCache, fetch: fetchAuthUser } = useAuthUser()
 const {
   notifications: globalNotifications,
+  isLoading: isGlobalNotificationsLoading,
   loadNotifications: loadGlobalNotifications,
   markNotificationRead: globalMarkRead,
   markAllNotificationsRead: globalMarkAllRead,
@@ -82,6 +85,11 @@ const isAccountSectionActive = computed(
 const isAdminSectionActive = computed(
   () => route.path === "/admin" || route.path.startsWith("/admin/"),
 )
+
+const warmCommunityFeedNavigation = () => {
+  if (route.path === "/feed" || route.path.startsWith("/feed/")) return
+  warmCommunityFeed()
+}
 
 const bridgeAndLoadAccountType = async () => {
   if (!user.value) {
@@ -365,8 +373,12 @@ onBeforeUnmount(() => {
         </NuxtLink>
         <NuxtLink
           to="/feed"
+          :prefetch-on="{ interaction: true }"
           class="nav-link flex items-center text-[15px] text-noble-black font-geist font-normal transition-colors duration-300 ease-in-out hover:text-burning-orange"
           active-class="active-nav-link"
+          @pointerenter="warmCommunityFeedNavigation"
+          @focus="warmCommunityFeedNavigation"
+          @touchstart.passive="warmCommunityFeedNavigation"
         >
           Community Feed
         </NuxtLink>
@@ -383,7 +395,7 @@ onBeforeUnmount(() => {
 
     <!-- Right Section: Icons -->
     <div
-      class="flex justify-end items-stretch gap-2 shrink-0 h-full"
+      class="flex justify-end items-stretch gap-1 sm:gap-2 shrink-0 h-full"
       :class="[showNav ? 'lg:w-80' : '', customPadding || 'px-4 sm:px-6']"
     >
       <slot name="right" />
@@ -399,17 +411,19 @@ onBeforeUnmount(() => {
             :aria-expanded="showNotifications"
             @click="toggleNotifications"
           >
-            <Icon
-              name="ph:bell"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:bell"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
 
-            <span
-              v-if="unreadNotificationCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ unreadNotificationCount }}
-            </span>
+              <span
+                v-if="unreadNotificationCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ unreadNotificationCount }}
+              </span>
+            </div>
           </button>
 
           <div class="custom-tooltip">
@@ -431,7 +445,7 @@ onBeforeUnmount(() => {
               <div
                 class="relative z-10 flex items-center justify-between px-4 py-4 border-b border-gray-100 shrink-0"
               >
-                <span class="font-montravia text-[20px] font-semibold text-noble-black italic">
+                <span class="font-montravia text-[20px] font-semibold text-noble-black">
                   Notifications
                 </span>
                 <button
@@ -445,7 +459,20 @@ onBeforeUnmount(() => {
 
               <!-- Notifications List -->
               <div
-                v-if="displayNotifications.length > 0"
+                v-if="isGlobalNotificationsLoading"
+                class="px-4 py-6 space-y-5 animate-pulse relative z-10"
+              >
+                <div v-for="i in 3" :key="i" class="flex gap-4">
+                  <div class="h-10 w-10 rounded-full bg-noble-black/10 shrink-0"></div>
+                  <div class="flex-1 space-y-2 py-1">
+                    <div class="h-3 w-3/4 bg-noble-black/20 rounded"></div>
+                    <div class="h-2 w-1/2 bg-noble-black/10 rounded"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-else-if="displayNotifications.length > 0"
                 class="overflow-y-auto custom-scrollbar flex-1 relative z-10 rounded-b-[16px]"
               >
                 <div class="flex flex-col">
@@ -533,16 +560,18 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <Icon
-              name="ph:chat-centered-text"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
-            <span
-              v-if="chatUnreadCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ chatUnreadCount }}
-            </span>
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:chat-centered-text"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="chatUnreadCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ chatUnreadCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Chat
@@ -558,16 +587,18 @@ onBeforeUnmount(() => {
             active-class="active-nav-link"
             aria-label="Likes"
           >
-            <Icon
-              name="ph:heart"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
-            <span
-              v-if="likesCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ likesCount }}
-            </span>
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:heart"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="likesCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ likesCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Likes
@@ -582,16 +613,18 @@ onBeforeUnmount(() => {
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
             active-class="active-nav-link"
           >
-            <Icon
-              name="ph:handbag"
-              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-            />
-            <span
-              v-if="bagCount > 0"
-              class="absolute top-2.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm scale-90"
-            >
-              {{ bagCount }}
-            </span>
+            <div class="relative flex items-center justify-center">
+              <Icon
+                name="ph:handbag"
+                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+              />
+              <span
+                v-if="bagCount > 0"
+                class="absolute -top-1.5 -right-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[10px] font-bold text-white shadow-sm"
+              >
+                {{ bagCount }}
+              </span>
+            </div>
           </NuxtLink>
           <div class="custom-tooltip">
             Bag
@@ -599,47 +632,50 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Account Actions -->
-        <div class="flex items-stretch md:ml-1">
-          <div class="flex items-center px-2 md:px-4">
-            <div class="h-6 w-px bg-cinnamon-ice/30"></div>
-          </div>
-          <div
-            v-if="accountType === 'ADMIN'"
-            class="relative hidden md:flex items-stretch group/tooltip"
+        <!-- Vertical Divider -->
+        <div class="flex items-center px-2 sm:px-3">
+          <div class="h-6 w-px bg-cinnamon-ice/30"></div>
+        </div>
+
+        <!-- Admin Panel Icon -->
+        <div
+          v-if="accountType === 'ADMIN'"
+          class="relative hidden md:flex items-stretch group/tooltip"
+        >
+          <NuxtLink
+            to="/admin"
+            class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            :class="{ 'active-nav-link': isAdminSectionActive }"
+            active-class="active-nav-link"
           >
-            <NuxtLink
-              to="/admin"
-              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
-              :class="{ 'active-nav-link': isAdminSectionActive }"
-              active-class="active-nav-link"
-            >
-              <Icon
-                name="ph:shield-check"
-                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-              />
-            </NuxtLink>
-            <div class="custom-tooltip">
-              Admin Panel
-              <div class="tooltip-arrow"></div>
-            </div>
+            <Icon
+              name="ph:shield-check"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+            />
+          </NuxtLink>
+          <div class="custom-tooltip">
+            Admin Panel
+            <div class="tooltip-arrow"></div>
           </div>
-          <div class="relative flex items-stretch group/tooltip">
-            <NuxtLink
-              to="/account"
-              class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
-              :class="{ 'active-nav-link': isAccountSectionActive }"
-              active-class="active-nav-link"
-            >
-              <Icon
-                name="ph:user"
-                class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
-              />
-            </NuxtLink>
-            <div class="custom-tooltip">
-              Account
-              <div class="tooltip-arrow"></div>
-            </div>
+        </div>
+
+        <!-- Account Icon -->
+        <div class="relative flex items-stretch group/tooltip">
+          <NuxtLink
+            to="/account"
+            :prefetch-on="{ interaction: true }"
+            class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
+            :class="{ 'active-nav-link': isAccountSectionActive }"
+            active-class="active-nav-link"
+          >
+            <Icon
+              name="ph:user"
+              class="w-[22px] h-[22px] transition-transform duration-300 ease-in-out group-hover:scale-110 group-active:scale-95 shrink-0"
+            />
+          </NuxtLink>
+          <div class="custom-tooltip">
+            Account
+            <div class="tooltip-arrow"></div>
           </div>
         </div>
       </template>

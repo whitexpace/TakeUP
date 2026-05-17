@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import type { BorrowerItemRequest } from "../composables/use-borrower-item-requests"
+import { useBookingDetailPrefetch } from "../composables/use-booking-detail-prefetch"
 
 const props = defineProps<{
   request: BorrowerItemRequest
 }>()
+
+const { warmBookingDetail } = useBookingDetailPrefetch()
 
 const lenderName = computed(() => {
   const user = props.request.lender.user
@@ -79,12 +82,25 @@ const badgeClass = computed(() => {
       return "bg-gray-100 text-gray-500 border-gray-200"
   }
 })
+
+const warmOrderDetails = () => {
+  void warmBookingDetail(detailPath.value, { priority: true }).catch(() => {})
+}
+
+const warmOrderDetailsImmediately = () => {
+  void warmBookingDetail(detailPath.value, { immediate: true, priority: true }).catch(() => {})
+}
 </script>
 
 <template>
   <NuxtLink
     :to="detailPath"
+    :prefetch-on="{ interaction: true }"
     class="block overflow-hidden rounded-[16px] border border-cinnamon-ice/20 bg-white font-geist shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200 cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] group/card"
+    @pointerenter="warmOrderDetails"
+    @focus="warmOrderDetails"
+    @mousedown="warmOrderDetailsImmediately"
+    @touchstart.passive="warmOrderDetails"
   >
     <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
       <div class="flex items-center justify-between">

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { useMyListings } from "../../../../composables/use-my-listings"
+import {
+  getPrefetchedMyListingDetail,
+  prefetchMyListingEdit,
+  seedPrefetchedMyListingDetail,
+  useMyListings,
+} from "../../../../composables/use-my-listings"
 import type { MyListingItem } from "../../../../composables/use-my-listings"
 
 definePageMeta({ layout: "account", middleware: "account-auth" })
@@ -32,7 +37,16 @@ onBeforeRouteLeave((to, from, next) => {
 
 onMounted(async () => {
   try {
+    const prefetched =
+      getPrefetchedMyListingDetail<MyListingItem>(id) ?? (await prefetchMyListingEdit(id))
+
+    if (prefetched) {
+      item.value = prefetched as MyListingItem
+      return
+    }
+
     const result = await $fetch<MyListingItem>(`/api/items/${id}`)
+    seedPrefetchedMyListingDetail(result)
     item.value = result
   } catch (err: unknown) {
     const status = (err as { statusCode?: number })?.statusCode
@@ -214,7 +228,7 @@ const handleStatusAction = async () => {
               </div>
               <button
                 type="button"
-                class="inline-flex h-10 items-center justify-center rounded-[12px] bg-cinnabar-red px-5 text-[13px] font-semibold text-white transition hover:bg-noble-black shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                class="inline-flex h-10 items-center justify-center rounded-[12px] bg-cinnabar-red px-5 text-[13px] font-semibold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="isDeleting || isUpdatingStatus"
                 @click="handleDelete"
               >

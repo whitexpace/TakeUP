@@ -82,6 +82,15 @@ const cancelLogout = () => {
 const confirmLogout = async () => {
   showLogoutModal.value = false
   await supabase.auth.signOut()
+
+  // Clear client-side auth caches
+  const { clear: clearAuthUser } = useAuthUser()
+  const { clear: clearSessionBridge } = useSessionBridge()
+  const { clear: clearViewerSession } = useViewerSession()
+  clearAuthUser()
+  clearSessionBridge()
+  clearViewerSession()
+
   await $fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined)
   await navigateTo("/")
 }
@@ -144,7 +153,7 @@ onMounted(() => {
 
       <!-- Left Sidebar -->
       <aside
-        class="bg-wahoo flex flex-col shrink-0 text-white border-r border-white/10 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0 overflow-hidden"
+        class="bg-noble-black flex flex-col shrink-0 text-white border-r border-white/5 transition-all duration-500 ease-in-out z-50 fixed inset-y-0 left-0 lg:relative lg:translate-x-0 overflow-hidden"
         :class="[
           isSidebarOpen
             ? 'translate-x-0 w-[300px]'
@@ -152,32 +161,30 @@ onMounted(() => {
           isHeaderVisible ? 'pt-14' : 'pt-0',
         ]"
       >
-        <div class="px-6 pt-10 pb-6 shrink-0">
-          <p class="text-[10px] font-bold uppercase tracking-[2px] text-slate-500">
-            Platform Controls
-          </p>
-          <h2 class="mt-2 text-[20px] font-bold text-white">ADMIN PANEL</h2>
-          <p class="mt-2 max-w-[220px] text-[13px] leading-relaxed text-slate-400">
-            Centralized tools for shared operational workflows and platform revenue.
-          </p>
+        <div class="px-6 pt-10 pb-8 border-b border-white/5 shrink-0">
+          <h2 class="font-montravia text-[26px] font-bold text-white tracking-tight">
+            Admin Panel
+          </h2>
         </div>
 
-        <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-4 pt-6 pb-24">
+        <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-4 py-8 space-y-1">
           <NuxtLink
             v-for="link in adminLinks"
             :key="link.to"
             :to="link.to"
-            class="group flex items-center gap-3 px-4 py-3 transition-all duration-200"
+            class="group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300"
             :class="
               isActive(link)
-                ? 'bg-white/10 text-white border-l-[3px] border-orange-600 rounded-r-[8px]'
-                : 'text-slate-400 hover:bg-white/5 border-l-[3px] border-transparent'
+                ? 'bg-burning-orange/15 text-burning-orange font-semibold shadow-sm shadow-burning-orange/5 border-l-4 border-burning-orange'
+                : 'text-white/50 hover:bg-white/5 hover:text-white border-l-4 border-transparent'
             "
             @click="isMobile && (isSidebarOpen = false)"
           >
             <div
-              class="shrink-0 transition-colors w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
-              :class="isActive(link) ? 'text-white' : 'text-slate-600'"
+              class="shrink-0 transition-transform duration-300 w-[24px] h-[24px] flex items-center justify-center group-hover:scale-110"
+              :class="
+                isActive(link) ? 'text-burning-orange' : 'text-white/20 group-hover:text-white/60'
+              "
             >
               <Icon
                 v-if="link.key === 'overview'"
@@ -215,54 +222,52 @@ onMounted(() => {
                 class="w-[22px] h-[22px] shrink-0"
               />
             </div>
-            <span class="text-[14px] font-medium leading-none">
+            <span class="text-[15px] leading-tight">
               {{ link.label }}
             </span>
           </NuxtLink>
 
-          <div class="mx-6 my-4 border-t border-white/10" />
+          <div class="mx-4 my-6 border-t border-white/5" />
 
           <NuxtLink
             to="/account"
-            class="group flex items-center gap-3 px-4 py-3 text-slate-400 transition-all duration-200 hover:bg-white/5 border-l-[3px] border-transparent"
+            class="group flex items-center gap-3 px-4 py-3 text-white/40 rounded-xl transition-all duration-300 hover:bg-white/5 hover:text-white border-l-4 border-transparent"
             @click="isMobile && (isSidebarOpen = false)"
           >
             <div
-              class="shrink-0 text-slate-600 transition-colors w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
+              class="shrink-0 text-white/20 transition-all duration-300 w-[24px] h-[24px] flex items-center justify-center group-hover:scale-110 group-hover:text-white/60"
             >
               <Icon name="ph:arrow-left" class="w-[22px] h-[22px] shrink-0" />
             </div>
-            <span class="text-[14px] font-medium leading-none">Personal Account</span>
+            <span class="text-[15px] leading-tight">Personal Account</span>
           </NuxtLink>
         </nav>
 
         <!-- Log Out Section -->
-        <div class="p-4 border-t border-white/10 shrink-0">
+        <div class="p-4 border-t border-white/5 shrink-0">
           <button
-            class="flex w-full items-center gap-3 px-4 py-3 text-slate-400 group transition-all duration-200 hover:text-white"
+            class="flex w-full items-center gap-3 px-4 py-3 text-white/40 rounded-xl group transition-all duration-300 hover:bg-cinnabar-red/10 hover:text-cinnabar-red font-bold"
             @click="openLogoutModal"
           >
             <div
-              class="shrink-0 w-[22px] h-[22px] flex items-center justify-center -translate-y-[0.5px]"
+              class="shrink-0 w-[24px] h-[24px] flex items-center justify-center group-hover:scale-110"
             >
               <Icon
                 name="ph:sign-out"
-                class="w-[22px] h-[22px] shrink-0 transition-colors duration-200 text-slate-600 group-hover:text-burning-orange"
+                class="w-[22px] h-[22px] shrink-0 transition-all duration-300 text-white/20 group-hover:text-cinnabar-red group-hover:-translate-x-1"
               />
             </div>
-            <span class="text-[14px] font-medium leading-none transition-colors duration-200">
-              Log Out
-            </span>
+            <span class="text-[15px] leading-tight"> Log Out </span>
           </button>
         </div>
       </aside>
 
       <main
-        class="custom-admin-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-white"
+        class="custom-admin-main-scrollbar relative flex-1 min-w-0 overflow-y-auto bg-cream"
         :class="[isHeaderVisible ? 'pt-14' : 'pt-0']"
       >
-        <div class="py-8">
-          <div class="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
+        <div class="py-12">
+          <div class="mx-auto max-w-[1400px] px-4 sm:px-12 lg:px-16 xl:px-24">
             <slot />
           </div>
         </div>
@@ -312,31 +317,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.custom-sidebar-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-sidebar-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.custom-admin-main-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-admin-main-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-admin-main-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice");
-  border-radius: 10px;
-}
-.custom-admin-main-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.burning-orange");
-}
-
 .custom-tooltip {
   position: absolute;
   top: 100%;

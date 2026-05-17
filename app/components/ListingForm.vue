@@ -121,9 +121,9 @@ const CONDITIONS: { value: ItemCondition; label: string }[] = [
 
 const SUGGESTED_TAGS = [
   "Student-friendly",
-  "Brand new",
-  "Deposit required",
-  "ID required",
+  "Brand-new",
+  "Deposit-required",
+  "ID-required",
   "Popular",
 ]
 
@@ -641,7 +641,31 @@ const buildPayload = () => {
   }
 }
 
+const { authUser, refresh: refreshAuthUser } = useAuthUser()
+
+onMounted(async () => {
+  if (import.meta.client) {
+    // Always refresh on mount to ensure we have the latest lender stats
+    // and to bypass any old cached profile objects.
+    await refreshAuthUser()
+  }
+})
+
 const showPreview = ref(false)
+const lenderRating = computed(() => {
+  if (authUser.value && typeof authUser.value.lenderRating !== "undefined") {
+    return authUser.value.lenderRating
+  }
+  return props.item?.lenderRating ?? 0
+})
+
+const lenderBookingCount = computed(() => {
+  if (authUser.value && typeof authUser.value.totalLenderBookings !== "undefined") {
+    return authUser.value.totalLenderBookings
+  }
+  return props.item?.lenderBookingCount ?? 0
+})
+
 const previewData = computed(() => {
   const payload = buildPayload()
   return {
@@ -649,16 +673,12 @@ const previewData = computed(() => {
     images: payload.photos.map((p, i) => ({ path: p, isPrimary: i === 0 })),
     categories: form.categories,
     condition: form.condition || "GOOD",
-    lender: {
-      user: {
-        firstName: props.item?.ownerName?.split(" ")[0] ?? "You",
-        lastName: props.item?.ownerName?.split(" ").slice(1).join(" ") ?? "",
-        avatarUrl: null,
-      },
-      lenderRating: props.item?.rating ?? 5.0,
-    },
-    ownerName: props.item?.ownerName ?? "You",
-    rating: props.item?.rating ?? 5.0,
+    ownerName: authUser.value?.name ?? props.item?.ownerName ?? "You (Preview)",
+    ownerAvatarUrl: authUser.value?.avatarUrl ?? props.item?.lenderAvatarUrl ?? null,
+    rating: 0,
+    lenderRating: lenderRating.value,
+    bookingCount: 0,
+    lenderBookingCount: lenderBookingCount.value,
   }
 })
 
@@ -734,16 +754,21 @@ const availabilityRowErrors = computed(() =>
 <template>
   <div class="mx-auto w-full max-w-[1100px] font-geist pb-20 lg:px-16 xl:px-24">
     <div v-if="!embedded" class="mb-10">
-      <NuxtLink
-        to="/account/listings"
-        class="flex items-center gap-2 text-noble-black hover:text-burning-orange transition-colors mb-8 group w-fit"
-      >
-        <Icon
-          name="ph:caret-left"
-          class="w-[18px] h-[18px] transition-transform group-hover:-translate-x-1 shrink-0"
-        />
-        <span class="text-[15px] font-bold">Back to My Listings</span>
-      </NuxtLink>
+      <div class="relative group/tooltip w-fit mb-8">
+        <NuxtLink
+          to="/account/listings"
+          class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
+        >
+          <Icon
+            name="ph:caret-left"
+            class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+          />
+        </NuxtLink>
+        <div class="custom-tooltip">
+          Back to My Listings
+          <div class="tooltip-arrow"></div>
+        </div>
+      </div>
       <section class="space-y-3">
         <div class="space-y-2">
           <h1 class="font-montravia text-[36px] font-medium text-noble-black">
@@ -1350,6 +1375,7 @@ const availabilityRowErrors = computed(() =>
               placeholder="Add tags..."
               class="flex-1 bg-transparent px-1.5 text-[14px] font-medium outline-none"
               @keydown.enter.prevent="addTag"
+              @keydown.space.prevent="addTag"
               @keydown.,.prevent="addTag"
               @blur="addTag"
             />
@@ -1480,6 +1506,62 @@ const availabilityRowErrors = computed(() =>
   transform: translateY(-2px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
+
+/* Custom Tooltip Styling matching Header.vue */
+.custom-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background-color: theme("colors.cream");
+  color: theme("colors.noble-black");
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid theme("colors.cinnamon-ice / 30%");
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  z-index: 1200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cinnamon-ice / 30%");
+}
+
+.tooltip-arrow::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid theme("colors.cream");
+}
+
+.group\/tooltip:hover .custom-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(14px);
+}
+
 .section-header {
   border-left: 3px solid theme("colors.burning-orange");
   padding-left: 16px;

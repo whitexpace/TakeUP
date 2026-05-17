@@ -15,6 +15,7 @@ type UseAdminTransactionsOptions = {
   searchQuery: Ref<string>
   createdAtFrom: Ref<string>
   createdAtTo: Ref<string>
+  limit?: number
 }
 
 export const useAdminTransactions = ({
@@ -22,29 +23,33 @@ export const useAdminTransactions = ({
   searchQuery,
   createdAtFrom,
   createdAtTo,
+  limit = 10,
 }: UseAdminTransactionsOptions) => {
   const transactions = ref<AdminTransactionListItem[]>([])
-  const isLoading = ref(false)
+  const isLoading = ref(true)
   const error = ref<string | null>(null)
   const nextCursor = ref<PaginationCursor>(null)
   const hasMore = computed(() => nextCursor.value !== null)
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+  let isInitialFetch = true
 
   const reset = () => {
     transactions.value = []
     nextCursor.value = null
     error.value = null
     isLoading.value = false
+    isInitialFetch = false
   }
 
   const fetchPage = async (cursor: PaginationCursor = null) => {
-    if (isLoading.value) return
+    if (isLoading.value && !isInitialFetch) return
 
     isLoading.value = true
+    isInitialFetch = false
     error.value = null
 
     try {
-      const query: Record<string, string | number> = { limit: 20 }
+      const query: Record<string, string | number> = { limit }
       const trimmedSearch = searchQuery.value.trim()
 
       if (status.value) query.status = status.value

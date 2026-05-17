@@ -17,10 +17,10 @@ const loginStatus = ref<LoginStatus>("idle")
 const errorMessage = ref("")
 
 // 1. Fetch Dynamic Category Metadata using the same endpoint as the dashboard
-const { data: filterData, pending: isLoadingMetadata } = useFetch("/api/items/filter-metadata")
+const { data: filterData, pending: isLoadingMetadata } = useLazyFetch("/api/items/filter-metadata")
 
 // 2. Fetch Popular/Trending Items using standard API
-const { data: itemsResponse, pending: isLoadingPopular } = useFetch("/api/items?limit=8")
+const { data: itemsResponse, pending: isLoadingPopular } = useLazyFetch("/api/items?limit=8")
 
 const trendingIds = computed(() => {
   const items = itemsResponse.value?.items || []
@@ -493,9 +493,20 @@ const handleGoogleLogin = async () => {
         <!-- Skeleton Loading State -->
         <div
           v-if="isLoadingMetadata"
-          class="grid grid-cols-1 md:grid-cols-4 gap-4 h-auto md:h-[600px]"
+          class="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-auto md:h-[600px]"
         >
-          <div v-for="i in 5" :key="i" class="bg-gray-100 rounded-[24px] animate-pulse"></div>
+          <div
+            v-for="i in 5"
+            :key="i"
+            :class="[
+              i === 1 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 2 ? 'md:col-span-1 md:row-span-2' : '',
+              i === 3 ? 'md:col-span-1 md:row-span-1' : '',
+              i === 4 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 5 ? 'md:col-span-1 md:row-span-1' : '',
+              'bg-noble-black/5 rounded-[24px] animate-pulse border border-cinnamon-ice/10',
+            ]"
+          ></div>
         </div>
 
         <div

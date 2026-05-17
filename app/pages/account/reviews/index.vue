@@ -1,77 +1,51 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue"
-import type { inferRouterOutputs } from "@trpc/server"
-import type { AppRouter } from "~~/server/trpc/routers"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { ReviewType } from "~~/shared/schemas/review"
-import type { TransactionListItem } from "~/composables/use-transactions"
+import {
+  useAccountReviews,
+  type ReviewDraftListItem,
+  type ReviewTransactionListItem,
+} from "../../../composables/use-account-reviews"
 
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
 
-type RouterOutputs = inferRouterOutputs<AppRouter>
-type ReviewDraftListItem = RouterOutputs["transaction"]["listReviewDrafts"][number]
-type SubmittedReviewListItem = RouterOutputs["transaction"]["listSubmittedReviews"][number]
-type ReviewLeaderboardEntry = RouterOutputs["review"]["borrowerLeaderboard"]["leaderboard"][number]
 type ReviewsTab = "PENDING" | "DRAFTS" | "HISTORY"
 
 const activeTab = ref<ReviewsTab>("PENDING")
 const searchQuery = ref("")
 const user = useSupabaseUser()
-
 const {
-  data: transactionsData,
-  pending: transactionsPending,
-  error: transactionsError,
-  refresh: refreshTransactions,
-} = await useAsyncData("account-my-review-transactions", async () => {
-  const transactionResponse = await $fetch<RouterOutputs["transaction"]["list"]>(
-    "/api/transactions",
-    {
-      query: {
-        status: "COMPLETED",
-        limit: 100,
-      },
-    },
-  )
+  transactionsData,
+  draftsData,
+  historyData,
+  leaderboardData,
+  transactionsPending,
+  draftsPending,
+  historyPending,
+  leaderboardPending,
+  transactionsError,
+  draftsError,
+  historyError,
+  hasFreshTransactionsCache,
+  hasFreshDraftsCache,
+  hasFreshHistoryCache,
+  hasFreshLeaderboardsCache,
+  fetchReviewTransactions,
+  fetchReviewDrafts,
+  fetchSubmittedReviews,
+  fetchSecondaryReviewsData,
+  refreshReviewTransactions,
+  refreshReviewDrafts,
+  refreshSubmittedReviews,
+  refreshReviewLeaderboards,
+} = useAccountReviews()
 
-  return transactionResponse.transactions
-})
-
-const {
-  data: draftsData,
-  pending: draftsPending,
-  error: draftsError,
-  refresh: refreshDrafts,
-} = await useAsyncData("account-my-review-drafts", async () => {
-  return await $fetch<ReviewDraftListItem[]>("/api/my-reviews/drafts")
-})
-
-const {
-  data: historyData,
-  pending: historyPending,
-  error: historyError,
-  refresh: refreshHistory,
-} = await useAsyncData("account-my-review-history", async () => {
-  return await $fetch<SubmittedReviewListItem[]>("/api/my-reviews/submitted")
-})
-
-const {
-  data: leaderboardData,
-  pending: leaderboardPending,
-  refresh: refreshLeaderboard,
-} = await useAsyncData("account-review-leaderboards", async () => {
-  const [borrowersResponse, lendersResponse] = await Promise.all([
-    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/borrowers"),
-    $fetch<{ leaderboard: ReviewLeaderboardEntry[] }>("/api/reviews/leaderboard/lenders"),
-  ])
-
-  return {
-    borrowers: borrowersResponse.leaderboard,
-    lenders: lendersResponse.leaderboard,
-  }
-})
+if (import.meta.client && !hasFreshTransactionsCache.value) {
+  void fetchReviewTransactions()
+}
 
 const allTransactions = computed(() => transactionsData.value ?? [])
 const allDrafts = computed(() => draftsData.value ?? [])
@@ -80,9 +54,15 @@ const borrowerLeaderboard = computed(() => leaderboardData.value?.borrowers ?? [
 const lenderLeaderboard = computed(() => leaderboardData.value?.lenders ?? [])
 
 const currentTabPending = computed(() => {
-  if (activeTab.value === "DRAFTS") return draftsPending.value
-  if (activeTab.value === "HISTORY") return historyPending.value
-  return transactionsPending.value
+  if (activeTab.value === "DRAFTS") {
+    return draftsPending.value && draftsData.value === null
+  }
+
+  if (activeTab.value === "HISTORY") {
+    return historyPending.value && historyData.value === null
+  }
+
+  return transactionsPending.value && transactionsData.value === null
 })
 
 const currentTabErrorMessage = computed(() => {
@@ -208,7 +188,7 @@ const formatRoleLabel = (role: string | null) => (role === "LENDER" ? "Lender" :
 const formatReviewCount = (value: number) => `${value} ${value === 1 ? "review" : "reviews"}`
 
 const getCurrentUserRoleForTransaction = (
-  transaction: TransactionListItem,
+  transaction: ReviewTransactionListItem,
 ): "BORROWER" | "LENDER" => {
   if (user.value?.id && transaction.lenderId === user.value.id) {
     return "LENDER"
@@ -217,7 +197,7 @@ const getCurrentUserRoleForTransaction = (
   return "BORROWER"
 }
 
-const getCounterpartNameForTransaction = (transaction: TransactionListItem) => {
+const getCounterpartNameForTransaction = (transaction: ReviewTransactionListItem) => {
   const currentUserRole = getCurrentUserRoleForTransaction(transaction)
   const counterpart =
     currentUserRole === "BORROWER" ? transaction.lender.user : transaction.borrower.user
@@ -226,7 +206,7 @@ const getCounterpartNameForTransaction = (transaction: TransactionListItem) => {
 }
 
 const isReviewModalOpen = ref(false)
-const selectedTransactionForReview = ref<TransactionListItem | null>(null)
+const selectedTransactionForReview = ref<ReviewTransactionListItem | null>(null)
 const selectedReviewType = ref<ReviewType | null>(null)
 const pageActionError = ref("")
 const showRewardPopup = ref(false)
@@ -266,7 +246,7 @@ const reviewContext = computed(() => {
   }
 })
 
-const openReviewModal = (transaction: TransactionListItem, reviewType: ReviewType) => {
+const openReviewModal = (transaction: ReviewTransactionListItem, reviewType: ReviewType) => {
   pageActionError.value = ""
   selectedTransactionForReview.value = transaction
   selectedReviewType.value = reviewType
@@ -342,29 +322,55 @@ const handleReviewSubmitted = async (payload: SubmittedReviewPayload) => {
     triggerRewardPopup(earnedPoints)
   }
   await Promise.all([
-    refreshTransactions(),
-    refreshDrafts(),
-    refreshHistory(),
-    refreshLeaderboard(),
+    refreshReviewTransactions(),
+    refreshReviewDrafts(),
+    refreshSubmittedReviews(),
+    refreshReviewLeaderboards(),
   ])
 }
 
 const refreshCurrentTab = async () => {
   if (activeTab.value === "DRAFTS") {
-    await refreshDrafts()
+    await refreshReviewDrafts()
     return
   }
 
   if (activeTab.value === "HISTORY") {
-    await refreshHistory()
+    await refreshSubmittedReviews()
     return
   }
 
-  await refreshTransactions()
+  await refreshReviewTransactions()
 }
 
 watch(activeTab, async () => {
-  await refreshCurrentTab()
+  if (activeTab.value === "DRAFTS" && !hasFreshDraftsCache.value) {
+    await fetchReviewDrafts()
+    return
+  }
+
+  if (activeTab.value === "HISTORY" && !hasFreshHistoryCache.value) {
+    await fetchSubmittedReviews()
+    return
+  }
+
+  if (activeTab.value === "PENDING" && !hasFreshTransactionsCache.value) {
+    await fetchReviewTransactions()
+  }
+})
+
+onMounted(() => {
+  if (!hasFreshTransactionsCache.value) {
+    void fetchReviewTransactions()
+  }
+
+  if (
+    !hasFreshDraftsCache.value ||
+    !hasFreshHistoryCache.value ||
+    !hasFreshLeaderboardsCache.value
+  ) {
+    void fetchSecondaryReviewsData()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -375,7 +381,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+  <MyReviewsSkeleton
+    v-if="currentTabPending && !allTransactions.length && !allDrafts.length && !allHistory.length"
+  />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
@@ -446,24 +456,30 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="relative w-full sm:max-w-[280px] mb-4 z-20">
-        <Icon
-          name="ph:magnifying-glass"
-          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-noble-black/30 pointer-events-none"
-        />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search by item or person..."
-          class="w-full h-9 bg-white border border-cinnamon-ice/20 rounded-[10px] pl-9 pr-9 text-[13px] text-noble-black outline-none focus:border-burning-orange/40 focus:ring-4 focus:ring-burning-orange/5 shadow-sm transition-all placeholder:text-noble-black/30"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-md text-noble-black/20 hover:text-noble-black/40 hover:bg-noble-black/5 transition-all"
-          @click="searchQuery = ''"
+        <div
+          class="flex h-9 items-center gap-2 bg-white border border-cinnamon-ice/20 rounded-[10px] px-2.5 transition-all focus-within:border-burning-orange/40 focus-within:ring-4 focus-within:ring-burning-orange/5 shadow-sm"
         >
-          <Icon name="ph:x" class="w-3 h-3" />
-        </button>
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="flex h-7 w-7 items-center justify-center -ml-1 text-noble-black/30 hover:text-burning-orange transition-colors"
+            title="Clear search"
+            @click="searchQuery = ''"
+          >
+            <Icon name="ph:x" class="w-4 h-4" />
+          </button>
+          <Icon
+            v-else
+            name="ph:magnifying-glass"
+            class="shrink-0 text-noble-black/30 w-4 h-4 ml-1"
+          />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search by item or person..."
+            class="flex-1 bg-transparent text-[13px] text-noble-black outline-none placeholder:text-noble-black/30 min-w-0"
+          />
+        </div>
       </div>
     </div>
 
@@ -486,12 +502,8 @@ onBeforeUnmount(() => {
             {{ pageActionError }}
           </p>
 
-          <div v-if="currentTabPending" class="mt-6 space-y-4">
-            <div
-              v-for="i in 3"
-              :key="i"
-              class="h-[88px] animate-pulse rounded-[14px] border border-cinnamon-ice/30 bg-white/80"
-            />
+          <div v-if="currentTabPending" class="mt-6 space-y-6">
+            <AdminListRecordSkeleton v-for="i in 3" :key="i" />
           </div>
 
           <div
@@ -726,14 +738,6 @@ onBeforeUnmount(() => {
             Save a draft if you’re busy, then come back when you’re ready to submit.
           </p>
         </div>
-
-        <button
-          type="button"
-          class="w-full h-11 rounded-[12px] border-[1.5px] border-burning-orange text-burning-orange font-bold text-[14px] transition-all hover:bg-burning-orange/5 active:scale-95"
-          @click="activeTab = 'DRAFTS'"
-        >
-          View Drafts
-        </button>
       </aside>
     </div>
 

@@ -11,7 +11,7 @@ export type BorrowerItemRequestStatus = "PENDING" | "APPROVED" | "REJECTED"
 
 export type BorrowerItemRequest = BorrowerItemRequestSource & {
   requestStatus: BorrowerItemRequestStatus
-  requestStatusLabel: "Pending" | "Approved" | "Rejected" | "Cancelled"
+  requestStatusLabel: "Pending" | "Approved" | "Rejected" | "Cancelled" | "Completed"
 }
 
 type UseBorrowerItemRequestsOptions = {
@@ -20,8 +20,63 @@ type UseBorrowerItemRequestsOptions = {
   searchQuery: Ref<string>
 }
 
-const REQUEST_BOOKING_STATUSES = ["PENDING", "CONFIRMED", "CANCELLED"] satisfies BookingStatus[]
+type BorrowerRequestCacheEntry = {
+  expiresAt: number
+  requests: BorrowerItemRequest[]
+}
+
+type FetchRequestsOptions = {
+  force?: boolean
+}
+
+const BORROWER_REQUEST_CACHE_TTL_MS = 5 * 60_000
+const REQUEST_BOOKING_STATUSES = [
+  "PENDING",
+  "CONFIRMED",
+  "CANCELLED",
+  "COMPLETED",
+  "RETURNED",
+  "IN_DISPUTE",
+] satisfies BookingStatus[]
 const REQUEST_BOOKING_STATUS_SET = new Set<BookingStatus>(REQUEST_BOOKING_STATUSES)
+const borrowerRequestCache = new Map<string, BorrowerRequestCacheEntry>()
+const pendingBorrowerRequestFetches = new Map<string, Promise<BorrowerItemRequest[]>>()
+
+const cloneBorrowerRequests = (requests: BorrowerItemRequest[]) => structuredClone(requests)
+
+const getBorrowerRequestViewerKey = () => {
+  if (import.meta.server) {
+    return useRequestEvent()?.context.authUser?.id ?? "anonymous"
+  }
+
+  if (typeof useSupabaseUser === "function") {
+    return useSupabaseUser().value?.id ?? "anonymous"
+  }
+
+  return "anonymous"
+}
+
+const buildBorrowerRequestCacheKey = (statuses: BookingStatus[]) =>
+  `${getBorrowerRequestViewerKey()}:borrower-requests:${[...statuses].sort().join("|")}`
+
+const getCachedBorrowerRequests = (cacheKey: string) => {
+  const cachedEntry = borrowerRequestCache.get(cacheKey)
+  if (!cachedEntry) return null
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    borrowerRequestCache.delete(cacheKey)
+    return null
+  }
+
+  return cloneBorrowerRequests(cachedEntry.requests)
+}
+
+const setCachedBorrowerRequests = (cacheKey: string, requests: BorrowerItemRequest[]) => {
+  borrowerRequestCache.set(cacheKey, {
+    expiresAt: Date.now() + BORROWER_REQUEST_CACHE_TTL_MS,
+    requests: cloneBorrowerRequests(requests),
+  })
+}
 
 const requestStatusByBookingStatus: Partial<
   Record<BookingStatus, Pick<BorrowerItemRequest, "requestStatus" | "requestStatusLabel">>
@@ -34,6 +89,8 @@ const requestStatusByBookingStatus: Partial<
   // keeping the internal requestStatus value so existing consumers/styles
   // remain compatible.
   CANCELLED: { requestStatus: "REJECTED", requestStatusLabel: "Cancelled" },
+  COMPLETED: { requestStatus: "APPROVED", requestStatusLabel: "Completed" },
+  RETURNED: { requestStatus: "APPROVED", requestStatusLabel: "Approved" },
 }
 
 const formatUserName = (user: { firstName: string; middleName: string | null; lastName: string }) =>
@@ -73,7 +130,7 @@ export const useBorrowerItemRequests = ({
     isLoading.value = false
   }
 
-  const fetchRequests = async () => {
+  const fetchRequests = async (options: FetchRequestsOptions = {}) => {
     requestVersion.value += 1
     const version = requestVersion.value
 
@@ -82,20 +139,52 @@ export const useBorrowerItemRequests = ({
       return
     }
 
-    isLoading.value = true
-    error.value = null
+    const uniqueStatuses = [...new Set(statuses.value)].filter((status) =>
+      REQUEST_BOOKING_STATUS_SET.has(status),
+    )
 
-    try {
-      const uniqueStatuses = [...new Set(statuses.value)].filter((status) =>
-        REQUEST_BOOKING_STATUS_SET.has(status),
-      )
+    if (uniqueStatuses.length === 0) {
+      requests.value = []
+      return
+    }
 
-      if (uniqueStatuses.length === 0) {
-        requests.value = []
+    const cacheKey = buildBorrowerRequestCacheKey(uniqueStatuses)
+
+    if (!options.force) {
+      const cachedRequests = getCachedBorrowerRequests(cacheKey)
+      if (cachedRequests) {
+        requests.value = cachedRequests
         return
       }
 
-      const responses = await Promise.all(
+      const pendingRequest = pendingBorrowerRequestFetches.get(cacheKey)
+      if (pendingRequest) {
+        isLoading.value = true
+        error.value = null
+
+        try {
+          const pendingRequests = await pendingRequest
+          if (version === requestVersion.value) {
+            requests.value = cloneBorrowerRequests(pendingRequests)
+          }
+        } catch {
+          if (version === requestVersion.value) {
+            error.value = "Unable to load item requests. Please try again."
+          }
+        } finally {
+          if (version === requestVersion.value) {
+            isLoading.value = false
+          }
+        }
+        return
+      }
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+
+      const request = Promise.all(
         uniqueStatuses.map((status) =>
           $fetch<BookingListResponse>("/api/bookings", {
             query: {
@@ -106,14 +195,29 @@ export const useBorrowerItemRequests = ({
           }),
         ),
       )
+        .then((responses) =>
+          responses
+            .flatMap((response) => response.bookings)
+            .map(toBorrowerItemRequest)
+            .filter((request): request is BorrowerItemRequest => request !== null)
+            .sort(sortByCreatedAtDesc),
+        )
+        .then((nextRequests) => {
+          setCachedBorrowerRequests(cacheKey, nextRequests)
+          return nextRequests
+        })
+        .finally(() => {
+          if (pendingBorrowerRequestFetches.get(cacheKey) === request) {
+            pendingBorrowerRequestFetches.delete(cacheKey)
+          }
+        })
+
+      pendingBorrowerRequestFetches.set(cacheKey, request)
+      const nextRequests = await request
 
       if (version !== requestVersion.value) return
 
-      requests.value = responses
-        .flatMap((response) => response.bookings)
-        .map(toBorrowerItemRequest)
-        .filter((request): request is BorrowerItemRequest => request !== null)
-        .sort(sortByCreatedAtDesc)
+      requests.value = cloneBorrowerRequests(nextRequests)
     } catch (err: unknown) {
       if (version !== requestVersion.value) return
 

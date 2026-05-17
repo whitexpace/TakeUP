@@ -1,8 +1,22 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+const configuredSupabaseUrl = process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+const supabaseImageDomain = (() => {
+  if (!configuredSupabaseUrl) return undefined
+
+  try {
+    return new URL(configuredSupabaseUrl).hostname
+  } catch {
+    return undefined
+  }
+})()
+
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
   devtools: { enabled: true },
-  modules: ["@nuxt/eslint", "@nuxtjs/tailwindcss", "@nuxtjs/supabase", "@nuxt/icon"],
+  modules: ["@nuxt/eslint", "@nuxtjs/tailwindcss", "@nuxtjs/supabase", "@nuxt/icon", "@nuxt/image"],
+  image: {
+    domains: supabaseImageDomain ? [supabaseImageDomain] : [],
+  },
   typescript: { strict: true },
   runtimeConfig: {
     googleClientId: process.env.GOOGLE_CLIENT_ID,
@@ -22,6 +36,7 @@ export default defineNuxtConfig({
       itemImageBucket: process.env.NUXT_PUBLIC_SUPABASE_ITEM_IMAGE_BUCKET || "item-images",
       userAvatarBucket: process.env.NUXT_PUBLIC_SUPABASE_USER_AVATAR_BUCKET || "user-avatars",
       googleClientId: process.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+      optimizedImageDomains: supabaseImageDomain ? [supabaseImageDomain] : [],
     },
   },
   supabase: {
@@ -33,4 +48,10 @@ export default defineNuxtConfig({
     },
   },
   css: ["~/assets/css/main.css"],
+  app: {
+    head: {
+      title: "TakeUP",
+      link: [{ rel: "icon", type: "image/png", href: "/images/takeup-logo.png" }],
+    },
+  },
 })

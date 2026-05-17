@@ -339,7 +339,7 @@
                 <CustomCalendar v-model="dateFrom" placeholder="Date" disable-past />
               </div>
               <div class="w-[115px]">
-                <CustomTimePicker v-model="timeFrom" placeholder="Time" />
+                <CustomTimePicker v-model="timeFrom" placeholder="Time" :min-time="minTimeFrom" />
               </div>
             </div>
           </div>
@@ -361,7 +361,8 @@
                 <CustomTimePicker
                   v-model="timeTo"
                   placeholder="Time"
-                  :min-time="dateFrom === dateTo ? timeFrom : ''"
+                  :min-time="minTimeTo"
+                  strict-min
                 />
               </div>
             </div>
@@ -428,6 +429,27 @@ const dateFrom = ref<string>(props.dateFrom ?? "")
 const timeFrom = ref<string>(props.timeFrom ?? "")
 const dateTo = ref<string>(props.dateTo ?? "")
 const timeTo = ref<string>(props.timeTo ?? "")
+
+const minTimeFrom = computed(() => {
+  if (!dateFrom.value) return ""
+  const todayStr = new Date().toLocaleDateString("en-CA") // YYYY-MM-DD
+  if (dateFrom.value !== todayStr) return ""
+
+  const now = new Date()
+  return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`
+})
+
+const minTimeTo = computed(() => {
+  if (!dateTo.value || !dateFrom.value || dateFrom.value !== dateTo.value || !timeFrom.value)
+    return ""
+
+  // Add 1 hour to timeFrom
+  const [h = 0, m = 0] = timeFrom.value.split(":").map(Number)
+  const date = new Date()
+  date.setHours(h + 1, m, 0, 0)
+  return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`
+})
+
 const categorySearch = ref("")
 const isCategoryDropdownOpen = ref(false)
 
@@ -672,19 +694,5 @@ const clearAll = () => {
 .section-leave-to {
   opacity: 0;
   transform: translateY(-8px);
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 50%");
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.burning-orange");
 }
 </style>

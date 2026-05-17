@@ -9,9 +9,11 @@ definePageMeta({
 const {
   transactions,
   isBalanceVisible,
+  isInitialLoading,
   linkedAccounts,
   toggleBalanceVisibility,
   topUpPseudo,
+  withdrawPseudo,
   formattedBalance,
   maskedBalance,
 } = useWallet()
@@ -19,7 +21,10 @@ const {
 
 <template>
   <div class="mx-auto max-w-[1100px] lg:px-16 xl:px-24 pb-10">
+    <WalletOverviewSkeleton v-if="isInitialLoading" />
+
     <WalletOverview
+      v-else
       title="My Wallet"
       subtitle="Manage your TakeUP wallet balance and linked accounts"
       :transactions="transactions"
@@ -27,8 +32,10 @@ const {
       :formatted-balance="formattedBalance"
       :masked-balance="maskedBalance"
       :linked-accounts="linkedAccounts"
+      :is-activity-loading="isInitialLoading && transactions.length === 0"
       :on-toggle-balance="toggleBalanceVisibility"
       :on-top-up="topUpPseudo"
+      :on-withdraw="withdrawPseudo"
     />
   </div>
 </template>

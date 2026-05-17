@@ -21,21 +21,25 @@ const formatUserName = (user: { firstName: string; middleName: string | null; la
 
 export const useBookings = ({ role, status, searchQuery }: UseBookingsOptions) => {
   const bookings = ref<BookingListItem[]>([])
-  const isLoading = ref(false)
+  const isLoading = ref(true)
   const error = ref<string | null>(null)
   const nextCursor = ref<PaginationCursor>(null)
   const hasMore = computed(() => nextCursor.value !== null)
+  let isInitialFetch = true
 
   const reset = () => {
     bookings.value = []
     nextCursor.value = null
     error.value = null
     isLoading.value = false
+    isInitialFetch = false
   }
 
   const fetchPage = async (cursor: PaginationCursor = null) => {
-    if (isLoading.value) return
+    if (isLoading.value && !isInitialFetch) return
+
     isLoading.value = true
+    isInitialFetch = false
     error.value = null
 
     try {

@@ -74,6 +74,10 @@ const itemWithTaxonomy = {
   },
   lender: {
     select: {
+      lenderRating: true,
+      _count: {
+        select: { bookings: true },
+      },
       user: {
         select: {
           username: true,
@@ -82,6 +86,7 @@ const itemWithTaxonomy = {
           lastName: true,
           email: true,
           status: true,
+          avatarUrl: true,
         },
       },
     },
@@ -163,6 +168,7 @@ const itemSearchSelect = {
   },
   lender: {
     select: {
+      lenderRating: true,
       user: {
         select: {
           username: true,
@@ -171,6 +177,7 @@ const itemSearchSelect = {
           lastName: true,
           email: true,
           status: true,
+          avatarUrl: true,
         },
       },
     },
@@ -374,10 +381,13 @@ const mapItemTaxonomy = (
     ...rest
   } = item
   const lenderUser = lender?.user
+  const lenderRating = lender?.lenderRating ?? 0
+  const lenderBookingCount = lender?._count?.bookings ?? 0
   const lenderFullName = lenderUser
     ? [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ")
     : null
   const lenderUsername = lenderUser?.username || null
+  const lenderAvatarUrl = lenderUser?.avatarUrl || null
   const ownerName = lenderUsername || lenderFullName || lenderUser?.email || item.lenderId
   const orderedPhotos =
     images?.map((entry) => entry.path) ??
@@ -394,6 +404,9 @@ const mapItemTaxonomy = (
     ownerName,
     lenderUsername,
     lenderFullName,
+    lenderRating,
+    lenderBookingCount,
+    lenderAvatarUrl,
     isLiked: Array.isArray(likes) ? likes.length > 0 : false,
     images:
       images?.map((entry, index) => ({
@@ -566,7 +579,7 @@ const buildListWhere = (
   const includeSearch = options.includeSearch ?? true
   const userId = options.userId ?? null
   const now = options.now ?? new Date()
-  const shouldApplyPublicVisibility = !ownedOnly
+  const shouldApplyPublicVisibility = !ownedOnly && !likedOnly
 
   const statusFilter: Prisma.ItemWhereInput["status"] = status
     ? (status as ItemStatus)
@@ -928,6 +941,7 @@ const loadPendingFeedRecords = async (
   now: Date,
   requiredWindow: { startDate: Date; endDate: Date } | null,
   search?: string,
+  likedOnly = false,
 ) => {
   if (pendingIds.length === 0) {
     return []
@@ -940,13 +954,15 @@ const loadPendingFeedRecords = async (
     },
   })
 
-  const filteredPendingRecords = filterPublicVisibleItems(
-    search
-      ? filterAndRankSearchResults(pendingRecords, search, { sortByScore: false })
-      : pendingRecords,
-    now,
-    requiredWindow,
-  )
+  const filteredPendingRecords = likedOnly
+    ? pendingRecords
+    : filterPublicVisibleItems(
+        search
+          ? filterAndRankSearchResults(pendingRecords, search, { sortByScore: false })
+          : pendingRecords,
+        now,
+        requiredWindow,
+      )
 
   return orderItemsByIds(filteredPendingRecords, pendingIds)
 }
@@ -961,6 +977,7 @@ const collectRankedFeedRecords = async ({
   now,
   requiredWindow,
   viewerProfile,
+  likedOnly = false,
 }: {
   prisma: PrismaClientLike
   userId: string | null
@@ -971,6 +988,7 @@ const collectRankedFeedRecords = async ({
   now: Date
   requiredWindow: { startDate: Date; endDate: Date } | null
   viewerProfile: ViewerInterestProfile
+  likedOnly?: boolean
 }) => {
   const collectedRecords = await loadPendingFeedRecords(
     prisma.item,
@@ -980,14 +998,16 @@ const collectRankedFeedRecords = async ({
     now,
     requiredWindow,
     search,
+    likedOnly,
   )
 
   let scanCursor = pagination.scanCursor
   let scanExhausted = pagination.scanExhausted
   let scannedCount = 0
+  const scanLimit = likedOnly ? 100_000 : FEED_RANKING_SCAN_LIMIT
 
-  while (!scanExhausted && scannedCount < FEED_RANKING_SCAN_LIMIT) {
-    const take = Math.min(VISIBILITY_SCAN_BATCH_SIZE, FEED_RANKING_SCAN_LIMIT - scannedCount)
+  while (!scanExhausted && scannedCount < scanLimit) {
+    const take = Math.min(VISIBILITY_SCAN_BATCH_SIZE, scanLimit - scannedCount)
     const records = await prisma.item.findMany({
       take,
       orderBy: getDefaultItemOrderBy(),
@@ -1002,11 +1022,13 @@ const collectRankedFeedRecords = async ({
 
     scannedCount += records.length
 
-    const filteredRecords = filterPublicVisibleItems(
-      search ? filterAndRankSearchResults(records, search, { sortByScore: false }) : records,
-      now,
-      requiredWindow,
-    )
+    const filteredRecords = likedOnly
+      ? records
+      : filterPublicVisibleItems(
+          search ? filterAndRankSearchResults(records, search, { sortByScore: false }) : records,
+          now,
+          requiredWindow,
+        )
     collectedRecords.push(...filteredRecords)
 
     const lastScannedRecord = records.at(-1)
@@ -1069,6 +1091,7 @@ export const itemRouter = router({
       now,
       requiredWindow,
       viewerProfile,
+      likedOnly: !!input?.likedOnly,
     })
 
     return pageRecords.map(mapItemTaxonomy)
@@ -1115,6 +1138,7 @@ export const itemRouter = router({
       now,
       requiredWindow,
       viewerProfile,
+      likedOnly: !!input.likedOnly,
     })
 
     return {
@@ -1153,9 +1177,10 @@ export const itemRouter = router({
         break
       }
 
-      const visibleBatch = batch.filter((item) =>
-        isPublicVisibleItem(item, now, { requiredWindow }),
-      )
+      const visibleBatch = input?.likedOnly
+        ? batch
+        : batch.filter((item) => isPublicVisibleItem(item, now, { requiredWindow }))
+
       totalCount += search
         ? filterAndRankSearchResults(visibleBatch, search, { sortByScore: false }).length
         : visibleBatch.length

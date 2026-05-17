@@ -478,7 +478,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col overflow-hidden bg-white pt-14 font-geist text-noble-black">
+  <div class="h-screen flex flex-col overflow-hidden bg-white pt-16 font-geist text-noble-black">
     <Header :notifications="notifications" />
 
     <div class="relative flex flex-1 overflow-hidden">
@@ -488,7 +488,7 @@ onUnmounted(() => {
           isMobile && routeTransactionId ? '-translate-x-full absolute inset-0' : 'translate-x-0',
         ]"
       >
-        <div class="flex items-center justify-between p-4">
+        <div class="flex items-center justify-between pt-6 px-4 pb-4">
           <h1 class="font-montravia text-2xl font-semibold">Inbox</h1>
         </div>
 
@@ -500,7 +500,16 @@ onUnmounted(() => {
               placeholder="Search conversations..."
               class="w-full rounded-full border border-cinnamon-ice/30 bg-cream/50 py-2 pl-11 pr-4 text-[14px] outline-none transition-all duration-300 focus:border-burning-orange/50 focus:bg-white"
             />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-noble-black/30 hover:text-burning-orange transition-colors"
+              @click="searchQuery = ''"
+            >
+              <Icon name="ph:x" size="16" />
+            </button>
             <Icon
+              v-else
               name="ph:magnifying-glass"
               class="absolute left-4 top-1/2 -translate-y-1/2 shrink-0 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
               size="16"
@@ -511,10 +520,10 @@ onUnmounted(() => {
         <div class="custom-chat-scrollbar flex-1 overflow-y-auto">
           <div v-if="isLoadingConversations" class="space-y-4 p-4">
             <div v-for="index in 6" :key="index" class="flex animate-pulse gap-3">
-              <div class="h-12 w-12 rounded-full bg-cream"></div>
+              <div class="h-12 w-12 rounded-full bg-noble-black/10"></div>
               <div class="flex-1 space-y-2 py-1">
-                <div class="h-3 w-3/4 rounded bg-cream"></div>
-                <div class="h-2 w-1/2 rounded bg-cream"></div>
+                <div class="h-3 w-3/4 rounded bg-noble-black/20"></div>
+                <div class="h-2 w-1/2 rounded bg-noble-black/10"></div>
               </div>
             </div>
           </div>
@@ -623,27 +632,31 @@ onUnmounted(() => {
         ]"
       >
         <div
-          v-if="isOpeningConversation && !activeConversation"
-          class="flex flex-1 flex-col items-center justify-center space-y-4"
+          v-if="
+            (isOpeningConversation && !activeConversation) ||
+            (isLoadingMessages && !messages.length)
+          "
+          class="flex flex-1 flex-col p-6 gap-6 animate-pulse bg-cream"
         >
+          <div class="flex items-center gap-4 mb-4">
+            <div class="h-10 w-10 rounded-full bg-noble-black/10"></div>
+            <div class="space-y-2">
+              <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
+              <div class="h-3 w-24 bg-noble-black/10 rounded"></div>
+            </div>
+          </div>
           <div
-            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
-          ></div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
-            Opening conversation...
-          </p>
-        </div>
-
-        <div
-          v-else-if="isLoadingMessages && !messages.length"
-          class="flex flex-1 flex-col items-center justify-center space-y-4"
-        >
-          <div
-            class="h-12 w-12 animate-spin rounded-full border-4 border-cinnamon-ice/20 border-t-burning-orange"
-          ></div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-noble-black/30">
-            Loading messages...
-          </p>
+            v-for="i in 4"
+            :key="i"
+            class="flex flex-col"
+            :class="i % 2 === 0 ? 'items-end' : 'items-start'"
+          >
+            <div
+              class="h-12 w-2/3 rounded-2xl bg-noble-black/10"
+              :class="i % 2 === 0 ? 'rounded-tr-none' : 'rounded-tl-none'"
+            ></div>
+            <div class="h-2 w-20 bg-noble-black/5 rounded mt-2"></div>
+          </div>
         </div>
 
         <template v-else-if="activeConversation">
@@ -905,12 +918,12 @@ onUnmounted(() => {
             <div class="flex items-end gap-2 lg:gap-3">
               <!-- Photo Icon (Outside) -->
               <button
-                class="mb-1 rounded-full p-2 text-noble-black/40 transition-colors hover:bg-cream hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-noble-black/40 transition-colors hover:bg-cream hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
                 type="button"
                 :disabled="isUploadingImage"
                 @click="triggerPhotoPicker"
               >
-                <Icon name="ph:image" class="shrink-0" size="20" />
+                <Icon name="ph:image" class="shrink-0" size="22" />
               </button>
 
               <div
@@ -918,7 +931,7 @@ onUnmounted(() => {
               >
                 <!-- Aa Icon (Inside Left) -->
                 <div
-                  class="mb-1 ml-3 flex h-8 w-8 items-center justify-center text-[15px] font-bold italic tracking-tighter text-noble-black/25 select-none"
+                  class="flex h-[44px] w-10 shrink-0 items-center justify-center pl-1 text-[15px] font-bold italic tracking-tighter text-noble-black/25 select-none"
                 >
                   Aa
                 </div>
@@ -929,19 +942,19 @@ onUnmounted(() => {
                   rows="1"
                   :disabled="isUploadingImage"
                   placeholder="Type your message..."
-                  class="custom-chat-scrollbar w-full resize-none bg-transparent px-2 py-2.5 text-[14px] leading-relaxed outline-none placeholder:text-noble-black/30"
+                  class="custom-chat-scrollbar w-full resize-none bg-transparent px-1 py-[11px] text-[14px] leading-relaxed outline-none placeholder:text-noble-black/30"
                   style="min-height: 44px; max-height: 140px"
                   @input="handleComposerInput"
                   @keydown="handleKeydown"
                 ></textarea>
 
-                <div ref="emojiMenuRef" class="relative mb-1 mr-2">
+                <div ref="emojiMenuRef" class="relative">
                   <button
-                    class="rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                    class="flex h-[44px] w-10 shrink-0 items-center justify-center pr-1 text-noble-black/40 transition-colors hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
                     type="button"
                     @click.stop="toggleEmojiPicker"
                   >
-                    <Icon name="ph:smiley" class="shrink-0" size="18" />
+                    <Icon name="ph:smiley" class="shrink-0" size="20" />
                   </button>
 
                   <div
@@ -962,7 +975,7 @@ onUnmounted(() => {
               </div>
 
               <button
-                class="mb-1 shrink-0 rounded-full p-2.5 text-white shadow-md transition-all duration-300"
+                class="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all duration-300"
                 :class="[
                   'bg-burning-orange hover:bg-burning-orange/90',
                   { 'cursor-not-allowed opacity-50 grayscale': !canSendMessage },

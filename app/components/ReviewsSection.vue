@@ -195,7 +195,7 @@ const initialsFor = (name: string) =>
             :key="i"
             name="ph:star-fill"
             class="w-6 h-6 -translate-y-[0.5px]"
-            :class="i <= Math.round(rating) ? 'opacity-100' : 'opacity-20'"
+            :class="i <= Math.floor(rating) ? 'opacity-100' : 'opacity-20'"
           />
         </div>
         <div class="text-sm text-noble-black/60 font-medium">
@@ -306,7 +306,12 @@ const initialsFor = (name: string) =>
         class="bg-cream/50 rounded-2xl p-5 border border-cinnamon-ice/15 hover:border-cinnamon-ice/20 transition-colors"
       >
         <div class="flex justify-between items-start mb-4">
-          <div class="flex items-center gap-3">
+          <component
+            :is="review.reviewer.username ? 'NuxtLink' : 'div'"
+            :to="review.reviewer.username ? `/profile/${review.reviewer.username}` : undefined"
+            class="flex items-center gap-3 group/reviewer"
+            :class="{ 'cursor-default': !review.reviewer.username }"
+          >
             <div
               class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base overflow-hidden shrink-0"
             >
@@ -324,7 +329,10 @@ const initialsFor = (name: string) =>
               </div>
             </div>
             <div>
-              <h4 class="font-bold text-noble-black text-sm">
+              <h4
+                class="font-bold text-noble-black text-sm transition-colors"
+                :class="{ 'group-hover/reviewer:text-burning-orange': review.reviewer.username }"
+              >
                 {{ review.reviewer.displayName }}
               </h4>
               <div class="flex items-center gap-2">
@@ -336,7 +344,7 @@ const initialsFor = (name: string) =>
                 </span>
               </div>
             </div>
-          </div>
+          </component>
           <div class="flex items-center gap-0.5 text-burning-orange">
             <Icon
               v-for="i in 5"

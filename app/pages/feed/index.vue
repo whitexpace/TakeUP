@@ -15,7 +15,12 @@
         <div class="flex flex-col lg:flex-row gap-10">
           <aside class="hidden lg:block lg:w-[240px] xl:w-[280px] shrink-0">
             <div class="sticky top-6">
+              <div
+                v-if="isLoadingFeed"
+                class="h-64 w-full bg-noble-black/5 rounded-[24px] animate-pulse"
+              ></div>
               <CommunityActivitySidebar
+                v-else
                 :posts-made="userActivity.postsMade"
                 :offers-sent="userActivity.offersSent"
                 :offers-received="userActivity.offersReceived"
@@ -121,7 +126,11 @@
 
           <aside class="hidden lg:block lg:w-[280px] xl:w-[320px] shrink-0">
             <div class="sticky top-6">
-              <CommunityTrendingSidebar :trending-items="trendingItems" />
+              <div
+                v-if="isLoadingFeed"
+                class="h-96 w-full bg-noble-black/5 rounded-[24px] animate-pulse"
+              ></div>
+              <CommunityTrendingSidebar v-else :trending-items="trendingItems" />
             </div>
           </aside>
         </div>
@@ -190,94 +199,31 @@
 
 <script setup lang="ts">
 import { useViewerSession } from "../../composables/use-viewer-session"
-import { usePersistedSessionState } from "../../composables/use-persisted-session-state"
+import { useCommunityFeedCache } from "../../composables/use-community-feed-cache"
 import { recordPerfEvent, withPerfTimer } from "../../utils/performance-telemetry"
+import {
+  COMMUNITY_FEED_CACHE_TTL_MS,
+  type ApiCommunityNotification,
+  type ApiCommunityRequest,
+  type ApiOfferableItem,
+  buildCommunityFeedActivity,
+  buildCommunityFeedTrendingItems,
+  normalizeCommunityNotification,
+  normalizeCommunityRequest,
+  normalizeOfferableItem,
+} from "../../utils/community-feed"
 
 import { computed, onMounted, ref, watch } from "vue"
 import type {
-  CommunityMember,
-  CommunityOffer,
   CommunityOfferFormInput,
-  CommunityOfferNotification,
   CommunityOfferStatus,
-  CommunityOfferableItem,
-  CommunityRequest,
   CommunityRequestComposerInput,
   CommunityRequestStatus,
-  TrendingRequest,
-  UserActivity,
 } from "~/types/community-requests"
 import CommunityCreatePost from "~/components/CommunityCreatePost.vue"
 import ListingForm from "~/components/ListingForm.vue"
 
 definePageMeta({ layout: false })
-
-type ApiCommunityMember = {
-  profileId: number
-  userId: string
-  username: string
-  name: string
-  avatar: string
-}
-
-type ApiCommunityOffer = {
-  id: number
-  lenderID: number
-  requestID: number
-  itemID: number
-  itemName: string
-  rentalFee: number
-  availability: boolean
-  condition: string
-  rentalTerms: string
-  status: string
-  borrowerReadAt: string | Date | null
-  createdAt: string | Date
-  updatedAt: string | Date
-  lender: ApiCommunityMember
-  itemThumbnailImage: string | null
-}
-
-type ApiCommunityRequest = {
-  id: number
-  borrowerID: number
-  itemNeeded: string
-  referenceImageUrl: string | null
-  requestedDates: Array<string | Date>
-  priceRange: number[]
-  description: string
-  status: string
-  createdAt: string | Date
-  updatedAt: string | Date
-  offersCount: number
-  borrower: ApiCommunityMember
-  offers: ApiCommunityOffer[]
-}
-
-type ApiCommunityNotification = {
-  id: number
-  requestId: number
-  requestTitle: string
-  recipientId: number
-  actorName: string
-  itemName: string
-  fee: number
-  createdAt: string | Date
-  read: boolean
-}
-
-type ApiOfferableItem = {
-  id: string
-  numericId: number
-  name: string
-  thumbnailImage: string | null
-  condition: string
-  rentalFee: number
-  freeToBorrow: boolean
-  status: string
-  rateOption: string
-  createdAt: string | Date
-}
 
 const createPostRef = ref<InstanceType<typeof CommunityCreatePost> | null>(null)
 const feedMainRef = ref<HTMLElement | null>(null)
@@ -371,8 +317,6 @@ const currentUserAvatar = computed(() => currentUserProfile.value.avatar)
 
 type FeedFilter = "Newest" | "Most Offers" | "Open" | "My Requests"
 
-const COMMUNITY_FEED_CACHE_TTL_MS = 30_000
-
 const activeFilter = ref<FeedFilter>("Newest")
 const availableFilters = computed(() => {
   const filters: Array<{ label: string; value: FeedFilter }> = [
@@ -388,28 +332,20 @@ const availableFilters = computed(() => {
   return filters
 })
 
-const requests = usePersistedSessionState<CommunityRequest[]>("community-feed:requests", () => [], {
-  deserialize: (value) => JSON.parse(value).map(normalizeRequest),
-})
-const notifications = usePersistedSessionState<CommunityOfferNotification[]>(
-  "community-feed:notifications",
-  () => [],
-  {
-    deserialize: (value) => JSON.parse(value).map(normalizeNotification),
-  },
-)
-const offerableItems = usePersistedSessionState<CommunityOfferableItem[]>(
-  "community-feed:offerable-items",
-  () => [],
-  {
-    deserialize: (value) => JSON.parse(value).map(normalizeOfferableItem),
-  },
-)
-const currentDbUserId = usePersistedSessionState<string>(
-  "community-feed:current-db-user-id",
-  () => "",
-)
-const isLoadingFeed = ref(true)
+const {
+  requests,
+  notifications,
+  offerableItems,
+  currentDbUserId,
+  feedHydrated,
+  feedLastLoadedAt,
+  feedViewerKey,
+  feedActivity,
+  feedTrendingItems,
+  setFeedSummary,
+} = useCommunityFeedCache()
+const initialViewerKey = user.value?.id ?? "anonymous"
+const isLoadingFeed = ref(!feedHydrated.value || feedViewerKey.value !== initialViewerKey)
 const isCreatingRequest = ref(false)
 const isSubmittingOffer = ref(false)
 const feedError = ref<string | null>(null)
@@ -421,21 +357,7 @@ const preferredOfferItemId = ref<number | null>(null)
 const isNewItemComposerOpen = ref(false)
 const isSubmittingNewItem = ref(false)
 const newItemComposerError = ref<string | null>(null)
-const feedHydrated = usePersistedSessionState<boolean>("community-feed:hydrated", () => false)
-const feedLastLoadedAt = usePersistedSessionState<number | null>(
-  "community-feed:last-loaded-at",
-  () => null,
-)
-const feedViewerKey = usePersistedSessionState<string>(
-  "community-feed:viewer-key",
-  () => "anonymous",
-)
 const { createListing } = useMyListings()
-
-const toDate = (value: string | Date | null | undefined) => {
-  if (!value) return null
-  return value instanceof Date ? value : new Date(value)
-}
 
 const getFirstFieldError = (value: unknown) => {
   const record = asRecord(value)
@@ -479,85 +401,6 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
     getMeaningfulErrorMessage(errorRecord?.message) ||
     fallback
   )
-}
-
-function normalizeMember(member: ApiCommunityMember): CommunityMember {
-  return {
-    profileId: Number(member.profileId),
-    userId: member.userId,
-    username: member.username,
-    name: member.name,
-    avatar: member.avatar || "",
-  }
-}
-
-function normalizeOffer(offer: ApiCommunityOffer): CommunityOffer {
-  return {
-    id: Number(offer.id),
-    lenderID: Number(offer.lenderID),
-    requestID: Number(offer.requestID),
-    itemID: Number(offer.itemID),
-    itemName: offer.itemName,
-    itemThumbnailImage: offer.itemThumbnailImage,
-    rentalFee: Number(offer.rentalFee),
-    availability: Boolean(offer.availability),
-    condition: offer.condition as CommunityOffer["condition"],
-    rentalTerms: offer.rentalTerms ?? "",
-    status: offer.status as CommunityOfferStatus,
-    borrowerReadAt: toDate(offer.borrowerReadAt),
-    createdAt: toDate(offer.createdAt) ?? new Date(),
-    updatedAt: toDate(offer.updatedAt) ?? new Date(),
-    lender: normalizeMember(offer.lender),
-  }
-}
-
-function normalizeRequest(request: ApiCommunityRequest): CommunityRequest {
-  return {
-    id: Number(request.id),
-    borrowerID: Number(request.borrowerID),
-    itemNeeded: request.itemNeeded,
-    referenceImageUrl: request.referenceImageUrl,
-    requestedDates: request.requestedDates
-      .map((value) => toDate(value))
-      .filter((value): value is Date => Boolean(value)),
-    priceRange: [Number(request.priceRange[0] ?? 0), Number(request.priceRange[1] ?? 0)],
-    description: request.description,
-    status: request.status as CommunityRequestStatus,
-    createdAt: toDate(request.createdAt) ?? new Date(),
-    updatedAt: toDate(request.updatedAt) ?? new Date(),
-    offersCount: Number(request.offersCount ?? 0),
-    borrower: normalizeMember(request.borrower),
-    offers: request.offers.map(normalizeOffer),
-  }
-}
-
-function normalizeNotification(notification: ApiCommunityNotification): CommunityOfferNotification {
-  return {
-    id: Number(notification.id),
-    requestId: Number(notification.requestId),
-    requestTitle: notification.requestTitle,
-    recipientId: Number(notification.recipientId),
-    actorName: notification.actorName,
-    itemName: notification.itemName,
-    fee: Number(notification.fee),
-    createdAt: toDate(notification.createdAt) ?? new Date(),
-    read: Boolean(notification.read),
-  }
-}
-
-function normalizeOfferableItem(item: ApiOfferableItem): CommunityOfferableItem {
-  return {
-    id: item.id,
-    numericId: Number(item.numericId),
-    name: item.name,
-    thumbnailImage: item.thumbnailImage,
-    condition: item.condition as CommunityOfferableItem["condition"],
-    rentalFee: Number(item.rentalFee),
-    freeToBorrow: Boolean(item.freeToBorrow),
-    status: item.status,
-    rateOption: item.rateOption,
-    createdAt: toDate(item.createdAt) ?? new Date(),
-  }
 }
 
 const getAuthHeaders = async () => {
@@ -645,9 +488,11 @@ const refreshFeed = async () => {
       },
     )
 
-    requests.value = requestResponse.map(normalizeRequest)
-    notifications.value = notificationResponse.map(normalizeNotification)
+    const nextRequests = requestResponse.map(normalizeCommunityRequest)
+    requests.value = nextRequests
+    notifications.value = notificationResponse.map(normalizeCommunityNotification)
     offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
+    setFeedSummary(nextRequests, currentDbUserId.value)
     feedLastLoadedAt.value = Date.now()
   } catch (error) {
     console.error("Failed to load community feed", error)
@@ -676,41 +521,15 @@ const currentUserNotifications = computed(() => {
   )
 })
 
-const userActivity = computed<UserActivity>(() => {
-  if (!currentDbUserId.value) {
-    return { postsMade: 0, offersSent: 0, offersReceived: 0 }
-  }
+const userActivity = computed(
+  () => feedActivity.value ?? buildCommunityFeedActivity(requests.value, currentDbUserId.value),
+)
 
-  const myRequests = requests.value.filter(
-    (request) => request.borrower.userId === currentDbUserId.value,
-  )
-  const offersSent = requests.value.reduce((count, request) => {
-    return (
-      count + request.offers.filter((offer) => offer.lender.userId === currentDbUserId.value).length
-    )
-  }, 0)
-  const offersReceived = myRequests.reduce((count, request) => count + request.offersCount, 0)
-
-  return {
-    postsMade: myRequests.length,
-    offersSent,
-    offersReceived,
-  }
-})
-
-const trendingItems = computed<TrendingRequest[]>(() => {
-  return [...requests.value]
-    .sort((left, right) => {
-      if (right.offersCount !== left.offersCount) return right.offersCount - left.offersCount
-      return right.createdAt.getTime() - left.createdAt.getTime()
-    })
-    .slice(0, 5)
-    .map((request) => ({
-      id: request.id,
-      title: request.itemNeeded,
-      offersCount: request.offersCount,
-    }))
-})
+const trendingItems = computed(() =>
+  feedTrendingItems.value.length > 0
+    ? feedTrendingItems.value
+    : buildCommunityFeedTrendingItems(requests.value),
+)
 
 const sortedRequests = computed(() => {
   let filteredRequests = [...requests.value]

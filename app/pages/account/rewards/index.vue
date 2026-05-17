@@ -1,25 +1,11 @@
 <script setup lang="ts">
 import { getRemainingBoostTime } from "../../../utils/rewards"
+import { useRewards } from "../../../composables/use-rewards"
 
 definePageMeta({
   layout: "account",
   middleware: "account-auth",
 })
-
-type RewardsSummary = {
-  availablePoints: number
-}
-
-type ActiveBoost = {
-  id: string
-  itemId: string
-  itemName: string
-  itemImage?: string | null
-  boostStatus: "ACTIVE" | "EXPIRED"
-  boostStartedAt: string | Date
-  boostExpiresAt: string | Date
-  remainingTime?: string | null
-}
 
 const BOOST_CONFIG = {
   pointsCost: 50,
@@ -32,18 +18,17 @@ const showRewardPopup = ref(false)
 let rewardPopupTimeout: ReturnType<typeof setTimeout> | null = null
 const REVIEW_REWARD_POPUP_STORAGE_KEY = "takeup:review-reward-popup"
 
-const { data: summary } = await useAsyncData("rewards:summary", () =>
-  $fetch<RewardsSummary>("/api/rewards"),
-)
-
 const {
-  data: activeBoostsResponse,
-  pending: boostsPending,
-  error: boostsError,
-  refresh: refreshBoosts,
-} = await useAsyncData("rewards:active-boosts", () =>
-  $fetch<ActiveBoost[]>("/api/rewards/boosts/active"),
-)
+  summary,
+  activeBoostsResponse,
+  boostsPending,
+  boostsError,
+  hasFreshSummaryCache,
+  hasFreshBoostsCache,
+  fetchRewardsSummary,
+  fetchActiveBoosts,
+  refreshActiveBoosts,
+} = useRewards()
 
 type RewardActivity = {
   id: string
@@ -70,6 +55,7 @@ const activeBoosts = computed(() =>
   (activeBoostsResponse.value ?? [])
     .map((boost) => {
       const timing = getRemainingBoostTime(boost.boostExpiresAt, new Date(now.value))
+      const remainingTime = boost.remainingTime as string | null | undefined
 
       // Calculate percentage for progress bar (remaining / 24 hours)
       const expiration = new Date(boost.boostExpiresAt).getTime()
@@ -80,7 +66,10 @@ const activeBoosts = computed(() =>
 
       return {
         ...boost,
-        remainingLabel: boost.remainingTime?.trim() || timing.label,
+        remainingLabel:
+          typeof remainingTime === "string" && remainingTime.trim()
+            ? remainingTime.trim()
+            : timing.label,
         isExpired: boost.boostStatus !== "ACTIVE" || timing.expired,
         progress,
       }
@@ -142,10 +131,24 @@ const triggerRewardPopup = () => {
 }
 
 onMounted(() => {
+  if (!hasFreshSummaryCache.value) {
+    void fetchRewardsSummary()
+  }
+  if (!hasFreshBoostsCache.value) {
+    void fetchActiveBoosts()
+  }
   now.value = Date.now()
   countdownInterval = window.setInterval(() => {
     now.value = Date.now()
   }, 60_000)
+
+  if (!hasFreshSummaryCache.value) {
+    void fetchRewardsSummary()
+  }
+
+  if (!hasFreshBoostsCache.value) {
+    void fetchActiveBoosts()
+  }
 
   if (window.sessionStorage.getItem(REVIEW_REWARD_POPUP_STORAGE_KEY) === "1") {
     window.sessionStorage.removeItem(REVIEW_REWARD_POPUP_STORAGE_KEY)
@@ -238,23 +241,16 @@ const getStatusBadgeClass = (status: string) => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
+  <RewardsSkeleton v-if="boostsPending && !activeBoostsResponse" />
+
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24 text-noble-black">
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
-        <div class="flex items-center gap-4">
-          <div class="space-y-2">
-            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
-              My Rewards
-            </h1>
-            <div class="w-10 h-0.5 bg-burning-orange"></div>
-          </div>
-          <div
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-burning-orange/5 border border-burning-orange/20 mt-1"
-          >
-            <span class="text-[13px] font-bold text-burning-orange tracking-tight"
-              >{{ (summary?.availablePoints ?? 0).toLocaleString() }} pts</span
-            >
-          </div>
+        <div class="space-y-2">
+          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            My Rewards
+          </h1>
+          <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
         <p class="text-[16px] font-light text-noble-black/50">
           Quality reviews earn you reward points you can redeem for perks.
@@ -273,17 +269,18 @@ const getStatusBadgeClass = (status: string) => {
 
       <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-10">
         <div class="text-center sm:text-left">
-          <p class="text-[12px] font-black uppercase tracking-[0.2em] text-noble-black/40 mb-2">
-            Your Points Balance
-          </p>
           <div class="flex items-baseline justify-center sm:justify-start gap-4">
             <h2
-              class="text-[64px] sm:text-[72px] font-black text-blue-estate leading-none tracking-tighter"
+              class="text-[64px] sm:text-[72px] font-black text-burning-orange leading-none tracking-tighter"
             >
               {{ (summary?.availablePoints ?? 0).toLocaleString() }}
             </h2>
           </div>
-          <p class="text-[14px] font-light text-noble-black/50 mt-2">points available to spend</p>
+          <p
+            class="text-[14px] font-light text-noble-black/50 mt-2 uppercase tracking-[0.1em] font-bold"
+          >
+            Points Available
+          </p>
         </div>
 
         <!-- Progress Ring -->
@@ -491,24 +488,15 @@ const getStatusBadgeClass = (status: string) => {
             v-if="boostsError"
             type="button"
             class="inline-flex h-8 items-center px-4 rounded-full border border-burning-orange text-[12px] font-bold text-burning-orange transition-all hover:bg-burning-orange hover:text-white"
-            @click="refreshBoosts()"
+            @click="refreshActiveBoosts()"
           >
             Retry
           </button>
         </div>
 
-        <!-- Loading -->
-        <div v-if="boostsPending && !activeBoostsResponse" class="grid gap-4 sm:grid-cols-2">
-          <div
-            v-for="i in 2"
-            :key="i"
-            class="h-24 animate-pulse rounded-[20px] bg-cream border border-cinnamon-ice/10"
-          />
-        </div>
-
         <!-- Empty State -->
         <div
-          v-else-if="activeBoosts.length === 0"
+          v-if="activeBoosts.length === 0"
           class="flex flex-col items-center justify-center py-12 rounded-[24px] border border-dashed border-cinnamon-ice/30 bg-white"
         >
           <div

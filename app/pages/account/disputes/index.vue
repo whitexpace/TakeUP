@@ -16,6 +16,9 @@ type DisputesTab = "report" | "disputes" | "appeals"
 
 const route = useRoute()
 const router = useRouter()
+const { clearAccountDisputesCache, fetchDisputeReportableTransactions, fetchMyDisputes } =
+  useAccountDisputesPrefetch()
+const { warmBookingDetail } = useBookingDetailPrefetch()
 
 const disputeTabs: Array<{ id: DisputesTab; label: string }> = [
   { id: "report", label: "Report an Issue" },
@@ -128,35 +131,17 @@ const statusClasses = (status: MyDispute["status"]) => {
       return "bg-success-green/[0.08] text-success-green border border-success-green/20"
   }
 }
-
 const {
   data: reportableData,
   pending: reportablePending,
-  error: reportableError,
   refresh: refreshReportableTransactions,
-} = await useAsyncData("dispute:reportable-transactions", () =>
-  $fetch<RouterOutputs["dispute"]["reportableTransactions"]>(
-    "/api/dispute-reportable-transactions",
-  ),
-)
-
-if (reportableError.value) {
-  throw reportableError.value
-}
+} = useLazyAsyncData("dispute:reportable-transactions", () => fetchDisputeReportableTransactions())
 
 const {
   data: disputesData,
   pending: disputesPending,
-  error: disputesError,
   refresh: refreshDisputes,
-} = await useAsyncData("dispute:mine", () =>
-  $fetch<RouterOutputs["dispute"]["mine"]>("/api/my-disputes"),
-)
-
-if (disputesError.value) {
-  throw disputesError.value
-}
-
+} = useLazyAsyncData("dispute:mine", () => fetchMyDisputes())
 const reportableTransactions = computed(() => reportableData.value?.transactions ?? [])
 const myDisputes = computed(() => disputesData.value?.disputes ?? [])
 const recentAppealableDisputes = computed(() =>
@@ -279,6 +264,18 @@ const openAppealFilePicker = () => appealFileInput.value?.click()
 const handleReportFileChange = (event: Event) => attachSelectedFiles(event, reportEvidenceFiles)
 const handleAppealFileChange = (event: Event) => attachSelectedFiles(event, appealEvidenceFiles)
 
+const warmDisputeTransactionDetail = (
+  dispute: MyDispute,
+  options: { immediate?: boolean } = {},
+) => {
+  if (!dispute.bookingId) return
+
+  void warmBookingDetail(`/account/transactions/${dispute.bookingId}`, {
+    priority: true,
+    ...options,
+  }).catch(() => {})
+}
+
 const buildReportDescription = () =>
   [
     `Requested resolution: ${resolutionLabel.value}`,
@@ -315,6 +312,7 @@ const submitReport = async () => {
     })
 
     resetReportForm()
+    clearAccountDisputesCache()
     await Promise.all([refreshReportableTransactions(), refreshDisputes()])
     actionSuccessMessage.value = "Your concern has been submitted for review."
     await router.replace({ query: { tab: "disputes" } })
@@ -362,6 +360,7 @@ const submitAppeal = async () => {
     })
 
     resetAppealForm()
+    clearAccountDisputesCache()
     await refreshDisputes()
     actionSuccessMessage.value = "Your appeal has been submitted."
     await router.replace({ query: { tab: "disputes" } })
@@ -400,7 +399,9 @@ const prevStep = () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <MyDisputesSkeleton v-if="reportablePending || disputesPending" :active-tab="activeTab" />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <!-- Page Header -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-10">
       <section class="space-y-3">
@@ -500,13 +501,8 @@ const prevStep = () => {
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start mt-16">
           <!-- Left Column: Form Steps (60%) -->
           <div class="lg:col-span-3 space-y-8 min-h-[400px]">
-            <div v-if="reportablePending" class="space-y-6">
-              <div class="h-32 animate-pulse rounded-3xl bg-cream"></div>
-              <div class="h-64 animate-pulse rounded-3xl bg-cream"></div>
-            </div>
-
             <div
-              v-else-if="!reportableTransactions.length"
+              v-if="!reportableTransactions.length"
               class="rounded-[32px] border border-dashed border-cinnamon-ice bg-cream px-6 py-16 text-center"
             >
               <div
@@ -1031,16 +1027,8 @@ const prevStep = () => {
             </p>
           </div>
 
-          <div v-if="disputesPending" class="space-y-4">
-            <div
-              v-for="index in 3"
-              :key="index"
-              class="h-32 animate-pulse rounded-2xl bg-white/50 border border-gray-100"
-            ></div>
-          </div>
-
           <div
-            v-else-if="!myDisputes.length"
+            v-if="!myDisputes.length"
             class="rounded-[24px] border border-dashed border-cinnamon-ice/40 bg-white/40 px-6 py-14 text-center"
           >
             <div
@@ -1059,6 +1047,11 @@ const prevStep = () => {
               v-for="dispute in myDisputes"
               :key="dispute.id"
               class="group relative bg-white border border-gray-100 rounded-[22px] overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
+              @pointerenter="warmDisputeTransactionDetail(dispute)"
+              @pointerover.passive="warmDisputeTransactionDetail(dispute)"
+              @focusin="warmDisputeTransactionDetail(dispute)"
+              @touchstart.passive="warmDisputeTransactionDetail(dispute)"
+              @mousedown.left="warmDisputeTransactionDetail(dispute, { immediate: true })"
             >
               <!-- Zone 1: Header / Status -->
               <div
@@ -1141,7 +1134,11 @@ const prevStep = () => {
                     <NuxtLink
                       v-if="dispute.canSubmitRebuttal && dispute.bookingId"
                       :to="`/account/transactions/${dispute.bookingId}?action=rebuttal`"
+                      :prefetch-on="{ interaction: true }"
                       class="h-9 px-5 flex items-center justify-center rounded-lg bg-blue-estate text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-blue-estate/20"
+                      @pointerenter="warmDisputeTransactionDetail(dispute)"
+                      @focus="warmDisputeTransactionDetail(dispute)"
+                      @mousedown.left="warmDisputeTransactionDetail(dispute, { immediate: true })"
                     >
                       Submit Rebuttal
                     </NuxtLink>
@@ -1158,7 +1155,11 @@ const prevStep = () => {
                   <NuxtLink
                     v-if="dispute.bookingId"
                     :to="`/account/transactions/${dispute.bookingId}`"
+                    :prefetch-on="{ interaction: true }"
                     class="text-[12px] font-bold text-burning-orange hover:underline flex items-center gap-1"
+                    @pointerenter="warmDisputeTransactionDetail(dispute)"
+                    @focus="warmDisputeTransactionDetail(dispute)"
+                    @mousedown.left="warmDisputeTransactionDetail(dispute, { immediate: true })"
                   >
                     View Details
                     <Icon name="ph:caret-right" class="w-3.5 h-3.5" />

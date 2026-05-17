@@ -49,6 +49,7 @@ const participantUserSelect = {
   email: true,
   status: true,
   points: true,
+  avatarUrl: true,
 } as const
 
 const disputeActionSelect = {
@@ -271,6 +272,7 @@ type DisputeParticipant = {
   email: string
   status: string
   points: number
+  avatarUrl: string | null
 }
 
 type DisputeActionRecord = {
@@ -546,6 +548,7 @@ const mapParticipant = (user: DisputeParticipant | null | undefined) =>
         lastName: user.lastName,
         status: user.status,
         points: user.points,
+        avatarUrl: user.avatarUrl,
         displayName: formatDisplayName(user),
       }
     : null

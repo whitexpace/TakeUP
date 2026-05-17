@@ -3,7 +3,11 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue"
 import type { TransactionStatus } from "#shared/schemas/transaction"
 import type { BookingStatus } from "#shared/schemas/booking"
 import type { ReviewType } from "#shared/schemas/review"
-import { useTransactions, type TransactionListItem } from "../../../composables/use-transactions"
+import {
+  useTransactionHistoryPrefetch,
+  useTransactions,
+  type TransactionListItem,
+} from "../../../composables/use-transactions"
 import {
   useBorrowerItemRequests,
   type BorrowerItemRequest,
@@ -35,6 +39,7 @@ const router = useRouter()
 const activeRole = ref<ActiveRole>((route.query.role as ActiveRole) || "BORROWER")
 const activeStatus = ref<TransactionFilter>(null)
 const searchQuery = ref("")
+const { warmTransactionHistory } = useTransactionHistoryPrefetch()
 
 const { filteredTransactions, isLoading, error, hasMore, loadMore, refresh, fetchPage } =
   useTransactions({
@@ -58,13 +63,17 @@ const borrowerRequestStatuses = computed<BookingStatus[]>(() => {
   switch (activeStatus.value) {
     case null:
     case "REQUESTED_ITEMS":
-      return ["PENDING", "CONFIRMED", "CANCELLED"]
+      return ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "RETURNED", "IN_DISPUTE"]
     case "PENDING":
       return ["PENDING"]
     case "ACTIVE":
       return ["CONFIRMED"]
     case "CANCELLED":
       return ["CANCELLED"]
+    case "RETURNED":
+      return ["RETURNED"]
+    case "COMPLETED":
+      return ["COMPLETED"]
     default:
       return []
   }
@@ -85,10 +94,30 @@ const {
   searchQuery,
 })
 
+const lenderRequestStatuses = computed<BookingStatus[]>(() => {
+  if (activeRole.value !== "LENDER") return []
+
+  switch (activeStatus.value) {
+    case null:
+    case "LENDER_FOR_APPROVAL":
+      return ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "RETURNED", "IN_DISPUTE"]
+    case "PENDING":
+      return ["PENDING"]
+    case "ACTIVE":
+      return ["CONFIRMED"]
+    case "CANCELLED":
+      return ["CANCELLED"]
+    case "RETURNED":
+      return ["RETURNED"]
+    case "COMPLETED":
+      return ["COMPLETED"]
+    default:
+      return []
+  }
+})
+
 const shouldShowLenderRequests = computed(
-  () =>
-    activeRole.value === "LENDER" &&
-    (activeStatus.value === null || activeStatus.value === "LENDER_FOR_APPROVAL"),
+  () => activeRole.value === "LENDER" && lenderRequestStatuses.value.length > 0,
 )
 
 const {
@@ -98,6 +127,7 @@ const {
   fetchRequests: fetchLenderRequests,
 } = useLenderItemRequests({
   enabled: shouldShowLenderRequests,
+  statuses: lenderRequestStatuses,
   searchQuery,
 })
 
@@ -120,35 +150,34 @@ const visibleLenderRequests = computed(() =>
 )
 
 const visibleHistoryEntries = computed<HistoryEntry[]>(() => {
-  const borrowerRequestIdSet = new Set(visibleBorrowerRequests.value.map((r) => r.id))
-  const lenderRequestIdSet = new Set(visibleLenderRequests.value.map((r) => r.id))
+  const transactionBookingIds = new Set(
+    visibleTransactions.value.map((tx) => tx.bookingId).filter(Boolean),
+  )
 
-  const borrowerRequestEntries = visibleBorrowerRequests.value.map((request) => ({
-    kind: "request" as const,
-    id: request.id,
-    date: request.createdAt,
-    request,
-  }))
-
-  const lenderRequestEntries = visibleLenderRequests.value.map((request) => ({
-    kind: "lender-request" as const,
-    id: request.id,
-    date: request.createdAt,
-    request,
-  }))
-
-  const transactionEntries = visibleTransactions.value
-    .filter(
-      (transaction) =>
-        !(transaction.bookingId && borrowerRequestIdSet.has(transaction.bookingId)) &&
-        !(transaction.bookingId && lenderRequestIdSet.has(transaction.bookingId)),
-    )
-    .map((transaction) => ({
-      kind: "transaction" as const,
-      id: transaction.id,
-      date: transaction.createdAt,
-      transaction,
+  const borrowerRequestEntries = visibleBorrowerRequests.value
+    .filter((request) => !transactionBookingIds.has(request.id))
+    .map((request) => ({
+      kind: "request" as const,
+      id: request.id,
+      date: request.createdAt,
+      request,
     }))
+
+  const lenderRequestEntries = visibleLenderRequests.value
+    .filter((request) => !transactionBookingIds.has(request.id))
+    .map((request) => ({
+      kind: "lender-request" as const,
+      id: request.id,
+      date: request.createdAt,
+      request,
+    }))
+
+  const transactionEntries = visibleTransactions.value.map((transaction) => ({
+    kind: "transaction" as const,
+    id: transaction.id,
+    date: transaction.createdAt,
+    transaction,
+  }))
 
   return [...borrowerRequestEntries, ...lenderRequestEntries, ...transactionEntries].sort(
     (left, right) => {
@@ -248,6 +277,13 @@ const setRole = (role: ActiveRole) => {
   router.replace({ query: { ...route.query, role } })
 }
 
+const warmRoleHistory = (role: ActiveRole) => {
+  void warmTransactionHistory(role, {
+    priority: role === "LENDER",
+    prefetchNextPage: role === "BORROWER",
+  })
+}
+
 const setStatus = (status: TransactionFilter) => {
   activeStatus.value = status
 }
@@ -300,7 +336,23 @@ const emptySubtitle = computed(() => {
 })
 
 const refreshAll = async () => {
-  await Promise.all([refresh(), fetchBorrowerRequests(), fetchLenderRequests()])
+  await Promise.all([
+    refresh(),
+    fetchBorrowerRequests({ force: true }),
+    fetchLenderRequests({ force: true }),
+  ])
+}
+
+const loadMoreIfNearBottom = (event: Event) => {
+  const container = event.currentTarget as HTMLElement | null
+  if (!container || !hasMore.value || isLoading.value || visibleTransactions.value.length === 0) {
+    return
+  }
+
+  const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
+  if (remaining <= 180) {
+    void loadMore()
+  }
 }
 
 const reviewContext = computed(() => {
@@ -392,7 +444,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <TransactionHistorySkeleton v-if="isInitialLoading" />
+
+  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <section class="space-y-3">
         <div class="space-y-2">
@@ -403,35 +457,32 @@ onBeforeUnmount(() => {
           Review your borrowing and lending history
         </p>
       </section>
-
-      <NuxtLink
-        to="/account/requests"
-        class="inline-flex h-11 shrink-0 items-center gap-2 rounded-[12px] border-[1.5px] border-burning-orange px-6 text-[13px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5"
-      >
-        View Requests
-      </NuxtLink>
     </div>
 
     <!-- Search bar -->
     <div
       class="flex items-center gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-12 px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
     >
-      <Icon name="ph:magnifying-glass" class="w-5 h-5 text-gray-400 shrink-0" />
+      <button
+        v-if="searchQuery"
+        type="button"
+        class="flex h-10 w-10 items-center justify-center -ml-2.5 text-noble-black/30 hover:text-burning-orange transition-colors"
+        title="Clear search"
+        @click="searchQuery = ''"
+      >
+        <Icon name="ph:x" class="w-5 h-5" />
+      </button>
+      <Icon
+        v-else
+        name="ph:magnifying-glass"
+        class="w-5 h-5 text-gray-400 shrink-0 transition-colors"
+      />
       <input
         v-model="searchQuery"
         type="text"
         placeholder="Search transactions..."
         class="flex-1 bg-transparent outline-none text-noble-black text-[15px] font-medium placeholder:text-gray-400 min-w-0"
       />
-      <!-- Clear Search Button -->
-      <button
-        v-if="searchQuery"
-        class="text-gray-400 hover:text-noble-black transition-colors"
-        title="Clear search"
-        @click="searchQuery = ''"
-      >
-        <Icon name="ph:x" class="w-[18px] h-[18px]" />
-      </button>
     </div>
 
     <!-- Tab bar -->
@@ -443,6 +494,9 @@ onBeforeUnmount(() => {
             ? 'text-burning-orange'
             : 'text-noble-black/40 hover:text-noble-black/60'
         "
+        @pointerenter="warmRoleHistory('BORROWER')"
+        @focus="warmRoleHistory('BORROWER')"
+        @touchstart.passive="warmRoleHistory('BORROWER')"
         @click="setRole('BORROWER')"
       >
         Borrow History
@@ -459,6 +513,9 @@ onBeforeUnmount(() => {
             ? 'text-burning-orange'
             : 'text-noble-black/40 hover:text-noble-black/60'
         "
+        @pointerenter="warmRoleHistory('LENDER')"
+        @focus="warmRoleHistory('LENDER')"
+        @touchstart.passive="warmRoleHistory('LENDER')"
         @click="setRole('LENDER')"
       >
         Lend History
@@ -493,18 +550,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Loading skeletons -->
-      <template v-if="isInitialLoading">
-        <div class="flex flex-col gap-4">
-          <TransactionCardSkeleton />
-          <BorrowerRequestCardSkeleton />
-          <TransactionCardSkeleton />
-        </div>
-      </template>
-
       <!-- Error state -->
       <div
-        v-else-if="hasInitialError"
+        v-if="hasInitialError"
         class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
       >
         <Icon name="ph:warning-circle" class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4" />
@@ -532,7 +580,11 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Transaction list (Grouped & Internal Scroll) -->
-      <div v-else class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10">
+      <div
+        v-else
+        class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10"
+        @scroll.passive="loadMoreIfNearBottom"
+      >
         <div v-for="group in groupedHistoryEntries" :key="group.title" class="space-y-5">
           <div class="flex items-center gap-4 px-2 sticky top-0 bg-cream z-20 py-2">
             <span
@@ -608,3 +660,19 @@ onBeforeUnmount(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.noble-black / 10%");
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.noble-black / 20%");
+}
+</style>

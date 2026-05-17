@@ -2,8 +2,12 @@
   <div ref="container" class="relative">
     <!-- Input Trigger -->
     <div
-      class="flex items-center w-full h-[42px] bg-white border border-cinnamon-ice/40 rounded-[10px] px-3 cursor-pointer group hover:border-burning-orange/40 transition-all duration-300"
-      :class="{ 'border-burning-orange ring-1 ring-burning-orange/20': isOpen }"
+      class="flex items-center w-full h-[42px] bg-white border border-cinnamon-ice/30 rounded-[10px] px-3 cursor-pointer group transition-all duration-300"
+      :class="
+        isOpen
+          ? 'border-burning-orange ring-1 ring-burning-orange/20'
+          : 'hover:border-burning-orange/50'
+      "
       @click="toggleDropdown"
     >
       <div class="flex items-center flex-1">
@@ -20,7 +24,7 @@
       </div>
       <Icon
         name="ph:caret-down"
-        class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors ml-1"
+        class="w-4 h-4 text-gray-400 transition-colors ml-1"
         :class="{ 'rotate-180': isOpen }"
       />
     </div>
@@ -36,20 +40,20 @@
     >
       <div
         v-if="isOpen"
-        class="absolute z-[100] mt-2 w-full min-w-[120px] bg-white border border-cinnamon-ice/30 rounded-[15px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] py-2 font-geist"
+        class="absolute z-[100] mt-2 w-full min-w-[140px] bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] py-2 font-geist"
       >
         <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
           <button
             v-for="option in timeOptions"
             :key="option.value"
             type="button"
-            class="w-full text-left px-4 py-2 text-[13px] transition-all duration-200"
+            class="w-full text-left px-4 py-2 text-sm transition-all duration-200"
             :class="[
               isTimeDisabled(option.value)
                 ? 'opacity-30 cursor-not-allowed'
                 : modelValue === option.value
-                  ? 'bg-burning-orange text-white font-bold'
-                  : 'text-noble-black/80 hover:bg-cream hover:text-burning-orange',
+                  ? 'bg-gray-50 text-burning-orange font-bold'
+                  : 'text-noble-black hover:bg-gray-50 hover:text-burning-orange',
             ]"
             :disabled="isTimeDisabled(option.value)"
             @click.stop="selectTime(option)"
@@ -136,24 +140,4 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: theme("colors.cinnamon-ice / 50%");
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: theme("colors.burning-orange");
-}
-
-/* For browsers that support scrollbar-color (Firefox) */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: theme("colors.cinnamon-ice / 50%") transparent;
-}
-</style>
+<style scoped></style>
