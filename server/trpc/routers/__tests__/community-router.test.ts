@@ -4,6 +4,8 @@ import { communityRouter } from "../community"
 const BORROWER_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const LENDER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 const OTHER_USER_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+const ROOT_REPLY_ID = "11111111-1111-4111-8111-111111111111"
+const CHILD_REPLY_ID = "22222222-2222-4222-8222-222222222222"
 
 const borrowerUser = {
   id: BORROWER_USER_ID,
@@ -84,6 +86,15 @@ const makeOfferRow = (overrides: Record<string, unknown> = {}) => ({
 const makePrisma = (overrides: Record<string, unknown> = {}) => ({
   $queryRaw: vi.fn(),
   $executeRaw: vi.fn().mockResolvedValue(1),
+  itemRequestReply: {
+    findMany: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+  },
+  itemRequestReplyUpvote: {
+    findUnique: vi.fn().mockResolvedValue(null),
+    create: vi.fn(),
+    delete: vi.fn(),
+  },
   user: {
     findUnique: vi.fn().mockResolvedValue({ id: BORROWER_USER_ID }),
   },
@@ -147,6 +158,185 @@ describe("communityRouter", () => {
       id: 20,
       itemName: "Camera",
       lender: { userId: LENDER_USER_ID, name: "lender1" },
+    })
+  })
+
+  it("lists request replies as a nested tree with viewer upvote state", async () => {
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "Top-level reply",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: BORROWER_USER_ID,
+          username: "borrower1",
+          firstName: "Juan",
+          middleName: null,
+          lastName: "Cruz",
+          email: "borrower@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 2 },
+        upvotes: [{ id: "vote-1" }],
+      },
+      {
+        id: CHILD_REPLY_ID,
+        requestId: 10,
+        parentReplyId: ROOT_REPLY_ID,
+        body: "Nested reply",
+        createdAt: new Date("2026-04-18T01:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T01:00:00.000Z"),
+        author: {
+          id: LENDER_USER_ID,
+          username: "lender1",
+          firstName: "Issa",
+          middleName: null,
+          lastName: "Santos",
+          email: "lender@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 0 },
+        upvotes: [],
+      },
+    ])
+    const queryRaw = vi.fn().mockResolvedValueOnce([makeRequestRow()])
+    const caller = communityRouter.createCaller(
+      makeContext(borrowerUser, {
+        $queryRaw: queryRaw,
+        itemRequestReply: { findMany: replyFindMany },
+      }),
+    )
+
+    const result = await caller.listReplies({ requestId: 10 })
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      id: ROOT_REPLY_ID,
+      text: "Top-level reply",
+      isUpvoted: true,
+      replies: [{ id: CHILD_REPLY_ID, text: "Nested reply" }],
+    })
+  })
+
+  it("creates a reply for an existing request", async () => {
+    const queryRaw = vi.fn().mockResolvedValueOnce([makeRequestRow()])
+    const createReply = vi.fn().mockResolvedValue({ id: ROOT_REPLY_ID })
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "Fresh reply",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: BORROWER_USER_ID,
+          username: "borrower1",
+          firstName: "Juan",
+          middleName: null,
+          lastName: "Cruz",
+          email: "borrower@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 0 },
+        upvotes: [],
+      },
+    ])
+    const findUnique = vi.fn().mockResolvedValue({ id: BORROWER_USER_ID })
+    const caller = communityRouter.createCaller(
+      makeContext(borrowerUser, {
+        $queryRaw: queryRaw,
+        user: { findUnique },
+        itemRequestReply: {
+          create: createReply,
+          findMany: replyFindMany,
+        },
+      }),
+    )
+
+    const result = await caller.createReply({
+      requestId: 10,
+      text: "Fresh reply",
+    })
+
+    expect(createReply).toHaveBeenCalledWith({
+      data: {
+        requestId: 10,
+        authorUserId: BORROWER_USER_ID,
+        parentReplyId: null,
+        body: "Fresh reply",
+      },
+      select: { id: true },
+    })
+    expect(result).toMatchObject({
+      id: ROOT_REPLY_ID,
+      requestId: 10,
+      text: "Fresh reply",
+    })
+  })
+
+  it("toggles a reply upvote for the current user", async () => {
+    const queryRaw = vi.fn().mockResolvedValueOnce([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        authorUserId: BORROWER_USER_ID,
+      },
+    ])
+    const upvoteFindUnique = vi.fn().mockResolvedValue(null)
+    const upvoteCreate = vi.fn().mockResolvedValue({ id: "vote-1" })
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "Fresh reply",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: BORROWER_USER_ID,
+          username: "borrower1",
+          firstName: "Juan",
+          middleName: null,
+          lastName: "Cruz",
+          email: "borrower@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 1 },
+        upvotes: [{ id: "vote-1" }],
+      },
+    ])
+    const findUnique = vi.fn().mockResolvedValue({ id: LENDER_USER_ID })
+    const caller = communityRouter.createCaller(
+      makeContext(lenderUser, {
+        $queryRaw: queryRaw,
+        user: { findUnique },
+        itemRequestReply: { findMany: replyFindMany },
+        itemRequestReplyUpvote: {
+          findUnique: upvoteFindUnique,
+          create: upvoteCreate,
+          delete: vi.fn(),
+        },
+      }),
+    )
+
+    const result = await caller.toggleReplyUpvote({ id: ROOT_REPLY_ID })
+
+    expect(upvoteCreate).toHaveBeenCalledWith({
+      data: {
+        replyId: ROOT_REPLY_ID,
+        userId: LENDER_USER_ID,
+      },
+    })
+    expect(result).toEqual({
+      replyId: ROOT_REPLY_ID,
+      requestId: 10,
+      isUpvoted: true,
+      upvotes: 1,
     })
   })
 

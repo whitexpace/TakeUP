@@ -8,6 +8,9 @@ export const itemRequestIdSchema = z.object({
 export const itemRequestStatusSchema = z.enum(["OPEN", "FULFILLED", "CANCELLED"])
 export const requestOfferStatusSchema = z.enum(["PENDING", "ACCEPTED", "DECLINED", "CANCELLED"])
 export const requestOfferConditionSchema = itemConditionSchema
+export const itemRequestReplyIdSchema = z.object({
+  id: z.string().uuid(),
+})
 
 const requiredTextField = (label: string, maxLength: number) =>
   z
@@ -59,6 +62,18 @@ export const createItemRequestSchema = z.object({
   referenceImageUrl: z.string().url().nullable().optional(),
   status: itemRequestStatusSchema.default("OPEN"),
 })
+
+export const listItemRequestRepliesSchema = z.object({
+  requestId: z.coerce.number().int().positive(),
+})
+
+export const createItemRequestReplySchema = z.object({
+  requestId: z.coerce.number().int().positive(),
+  parentReplyId: z.string().uuid().nullable().optional(),
+  text: requiredTextField("Reply text", 2000),
+})
+
+export const toggleItemRequestReplyUpvoteSchema = itemRequestReplyIdSchema
 
 export const updateItemRequestSchema = z
   .object({
@@ -153,6 +168,9 @@ export type RequestOfferStatus = z.infer<typeof requestOfferStatusSchema>
 export type CreateItemRequestInput = z.infer<typeof createItemRequestSchema>
 export type UpdateItemRequestInput = z.infer<typeof updateItemRequestSchema>
 export type ListItemRequestsInput = z.infer<typeof listItemRequestsSchema>
+export type ListItemRequestRepliesInput = z.infer<typeof listItemRequestRepliesSchema>
+export type CreateItemRequestReplyInput = z.infer<typeof createItemRequestReplySchema>
+export type ToggleItemRequestReplyUpvoteInput = z.infer<typeof toggleItemRequestReplyUpvoteSchema>
 export type CreateRequestOfferInput = z.infer<typeof createRequestOfferSchema>
 export type UpdateRequestOfferInput = z.infer<typeof updateRequestOfferSchema>
 export type ListRequestOffersInput = z.infer<typeof listRequestOffersSchema>

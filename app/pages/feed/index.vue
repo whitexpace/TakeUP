@@ -90,6 +90,8 @@
                 :key="request.id"
                 :request="request"
                 :current-user-id="currentDbUserId"
+                :current-user-name="currentUserName"
+                :current-user-avatar="currentUserAvatar"
                 @offer-item="openOfferComposer"
                 @update-request-status="handleUpdateRequestStatus"
                 @delete-request="handleDeleteRequest"
@@ -213,7 +215,7 @@ import {
   normalizeOfferableItem,
 } from "../../utils/community-feed"
 
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type {
   CommunityOfferFormInput,
   CommunityOfferStatus,
@@ -344,6 +346,10 @@ const {
   feedTrendingItems,
   setFeedSummary,
 } = useCommunityFeedCache()
+const supabase = useSupabaseClient()
+let refreshFeedPromise: Promise<void> | null = null
+let feedPollIntervalId: ReturnType<typeof setInterval> | null = null
+let feedRealtimeChannel: ReturnType<typeof supabase.channel> | null = null
 const initialViewerKey = user.value?.id ?? "anonymous"
 const isLoadingFeed = ref(!feedHydrated.value || feedViewerKey.value !== initialViewerKey)
 const isCreatingRequest = ref(false)
@@ -447,63 +453,102 @@ const enumerateRequestedDates = (
 }
 
 const refreshFeed = async () => {
-  if (feedHydrated.value) {
-    isLoadingFeed.value = false
-  } else {
-    isLoadingFeed.value = true
+  if (refreshFeedPromise) {
+    return refreshFeedPromise
   }
 
-  feedError.value = null
-
-  try {
-    const headers = await getAuthHeaders()
-    feedViewerKey.value = user.value?.id ?? "anonymous"
-
-    if (headers) {
-      const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
-      const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
-      currentDbUserId.value = authUser?.id ?? ""
+  refreshFeedPromise = (async () => {
+    if (feedHydrated.value) {
+      isLoadingFeed.value = false
     } else {
-      currentDbUserId.value = ""
+      isLoadingFeed.value = true
     }
 
-    const [requestResponse, notificationResponse, offerableItemResponse] = await withPerfTimer(
-      "community-feed",
-      feedViewerKey.value,
-      () =>
-        Promise.all([
-          $fetch<ApiCommunityRequest[]>("/api/item-requests", {
-            query: { includeCancelledOffers: true, offersLimit: 5 },
-            ...(headers ? { headers } : {}),
-          }),
-          headers
-            ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", {
-                query: { limit: 20 },
-                headers,
-              })
-            : Promise.resolve([]),
-          headers
-            ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
-            : Promise.resolve([]),
-        ]),
-      {
-        detail: "refreshFeed",
-      },
-    )
+    feedError.value = null
 
-    const nextRequests = requestResponse.map(normalizeCommunityRequest)
-    requests.value = nextRequests
-    notifications.value = notificationResponse.map(normalizeCommunityNotification)
-    offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
-    setFeedSummary(nextRequests, currentDbUserId.value)
-    feedLastLoadedAt.value = Date.now()
-  } catch (error) {
-    console.error("Failed to load community feed", error)
-    feedError.value = "Unable to load the live community feed right now."
-  } finally {
-    isLoadingFeed.value = false
-    feedHydrated.value = true
+    try {
+      const headers = await getAuthHeaders()
+      feedViewerKey.value = user.value?.id ?? "anonymous"
+
+      if (headers) {
+        const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
+        const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
+        currentDbUserId.value = authUser?.id ?? ""
+      } else {
+        currentDbUserId.value = ""
+      }
+
+      const [requestResponse, notificationResponse, offerableItemResponse] = await withPerfTimer(
+        "community-feed",
+        feedViewerKey.value,
+        () =>
+          Promise.all([
+            $fetch<ApiCommunityRequest[]>("/api/item-requests", {
+              query: { includeCancelledOffers: true, offersLimit: 5 },
+              ...(headers ? { headers } : {}),
+            }),
+            headers
+              ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", {
+                  query: { limit: 20 },
+                  headers,
+                })
+              : Promise.resolve([]),
+            headers
+              ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
+              : Promise.resolve([]),
+          ]),
+        {
+          detail: "refreshFeed",
+        },
+      )
+
+      const nextRequests = requestResponse.map(normalizeCommunityRequest)
+      requests.value = nextRequests
+      notifications.value = notificationResponse.map(normalizeCommunityNotification)
+      offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
+      setFeedSummary(nextRequests, currentDbUserId.value)
+      feedLastLoadedAt.value = Date.now()
+    } catch (error) {
+      console.error("Failed to load community feed", error)
+      feedError.value = "Unable to load the live community feed right now."
+    } finally {
+      isLoadingFeed.value = false
+      feedHydrated.value = true
+      refreshFeedPromise = null
+    }
+  })()
+
+  return refreshFeedPromise
+}
+
+const stopFeedSync = () => {
+  if (feedPollIntervalId !== null) {
+    clearInterval(feedPollIntervalId)
+    feedPollIntervalId = null
   }
+
+  if (feedRealtimeChannel) {
+    void supabase.removeChannel(feedRealtimeChannel)
+    feedRealtimeChannel = null
+  }
+}
+
+const startFeedSync = () => {
+  stopFeedSync()
+
+  feedRealtimeChannel = supabase
+    .channel("community-feed")
+    .on("broadcast", { event: "message" }, () => {
+      void refreshFeed()
+    })
+
+  void feedRealtimeChannel.subscribe()
+
+  feedPollIntervalId = setInterval(() => {
+    if (!document.hidden) {
+      void refreshFeed()
+    }
+  }, COMMUNITY_FEED_CACHE_TTL_MS)
 }
 
 const selectedRequestForOffer = computed(() => {
@@ -892,6 +937,8 @@ const markAllNotificationsRead = async () => {
 }
 
 onMounted(() => {
+  startFeedSync()
+
   const currentViewerKey = user.value?.id ?? "anonymous"
   const isViewerCacheMatch = feedViewerKey.value === currentViewerKey
   const isCachedFeedFresh =
@@ -923,6 +970,7 @@ watch(
   (nextUserId, previousUserId) => {
     if (!feedHydrated.value) return
     if (nextUserId === previousUserId) return
+    startFeedSync()
     void refreshFeed()
   },
 )
@@ -931,6 +979,10 @@ watch(currentDbUserId, (userId) => {
   if (!userId && activeFilter.value === "My Requests") {
     activeFilter.value = "Newest"
   }
+})
+
+onBeforeUnmount(() => {
+  stopFeedSync()
 })
 </script>
 

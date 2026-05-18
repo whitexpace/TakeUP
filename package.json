@@ -15,6 +15,7 @@
     "format": "prettier . --write && prisma format",
     "format:prisma": "prisma format",
     "check": "pnpm format && pnpm lint && pnpm typecheck && pnpm test",
+    "pretypecheck": "prisma generate",
     "typecheck": "nuxi typecheck",
     "pretest": "prisma generate",
     "test": "vitest run",

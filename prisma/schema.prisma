@@ -534,6 +534,8 @@ model User {
   borrowedTransactions              RentalTransaction[]        @relation("transactions_borrower_user_idToUser")
   lentTransactions                  RentalTransaction[]        @relation("transactions_lender_user_idToUser")
   requestPosts                      RequestPost[]
+  itemRequestReplies                ItemRequestReply[]
+  itemRequestReplyUpvotes           ItemRequestReplyUpvote[]
   rewardEvents                      RewardEvent[]
   rewards                           UserReward?
   sentMessages                      Message[]
@@ -682,8 +684,9 @@ model ItemRequest {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  borrower Borrower       @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
+  borrower Borrower           @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
   offers   RequestOffer[]
+  replies  ItemRequestReply[]
 
   @@index([borrowerID])
   @@index([status])
@@ -714,6 +717,42 @@ model RequestOffer {
   @@index([itemID])
   @@index([status])
   @@index([borrowerReadAt])
+}
+
+model ItemRequestReply {
+  id            String   @id @default(uuid())
+  requestId     Int      @map("request_id")
+  authorUserId  String   @map("author_user_id")
+  parentReplyId String?  @map("parent_reply_id")
+  body          String
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  author  User                     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  parent  ItemRequestReply?        @relation("item_request_reply_replies", fields: [parentReplyId], references: [id], onDelete: Cascade)
+  replies ItemRequestReply[]       @relation("item_request_reply_replies")
+  request ItemRequest              @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  upvotes ItemRequestReplyUpvote[]
+
+  @@index([requestId, createdAt(sort: Desc)])
+  @@index([parentReplyId, createdAt(sort: Desc)])
+  @@index([authorUserId, createdAt(sort: Desc)])
+  @@map("item_request_replies")
+}
+
+model ItemRequestReplyUpvote {
+  id        String   @id @default(uuid())
+  replyId   String   @map("reply_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  reply ItemRequestReply @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([replyId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([replyId, createdAt(sort: Desc)])
+  @@map("item_request_reply_upvotes")
 }
 
 model TransactionDispute {

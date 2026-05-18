@@ -44,19 +44,17 @@
           <button
             class="flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase transition-all duration-300 group/upvote"
             :class="
-              isUpvoted
+              reply.isUpvoted
                 ? 'text-burning-orange scale-105'
                 : 'text-noble-black/40 hover:text-burning-orange'
             "
-            @click="toggleUpvote"
+            @click="$emit('upvote-reply', reply.id)"
           >
             <Icon
-              :name="isUpvoted ? 'ph:arrow-fat-up-fill' : 'ph:arrow-fat-up'"
+              :name="reply.isUpvoted ? 'ph:arrow-fat-up-fill' : 'ph:arrow-fat-up'"
               class="w-[14px] h-[14px] group-hover/upvote:-translate-y-0.5 transition-transform"
             />
-            <span class="font-geist">{{
-              reply.upvotes + (isUpvoted && !reply.isUpvoted ? 1 : 0)
-            }}</span>
+            <span class="font-geist">{{ reply.upvotes }}</span>
           </button>
 
           <!-- Reply Toggle -->
@@ -108,25 +106,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue"
+import { computed, ref } from "vue"
 import type { Reply } from "~/types/community-requests"
 
 const props = defineProps<{
   reply: Reply
 }>()
 
-const emit = defineEmits(["reply", "upvote-reply"])
-
-const isUpvoted = ref(props.reply.isUpvoted || false)
+defineEmits(["reply", "upvote-reply"])
 const isExpanded = ref(false)
 
 const hasReplies = computed(() => props.reply.replies && props.reply.replies.length > 0)
 const replyCount = computed(() => props.reply.replies?.length || 0)
-
-const toggleUpvote = () => {
-  isUpvoted.value = !isUpvoted.value
-  emit("upvote-reply", props.reply.id)
-}
 
 const formatRelativeTime = (timestamp: Date) => {
   const diff = Date.now() - new Date(timestamp).getTime()

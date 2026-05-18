@@ -3,23 +3,27 @@ import { TRPCError } from "@trpc/server"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
+  createItemRequestReplySchema,
   createItemRequestSchema,
   createRequestOfferSchema,
   deleteItemRequestSchema,
   deleteRequestOfferSchema,
   itemRequestIdSchema,
   itemRequestStatusSchema,
+  listItemRequestRepliesSchema,
   listItemRequestsSchema,
   listRequestOfferNotificationsSchema,
   listRequestOffersSchema,
   markRequestOfferNotificationReadSchema,
   requestOfferIdSchema,
   requestOfferStatusSchema,
+  toggleItemRequestReplyUpvoteSchema,
   type ItemRequestStatus,
   type RequestOfferStatus,
   updateItemRequestSchema,
   updateRequestOfferSchema,
 } from "#shared/schemas/item-request"
+import { broadcastCommunityFeedEvent } from "../../utils/community-feed-realtime"
 
 type ProfileIdRow = {
   id: number
@@ -89,6 +93,46 @@ type OfferRow = {
   requestItemNeeded: string
 }
 
+type ReplyAuthor = {
+  userId: string
+  username: string
+  firstName: string
+  middleName: string | null
+  lastName: string
+  email: string
+  avatarUrl: string | null
+}
+
+type ReplyRow = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  body: string
+  createdAt: Date
+  updatedAt: Date
+  author: ReplyAuthor
+  upvoteCount: number
+  isUpvoted: boolean
+}
+
+type CommunityReplyNode = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  user: {
+    userId: string
+    username: string
+    name: string
+    avatar: string
+  }
+  text: string
+  upvotes: number
+  isUpvoted: boolean
+  createdAt: Date
+  updatedAt: Date
+  replies: CommunityReplyNode[]
+}
+
 const toDate = (value: Date | string | null | undefined) => {
   if (!value) return null
   return value instanceof Date ? value : new Date(value)
@@ -116,6 +160,62 @@ const formatUserName = (user: {
   user.username ||
   [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ") ||
   user.email
+
+const mapCommunityMember = (user: ReplyAuthor) => ({
+  userId: user.userId,
+  username: user.username,
+  name: formatUserName(user),
+  avatar: user.avatarUrl || "",
+})
+
+const mapReplyRow = (reply: ReplyRow): CommunityReplyNode => ({
+  id: reply.id,
+  requestId: reply.requestId,
+  parentReplyId: reply.parentReplyId,
+  user: mapCommunityMember(reply.author),
+  text: reply.body,
+  upvotes: reply.upvoteCount,
+  isUpvoted: reply.isUpvoted,
+  createdAt: reply.createdAt,
+  updatedAt: reply.updatedAt,
+  replies: [],
+})
+
+const buildReplyTree = (rows: ReplyRow[]) => {
+  const nodesById = new Map<string, CommunityReplyNode>()
+  const roots: CommunityReplyNode[] = []
+
+  for (const row of rows) {
+    nodesById.set(row.id, mapReplyRow(row))
+  }
+
+  for (const row of rows) {
+    const node = nodesById.get(row.id)
+    if (!node) continue
+
+    if (row.parentReplyId) {
+      const parent = nodesById.get(row.parentReplyId)
+      if (parent) {
+        parent.replies.push(node)
+        continue
+      }
+    }
+
+    roots.push(node)
+  }
+
+  const sortNodes = (nodes: CommunityReplyNode[]) => {
+    nodes.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+    for (const node of nodes) {
+      if (node.replies.length > 0) {
+        sortNodes(node.replies)
+      }
+    }
+  }
+
+  sortNodes(roots)
+  return roots
+}
 
 const sqlDateArray = (values: Date[]) =>
   Prisma.sql`ARRAY[${Prisma.join(values.map((value) => Prisma.sql`${value}`))}]::timestamp[]`
@@ -436,6 +536,119 @@ const fetchMappedRequests = async (
   return requests.map((request) => mapRequest(request, offersByRequestId.get(request.id) ?? []))
 }
 
+const fetchReplyTree = async (
+  prisma: {
+    itemRequestReply: {
+      findMany(args: {
+        where: { requestId: number }
+        orderBy: Array<{ createdAt: "asc" }>
+        select: {
+          id: true
+          requestId: true
+          parentReplyId: true
+          body: true
+          createdAt: true
+          updatedAt: true
+          author: {
+            select: {
+              id: true
+              username: true
+              firstName: true
+              middleName: true
+              lastName: true
+              email: true
+              avatarUrl: true
+            }
+          }
+          _count: { select: { upvotes: true } }
+          upvotes: {
+            where: { userId: string }
+            select: { id: true }
+          }
+        }
+      }): Promise<
+        Array<{
+          id: string
+          requestId: number
+          parentReplyId: string | null
+          body: string
+          createdAt: Date
+          updatedAt: Date
+          author: {
+            id: string
+            username: string
+            firstName: string
+            middleName: string | null
+            lastName: string
+            email: string
+            avatarUrl: string | null
+          }
+          _count: { upvotes: number }
+          upvotes: Array<{ id: string }>
+        }>
+      >
+    }
+  },
+  requestId: number,
+  viewerUserId: string | null,
+) => {
+  const rows = await prisma.itemRequestReply.findMany({
+    where: { requestId },
+    orderBy: [{ createdAt: "asc" }],
+    select: {
+      id: true,
+      requestId: true,
+      parentReplyId: true,
+      body: true,
+      createdAt: true,
+      updatedAt: true,
+      author: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+          avatarUrl: true,
+        },
+      },
+      _count: { select: { upvotes: true } },
+      upvotes: viewerUserId
+        ? {
+            where: { userId: viewerUserId },
+            select: { id: true },
+          }
+        : {
+            where: { userId: "__no_viewer__" },
+            select: { id: true },
+          },
+    },
+  })
+
+  const normalizedRows: ReplyRow[] = rows.map((row) => ({
+    id: row.id,
+    requestId: row.requestId,
+    parentReplyId: row.parentReplyId,
+    body: row.body,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    author: {
+      userId: row.author.id,
+      username: row.author.username,
+      firstName: row.author.firstName,
+      middleName: row.author.middleName,
+      lastName: row.author.lastName,
+      email: row.author.email,
+      avatarUrl: row.author.avatarUrl,
+    },
+    upvoteCount: row._count.upvotes,
+    isUpvoted: row.upvotes.length > 0,
+  }))
+
+  return buildReplyTree(normalizedRows)
+}
+
 const assertUserExists = async (
   prisma: {
     user: {
@@ -567,6 +780,38 @@ const getEditableRequest = async (
   return request
 }
 
+type ExistingReplyRow = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  authorUserId: string
+}
+
+const getExistingReply = async (
+  prisma: {
+    $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+  },
+  replyId: string,
+) => {
+  const rows = await prisma.$queryRaw<ExistingReplyRow[]>(Prisma.sql`
+    SELECT
+      r."id",
+      r."request_id" AS "requestId",
+      r."parent_reply_id" AS "parentReplyId",
+      r."author_user_id" AS "authorUserId"
+    FROM "item_request_replies" r
+    WHERE r."id" = ${replyId}
+    LIMIT 1
+  `)
+
+  const reply = rows[0]
+  if (!reply) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Reply not found." })
+  }
+
+  return reply
+}
+
 type ItemOwnershipRow = {
   numericId: number
   lenderId: string
@@ -657,6 +902,124 @@ export const communityRouter = router({
     return request
   }),
 
+  listReplies: publicProcedure.input(listItemRequestRepliesSchema).query(async ({ ctx, input }) => {
+    await getEditableRequest(ctx.prisma, input.requestId)
+    return fetchReplyTree(ctx.prisma, input.requestId, ctx.user?.id ?? null)
+  }),
+
+  createReply: protectedProcedure
+    .input(createItemRequestReplySchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertUserExists(ctx.prisma, ctx.user.id)
+      await getEditableRequest(ctx.prisma, input.requestId)
+
+      if (input.parentReplyId) {
+        const parentReply = await getExistingReply(ctx.prisma, input.parentReplyId)
+        if (parentReply.requestId !== input.requestId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Reply thread does not belong to this request.",
+          })
+        }
+      }
+
+      const createdReply = await ctx.prisma.itemRequestReply.create({
+        data: {
+          requestId: input.requestId,
+          authorUserId: ctx.user.id,
+          parentReplyId: input.parentReplyId ?? null,
+          body: input.text,
+        },
+        select: { id: true },
+      })
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "reply-created",
+        requestId: input.requestId,
+        replyId: createdReply.id,
+        actorUserId: ctx.user.id,
+      })
+
+      const replyTree = await fetchReplyTree(ctx.prisma, input.requestId, ctx.user.id)
+      const createdNode = (() => {
+        const stack = [...replyTree]
+        while (stack.length > 0) {
+          const node = stack.shift()
+          if (!node) continue
+          if (node.id === createdReply.id) return node
+          stack.unshift(...node.replies)
+        }
+        return null
+      })()
+
+      if (!createdNode) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Reply not found." })
+      }
+
+      return createdNode
+    }),
+
+  toggleReplyUpvote: protectedProcedure
+    .input(toggleItemRequestReplyUpvoteSchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertUserExists(ctx.prisma, ctx.user.id)
+      const reply = await getExistingReply(ctx.prisma, input.id)
+
+      const existingUpvote = await ctx.prisma.itemRequestReplyUpvote.findUnique({
+        where: {
+          replyId_userId: {
+            replyId: input.id,
+            userId: ctx.user.id,
+          },
+        },
+        select: { id: true },
+      })
+
+      if (existingUpvote) {
+        await ctx.prisma.itemRequestReplyUpvote.delete({
+          where: {
+            replyId_userId: {
+              replyId: input.id,
+              userId: ctx.user.id,
+            },
+          },
+        })
+      } else {
+        await ctx.prisma.itemRequestReplyUpvote.create({
+          data: {
+            replyId: input.id,
+            userId: ctx.user.id,
+          },
+        })
+      }
+
+      const refreshedReply = await fetchReplyTree(ctx.prisma, reply.requestId, ctx.user.id)
+      const targetNode = (() => {
+        const stack = [...refreshedReply]
+        while (stack.length > 0) {
+          const node = stack.shift()
+          if (!node) continue
+          if (node.id === input.id) return node
+          stack.unshift(...node.replies)
+        }
+        return null
+      })()
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "reply-upvote-toggled",
+        requestId: reply.requestId,
+        replyId: input.id,
+        actorUserId: ctx.user.id,
+      })
+
+      return {
+        replyId: input.id,
+        requestId: reply.requestId,
+        isUpvoted: !existingUpvote,
+        upvotes: targetNode?.upvotes ?? 0,
+      }
+    }),
+
   createRequest: protectedProcedure
     .input(createItemRequestSchema)
     .mutation(async ({ ctx, input }) => {
@@ -697,6 +1060,12 @@ export const communityRouter = router({
         { requestId, includeCancelledOffers: true },
         ctx.user.id,
       )
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "request-created",
+        requestId,
+        actorUserId: ctx.user.id,
+      })
 
       return request
     }),
@@ -746,6 +1115,12 @@ export const communityRouter = router({
         ctx.user.id,
       )
 
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "request-updated",
+        requestId: input.id,
+        actorUserId: ctx.user.id,
+      })
+
       return request
     }),
 
@@ -766,6 +1141,12 @@ export const communityRouter = router({
         WHERE "id" = ${input.id}
         RETURNING "id"
       `)
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "request-deleted",
+        requestId: input.id,
+        actorUserId: ctx.user.id,
+      })
 
       return rows[0] ?? { id: input.id }
     }),
@@ -899,6 +1280,12 @@ export const communityRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
       }
 
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "offer-created",
+        requestId: input.requestID,
+        actorUserId: ctx.user.id,
+      })
+
       return mapOffer(offer)
     }),
 
@@ -1004,6 +1391,12 @@ export const communityRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
       }
 
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "offer-updated",
+        requestId: existing.requestID,
+        actorUserId: ctx.user.id,
+      })
+
       return mapOffer(offer)
     }),
 
@@ -1036,6 +1429,12 @@ export const communityRouter = router({
         WHERE "id" = ${input.id}
         RETURNING "id"
       `)
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "offer-deleted",
+        requestId: existing.requestID,
+        actorUserId: ctx.user.id,
+      })
 
       return rows[0] ?? { id: input.id }
     }),

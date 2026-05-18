@@ -190,7 +190,12 @@
     >
       <!-- Quick Reply Input -->
       <div class="flex gap-3 mb-8">
-        <UserAvatar size="sm" class="shrink-0 mt-1" user-name="You" />
+        <UserAvatar
+          size="sm"
+          class="shrink-0 mt-1"
+          :avatar-url="currentUserAvatar"
+          :user-name="currentUserName"
+        />
         <div class="flex-1 relative group/input">
           <input
             ref="replyInputRef"
@@ -200,26 +205,49 @@
               replyingTo ? `Replying to ${replyingTo.name}...` : 'Add to the discussion...'
             "
             class="w-full bg-cream/30 border border-cinnamon-ice/10 rounded-[14px] px-4 py-2.5 text-[14px] font-geist focus:outline-none focus:border-burning-orange/30 focus:bg-white transition-all duration-300"
+            :disabled="isSubmittingComment"
             @keydown.esc="cancelReply"
             @keydown.enter="postComment"
           />
           <button
             class="absolute right-2 top-1.5 h-7 px-3 bg-noble-black text-white text-[11px] font-bold uppercase tracking-wider rounded-[8px] opacity-0 group-focus-within/input:opacity-100 transition-opacity"
+            :disabled="isSubmittingComment"
             @click="postComment"
           >
-            Post
+            {{ isSubmittingComment ? "Posting" : "Post" }}
           </button>
         </div>
       </div>
 
+      <div
+        v-if="replyError"
+        class="mb-4 rounded-[14px] border border-cinnabar-red/15 bg-cinnabar-red/5 px-4 py-3 text-[12px] font-medium text-cinnabar-red"
+      >
+        {{ replyError }}
+      </div>
+
+      <div
+        v-if="isLoadingReplies && threadReplies.length === 0"
+        class="rounded-[18px] border border-gray-100 bg-cream/20 px-4 py-5 text-[13px] text-noble-black/45"
+      >
+        Loading discussion...
+      </div>
+
       <!-- Nested Replies List -->
-      <div class="flex flex-col gap-6">
+      <div v-if="threadReplies.length > 0" class="flex flex-col gap-6">
         <CommunityReplyItem
-          v-for="reply in mockReplies"
+          v-for="reply in threadReplies"
           :key="reply.id"
           :reply="reply"
           @reply="handleReplyToUser"
+          @upvote-reply="handleToggleReplyUpvote"
         />
+      </div>
+      <div
+        v-else-if="!isLoadingReplies"
+        class="rounded-[18px] border border-dashed border-cinnamon-ice/20 bg-cream/20 px-4 py-6 text-[13px] text-noble-black/45"
+      >
+        No replies yet. Start the discussion.
       </div>
     </div>
 
@@ -356,6 +384,8 @@ import type {
 const props = defineProps<{
   request: CommunityRequest
   currentUserId: string
+  currentUserName: string
+  currentUserAvatar?: string
 }>()
 
 const emit = defineEmits<{
@@ -386,67 +416,65 @@ const isLoadingOffers = ref(false)
 const offerLoadError = ref("")
 const cardRef = ref<HTMLElement | null>(null)
 const replyInputRef = ref<HTMLInputElement | null>(null)
+const supabase = useSupabaseClient()
+let repliesPollIntervalId: ReturnType<typeof setInterval> | null = null
+let replyRealtimeChannel: ReturnType<typeof supabase.channel> | null = null
 
 // Discussion State
 const commentText = ref("")
 const replyingTo = ref<{ name: string; id: string } | null>(null)
+const threadReplies = ref<Reply[]>([])
+const isLoadingReplies = ref(false)
+const isSubmittingComment = ref(false)
+const replyError = ref("")
 
-// Mock Data for Discussion Demonstration
-const mockReplies = ref([
-  {
-    id: "r1",
-    user: {
-      name: "Sophia Laurent",
-      username: "sophia_l",
-      avatar: "",
-    },
-    text: "I actually have a vintage film camera that might fit what you're looking for! Is it for a professional shoot?",
-    upvotes: 12,
-    isUpvoted: false,
-    createdAt: new Date(Date.now() - 3600000),
-    replies: [
-      {
-        id: "r2",
-        user: {
-          name: "Marcus Chen",
-          username: "mchen",
-          avatar: "",
-        },
-        text: "Sophia, is it the Leica M6? I've been looking for one too!",
-        upvotes: 5,
-        isUpvoted: true,
-        createdAt: new Date(Date.now() - 1800000),
-        replies: [],
-      },
-    ],
+type ApiReply = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  user: {
+    userId?: string
+    name: string
+    avatar: string
+    username: string
+  }
+  text: string
+  upvotes: number
+  isUpvoted: boolean
+  createdAt: string | Date
+  updatedAt?: string | Date
+  replies?: ApiReply[]
+}
+
+const normalizeReply = (reply: ApiReply): Reply => ({
+  id: reply.id,
+  requestId: Number(reply.requestId),
+  parentReplyId: reply.parentReplyId,
+  user: {
+    name: reply.user.name,
+    avatar: reply.user.avatar,
+    username: reply.user.username,
   },
-  {
-    id: "r3",
-    user: {
-      name: "Isabella Reed",
-      username: "isabella_r",
-      avatar: "",
-    },
-    text: "Make sure to check the lens compatibility if you're borrowing an older body.",
-    upvotes: 8,
-    isUpvoted: false,
-    createdAt: new Date(Date.now() - 7200000),
-    replies: [],
-  },
-])
+  text: reply.text,
+  upvotes: Number(reply.upvotes ?? 0),
+  isUpvoted: Boolean(reply.isUpvoted),
+  createdAt: reply.createdAt instanceof Date ? reply.createdAt : new Date(reply.createdAt),
+  replies: (reply.replies ?? []).map(normalizeReply),
+})
+
+const countReplies = (list: Reply[]): number => {
+  let total = 0
+  for (const item of list) {
+    total += 1
+    if (item.replies && item.replies.length > 0) {
+      total += countReplies(item.replies)
+    }
+  }
+  return total
+}
 
 const totalRepliesCount = computed(() => {
-  const countReplies = (list: Reply[]): number => {
-    let total = 0
-    for (const item of list) {
-      total += 1
-      if (item.replies && item.replies.length > 0) {
-        total += countReplies(item.replies)
-      }
-    }
-    return total
-  }
-  return countReplies(mockReplies.value)
+  return countReplies(threadReplies.value)
 })
 
 const handleReplyToUser = (userName: string, replyId: string) => {
@@ -465,46 +493,125 @@ const cancelReply = () => {
   replyInputRef.value?.blur()
 }
 
-const postComment = () => {
-  if (!commentText.value.trim()) return
+const getAuthHeaders = async () => {
+  const { getAuthHeaders } = useViewerSession()
+  return (await getAuthHeaders()) ?? undefined
+}
 
-  const newReply = {
-    id: `r-new-${Date.now()}`,
-    user: {
-      name: "You", // Mocking current user
-      username: "current_user",
-      avatar: "",
-    },
-    text: commentText.value,
-    upvotes: 0,
-    isUpvoted: false,
-    createdAt: new Date(),
-    replies: [],
+const loadReplies = async (options: { background?: boolean } = {}) => {
+  if (!options.background) {
+    isLoadingReplies.value = true
   }
 
-  if (replyingTo.value) {
-    // Helper to find and add reply to a nested thread (Mock version)
-    const findAndAddReply = (list: Reply[]) => {
-      for (const item of list) {
-        if (item.id === replyingTo.value?.id) {
-          if (!item.replies) item.replies = []
-          item.replies.push(newReply)
-          return true
-        }
-        if (item.replies && findAndAddReply(item.replies)) return true
-      }
-      return false
+  try {
+    const headers = await getAuthHeaders()
+    const response = await $fetch<ApiReply[]>(
+      `/api/community-feed/requests/${props.request.id}/replies`,
+      headers ? { headers } : {},
+    )
+    threadReplies.value = response.map(normalizeReply)
+    replyError.value = ""
+  } catch (error) {
+    console.error("Failed to load request replies", error)
+    if (!options.background) {
+      replyError.value = "Unable to load the discussion right now."
     }
-    findAndAddReply(mockReplies.value)
-  } else {
-    // Add as top-level comment
-    mockReplies.value.unshift(newReply)
+  } finally {
+    isLoadingReplies.value = false
+  }
+}
+
+const stopReplySync = () => {
+  if (repliesPollIntervalId !== null) {
+    clearInterval(repliesPollIntervalId)
+    repliesPollIntervalId = null
   }
 
-  // Reset after "posting"
-  commentText.value = ""
-  replyingTo.value = null
-  replyInputRef.value?.blur()
+  if (replyRealtimeChannel) {
+    void supabase.removeChannel(replyRealtimeChannel)
+    replyRealtimeChannel = null
+  }
+}
+
+const startReplySync = () => {
+  stopReplySync()
+
+  replyRealtimeChannel = supabase
+    .channel(`community-request-${props.request.id}`)
+    .on("broadcast", { event: "message" }, () => {
+      void loadReplies({ background: true })
+    })
+
+  void replyRealtimeChannel.subscribe()
+
+  repliesPollIntervalId = setInterval(() => {
+    if (!document.hidden) {
+      void loadReplies({ background: true })
+    }
+  }, 20_000)
+}
+
+const postComment = async () => {
+  if (!commentText.value.trim()) return
+  if (!props.currentUserId) {
+    replyError.value = "You need to sign in before joining the discussion."
+    return
+  }
+
+  isSubmittingComment.value = true
+  replyError.value = ""
+
+  try {
+    const headers = await getAuthHeaders()
+    if (!headers) {
+      replyError.value = "You need to sign in before joining the discussion."
+      return
+    }
+
+    await $fetch(`/api/community-feed/requests/${props.request.id}/replies`, {
+      method: "POST",
+      headers,
+      body: {
+        text: commentText.value,
+        parentReplyId: replyingTo.value?.id ?? null,
+      },
+    })
+
+    commentText.value = ""
+    replyingTo.value = null
+    replyInputRef.value?.blur()
+    await loadReplies({ background: true })
+  } catch (error) {
+    console.error("Failed to create reply", error)
+    replyError.value = "Unable to post your reply right now."
+  } finally {
+    isSubmittingComment.value = false
+  }
+}
+
+const handleToggleReplyUpvote = async (replyId: string) => {
+  if (!props.currentUserId) {
+    replyError.value = "You need to sign in before voting on replies."
+    return
+  }
+
+  try {
+    const headers = await getAuthHeaders()
+    if (!headers) {
+      replyError.value = "You need to sign in before voting on replies."
+      return
+    }
+
+    await $fetch(`/api/community-feed/replies/${replyId}/toggle-upvote`, {
+      method: "POST",
+      headers,
+    })
+
+    await loadReplies({ background: true })
+  } catch (error) {
+    console.error("Failed to toggle reply upvote", error)
+    replyError.value = "Unable to update this reply right now."
+  }
 }
 
 const isOwner = computed(() => {
@@ -528,9 +635,26 @@ watch(
     loadedOffers.value = props.request.offers.map(normalizeOffer)
     offerPage.value = 1
     offerLoadError.value = ""
+    threadReplies.value = []
+    replyError.value = ""
+    stopReplySync()
+    if (showComments.value) {
+      void loadReplies()
+      startReplySync()
+    }
   },
   { immediate: true },
 )
+
+watch(showComments, (isVisible) => {
+  if (!isVisible) {
+    stopReplySync()
+    return
+  }
+
+  void loadReplies()
+  startReplySync()
+})
 
 const sortedOffers = computed(() => {
   return [...loadedOffers.value].sort(
@@ -732,6 +856,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", handlePointerDownOutside)
+  stopReplySync()
 })
 </script>
 
