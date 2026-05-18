@@ -1116,6 +1116,17 @@ const buildReturnNotification = (bookingId: string) => ({
   actionPath: `/account/transactions/${bookingId}`,
 })
 
+const buildBookingRequestNotification = (input: {
+  bookingId: string
+  itemName: string
+  borrowerName: string
+}) => ({
+  type: "BOOKING_REQUESTED" as const,
+  title: "New booking request",
+  body: `${input.borrowerName} requested to book ${input.itemName}. Review the request before the rental starts.`,
+  actionPath: `/account/transactions/${input.bookingId}`,
+})
+
 export const bookingRouter = router({
   list: protectedProcedure.input(listBookingsSchema).query(async ({ ctx, input }) => {
     const bookingPrisma = getBookingPrisma(ctx)
@@ -1180,6 +1191,7 @@ export const bookingRouter = router({
       where: { id: input.itemId },
       select: {
         id: true,
+        name: true,
         lenderId: true,
         rateOption: true,
         rentalFee: true,
@@ -1260,6 +1272,19 @@ export const bookingRouter = router({
         bookingCount: {
           increment: 1,
         },
+      },
+    })
+
+    await ctx.prisma.appNotification.create({
+      data: {
+        recipientUserId: item.lenderId,
+        actorUserId: ctx.user.id,
+        bookingId: booking.id,
+        ...buildBookingRequestNotification({
+          bookingId: booking.id,
+          itemName: item.name,
+          borrowerName: ctx.user.name || "A borrower",
+        }),
       },
     })
 

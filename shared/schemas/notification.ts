@@ -5,6 +5,7 @@ export const notificationIdSchema = z.object({
 })
 
 export const appNotificationTypeSchema = z.enum([
+  "BOOKING_REQUESTED",
   "BOOKING_RETURN_REQUESTED",
   "DISPUTE_SUBMITTED",
   "DISPUTE_OPENED",

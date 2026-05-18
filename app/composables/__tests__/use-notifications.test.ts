@@ -4,7 +4,7 @@ import { useNotifications } from "../use-notifications"
 
 const makeNotification = (overrides: Record<string, unknown> = {}) => ({
   id: "notif-1",
-  type: "DISPUTE_OPENED",
+  type: "BOOKING_REQUESTED",
   title: "New booking request",
   body: "Someone requested your listing.",
   actionPath: "/account/transactions",

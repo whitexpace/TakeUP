@@ -121,6 +121,7 @@ const makeContext = () => {
     item: {
       findUnique: vi.fn().mockResolvedValue({
         id: ITEM_ID,
+        name: "Camera",
         lenderId: LENDER_ID,
         rateOption: "PER_DAY",
         rentalFee: 200,
@@ -213,6 +214,18 @@ describe("bookingRouter", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           status: { in: ["CONFIRMED", "IN_DISPUTE"] },
+        }),
+      }),
+    )
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: LENDER_ID,
+          actorUserId: USER_ID,
+          bookingId: BOOKING_ID,
+          type: "BOOKING_REQUESTED",
+          title: "New booking request",
+          actionPath: `/account/transactions/${BOOKING_ID}`,
         }),
       }),
     )
