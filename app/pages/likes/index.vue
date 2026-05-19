@@ -341,7 +341,9 @@ watch(
   <div class="mx-auto max-w-7xl py-8 pt-20 sm:pt-24">
     <div class="mb-8">
       <div class="space-y-2">
-        <h1 class="font-montravia text-[36px] font-medium leading-tight text-noble-black">
+        <h1
+          class="font-geist text-[36px] font-medium leading-tight text-noble-black tracking-tight"
+        >
           Liked Items
         </h1>
         <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>

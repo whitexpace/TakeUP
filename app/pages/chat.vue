@@ -953,7 +953,7 @@ onUnmounted(() => {
         ]"
       >
         <div class="flex items-center justify-between pt-6 px-4 pb-4">
-          <h1 class="font-montravia text-2xl font-semibold">Inbox</h1>
+          <h1 class="font-geist text-2xl font-semibold tracking-tight">Inbox</h1>
         </div>
 
         <div class="px-4 pb-4">

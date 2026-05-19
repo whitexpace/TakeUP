@@ -1111,7 +1111,9 @@ const handleReviewSubmitted = async () => {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div class="space-y-1.5">
           <div class="space-y-2 mb-2">
-            <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+            <h1
+              class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+            >
               Order Details
             </h1>
             <div class="w-10 h-0.5 bg-burning-orange"></div>

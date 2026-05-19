@@ -30,7 +30,9 @@
 
           <div class="flex-1 min-w-0 flex flex-col gap-8">
             <div class="flex flex-col">
-              <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+              <h1
+                class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+              >
                 Community Feed
               </h1>
               <div class="h-[2px] w-10 bg-burning-orange rounded-full mt-2"></div>
@@ -108,7 +110,7 @@
               >
                 <Icon name="ph:chat-centered-text" class="w-8 h-8" />
               </div>
-              <h3 class="font-montravia text-[24px] font-medium text-noble-black mb-2">
+              <h3 class="font-geist text-[24px] font-medium text-noble-black mb-2">
                 No live requests yet
               </h3>
               <p

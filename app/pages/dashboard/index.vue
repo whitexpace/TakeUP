@@ -3,7 +3,7 @@
     <!-- Header Section -->
     <div class="mb-10">
       <h1
-        class="font-montravia font-semibold text-[48px] text-noble-black leading-tight mb-2 italic"
+        class="font-montravia font-semibold text-[48px] text-noble-black leading-tight mb-2 italic tracking-tighter"
       >
         Good {{ greeting }}, {{ firstName }}!
       </h1>
@@ -12,7 +12,7 @@
       </p>
 
       <!-- Search Bar Section (Modernized) -->
-      <div class="mt-6 sm:mt-8 flex items-center w-full max-w-3xl">
+      <div class="mt-6 sm:mt-8 flex items-center w-full">
         <!-- Unified Search Container -->
         <div
           class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"

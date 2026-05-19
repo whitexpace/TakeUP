@@ -292,7 +292,9 @@ onMounted(loadDispute)
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="space-y-1">
           <div class="flex items-center gap-3">
-            <h1 class="font-montravia text-[36px] font-medium text-noble-black">Dispute Details</h1>
+            <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+              Dispute Details
+            </h1>
           </div>
           <div class="w-10 h-0.5 bg-burning-orange mb-2"></div>
           <p

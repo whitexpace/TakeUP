@@ -142,7 +142,6 @@ const loadFullItemDetails = async () => {
 
 const currentDate = new Date()
 const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
-const currentTimeMinutes = currentDate.getHours() * 60 + currentDate.getMinutes()
 
 const currentImageIndex = ref(0)
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -164,6 +163,7 @@ watch(
   },
   { immediate: true },
 )
+
 const isSubmittingBooking = ref(false)
 const showPaymentModal = ref(false)
 const bookingErrorMessage = ref("")
@@ -694,7 +694,7 @@ const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
   if (!isEnd) {
     // For Start Time
     if (isStartDateToday.value) {
-      return timeToMinutes(timeValue) <= currentTimeMinutes
+      return timeToMinutes(timeValue) <= getNowMinutes()
     }
     return false
   }
@@ -725,6 +725,70 @@ const selectEndTime = (timeValue: string) => {
   endTime.value = timeValue
   isEndTimeOpen.value = false
 }
+
+const minutesToTime = (minutes: number) => {
+  let h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  const period = h >= 12 ? "PM" : "AM"
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")} ${period}`
+}
+
+const getNowMinutes = () => {
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes()
+}
+
+watch(startDate, (newDate) => {
+  if (!newDate) return
+
+  const isTodaySelected = normalizeDate(newDate).getTime() === today.getTime()
+
+  // Default to 9:00 AM (540 mins) unless it's in the past for today
+  let targetStartMins = 9 * 60
+  if (isTodaySelected) {
+    const earliestMinutes = Math.ceil((getNowMinutes() + 5) / 30) * 30
+    targetStartMins = Math.max(targetStartMins, earliestMinutes)
+  }
+
+  startTime.value = minutesToTime(Math.min(targetStartMins, 23 * 60 + 30))
+
+  // Adjust End Time
+  const effectiveEndDate = endDate.value || newDate
+  const isSameDayBooking =
+    normalizeDate(newDate).getTime() === normalizeDate(effectiveEndDate).getTime()
+
+  if (isSameDayBooking) {
+    const startMins = timeToMinutes(startTime.value)
+    // Default same-day end time to 1 hour after start, or 6:00 PM if that's later
+    let targetEndMins = Math.max(startMins + 60, 18 * 60) // 18:00 is 6:00 PM
+
+    // But if 6:00 PM is before start+1h, just use start+1h
+    if (targetEndMins < startMins + 60) targetEndMins = startMins + 60
+
+    endTime.value = minutesToTime(Math.min(targetEndMins, 23 * 60 + 30))
+  } else {
+    // For multi-day, default to 6:00 PM
+    endTime.value = "06:00 PM"
+  }
+})
+
+watch(startTime, (newStartTime) => {
+  const effectiveEndDate = endDate.value || startDate.value
+  if (
+    startDate.value &&
+    effectiveEndDate &&
+    normalizeDate(startDate.value).getTime() === normalizeDate(effectiveEndDate).getTime()
+  ) {
+    const startMins = timeToMinutes(newStartTime)
+    const endMins = timeToMinutes(endTime.value)
+
+    if (endMins < startMins + 60) {
+      endTime.value = minutesToTime(Math.min(startMins + 60, 23 * 60 + 30))
+    }
+  }
+})
 
 const toggleStartTime = () => {
   if (isItemUnavailableForBooking.value) return
@@ -922,6 +986,7 @@ const canAddToBag = computed(
 )
 
 const addToBagButtonLabel = computed(() => {
+  if (isAddingToBag.value) return "Adding..."
   if (isItemUnavailableForBooking.value) {
     return `Currently ${unavailableItemLabel.value}`
   }
@@ -930,6 +995,7 @@ const addToBagButtonLabel = computed(() => {
 })
 
 const mobileBookingButtonLabel = computed(() => {
+  if (isAddingToBag.value) return "Adding..."
   if (isInBag.value) return "Added to Bag"
   if (!isItemAvailableForBooking.value) return "Unavailable"
 
@@ -1251,17 +1317,21 @@ onUnmounted(() => {
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pt-20" @mouseleave="handleCalendarMouseLeave">
       <!-- Back Link -->
-      <NuxtLink
-        :to="backNavigationPath"
-        class="flex items-center gap-2 text-noble-black/70 hover:text-burning-orange transition-colors mb-6 group"
-      >
-        <Icon
-          name="ph:caret-left"
-          size="20"
-          class="transition-transform group-hover:-translate-x-1"
-        />
-        <span class="font-normal">{{ backNavigationLabel }}</span>
-      </NuxtLink>
+      <div class="relative group/tooltip w-fit mb-6">
+        <NuxtLink
+          :to="backNavigationPath"
+          class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
+        >
+          <Icon
+            name="ph:caret-left"
+            class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+          />
+        </NuxtLink>
+        <div class="custom-tooltip">
+          {{ backNavigationLabel }}
+          <div class="tooltip-arrow"></div>
+        </div>
+      </div>
 
       <div v-if="pending && !item" class="space-y-8 pb-28 lg:pb-6 animate-pulse">
         <div class="flex flex-col gap-4">
@@ -2665,62 +2735,74 @@ onUnmounted(() => {
       >
         <div
           v-if="showPaymentModal"
-          class="fixed inset-0 z-[3000] flex items-center justify-center p-4"
+          class="fixed inset-0 z-[3000] flex items-center justify-center p-4 font-geist"
         >
           <!-- Backdrop -->
           <div
-            class="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm"
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
             @click="showPaymentModal = false"
           ></div>
 
           <!-- Modal Content -->
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in zoom-in-95 duration-300"
           >
             <!-- Header -->
-            <div class="px-8 pt-8 pb-4 flex items-center justify-between">
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h3 class="text-2xl font-bold text-neutral-800 font-geist">
-                  Complete Booking Request
-                </h3>
-                <p class="text-sm text-neutral-500 mt-1">
+                <h2 class="text-[24px] font-semibold text-noble-black">Complete Booking Request</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Funds will be held securely until the rental is complete.
                 </p>
               </div>
               <button
-                class="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="showPaymentModal = false"
               >
-                <Icon name="ph:x" size="24" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
-            <!-- Booking Summary Snippet -->
-            <div class="px-8 pb-6">
-              <div class="bg-neutral-50 rounded-2xl p-4 flex gap-4 border border-neutral-100">
-                <img
-                  v-if="item?.thumbnailImage"
-                  :src="item.thumbnailImage"
-                  class="w-16 h-16 rounded-xl object-cover"
-                />
-                <div class="flex flex-col justify-center">
-                  <p class="font-bold text-neutral-800 leading-tight">{{ item?.name }}</p>
-                  <p class="text-xs text-neutral-500 mt-1">
-                    {{ formatDate(startDate) }} - {{ formatDate(endDate || startDate) }}
-                  </p>
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6 space-y-8">
+                <!-- Simple Booking Summary -->
+                <div class="flex items-center gap-4">
+                  <img
+                    v-if="item?.thumbnailImage"
+                    :src="item.thumbnailImage"
+                    class="w-16 h-16 rounded-xl object-cover border border-cinnamon-ice/10 shadow-sm"
+                  />
+                  <div
+                    v-else
+                    class="w-16 h-16 rounded-xl bg-noble-black/5 flex items-center justify-center text-noble-black/20"
+                  >
+                    <Icon name="ph:package" size="24" />
+                  </div>
+                  <div class="flex flex-col">
+                    <p class="font-bold text-noble-black text-[15px] leading-tight">
+                      {{ item?.name }}
+                    </p>
+                    <div class="flex items-center gap-2 mt-1.5 text-[12px] text-noble-black/40">
+                      <Icon name="ph:calendar-blank" size="14" />
+                      <span>
+                        {{ formatDate(startDate) }} - {{ formatDate(endDate || startDate) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <!-- Payment Component -->
-            <div class="px-8 pb-8">
-              <WalletPayment
-                :amount="totalPrice"
-                related-entity-type="BOOKING_PENDING"
-                :related-entity-id="item?.id || 'pending'"
-                @success="handlePaymentSuccess"
-                @cancel="showPaymentModal = false"
-              />
+                <!-- Payment Component -->
+                <WalletPayment
+                  variant="minimal"
+                  :amount="totalPrice"
+                  related-entity-type="BOOKING_PENDING"
+                  :related-entity-id="item?.id || 'pending'"
+                  @success="handlePaymentSuccess"
+                  @cancel="showPaymentModal = false"
+                />
+              </div>
             </div>
           </div>
         </div>

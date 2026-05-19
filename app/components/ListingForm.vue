@@ -706,6 +706,9 @@ const addSuggestedTag = (tag: string) => {
 }
 
 const confirmCancel = () => {
+  // Reset initialFormState to current state so isDirty becomes false,
+  // allowing onBeforeRouteLeave to proceed with navigation.
+  initialFormState.value = getFormStateString()
   showCancelModal.value = false
   emit("cancel")
 }
@@ -879,7 +882,7 @@ const availabilityRowErrors = computed(() =>
       </div>
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+          <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
             {{ props.mode === "new" ? "Add New Item" : "Edit Listing" }}
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
@@ -1565,38 +1568,67 @@ const availabilityRowErrors = computed(() =>
           <p class="text-white/70">{{ lightboxImage.name }}</p>
         </div>
       </div>
+      <!-- Discard Changes Modal -->
       <div
         v-if="showCancelModal"
-        class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
       >
         <div
-          class="absolute inset-0 bg-noble-black/40 backdrop-blur-[2px]"
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
           @click="showCancelModal = false"
         />
         <div
-          class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl p-8 text-center"
+          class="relative z-10 w-full max-w-md flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
         >
-          <div
-            class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream mx-auto text-cinnabar-red shadow-inner"
-          >
-            <Icon name="ph:warning" class="w-[30px] h-[30px] shrink-0" />
-          </div>
-          <h3 class="mb-3 text-[22px] font-bold text-noble-black">Discard changes?</h3>
-          <p class="mb-10 text-[14px] text-noble-black/40">
-            You have unsaved changes. Are you sure you want to discard them?
-          </p>
-          <div class="flex gap-3 justify-center">
+          <!-- Header -->
+          <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+            <div>
+              <h2 class="text-[24px] font-semibold text-noble-black">Discard changes?</h2>
+              <p class="mt-1 text-[13px] font-light text-noble-black/50">
+                You have unsaved changes. Are you sure you want to discard them?
+              </p>
+            </div>
             <button
-              class="h-10 rounded-xl border border-cinnamon-ice/10 px-6 text-[14px] font-semibold text-noble-black/60 hover:bg-noble-black/5"
+              type="button"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="showCancelModal = false"
             >
-              Stay</button
-            ><button
-              class="h-10 rounded-xl bg-cinnabar-red px-6 text-[14px] font-semibold text-white hover:bg-noble-black transition-all"
-              @click="confirmCancel"
-            >
-              Yes, Discard
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
+          </div>
+
+          <!-- Content (Warning Box) -->
+          <div class="px-6 py-6">
+            <div class="rounded-[16px] border border-cinnabar-red/10 bg-cinnabar-red/[0.03] p-5">
+              <div class="flex items-start gap-3 text-cinnabar-red">
+                <Icon name="ph:warning-circle" class="w-[18px] h-[18px] shrink-0 mt-0.5" />
+                <p class="text-[13px] font-bold leading-relaxed">
+                  Any progress you've made on this listing will be permanently lost.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div
+            class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+          >
+            <div class="flex gap-3 w-full">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-semibold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5"
+                @click="showCancelModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110"
+                @click="confirmCancel"
+              >
+                Yes, Discard
+              </button>
+            </div>
           </div>
         </div>
       </div>
