@@ -24,7 +24,8 @@ const PRIVATE_ROUTE_PREFIXES = [
 ]
 
 const isExternalUrlLike = (value: string) => /^([a-z][a-z\d+.-]*:)?\/\//i.test(value)
-const isPrismaPoolTimeout = (error: unknown) => (error as { code?: string } | null)?.code === "P2024"
+const isPrismaPoolTimeout = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "P2024"
 
 const getDestinationPath = (rawPath: string) => {
   let decodedPath: string

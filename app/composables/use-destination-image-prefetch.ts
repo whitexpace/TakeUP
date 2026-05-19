@@ -216,20 +216,22 @@ export const useDestinationImagePrefetch = () => {
       return
     }
 
-    const warmup = (async () => {
+    let warmupPromise: Promise<void> | null = null
+
+    warmupPromise = (async () => {
       try {
         await prefetchDestinationItemData(path, item).catch(() => null)
         const images = await fetchDestinationImages(path).catch(() => [])
         warmImages(images)
         setBoundedMapEntry(warmedDestinationPaths, path, Date.now(), 96)
       } finally {
-        if (pendingDestinationWarmups.get(path) === warmup) {
+        if (warmupPromise && pendingDestinationWarmups.get(path) === warmupPromise) {
           pendingDestinationWarmups.delete(path)
         }
       }
     })()
 
-    pendingDestinationWarmups.set(path, warmup)
+    pendingDestinationWarmups.set(path, warmupPromise)
   }
 
   return {

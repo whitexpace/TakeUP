@@ -410,15 +410,18 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
   )
 }
 
-const applyFeedSnapshot = (snapshot: {
-  requests: ApiCommunityRequest[]
-  notifications: ApiCommunityNotification[]
-  offerableItems: ApiOfferableItem[]
-  currentDbUserId?: string | null
-  viewerKey?: string | null
-  userActivity?: ReturnType<typeof buildCommunityFeedActivity> | null
-  trendingItems?: Array<{ id: number; title: string; offersCount: number }> | null
-}, options: { loadedAt?: number | null } = {}) => {
+const applyFeedSnapshot = (
+  snapshot: {
+    requests: ApiCommunityRequest[]
+    notifications: ApiCommunityNotification[]
+    offerableItems: ApiOfferableItem[]
+    currentDbUserId?: string | null
+    viewerKey?: string | null
+    userActivity?: ReturnType<typeof buildCommunityFeedActivity> | null
+    trendingItems?: Array<{ id: number; title: string; offersCount: number }> | null
+  },
+  options: { loadedAt?: number | null } = {},
+) => {
   const nextRequests = snapshot.requests.map(normalizeCommunityRequest)
   requests.value = nextRequests
   notifications.value = snapshot.notifications.map(normalizeCommunityNotification)
@@ -427,8 +430,7 @@ const applyFeedSnapshot = (snapshot: {
   feedViewerKey.value = snapshot.viewerKey ?? user.value?.id ?? "anonymous"
   feedActivity.value =
     snapshot.userActivity ?? buildCommunityFeedActivity(nextRequests, currentDbUserId.value)
-  feedTrendingItems.value =
-    snapshot.trendingItems ?? buildCommunityFeedTrendingItems(nextRequests)
+  feedTrendingItems.value = snapshot.trendingItems ?? buildCommunityFeedTrendingItems(nextRequests)
   feedHydrated.value = true
   feedLastLoadedAt.value = options.loadedAt ?? Date.now()
 }

@@ -327,19 +327,43 @@ const buildRequestWhereSql = (
   return clauses.length > 0 ? Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}` : Prisma.empty
 }
 
-const isMissingItemRequestReplyTableError = (error: unknown) => {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
-    return false
+const ITEM_REQUEST_REPLY_TABLE_CACHE_TTL_MS = 60_000
+let itemRequestReplyTableAvailability: {
+  checkedAt: number
+  exists: boolean
+} | null = null
+
+const hasItemRequestReplyTable = async (prisma: {
+  $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+  itemRequestReply?: unknown
+}) => {
+  if ("mock" in prisma.$queryRaw) {
+    return true
   }
 
-  if (error.code !== "P2010") {
-    return false
+  if (
+    itemRequestReplyTableAvailability &&
+    Date.now() - itemRequestReplyTableAvailability.checkedAt < ITEM_REQUEST_REPLY_TABLE_CACHE_TTL_MS
+  ) {
+    return itemRequestReplyTableAvailability.exists
   }
 
-  const rawCode = typeof error.meta?.code === "string" ? error.meta.code : ""
-  const rawMessage = typeof error.meta?.message === "string" ? error.meta.message : error.message
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>(Prisma.sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'ItemRequestReply'
+    ) AS "exists"
+  `)
 
-  return rawCode === "42P01" && rawMessage.includes(`"ItemRequestReply"`)
+  const exists = Boolean(rows[0]?.exists)
+  itemRequestReplyTableAvailability = {
+    checkedAt: Date.now(),
+    exists,
+  }
+
+  return exists
 }
 
 const buildRequestRowsQuery = (whereSql: Prisma.Sql, includeRepliesCount: boolean) => Prisma.sql`
@@ -364,9 +388,7 @@ const buildRequestRowsQuery = (whereSql: Prisma.Sql, includeRepliesCount: boolea
     u."avatarUrl" AS "borrowerAvatarUrl",
     COALESCE(oc."offersCount", 0) AS "offersCount",
     ${
-      includeRepliesCount
-        ? Prisma.sql`COALESCE(rc."repliesCount", 0)`
-        : Prisma.sql`0`
+      includeRepliesCount ? Prisma.sql`COALESCE(rc."repliesCount", 0)` : Prisma.sql`0`
     } AS "repliesCount"
   FROM "ItemRequest" r
   INNER JOIN "Borrower" b ON b."id" = r."borrowerID"
@@ -399,6 +421,7 @@ const buildRequestRowsQuery = (whereSql: Prisma.Sql, includeRepliesCount: boolea
 const fetchRequestRows = async (
   prisma: {
     $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+    itemRequestReply?: unknown
   },
   options: {
     requestId?: number
@@ -408,16 +431,8 @@ const fetchRequestRows = async (
   viewerUserId: string | null,
 ) => {
   const whereSql = buildRequestWhereSql(options, viewerUserId)
-
-  try {
-    return await prisma.$queryRaw<RequestRow[]>(buildRequestRowsQuery(whereSql, true))
-  } catch (error) {
-    if (isMissingItemRequestReplyTableError(error)) {
-      return prisma.$queryRaw<RequestRow[]>(buildRequestRowsQuery(whereSql, false))
-    }
-
-    throw error
-  }
+  const includeRepliesCount = await hasItemRequestReplyTable(prisma)
+  return prisma.$queryRaw<RequestRow[]>(buildRequestRowsQuery(whereSql, includeRepliesCount))
 }
 
 const fetchOfferRows = async (

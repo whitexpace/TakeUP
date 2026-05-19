@@ -7,7 +7,8 @@ import {
   isPublicVisibleItem,
 } from "../../../utils/item-visibility"
 import { setPublicSWRApiHeaders } from "../../../utils/request-security"
-const isPrismaPoolTimeout = (error: unknown) => (error as { code?: string } | null)?.code === "P2024"
+const isPrismaPoolTimeout = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "P2024"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },

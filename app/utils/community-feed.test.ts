@@ -50,6 +50,7 @@ const makeRequest = ({
   createdAt: new Date(createdAt),
   updatedAt: new Date(createdAt),
   offersCount,
+  repliesCount: 0,
   borrower: {
     profileId: id,
     userId: borrowerUserId,
