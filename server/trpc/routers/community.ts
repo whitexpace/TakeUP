@@ -327,6 +327,75 @@ const buildRequestWhereSql = (
   return clauses.length > 0 ? Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}` : Prisma.empty
 }
 
+const isMissingItemRequestReplyTableError = (error: unknown) => {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false
+  }
+
+  if (error.code !== "P2010") {
+    return false
+  }
+
+  const rawCode = typeof error.meta?.code === "string" ? error.meta.code : ""
+  const rawMessage = typeof error.meta?.message === "string" ? error.meta.message : error.message
+
+  return rawCode === "42P01" && rawMessage.includes(`"ItemRequestReply"`)
+}
+
+const buildRequestRowsQuery = (whereSql: Prisma.Sql, includeRepliesCount: boolean) => Prisma.sql`
+  SELECT
+    r."id",
+    r."borrowerID",
+    r."itemNeeded",
+    r."referenceImageUrl",
+    r."requestedDates",
+    r."priceRange",
+    r."description",
+    r."status"::text AS "status",
+    r."createdAt",
+    r."updatedAt",
+    b."id" AS "borrowerProfileId",
+    b."userId" AS "borrowerUserId",
+    u."username" AS "borrowerUsername",
+    u."firstName" AS "borrowerFirstName",
+    u."middleName" AS "borrowerMiddleName",
+    u."lastName" AS "borrowerLastName",
+    u."email" AS "borrowerEmail",
+    u."avatarUrl" AS "borrowerAvatarUrl",
+    COALESCE(oc."offersCount", 0) AS "offersCount",
+    ${
+      includeRepliesCount
+        ? Prisma.sql`COALESCE(rc."repliesCount", 0)`
+        : Prisma.sql`0`
+    } AS "repliesCount"
+  FROM "ItemRequest" r
+  INNER JOIN "Borrower" b ON b."id" = r."borrowerID"
+  INNER JOIN "User" u ON u."id" = b."userId"
+  LEFT JOIN (
+    SELECT
+      "requestID",
+      COUNT(*)::int AS "offersCount"
+    FROM "RequestOffer"
+    WHERE "status" <> ${sqlRequestOfferStatus(requestOfferStatusSchema.enum.CANCELLED)}
+    GROUP BY "requestID"
+  ) oc ON oc."requestID" = r."id"
+  ${
+    includeRepliesCount
+      ? Prisma.sql`
+        LEFT JOIN (
+          SELECT
+            "requestId",
+            COUNT(*)::int AS "repliesCount"
+          FROM "ItemRequestReply"
+          GROUP BY "requestId"
+        ) rc ON rc."requestId" = r."id"
+      `
+      : Prisma.empty
+  }
+  ${whereSql}
+  ORDER BY r."createdAt" DESC
+`
+
 const fetchRequestRows = async (
   prisma: {
     $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
@@ -340,49 +409,15 @@ const fetchRequestRows = async (
 ) => {
   const whereSql = buildRequestWhereSql(options, viewerUserId)
 
-  return prisma.$queryRaw<RequestRow[]>(Prisma.sql`
-    SELECT
-      r."id",
-      r."borrowerID",
-      r."itemNeeded",
-      r."referenceImageUrl",
-      r."requestedDates",
-      r."priceRange",
-      r."description",
-      r."status"::text AS "status",
-      r."createdAt",
-      r."updatedAt",
-      b."id" AS "borrowerProfileId",
-      b."userId" AS "borrowerUserId",
-      u."username" AS "borrowerUsername",
-      u."firstName" AS "borrowerFirstName",
-      u."middleName" AS "borrowerMiddleName",
-      u."lastName" AS "borrowerLastName",
-      u."email" AS "borrowerEmail",
-      u."avatarUrl" AS "borrowerAvatarUrl",
-      COALESCE(oc."offersCount", 0) AS "offersCount",
-      COALESCE(rc."repliesCount", 0) AS "repliesCount"
-    FROM "ItemRequest" r
-    INNER JOIN "Borrower" b ON b."id" = r."borrowerID"
-    INNER JOIN "User" u ON u."id" = b."userId"
-    LEFT JOIN (
-      SELECT
-        "requestID",
-        COUNT(*)::int AS "offersCount"
-      FROM "RequestOffer"
-      WHERE "status" <> ${sqlRequestOfferStatus(requestOfferStatusSchema.enum.CANCELLED)}
-      GROUP BY "requestID"
-    ) oc ON oc."requestID" = r."id"
-    LEFT JOIN (
-      SELECT
-        "requestId",
-        COUNT(*)::int AS "repliesCount"
-      FROM "ItemRequestReply"
-      GROUP BY "requestId"
-    ) rc ON rc."requestId" = r."id"
-    ${whereSql}
-    ORDER BY r."createdAt" DESC
-  `)
+  try {
+    return await prisma.$queryRaw<RequestRow[]>(buildRequestRowsQuery(whereSql, true))
+  } catch (error) {
+    if (isMissingItemRequestReplyTableError(error)) {
+      return prisma.$queryRaw<RequestRow[]>(buildRequestRowsQuery(whereSql, false))
+    }
+
+    throw error
+  }
 }
 
 const fetchOfferRows = async (
