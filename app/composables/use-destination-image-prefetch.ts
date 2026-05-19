@@ -17,6 +17,7 @@ const ITEM_ID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]
 const MAX_DESTINATION_IMAGE_METADATA_ENTRIES = 96
 const MAX_DESTINATION_ITEM_SHELL_CACHE_ENTRIES = 64
 const MAX_WARMED_DESTINATION_IMAGES = 96
+const DESTINATION_WARM_COOLDOWN_MS = 15_000
 const metadataCache = new Map<
   string,
   Promise<DestinationImageMetadata[]> | DestinationImageMetadata[]
@@ -24,6 +25,8 @@ const metadataCache = new Map<
 const itemShellCache = new Map<string, unknown | null>()
 const pendingItemShellRequests = new Map<string, Promise<unknown | null>>()
 const warmedImages = new Map<string, HTMLImageElement>()
+const pendingDestinationWarmups = new Map<string, Promise<void>>()
+const warmedDestinationPaths = new Map<string, number>()
 
 const normalizeSameOriginPath = (target: string) => {
   if (!import.meta.client) return null
@@ -202,10 +205,31 @@ export const useDestinationImagePrefetch = () => {
     if (!path) return
 
     void preloadRouteComponents(path).catch(() => {})
-    void prefetchDestinationItemData(path, item).catch(() => {})
-    void fetchDestinationImages(path)
-      .then(warmImages)
-      .catch(() => {})
+
+    const warmedAt = warmedDestinationPaths.get(path)
+    if (warmedAt && Date.now() - warmedAt < DESTINATION_WARM_COOLDOWN_MS) {
+      return
+    }
+
+    const pendingWarmup = pendingDestinationWarmups.get(path)
+    if (pendingWarmup) {
+      return
+    }
+
+    const warmup = (async () => {
+      try {
+        await prefetchDestinationItemData(path, item).catch(() => null)
+        const images = await fetchDestinationImages(path).catch(() => [])
+        warmImages(images)
+        setBoundedMapEntry(warmedDestinationPaths, path, Date.now(), 96)
+      } finally {
+        if (pendingDestinationWarmups.get(path) === warmup) {
+          pendingDestinationWarmups.delete(path)
+        }
+      }
+    })()
+
+    pendingDestinationWarmups.set(path, warmup)
   }
 
   return {

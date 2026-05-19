@@ -51,6 +51,7 @@ export type ApiCommunityRequest = {
   createdAt: string | Date
   updatedAt: string | Date
   offersCount: number
+  repliesCount: number
   borrower: ApiCommunityMember
   offers: ApiCommunityOffer[]
 }
@@ -135,6 +136,7 @@ export const normalizeCommunityRequest = (request: ApiCommunityRequest): Communi
   createdAt: toDate(request.createdAt) ?? new Date(),
   updatedAt: toDate(request.updatedAt) ?? new Date(),
   offersCount: Number(request.offersCount ?? 0),
+  repliesCount: Number(request.repliesCount ?? 0),
   borrower: normalizeCommunityMember(request.borrower),
   offers: request.offers.map(normalizeCommunityOffer),
 })

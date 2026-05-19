@@ -65,6 +65,7 @@ export interface CommunityRequest {
   createdAt: Date
   updatedAt: Date
   offersCount: number
+  repliesCount: number
   borrower: CommunityMember
   offers: CommunityOffer[]
 }

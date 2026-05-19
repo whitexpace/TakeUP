@@ -81,21 +81,11 @@ export default defineEventHandler(async (event) => {
     const caller = appRouter.createCaller(ctx)
     const viewerUserId = ctx.user?.id ?? ""
 
-    const requestsPromise = caller.community.listRequests({
+    const requests = await caller.community.listRequests({
       includeCancelledOffers: true,
     })
-    const notificationsPromise = ctx.user
-      ? caller.community.notifications().catch(() => [])
-      : Promise.resolve([])
-    const offerableItemsPromise = ctx.user
-      ? caller.community.offerableItems().catch(() => [])
-      : Promise.resolve([])
-
-    const [requests, notifications, offerableItems] = await Promise.all([
-      requestsPromise,
-      notificationsPromise,
-      offerableItemsPromise,
-    ])
+    const notifications = ctx.user ? await caller.community.notifications().catch(() => []) : []
+    const offerableItems = ctx.user ? await caller.community.offerableItems().catch(() => []) : []
 
     return {
       requests: requests.slice(0, parsedQuery.data.limit),

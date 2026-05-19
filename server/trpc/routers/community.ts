@@ -63,6 +63,7 @@ type RequestRow = {
   borrowerEmail: string
   borrowerAvatarUrl: string | null
   offersCount: number | bigint
+  repliesCount: number | bigint
 }
 
 type OfferRow = {
@@ -274,6 +275,7 @@ const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
   createdAt: toDate(request.createdAt),
   updatedAt: toDate(request.updatedAt),
   offersCount: toNumber(request.offersCount),
+  repliesCount: toNumber(request.repliesCount),
   borrower: {
     profileId: request.borrowerProfileId,
     userId: request.borrowerUserId,
@@ -358,7 +360,8 @@ const fetchRequestRows = async (
       u."lastName" AS "borrowerLastName",
       u."email" AS "borrowerEmail",
       u."avatarUrl" AS "borrowerAvatarUrl",
-      COALESCE(oc."offersCount", 0) AS "offersCount"
+      COALESCE(oc."offersCount", 0) AS "offersCount",
+      COALESCE(rc."repliesCount", 0) AS "repliesCount"
     FROM "ItemRequest" r
     INNER JOIN "Borrower" b ON b."id" = r."borrowerID"
     INNER JOIN "User" u ON u."id" = b."userId"
@@ -370,6 +373,13 @@ const fetchRequestRows = async (
       WHERE "status" <> ${sqlRequestOfferStatus(requestOfferStatusSchema.enum.CANCELLED)}
       GROUP BY "requestID"
     ) oc ON oc."requestID" = r."id"
+    LEFT JOIN (
+      SELECT
+        "requestId",
+        COUNT(*)::int AS "repliesCount"
+      FROM "ItemRequestReply"
+      GROUP BY "requestId"
+    ) rc ON rc."requestId" = r."id"
     ${whereSql}
     ORDER BY r."createdAt" DESC
   `)

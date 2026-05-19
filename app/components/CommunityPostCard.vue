@@ -419,6 +419,7 @@ const replyInputRef = ref<HTMLInputElement | null>(null)
 const supabase = useSupabaseClient()
 let repliesPollIntervalId: ReturnType<typeof setInterval> | null = null
 let replyRealtimeChannel: ReturnType<typeof supabase.channel> | null = null
+const REPLIES_CACHE_TTL_MS = 20_000
 
 // Discussion State
 const commentText = ref("")
@@ -427,6 +428,8 @@ const threadReplies = ref<Reply[]>([])
 const isLoadingReplies = ref(false)
 const isSubmittingComment = ref(false)
 const replyError = ref("")
+const hasLoadedReplies = ref(false)
+const repliesLastLoadedAt = ref<number | null>(null)
 
 type ApiReply = {
   id: string
@@ -474,6 +477,10 @@ const countReplies = (list: Reply[]): number => {
 }
 
 const totalRepliesCount = computed(() => {
+  if (!hasLoadedReplies.value) {
+    return props.request.repliesCount
+  }
+
   return countReplies(threadReplies.value)
 })
 
@@ -510,6 +517,8 @@ const loadReplies = async (options: { background?: boolean } = {}) => {
       headers ? { headers } : {},
     )
     threadReplies.value = response.map(normalizeReply)
+    hasLoadedReplies.value = true
+    repliesLastLoadedAt.value = Date.now()
     replyError.value = ""
   } catch (error) {
     console.error("Failed to load request replies", error)
@@ -618,6 +627,13 @@ const isOwner = computed(() => {
   return props.request.borrower.userId === props.currentUserId
 })
 
+const hasFreshRepliesCache = computed(
+  () =>
+    hasLoadedReplies.value &&
+    repliesLastLoadedAt.value !== null &&
+    Date.now() - repliesLastLoadedAt.value < REPLIES_CACHE_TTL_MS,
+)
+
 const currentUserOffer = computed(() => {
   return props.request.offers.find((offer) => offer.lender.userId === props.currentUserId) ?? null
 })
@@ -630,20 +646,28 @@ const normalizeOffer = (offer: CommunityOffer): CommunityOffer => ({
 })
 
 watch(
-  () => [props.request.id, props.request.offers] as const,
+  () => props.request.offers,
   () => {
     loadedOffers.value = props.request.offers.map(normalizeOffer)
     offerPage.value = 1
     offerLoadError.value = ""
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.request.id,
+  () => {
     threadReplies.value = []
     replyError.value = ""
+    hasLoadedReplies.value = false
+    repliesLastLoadedAt.value = null
     stopReplySync()
     if (showComments.value) {
       void loadReplies()
       startReplySync()
     }
   },
-  { immediate: true },
 )
 
 watch(showComments, (isVisible) => {
@@ -652,7 +676,9 @@ watch(showComments, (isVisible) => {
     return
   }
 
-  void loadReplies()
+  if (!hasFreshRepliesCache.value) {
+    void loadReplies()
+  }
   startReplySync()
 })
 

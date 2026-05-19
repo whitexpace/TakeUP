@@ -210,6 +210,7 @@ import {
   type ApiOfferableItem,
   buildCommunityFeedActivity,
   buildCommunityFeedTrendingItems,
+  getStaleCommunityFeedTimestamp,
   normalizeCommunityNotification,
   normalizeCommunityRequest,
   normalizeOfferableItem,
@@ -409,6 +410,38 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
   )
 }
 
+const applyFeedSnapshot = (snapshot: {
+  requests: ApiCommunityRequest[]
+  notifications: ApiCommunityNotification[]
+  offerableItems: ApiOfferableItem[]
+  currentDbUserId?: string | null
+  viewerKey?: string | null
+  userActivity?: ReturnType<typeof buildCommunityFeedActivity> | null
+  trendingItems?: Array<{ id: number; title: string; offersCount: number }> | null
+}, options: { loadedAt?: number | null } = {}) => {
+  const nextRequests = snapshot.requests.map(normalizeCommunityRequest)
+  requests.value = nextRequests
+  notifications.value = snapshot.notifications.map(normalizeCommunityNotification)
+  offerableItems.value = snapshot.offerableItems.map(normalizeOfferableItem)
+  currentDbUserId.value = snapshot.currentDbUserId ?? currentDbUserId.value
+  feedViewerKey.value = snapshot.viewerKey ?? user.value?.id ?? "anonymous"
+  feedActivity.value =
+    snapshot.userActivity ?? buildCommunityFeedActivity(nextRequests, currentDbUserId.value)
+  feedTrendingItems.value =
+    snapshot.trendingItems ?? buildCommunityFeedTrendingItems(nextRequests)
+  feedHydrated.value = true
+  feedLastLoadedAt.value = options.loadedAt ?? Date.now()
+}
+
+const isFeedCacheFreshForViewer = (viewerKey: string) =>
+  feedHydrated.value &&
+  feedViewerKey.value === viewerKey &&
+  feedLastLoadedAt.value !== null &&
+  Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS
+
+const hasFeedCacheForViewer = (viewerKey: string) =>
+  feedHydrated.value && feedViewerKey.value === viewerKey
+
 const getAuthHeaders = async () => {
   const { getAuthHeaders } = useViewerSession()
   const headers = await getAuthHeaders()
@@ -419,6 +452,47 @@ const getAuthHeaders = async () => {
     authorization,
   }
 }
+
+const { data: initialFeedLoaded } = useLazyAsyncData(
+  "community-feed-initial-data",
+  async () => {
+    const viewerKey = user.value?.id ?? "anonymous"
+    if (isFeedCacheFreshForViewer(viewerKey)) {
+      return true
+    }
+
+    const headers = await getAuthHeaders()
+    const initialFeedSnapshot = await withPerfTimer(
+      "community-feed",
+      viewerKey,
+      () =>
+        $fetch<{
+          requests: ApiCommunityRequest[]
+          notifications: ApiCommunityNotification[]
+          offerableItems: ApiOfferableItem[]
+          currentDbUserId: string
+          viewerKey: string
+          userActivity: ReturnType<typeof buildCommunityFeedActivity>
+          trendingItems: Array<{ id: number; title: string; offersCount: number }>
+        }>("/api/community-feed/preview", {
+          query: { limit: 8 },
+          ...(headers ? { headers } : {}),
+        }),
+      {
+        detail: "initialFeedSnapshot",
+      },
+    )
+
+    applyFeedSnapshot(initialFeedSnapshot, {
+      // Paint instantly, then let the mounted path decide whether to refresh in background.
+      loadedAt: getStaleCommunityFeedTimestamp(),
+    })
+    return true
+  },
+  {
+    default: () => false,
+  },
+)
 
 const enumerateRequestedDates = (
   startDate: string,
@@ -502,12 +576,19 @@ const refreshFeed = async () => {
         },
       )
 
-      const nextRequests = requestResponse.map(normalizeCommunityRequest)
-      requests.value = nextRequests
-      notifications.value = notificationResponse.map(normalizeCommunityNotification)
-      offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
-      setFeedSummary(nextRequests, currentDbUserId.value)
-      feedLastLoadedAt.value = Date.now()
+      applyFeedSnapshot(
+        {
+          requests: requestResponse,
+          notifications: notificationResponse,
+          offerableItems: offerableItemResponse,
+          currentDbUserId: currentDbUserId.value,
+          viewerKey: feedViewerKey.value,
+        },
+        {
+          loadedAt: Date.now(),
+        },
+      )
+      setFeedSummary(requests.value, currentDbUserId.value)
     } catch (error) {
       console.error("Failed to load community feed", error)
       feedError.value = "Unable to load the live community feed right now."
@@ -940,12 +1021,7 @@ onMounted(() => {
   startFeedSync()
 
   const currentViewerKey = user.value?.id ?? "anonymous"
-  const isViewerCacheMatch = feedViewerKey.value === currentViewerKey
-  const isCachedFeedFresh =
-    feedHydrated.value &&
-    isViewerCacheMatch &&
-    feedLastLoadedAt.value !== null &&
-    Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS
+  const isCachedFeedFresh = isFeedCacheFreshForViewer(currentViewerKey)
 
   if (isCachedFeedFresh) {
     recordPerfEvent("community-feed", currentViewerKey, "cache-hit")
@@ -953,7 +1029,14 @@ onMounted(() => {
     return
   }
 
-  if (feedHydrated.value && isViewerCacheMatch) {
+  if (hasFeedCacheForViewer(currentViewerKey)) {
+    recordPerfEvent("community-feed", currentViewerKey, "background-refresh")
+    isLoadingFeed.value = false
+    void refreshFeed()
+    return
+  }
+
+  if (initialFeedLoaded.value) {
     recordPerfEvent("community-feed", currentViewerKey, "background-refresh")
     isLoadingFeed.value = false
     void refreshFeed()
