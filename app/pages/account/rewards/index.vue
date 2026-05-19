@@ -247,7 +247,9 @@ const getStatusBadgeClass = (status: string) => {
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+          <h1
+            class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+          >
             My Rewards
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>

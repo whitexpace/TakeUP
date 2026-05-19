@@ -84,51 +84,6 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 const asNonEmptyString = (val: unknown) =>
   typeof val === "string" && val.trim() ? val.trim() : null
 
-const getIdentityMetadata = (authUser: unknown) => {
-  const authUserRecord = asRecord(authUser)
-  const identities = authUserRecord?.identities
-  if (!Array.isArray(identities)) return []
-
-  return identities
-    .map((identity) => {
-      const identityRecord = asRecord(identity)
-      return asRecord(identityRecord?.identity_data) ?? asRecord(identityRecord?.provider_metadata)
-    })
-    .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
-}
-
-const buildNameFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return null
-  const directName =
-    asNonEmptyString(source.full_name) ||
-    asNonEmptyString(source.name) ||
-    asNonEmptyString(source.display_name)
-  if (directName) return directName
-
-  const firstName =
-    asNonEmptyString(source.given_name) ||
-    asNonEmptyString(source.first_name) ||
-    asNonEmptyString(source.firstName)
-  const lastName =
-    asNonEmptyString(source.family_name) ||
-    asNonEmptyString(source.last_name) ||
-    asNonEmptyString(source.lastName)
-  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
-  return fullName || null
-}
-
-const getAvatarFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return null
-  return (
-    asNonEmptyString(source.picture) ||
-    asNonEmptyString(source.avatar_url) ||
-    asNonEmptyString(source.photo_url) ||
-    asNonEmptyString(source.profile_image) ||
-    asNonEmptyString(source.image) ||
-    asNonEmptyString(source.avatarUrl)
-  )
-}
-
 const buildDbFullName = (payload: AuthMeUser | undefined) => {
   if (!payload) return null
   const first = (payload.firstName || "").trim()
@@ -141,38 +96,11 @@ const buildDbFullName = (payload: AuthMeUser | undefined) => {
 const profileDetails = computed(() => {
   const authUser = user.value
   const authUserRecord = asRecord(authUser)
-  const metadataSources = [
-    asRecord(authUserRecord?.user_metadata),
-    asRecord(authUserRecord?.app_metadata),
-    ...getIdentityMetadata(authUser),
-  ]
 
-  // 1. Try DB name first (Highest priority for local edits)
-  let fullName = buildDbFullName(authData.value?.user)
-
-  // 2. Try direct metadata fields if DB name is missing
-  if (!fullName) {
-    const meta = authUserRecord?.user_metadata as Record<string, unknown> | undefined
-    fullName = asNonEmptyString(meta?.full_name) || asNonEmptyString(meta?.name)
-  }
-
-  // 3. Try identity data if still missing
-  if (!fullName) {
-    for (const source of metadataSources) {
-      const name = buildNameFromSource(source)
-      if (name) {
-        fullName = name
-        break
-      }
-    }
-  }
-
-  fullName = fullName || asNonEmptyString(authUserRecord?.email)?.split("@")[0] || "User"
-
-  let avatarUrl = asNonEmptyString(authData.value?.user.avatarUrl)
-  if (!avatarUrl) {
-    avatarUrl = metadataSources.map(getAvatarFromSource).find(Boolean) || null
-  }
+  // Use DB name and avatar (which are now directly synced from Google on login)
+  const dbFullName = buildDbFullName(authData.value?.user)
+  const fullName = dbFullName || asNonEmptyString(authUserRecord?.email)?.split("@")[0] || "User"
+  const avatarUrl = asNonEmptyString(authData.value?.user.avatarUrl) || null
 
   const email = asNonEmptyString(authUserRecord?.email) || "No email available"
   const location = asNonEmptyString(authData.value?.user.location) || "Not set"
@@ -566,7 +494,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
     <template v-if="authData">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+          <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
             Account Information
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>

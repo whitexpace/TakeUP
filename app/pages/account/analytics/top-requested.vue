@@ -39,7 +39,9 @@ onMounted(() => {
     </div>
 
     <div>
-      <h1 class="font-montravia text-[36px] font-medium text-noble-black">Top Requested Items</h1>
+      <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+        Top Requested Items
+      </h1>
       <div class="mt-2 h-1 w-12 bg-burning-orange" />
       <p class="mt-1 font-geist text-[16px] font-light text-noble-black/50">
         All your items ranked by booking requests.

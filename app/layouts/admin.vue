@@ -171,9 +171,7 @@ onUnmounted(() => {
         ]"
       >
         <div class="px-6 pt-10 pb-8 border-b border-white/5 shrink-0">
-          <h2 class="font-montravia text-[26px] font-bold text-white tracking-tight">
-            Admin Panel
-          </h2>
+          <h2 class="font-geist text-[26px] font-bold text-white tracking-tight">Admin Panel</h2>
         </div>
 
         <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-4 py-8 space-y-1">

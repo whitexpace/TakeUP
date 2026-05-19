@@ -432,7 +432,7 @@ onBeforeUnmount(() => {
               <div
                 class="relative z-10 flex items-center justify-between px-4 py-4 border-b border-gray-100 shrink-0"
               >
-                <span class="font-montravia text-[20px] font-semibold text-noble-black">
+                <span class="font-geist text-[20px] font-semibold text-noble-black tracking-tight">
                   Notifications
                 </span>
                 <button

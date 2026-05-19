@@ -2,7 +2,7 @@
   <div ref="container" class="relative">
     <!-- Input Trigger -->
     <div
-      class="flex items-center w-full h-[42px] bg-white border border-cinnamon-ice/30 rounded-[10px] px-3 cursor-pointer group transition-all duration-300"
+      class="flex items-center w-full h-[42px] bg-white border border-cinnamon-ice/30 rounded-[10px] px-2.5 cursor-pointer group transition-all duration-300"
       :class="
         isOpen
           ? 'border-burning-orange ring-1 ring-burning-orange/20'
@@ -16,7 +16,7 @@
           class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors shrink-0"
         />
         <span
-          class="ml-2 font-geist text-[13px] transition-colors"
+          class="ml-1.5 font-geist text-[12px] transition-colors"
           :class="modelValue ? 'text-noble-black' : 'text-noble-black/40'"
         >
           {{ selectedLabel || placeholder }}
@@ -40,14 +40,14 @@
     >
       <div
         v-if="isOpen"
-        class="absolute z-[100] mt-2 w-full min-w-[140px] bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] py-2 font-geist"
+        class="absolute z-[100] mt-2 w-full min-w-[120px] bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] py-2 font-geist"
       >
         <div class="max-h-[200px] overflow-y-auto custom-scrollbar">
           <button
             v-for="option in timeOptions"
             :key="option.value"
             type="button"
-            class="w-full text-left px-4 py-2 text-sm transition-all duration-200"
+            class="w-full text-center px-4 py-2 text-sm transition-all duration-200"
             :class="[
               isTimeDisabled(option.value)
                 ? 'opacity-30 cursor-not-allowed'

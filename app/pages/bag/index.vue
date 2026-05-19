@@ -296,7 +296,9 @@ const handleRequestBooking = async () => {
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12 pt-24">
       <div class="mb-10">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+          <h1
+            class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+          >
             My Bag
           </h1>
           <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
@@ -389,8 +391,8 @@ const handleRequestBooking = async () => {
               </button>
             </div>
 
-            <!-- Groups by Lender -->
-            <div class="flex flex-col">
+            <!-- Groups by Lender (Scrollable Container) -->
+            <div class="flex flex-col max-h-[580px] overflow-y-auto">
               <div v-for="(group, lenderId) in groupedItems" :key="lenderId" class="flex flex-col">
                 <!-- Lender Header -->
                 <div
@@ -468,8 +470,8 @@ const handleRequestBooking = async () => {
                             class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-[6px] uppercase"
                             :class="
                               item.listingType === 'Rent'
-                                ? 'bg-blue-estate text-white'
-                                : 'bg-gray-100 text-gray-600'
+                                ? 'bg-cinnamon-ice text-black'
+                                : 'bg-blue-estate text-white'
                             "
                           >
                             {{ item.listingType }}
@@ -586,17 +588,6 @@ const handleRequestBooking = async () => {
                     {{ failedItem.reason }}
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div class="mt-8">
-              <div
-                class="flex items-center gap-2 px-4 py-2 bg-blue-estate/5 border border-blue-estate/10 rounded-full justify-center"
-              >
-                <Icon name="ph:shield" class="w-3.5 h-3.5 text-blue-estate" />
-                <span class="text-[12px] font-semibold text-blue-estate"
-                  >Protected by TakeUP Secure</span
-                >
               </div>
             </div>
           </div>

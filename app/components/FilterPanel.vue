@@ -334,11 +334,11 @@
               class="block font-geist text-[11px] font-bold uppercase tracking-wider text-noble-black/30 ml-1"
               >From</label
             >
-            <div class="flex gap-2">
+            <div class="flex gap-1.5">
               <div class="flex-1">
                 <CustomCalendar v-model="dateFrom" placeholder="Date" disable-past />
               </div>
-              <div class="w-[115px]">
+              <div class="w-[125px]">
                 <CustomTimePicker v-model="timeFrom" placeholder="Time" :min-time="minTimeFrom" />
               </div>
             </div>
@@ -348,7 +348,7 @@
               class="block font-geist text-[11px] font-bold uppercase tracking-wider text-noble-black/30 ml-1"
               >To</label
             >
-            <div class="flex gap-2">
+            <div class="flex gap-1.5">
               <div class="flex-1">
                 <CustomCalendar
                   v-model="dateTo"
@@ -357,7 +357,7 @@
                   :min-date="dateFrom"
                 />
               </div>
-              <div class="w-[115px]">
+              <div class="w-[125px]">
                 <CustomTimePicker
                   v-model="timeTo"
                   placeholder="Time"
