@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client"
+import { pruneExpiredEntries, setBoundedMapEntry } from "../../utils/bounded-cache"
 
 type CachedUserAccess = {
   status: string
@@ -7,9 +8,11 @@ type CachedUserAccess = {
 }
 
 const USER_ACCESS_CACHE_TTL_MS = 30_000
+const MAX_USER_ACCESS_CACHE_ENTRIES = 512
 const userAccessCache = new Map<string, CachedUserAccess>()
 
 export const getCachedUserAccess = async (prisma: PrismaClient, userId: string) => {
+  pruneExpiredEntries(userAccessCache)
   const cached = userAccessCache.get(userId)
   if (cached && cached.expiresAt > Date.now()) {
     return cached
@@ -34,6 +37,6 @@ export const getCachedUserAccess = async (prisma: PrismaClient, userId: string) 
     expiresAt: Date.now() + USER_ACCESS_CACHE_TTL_MS,
   }
 
-  userAccessCache.set(userId, nextRecord)
+  setBoundedMapEntry(userAccessCache, userId, nextRecord, MAX_USER_ACCESS_CACHE_ENTRIES)
   return nextRecord
 }

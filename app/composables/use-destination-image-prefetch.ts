@@ -1,4 +1,5 @@
 import type { ListedItem } from "../types/item-listing"
+import { setBoundedMapEntry } from "../utils/bounded-cache"
 
 type DestinationImageMetadata = {
   src?: string
@@ -13,6 +14,9 @@ type DestinationImagePrefetchResponse = {
 }
 
 const ITEM_ID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const MAX_DESTINATION_IMAGE_METADATA_ENTRIES = 96
+const MAX_DESTINATION_ITEM_SHELL_CACHE_ENTRIES = 64
+const MAX_WARMED_DESTINATION_IMAGES = 96
 const metadataCache = new Map<
   string,
   Promise<DestinationImageMetadata[]> | DestinationImageMetadata[]
@@ -42,7 +46,7 @@ const fetchDestinationImages = (path: string) => {
   const pending = $fetch<DestinationImagePrefetchResponse>(`/api/prefetch-images${path}`)
     .then((response) => {
       const images = Array.isArray(response.images) ? response.images : []
-      metadataCache.set(path, images)
+      setBoundedMapEntry(metadataCache, path, images, MAX_DESTINATION_IMAGE_METADATA_ENTRIES)
       return images
     })
     .catch((error: unknown) => {
@@ -50,7 +54,7 @@ const fetchDestinationImages = (path: string) => {
       throw error
     })
 
-  metadataCache.set(path, pending)
+  setBoundedMapEntry(metadataCache, path, pending, MAX_DESTINATION_IMAGE_METADATA_ENTRIES)
   return pending
 }
 
@@ -105,7 +109,12 @@ const buildListedItemShell = (item: ListedItem) => ({
 })
 
 export const seedPrefetchedItemDetail = (itemId: string, data: unknown | null) => {
-  itemShellCache.set(itemId, data)
+  setBoundedMapEntry(
+    itemShellCache,
+    itemId,
+    data,
+    MAX_DESTINATION_ITEM_SHELL_CACHE_ENTRIES,
+  )
 
   if (data) {
     seedNuxtItemData(itemId, data)
@@ -186,7 +195,7 @@ const warmImages = (images: DestinationImageMetadata[]) => {
       browserImage.src = image.src
     }
 
-    warmedImages.set(key, browserImage)
+    setBoundedMapEntry(warmedImages, key, browserImage, MAX_WARMED_DESTINATION_IMAGES)
   }
 }
 

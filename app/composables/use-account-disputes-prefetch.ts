@@ -1,5 +1,6 @@
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
+import { pruneExpiredEntries, setBoundedMapEntry } from "../utils/bounded-cache"
 import { useAccountPrefetch } from "./use-account-prefetch"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
@@ -12,6 +13,7 @@ type CacheEntry<T> = {
 }
 
 const ACCOUNT_DISPUTES_CACHE_TTL_MS = 5 * 60_000
+const MAX_ACCOUNT_DISPUTES_CACHE_ENTRIES = 24
 
 const myDisputesCache = new Map<string, CacheEntry<MyDisputesResponse>>()
 const reportableTransactionsCache = new Map<string, CacheEntry<ReportableTransactionsResponse>>()
@@ -36,6 +38,7 @@ const getViewerKey = () => {
 }
 
 const getCachedResponse = <T>(cache: Map<string, CacheEntry<T>>, cacheKey: string) => {
+  pruneExpiredEntries(cache)
   const cachedEntry = cache.get(cacheKey)
   if (!cachedEntry) return null
 
@@ -48,10 +51,16 @@ const getCachedResponse = <T>(cache: Map<string, CacheEntry<T>>, cacheKey: strin
 }
 
 const setCachedResponse = <T>(cache: Map<string, CacheEntry<T>>, cacheKey: string, response: T) => {
-  cache.set(cacheKey, {
-    expiresAt: Date.now() + ACCOUNT_DISPUTES_CACHE_TTL_MS,
-    response: cloneResponse(response),
-  })
+  pruneExpiredEntries(cache)
+  setBoundedMapEntry(
+    cache,
+    cacheKey,
+    {
+      expiresAt: Date.now() + ACCOUNT_DISPUTES_CACHE_TTL_MS,
+      response: cloneResponse(response),
+    },
+    MAX_ACCOUNT_DISPUTES_CACHE_ENTRIES,
+  )
 }
 
 export const clearAccountDisputesCache = () => {

@@ -1,5 +1,6 @@
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
+import { addBoundedSetEntry, setBoundedMapEntry } from "../utils/bounded-cache"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type BookingDetail = NonNullable<RouterOutputs["booking"]["byId"]>
@@ -7,6 +8,7 @@ type BookingDetail = NonNullable<RouterOutputs["booking"]["byId"]>
 const BOOKING_ID_PATTERN =
   /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const MAX_WARMED_BOOKING_IMAGE_URLS = 80
+const MAX_BOOKING_DETAIL_CACHE_ENTRIES = 64
 const MAX_CONCURRENT_BOOKING_DETAIL_PREFETCHES = 2
 const BOOKING_DETAIL_PREFETCH_DELAY_MS = 60
 
@@ -107,13 +109,18 @@ const warmBookingImage = (src: string | null | undefined) => {
     priorityImage.fetchPriority = "low"
   }
   browserImage.src = src
-  warmedBookingImageUrls.add(src)
+  addBoundedSetEntry(warmedBookingImageUrls, src, MAX_WARMED_BOOKING_IMAGE_URLS)
 }
 
 export const seedPrefetchedBookingDetail = (bookingId: string, data: BookingDetail) => {
   if (!import.meta.client) return
 
-  bookingDetailCache.set(bookingId, data)
+  setBoundedMapEntry(
+    bookingDetailCache,
+    bookingId,
+    data,
+    MAX_BOOKING_DETAIL_CACHE_ENTRIES,
+  )
   seedNuxtBookingData(bookingId, data)
   warmBookingImage(data.item.thumbnailImage)
 }

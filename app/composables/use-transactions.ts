@@ -2,6 +2,7 @@ import { computed, ref, watch, type Ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import type { TransactionStatus } from "#shared/schemas/transaction"
+import { addBoundedSetEntry, pruneExpiredEntries, setBoundedMapEntry } from "../utils/bounded-cache"
 import { useAccountPrefetch } from "./use-account-prefetch"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
@@ -32,6 +33,7 @@ const TRANSACTION_PAGE_LIMIT = 20
 const TRANSACTION_CACHE_TTL_MS = 5 * 60_000
 const TRANSACTION_LOOKAHEAD_DELAY_MS = 450
 const MAX_WARMED_TRANSACTION_IMAGE_URLS = 80
+const MAX_TRANSACTION_CACHE_ENTRIES = 48
 
 const transactionPageCache = new Map<string, TransactionPageCacheEntry>()
 const pendingTransactionPageRequests = new Map<string, Promise<TransactionListResponse>>()
@@ -71,6 +73,7 @@ const buildTransactionCacheKey = (query: TransactionQuery) =>
   `${getTransactionViewerKey()}:${serializeTransactionQuery(buildTransactionRequestQuery(query))}`
 
 const getCachedTransactionPage = (cacheKey: string) => {
+  pruneExpiredEntries(transactionPageCache)
   const cachedEntry = transactionPageCache.get(cacheKey)
   if (!cachedEntry) return null
 
@@ -100,7 +103,7 @@ const warmTransactionImage = (src: string | null | undefined) => {
     priorityImage.fetchPriority = "low"
   }
   browserImage.src = src
-  warmedTransactionImageUrls.add(src)
+  addBoundedSetEntry(warmedTransactionImageUrls, src, MAX_WARMED_TRANSACTION_IMAGE_URLS)
 }
 
 const warmTransactionImages = (transactions: TransactionListItem[]) => {
@@ -110,10 +113,16 @@ const warmTransactionImages = (transactions: TransactionListItem[]) => {
 }
 
 const setCachedTransactionPage = (cacheKey: string, response: TransactionListResponse) => {
-  transactionPageCache.set(cacheKey, {
-    expiresAt: Date.now() + TRANSACTION_CACHE_TTL_MS,
-    response: cloneTransactionListResponse(response),
-  })
+  pruneExpiredEntries(transactionPageCache)
+  setBoundedMapEntry(
+    transactionPageCache,
+    cacheKey,
+    {
+      expiresAt: Date.now() + TRANSACTION_CACHE_TTL_MS,
+      response: cloneTransactionListResponse(response),
+    },
+    MAX_TRANSACTION_CACHE_ENTRIES,
+  )
   warmTransactionImages(response.transactions)
 }
 
