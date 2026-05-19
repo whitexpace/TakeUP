@@ -142,12 +142,7 @@ const invalidateItemSearchCaches = () => {
 export const seedPrefetchedMyListingDetail = (item: MyListingItem) => {
   if (!import.meta.client) return
 
-  setBoundedMapEntry(
-    myListingDetailCache,
-    item.id,
-    item,
-    MAX_MY_LISTING_DETAIL_CACHE_ENTRIES,
-  )
+  setBoundedMapEntry(myListingDetailCache, item.id, item, MAX_MY_LISTING_DETAIL_CACHE_ENTRIES)
   warmMyListingDetailImages(item)
 }
 

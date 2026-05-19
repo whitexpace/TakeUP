@@ -115,12 +115,7 @@ const warmBookingImage = (src: string | null | undefined) => {
 export const seedPrefetchedBookingDetail = (bookingId: string, data: BookingDetail) => {
   if (!import.meta.client) return
 
-  setBoundedMapEntry(
-    bookingDetailCache,
-    bookingId,
-    data,
-    MAX_BOOKING_DETAIL_CACHE_ENTRIES,
-  )
+  setBoundedMapEntry(bookingDetailCache, bookingId, data, MAX_BOOKING_DETAIL_CACHE_ENTRIES)
   seedNuxtBookingData(bookingId, data)
   warmBookingImage(data.item.thumbnailImage)
 }

@@ -109,12 +109,7 @@ const buildListedItemShell = (item: ListedItem) => ({
 })
 
 export const seedPrefetchedItemDetail = (itemId: string, data: unknown | null) => {
-  setBoundedMapEntry(
-    itemShellCache,
-    itemId,
-    data,
-    MAX_DESTINATION_ITEM_SHELL_CACHE_ENTRIES,
-  )
+  setBoundedMapEntry(itemShellCache, itemId, data, MAX_DESTINATION_ITEM_SHELL_CACHE_ENTRIES)
 
   if (data) {
     seedNuxtItemData(itemId, data)
