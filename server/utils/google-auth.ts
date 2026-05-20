@@ -1,4 +1,5 @@
 import { AuthApiError } from "./auth-errors"
+import { parseProviderName, type ParsedAuthName } from "./auth-user-name"
 
 const ALLOWED_ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"])
 const ALLOWED_EMAIL_DOMAIN = "up.edu.ph"
@@ -11,12 +12,15 @@ type GoogleTokenInfo = {
   email?: string
   email_verified?: string
   name?: string
+  given_name?: string
+  family_name?: string
 }
 
 export type VerifiedGoogleIdentity = {
   googleSub: string
   email: string
   name: string
+  nameParts: ParsedAuthName | null
 }
 
 function assertGoogleClientId(value: string | undefined): string {
@@ -69,7 +73,12 @@ export async function verifyGoogleIdToken(
     throw new AuthApiError("AUTH_INVALID_TOKEN")
   }
 
-  const name = tokenInfo.name?.trim() || email.split("@")[0] || "UP User"
+  const nameParts = parseProviderName({
+    fullName: tokenInfo.name,
+    givenName: tokenInfo.given_name,
+    familyName: tokenInfo.family_name,
+  })
+  const name = nameParts?.fullName || tokenInfo.name?.trim() || "UP User"
 
-  return { googleSub, email, name }
+  return { googleSub, email, name, nameParts }
 }
