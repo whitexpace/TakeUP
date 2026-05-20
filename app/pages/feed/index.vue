@@ -99,6 +99,14 @@
                 @delete-request="handleDeleteRequest"
                 @update-offer-status="handleUpdateOfferStatus"
               />
+              <div ref="feedLoadMoreSentinelRef" class="flex min-h-12 items-center justify-center">
+                <span
+                  v-if="isLoadingMoreRequests"
+                  class="text-[13px] font-medium text-noble-black/35"
+                >
+                  Loading more requests...
+                </span>
+              </div>
             </div>
 
             <div
@@ -207,6 +215,7 @@ import { useCommunityFeedCache } from "../../composables/use-community-feed-cach
 import { recordPerfEvent, withPerfTimer } from "../../utils/performance-telemetry"
 import {
   COMMUNITY_FEED_CACHE_TTL_MS,
+  type ApiCommunityFeedPreviewResponse,
   type ApiCommunityNotification,
   type ApiCommunityRequest,
   type ApiOfferableItem,
@@ -218,7 +227,7 @@ import {
   normalizeOfferableItem,
 } from "../../utils/community-feed"
 
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type {
   CommunityOfferFormInput,
   CommunityOfferStatus,
@@ -232,6 +241,8 @@ definePageMeta({ layout: false })
 
 const createPostRef = ref<InstanceType<typeof CommunityCreatePost> | null>(null)
 const feedMainRef = ref<HTMLElement | null>(null)
+const feedLoadMoreSentinelRef = ref<HTMLElement | null>(null)
+const COMMUNITY_FEED_PAGE_SIZE = 8
 
 const triggerCreatePost = () => {
   createPostRef.value?.triggerHighlight()
@@ -347,14 +358,17 @@ const {
   feedViewerKey,
   feedActivity,
   feedTrendingItems,
-  setFeedSummary,
 } = useCommunityFeedCache()
 const supabase = useSupabaseClient()
 let refreshFeedPromise: Promise<void> | null = null
+let loadMoreRequestsPromise: Promise<void> | null = null
 let feedPollIntervalId: ReturnType<typeof setInterval> | null = null
 let feedRealtimeChannel: ReturnType<typeof supabase.channel> | null = null
+let feedLoadMoreObserver: IntersectionObserver | null = null
 const initialViewerKey = user.value?.id ?? "anonymous"
 const isLoadingFeed = ref(!feedHydrated.value || feedViewerKey.value !== initialViewerKey)
+const isLoadingMoreRequests = ref(false)
+const hasMoreRequests = ref(requests.value.length >= COMMUNITY_FEED_PAGE_SIZE)
 const isCreatingRequest = ref(false)
 const isSubmittingOffer = ref(false)
 const feedError = ref<string | null>(null)
@@ -422,7 +436,7 @@ const applyFeedSnapshot = (
     userActivity?: ReturnType<typeof buildCommunityFeedActivity> | null
     trendingItems?: Array<{ id: number; title: string; offersCount: number }> | null
   },
-  options: { loadedAt?: number | null } = {},
+  options: { loadedAt?: number | null; requestLimit?: number } = {},
 ) => {
   const nextRequests = snapshot.requests.map(normalizeCommunityRequest)
   requests.value = nextRequests
@@ -435,16 +449,37 @@ const applyFeedSnapshot = (
   feedTrendingItems.value = snapshot.trendingItems ?? buildCommunityFeedTrendingItems(nextRequests)
   feedHydrated.value = true
   feedLastLoadedAt.value = options.loadedAt ?? Date.now()
+  isLoadingFeed.value = false
+  hasMoreRequests.value =
+    snapshot.requests.length >= (options.requestLimit ?? COMMUNITY_FEED_PAGE_SIZE)
+}
+
+const appendFeedRequests = (apiRequests: ApiCommunityRequest[]) => {
+  const existingIds = new Set(requests.value.map((request) => request.id))
+  const nextRequests = apiRequests
+    .map(normalizeCommunityRequest)
+    .filter((request) => !existingIds.has(request.id))
+
+  if (nextRequests.length > 0) {
+    requests.value = [...requests.value, ...nextRequests]
+    feedLastLoadedAt.value = Date.now()
+  }
+
+  hasMoreRequests.value = apiRequests.length >= COMMUNITY_FEED_PAGE_SIZE
 }
 
 const isFeedCacheFreshForViewer = (viewerKey: string) =>
   feedHydrated.value &&
   feedViewerKey.value === viewerKey &&
   feedLastLoadedAt.value !== null &&
-  Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS
+  Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS &&
+  hasHydratedRequestReplies()
 
 const hasFeedCacheForViewer = (viewerKey: string) =>
   feedHydrated.value && feedViewerKey.value === viewerKey
+
+const hasHydratedRequestReplies = () =>
+  requests.value.every((request) => request.repliesCount === 0 || request.replies.length > 0)
 
 const getAuthHeaders = async () => {
   const { getAuthHeaders } = useViewerSession()
@@ -536,6 +571,11 @@ const refreshFeed = async () => {
   }
 
   refreshFeedPromise = (async () => {
+    const requestLimit = Math.min(
+      50,
+      Math.max(COMMUNITY_FEED_PAGE_SIZE, requests.value.length || COMMUNITY_FEED_PAGE_SIZE),
+    )
+
     if (feedHydrated.value) {
       isLoadingFeed.value = false
     } else {
@@ -548,51 +588,23 @@ const refreshFeed = async () => {
       const headers = await getAuthHeaders()
       feedViewerKey.value = user.value?.id ?? "anonymous"
 
-      if (headers) {
-        const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
-        const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
-        currentDbUserId.value = authUser?.id ?? ""
-      } else {
-        currentDbUserId.value = ""
-      }
-
-      const [requestResponse, notificationResponse, offerableItemResponse] = await withPerfTimer(
+      const feedSnapshot = await withPerfTimer(
         "community-feed",
         feedViewerKey.value,
         () =>
-          Promise.all([
-            $fetch<ApiCommunityRequest[]>("/api/item-requests", {
-              query: { includeCancelledOffers: true, offersLimit: 5 },
-              ...(headers ? { headers } : {}),
-            }),
-            headers
-              ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", {
-                  query: { limit: 20 },
-                  headers,
-                })
-              : Promise.resolve([]),
-            headers
-              ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
-              : Promise.resolve([]),
-          ]),
+          $fetch<ApiCommunityFeedPreviewResponse>("/api/community-feed/preview", {
+            query: { limit: requestLimit },
+            ...(headers ? { headers } : {}),
+          }),
         {
           detail: "refreshFeed",
         },
       )
 
-      applyFeedSnapshot(
-        {
-          requests: requestResponse,
-          notifications: notificationResponse,
-          offerableItems: offerableItemResponse,
-          currentDbUserId: currentDbUserId.value,
-          viewerKey: feedViewerKey.value,
-        },
-        {
-          loadedAt: Date.now(),
-        },
-      )
-      setFeedSummary(requests.value, currentDbUserId.value)
+      applyFeedSnapshot(feedSnapshot, {
+        loadedAt: Date.now(),
+        requestLimit,
+      })
     } catch (error) {
       console.error("Failed to load community feed", error)
       feedError.value = "Unable to load the live community feed right now."
@@ -604,6 +616,82 @@ const refreshFeed = async () => {
   })()
 
   return refreshFeedPromise
+}
+
+const loadNextRequestBatch = async () => {
+  if (loadMoreRequestsPromise) {
+    return loadMoreRequestsPromise
+  }
+
+  if (isLoadingFeed.value || !hasMoreRequests.value) {
+    return
+  }
+
+  loadMoreRequestsPromise = (async () => {
+    isLoadingMoreRequests.value = true
+    feedError.value = null
+
+    try {
+      const headers = await getAuthHeaders()
+      const nextRequests = await withPerfTimer(
+        "community-feed",
+        feedViewerKey.value,
+        () =>
+          $fetch<ApiCommunityRequest[]>("/api/item-requests", {
+            query: {
+              includeCancelledOffers: true,
+              includeReplies: true,
+              offersLimit: 5,
+              limit: COMMUNITY_FEED_PAGE_SIZE,
+              skip: requests.value.length,
+            },
+            ...(headers ? { headers } : {}),
+          }),
+        {
+          detail: "loadNextRequestBatch",
+        },
+      )
+
+      appendFeedRequests(nextRequests)
+    } catch (error) {
+      console.error("Failed to load more community requests", error)
+      feedError.value = "Unable to load more community requests right now."
+    } finally {
+      isLoadingMoreRequests.value = false
+      loadMoreRequestsPromise = null
+    }
+  })()
+
+  return loadMoreRequestsPromise
+}
+
+const stopFeedLoadMoreObserver = () => {
+  if (feedLoadMoreObserver) {
+    feedLoadMoreObserver.disconnect()
+    feedLoadMoreObserver = null
+  }
+}
+
+const startFeedLoadMoreObserver = () => {
+  if (!import.meta.client) return
+
+  stopFeedLoadMoreObserver()
+
+  if (!feedLoadMoreSentinelRef.value) return
+
+  feedLoadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void loadNextRequestBatch()
+      }
+    },
+    {
+      root: feedMainRef.value,
+      rootMargin: "700px 0px",
+      threshold: 0,
+    },
+  )
+  feedLoadMoreObserver.observe(feedLoadMoreSentinelRef.value)
 }
 
 const stopFeedSync = () => {
@@ -1023,6 +1111,7 @@ const markAllNotificationsRead = async () => {
 
 onMounted(() => {
   startFeedSync()
+  void nextTick(startFeedLoadMoreObserver)
 
   const currentViewerKey = user.value?.id ?? "anonymous"
   const isCachedFeedFresh = isFeedCacheFreshForViewer(currentViewerKey)
@@ -1068,7 +1157,15 @@ watch(currentDbUserId, (userId) => {
   }
 })
 
+watch(
+  () => [isLoadingFeed.value, sortedRequests.value.length, activeFilter.value],
+  () => {
+    void nextTick(startFeedLoadMoreObserver)
+  },
+)
+
 onBeforeUnmount(() => {
+  stopFeedLoadMoreObserver()
   stopFeedSync()
 })
 </script>

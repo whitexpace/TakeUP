@@ -425,11 +425,13 @@ const REPLIES_CACHE_TTL_MS = 20_000
 const commentText = ref("")
 const replyingTo = ref<{ name: string; id: string } | null>(null)
 const threadReplies = ref<Reply[]>([])
+const optimisticReplies = ref<Reply[]>([])
 const isLoadingReplies = ref(false)
 const isSubmittingComment = ref(false)
 const replyError = ref("")
 const hasLoadedReplies = ref(false)
 const repliesLastLoadedAt = ref<number | null>(null)
+const localConfirmedReplyCountDelta = ref(0)
 
 type ApiReply = {
   id: string
@@ -465,6 +467,86 @@ const normalizeReply = (reply: ApiReply): Reply => ({
   replies: (reply.replies ?? []).map(normalizeReply),
 })
 
+const getRequestReplies = () => props.request.replies.map((reply) => normalizeReply(reply))
+
+const optimisticRepliesCount = computed(() => optimisticReplies.value.length)
+
+const appendReplyToTree = (
+  replies: Reply[],
+  parentReplyId: string | null,
+  replyToAppend: Reply,
+): { replies: Reply[]; inserted: boolean } => {
+  if (!parentReplyId) {
+    return { replies: [...replies, replyToAppend], inserted: true }
+  }
+
+  let inserted = false
+  const nextReplies = replies.map((reply) => {
+    if (reply.id === parentReplyId) {
+      inserted = true
+      return {
+        ...reply,
+        replies: [...(reply.replies ?? []), replyToAppend],
+      }
+    }
+
+    const nested = appendReplyToTree(reply.replies ?? [], parentReplyId, replyToAppend)
+    if (!nested.inserted) return reply
+
+    inserted = true
+    return {
+      ...reply,
+      replies: nested.replies,
+    }
+  })
+
+  return { replies: nextReplies, inserted }
+}
+
+const removeReplyFromTree = (replies: Reply[], replyId: string): Reply[] =>
+  replies
+    .filter((reply) => reply.id !== replyId)
+    .map((reply) => ({
+      ...reply,
+      replies: removeReplyFromTree(reply.replies ?? [], replyId),
+    }))
+
+const replaceReplyInTree = (
+  replies: Reply[],
+  replyId: string,
+  replacement: Reply,
+): { replies: Reply[]; replaced: boolean } => {
+  let replaced = false
+  const nextReplies = replies.map((reply) => {
+    if (reply.id === replyId) {
+      replaced = true
+      return replacement
+    }
+
+    const nested = replaceReplyInTree(reply.replies ?? [], replyId, replacement)
+    if (!nested.replaced) return reply
+
+    replaced = true
+    return {
+      ...reply,
+      replies: nested.replies,
+    }
+  })
+
+  return { replies: nextReplies, replaced }
+}
+
+const hasReplyInTree = (replies: Reply[], replyId: string): boolean =>
+  replies.some((reply) => reply.id === replyId || hasReplyInTree(reply.replies ?? [], replyId))
+
+const applyOptimisticReplies = (replies: Reply[]) =>
+  optimisticReplies.value.reduce((nextReplies, reply) => {
+    if (hasReplyInTree(nextReplies, reply.id)) return nextReplies
+
+    const result = appendReplyToTree(nextReplies, reply.parentReplyId, reply)
+    return result.inserted ? result.replies : [...nextReplies, reply]
+  }, replies)
+
 const countReplies = (list: Reply[]): number => {
   let total = 0
   for (const item of list) {
@@ -478,7 +560,11 @@ const countReplies = (list: Reply[]): number => {
 
 const totalRepliesCount = computed(() => {
   if (!hasLoadedReplies.value) {
-    return props.request.repliesCount
+    return (
+      props.request.repliesCount +
+      localConfirmedReplyCountDelta.value +
+      optimisticRepliesCount.value
+    )
   }
 
   return countReplies(threadReplies.value)
@@ -516,8 +602,9 @@ const loadReplies = async (options: { background?: boolean } = {}) => {
       `/api/community-feed/requests/${props.request.id}/replies`,
       headers ? { headers } : {},
     )
-    threadReplies.value = response.map(normalizeReply)
+    threadReplies.value = applyOptimisticReplies(response.map(normalizeReply))
     hasLoadedReplies.value = true
+    localConfirmedReplyCountDelta.value = 0
     repliesLastLoadedAt.value = Date.now()
     replyError.value = ""
   } catch (error) {
@@ -561,38 +648,104 @@ const startReplySync = () => {
 }
 
 const postComment = async () => {
-  if (!commentText.value.trim()) return
+  const submittedText = commentText.value
+  if (!submittedText.trim()) return
   if (!props.currentUserId) {
     replyError.value = "You need to sign in before joining the discussion."
     return
   }
 
+  const submittedReplyingTo = replyingTo.value ? { ...replyingTo.value } : null
+  const wasRepliesLoaded = hasLoadedReplies.value
+  const temporaryReply: Reply = {
+    id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    requestId: props.request.id,
+    parentReplyId: submittedReplyingTo?.id ?? null,
+    user: {
+      name: props.currentUserName,
+      avatar: props.currentUserAvatar ?? "",
+      username: props.currentUserId,
+    },
+    text: submittedText,
+    upvotes: 0,
+    isUpvoted: false,
+    createdAt: new Date(),
+    replies: [],
+  }
+
+  optimisticReplies.value = [...optimisticReplies.value, temporaryReply]
+  const optimisticResult = appendReplyToTree(
+    threadReplies.value,
+    temporaryReply.parentReplyId,
+    temporaryReply,
+  )
+  threadReplies.value = optimisticResult.inserted
+    ? optimisticResult.replies
+    : [...threadReplies.value, temporaryReply]
+  commentText.value = ""
+  replyingTo.value = null
+  replyInputRef.value?.blur()
   isSubmittingComment.value = true
   replyError.value = ""
 
   try {
     const headers = await getAuthHeaders()
     if (!headers) {
-      replyError.value = "You need to sign in before joining the discussion."
-      return
+      throw new Error("Missing authentication headers.")
     }
 
-    await $fetch(`/api/community-feed/requests/${props.request.id}/replies`, {
-      method: "POST",
-      headers,
-      body: {
-        text: commentText.value,
-        parentReplyId: replyingTo.value?.id ?? null,
+    const createdReply = await $fetch<ApiReply>(
+      `/api/community-feed/requests/${props.request.id}/replies`,
+      {
+        method: "POST",
+        headers,
+        body: {
+          text: submittedText,
+          parentReplyId: submittedReplyingTo?.id ?? null,
+        },
       },
-    })
+    )
 
-    commentText.value = ""
-    replyingTo.value = null
-    replyInputRef.value?.blur()
-    await loadReplies({ background: true })
+    const confirmedReply = normalizeReply(createdReply)
+    optimisticReplies.value = optimisticReplies.value.filter(
+      (reply) => reply.id !== temporaryReply.id,
+    )
+
+    const replacementResult = replaceReplyInTree(
+      threadReplies.value,
+      temporaryReply.id,
+      confirmedReply,
+    )
+    if (replacementResult.replaced) {
+      threadReplies.value = replacementResult.replies
+    } else if (!hasReplyInTree(threadReplies.value, confirmedReply.id)) {
+      const confirmedResult = appendReplyToTree(
+        threadReplies.value,
+        confirmedReply.parentReplyId,
+        confirmedReply,
+      )
+      threadReplies.value = confirmedResult.inserted
+        ? confirmedResult.replies
+        : [...threadReplies.value, confirmedReply]
+    }
+
+    if (!wasRepliesLoaded) {
+      localConfirmedReplyCountDelta.value += 1
+    }
+
+    replyError.value = ""
   } catch (error) {
     console.error("Failed to create reply", error)
+    optimisticReplies.value = optimisticReplies.value.filter(
+      (reply) => reply.id !== temporaryReply.id,
+    )
+    threadReplies.value = removeReplyFromTree(threadReplies.value, temporaryReply.id)
+    commentText.value = submittedText
+    replyingTo.value = submittedReplyingTo
     replyError.value = "Unable to post your reply right now."
+    nextTick(() => {
+      replyInputRef.value?.focus()
+    })
   } finally {
     isSubmittingComment.value = false
   }
@@ -646,6 +799,17 @@ const normalizeOffer = (offer: CommunityOffer): CommunityOffer => ({
 })
 
 watch(
+  () => props.request.replies,
+  () => {
+    threadReplies.value = applyOptimisticReplies(getRequestReplies())
+    localConfirmedReplyCountDelta.value = 0
+    hasLoadedReplies.value = props.request.replies.length > 0 || props.request.repliesCount === 0
+    repliesLastLoadedAt.value = hasLoadedReplies.value ? Date.now() : null
+  },
+  { immediate: true },
+)
+
+watch(
   () => props.request.offers,
   () => {
     loadedOffers.value = props.request.offers.map(normalizeOffer)
@@ -658,13 +822,17 @@ watch(
 watch(
   () => props.request.id,
   () => {
-    threadReplies.value = []
+    optimisticReplies.value = []
+    localConfirmedReplyCountDelta.value = 0
+    threadReplies.value = getRequestReplies()
     replyError.value = ""
-    hasLoadedReplies.value = false
-    repliesLastLoadedAt.value = null
+    hasLoadedReplies.value = props.request.replies.length > 0 || props.request.repliesCount === 0
+    repliesLastLoadedAt.value = hasLoadedReplies.value ? Date.now() : null
     stopReplySync()
     if (showComments.value) {
-      void loadReplies()
+      if (!hasLoadedReplies.value) {
+        void loadReplies()
+      }
       startReplySync()
     }
   },

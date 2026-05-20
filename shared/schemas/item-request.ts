@@ -104,6 +104,9 @@ export const listItemRequestsSchema = z
     borrowerOnly: z.coerce.boolean().optional(),
     includeCancelledOffers: z.coerce.boolean().optional(),
     offersLimit: z.coerce.number().int().min(0).max(20).default(5),
+    includeReplies: z.coerce.boolean().optional(),
+    limit: z.coerce.number().int().min(1).max(50).optional(),
+    skip: z.coerce.number().int().min(0).default(0),
   })
   .default({})
 

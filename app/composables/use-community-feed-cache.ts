@@ -98,7 +98,8 @@ const isFreshFeedCache = (
   cache.feedViewerKey.value === viewerKey &&
   cache.feedLastLoadedAt.value !== null &&
   now - cache.feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS &&
-  cache.requests.value.length > 0
+  cache.requests.value.length > 0 &&
+  hasHydratedRequestReplies(cache.requests.value)
 
 const wasPreviewRecentlyWarmed = (
   cache: ReturnType<typeof useCommunityFeedCache>,
@@ -108,7 +109,8 @@ const wasPreviewRecentlyWarmed = (
   if (
     cache.feedHydrated.value &&
     cache.feedViewerKey.value === viewerKey &&
-    cache.requests.value.length > 0
+    cache.requests.value.length > 0 &&
+    hasHydratedRequestReplies(cache.requests.value)
   ) {
     const warmedAt = previewWarmedAtByViewer.get(viewerKey)
     return warmedAt !== undefined && now - warmedAt < COMMUNITY_FEED_CACHE_TTL_MS
@@ -139,6 +141,9 @@ const warmPreviewImages = (requests: CommunityRequest[]) => {
     warmImage(request.borrower.avatar)
   }
 }
+
+const hasHydratedRequestReplies = (requests: CommunityRequest[]) =>
+  requests.every((request) => request.repliesCount === 0 || request.replies.length > 0)
 
 export const useCommunityFeedPrefetch = () => {
   const cache = useCommunityFeedCache()
