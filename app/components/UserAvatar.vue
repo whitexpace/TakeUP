@@ -9,17 +9,22 @@
 
     <!-- Top Layer: Profile Image (Only shows if URL exists and hasn't failed) -->
     <img
-      v-if="avatarUrl && !imageError"
-      :src="avatarUrl"
+      v-if="shouldShowImage"
+      :key="avatarSrc"
+      :src="avatarSrc"
       :alt="userName"
       class="absolute inset-0 w-full h-full object-cover z-10"
+      referrerpolicy="no-referrer"
+      loading="eager"
+      decoding="async"
+      @load="handleImageLoad"
       @error="handleImageError"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 
 const props = withDefaults(
   defineProps<{
@@ -33,22 +38,77 @@ const props = withDefaults(
   },
 )
 
-const imageError = ref(false)
+const MAX_IMAGE_RETRY_COUNT = 3
+const IMAGE_RETRY_DELAY_MS = 600
+
+const imageFailed = ref(false)
+const imageRetryCount = ref(0)
+const imageRetryNonce = ref(0)
+let imageRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+const clearImageRetryTimer = () => {
+  if (imageRetryTimer) {
+    clearTimeout(imageRetryTimer)
+    imageRetryTimer = null
+  }
+}
+
+const withRetryNonce = (src: string, nonce: number) => {
+  if (nonce === 0 || src.startsWith("data:") || src.startsWith("blob:")) {
+    return src
+  }
+
+  try {
+    const isAbsoluteHttpUrl = /^https?:\/\//i.test(src)
+    const url = new URL(src, "http://takeup.local")
+    url.searchParams.set("takeup_avatar_retry", String(nonce))
+
+    return isAbsoluteHttpUrl ? url.toString() : `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return src
+  }
+}
+
+const avatarSrc = computed(() => {
+  if (!props.avatarUrl) return undefined
+  return withRetryNonce(props.avatarUrl, imageRetryNonce.value)
+})
+
+const shouldShowImage = computed(() => Boolean(avatarSrc.value) && !imageFailed.value)
 
 // Reset error state if URL changes
 watch(
   () => props.avatarUrl,
-  (newVal) => {
-    if (newVal) {
-      imageError.value = false
-    }
+  () => {
+    clearImageRetryTimer()
+    imageFailed.value = false
+    imageRetryCount.value = 0
+    imageRetryNonce.value = 0
   },
   { immediate: true },
 )
 
-const handleImageError = () => {
-  imageError.value = true
+const handleImageLoad = () => {
+  clearImageRetryTimer()
+  imageFailed.value = false
 }
+
+const handleImageError = () => {
+  clearImageRetryTimer()
+
+  if (imageRetryCount.value >= MAX_IMAGE_RETRY_COUNT) {
+    imageFailed.value = true
+    return
+  }
+
+  imageRetryTimer = setTimeout(() => {
+    imageRetryCount.value += 1
+    imageRetryNonce.value += 1
+    imageFailed.value = false
+  }, IMAGE_RETRY_DELAY_MS)
+}
+
+onBeforeUnmount(clearImageRetryTimer)
 
 const initials = computed(() => {
   const name = props.userName?.trim() || "User"

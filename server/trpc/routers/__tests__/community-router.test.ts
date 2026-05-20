@@ -51,7 +51,9 @@ const makeRequestRow = (overrides: Record<string, unknown> = {}) => ({
   borrowerMiddleName: null,
   borrowerLastName: "Cruz",
   borrowerEmail: "borrower@up.edu.ph",
+  borrowerAvatarUrl: "",
   offersCount: 1,
+  repliesCount: 0,
   ...overrides,
 })
 
@@ -159,6 +161,56 @@ describe("communityRouter", () => {
       itemName: "Camera",
       lender: { userId: LENDER_USER_ID, name: "lender1" },
     })
+    expect(result[0]?.replies).toEqual([])
+  })
+
+  it("can include request reply trees in the request feed payload", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeRequestRow({ repliesCount: 1 })])
+      .mockResolvedValueOnce([makeOfferRow()])
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "I can help with this.",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: LENDER_USER_ID,
+          username: "lender1",
+          firstName: "Issa",
+          middleName: null,
+          lastName: "Santos",
+          email: "lender@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 1 },
+        upvotes: [],
+      },
+    ])
+    const caller = communityRouter.createCaller(
+      makeContext(null, {
+        $queryRaw: queryRaw,
+        itemRequestReply: { findMany: replyFindMany },
+      }),
+    )
+
+    const result = await caller.listRequests({ includeReplies: true })
+
+    expect(replyFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { requestId: 10 },
+      }),
+    )
+    expect(result[0]?.replies).toMatchObject([
+      {
+        id: ROOT_REPLY_ID,
+        text: "I can help with this.",
+        upvotes: 1,
+      },
+    ])
   })
 
   it("lists request replies as a nested tree with viewer upvote state", async () => {

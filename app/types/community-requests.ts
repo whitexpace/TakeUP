@@ -68,6 +68,7 @@ export interface CommunityRequest {
   repliesCount: number
   borrower: CommunityMember
   offers: CommunityOffer[]
+  replies: Reply[]
 }
 
 export interface CommunityRequestComposerInput {

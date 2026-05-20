@@ -6,6 +6,7 @@ import type {
   CommunityOfferableItem,
   CommunityRequest,
   CommunityRequestStatus,
+  Reply,
   TrendingRequest,
   UserActivity,
 } from "~/types/community-requests"
@@ -54,6 +55,25 @@ export type ApiCommunityRequest = {
   repliesCount: number
   borrower: ApiCommunityMember
   offers: ApiCommunityOffer[]
+  replies?: ApiCommunityReply[]
+}
+
+export type ApiCommunityReply = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  user: {
+    userId?: string
+    name: string
+    avatar: string
+    username: string
+  }
+  text: string
+  upvotes: number
+  isUpvoted: boolean
+  createdAt: string | Date
+  updatedAt?: string | Date
+  replies?: ApiCommunityReply[]
 }
 
 export type ApiCommunityNotification = {
@@ -122,6 +142,22 @@ export const normalizeCommunityOffer = (offer: ApiCommunityOffer): CommunityOffe
   lender: normalizeCommunityMember(offer.lender),
 })
 
+export const normalizeCommunityReply = (reply: ApiCommunityReply): Reply => ({
+  id: reply.id,
+  requestId: Number(reply.requestId),
+  parentReplyId: reply.parentReplyId,
+  user: {
+    name: reply.user.name,
+    avatar: reply.user.avatar,
+    username: reply.user.username,
+  },
+  text: reply.text,
+  upvotes: Number(reply.upvotes ?? 0),
+  isUpvoted: Boolean(reply.isUpvoted),
+  createdAt: toDate(reply.createdAt) ?? new Date(),
+  replies: (reply.replies ?? []).map(normalizeCommunityReply),
+})
+
 export const normalizeCommunityRequest = (request: ApiCommunityRequest): CommunityRequest => ({
   id: Number(request.id),
   borrowerID: Number(request.borrowerID),
@@ -139,6 +175,7 @@ export const normalizeCommunityRequest = (request: ApiCommunityRequest): Communi
   repliesCount: Number(request.repliesCount ?? 0),
   borrower: normalizeCommunityMember(request.borrower),
   offers: request.offers.map(normalizeCommunityOffer),
+  replies: (request.replies ?? []).map(normalizeCommunityReply),
 })
 
 export const normalizeCommunityNotification = (

@@ -59,6 +59,7 @@ const makeRequest = ({
     avatar: "",
   },
   offers,
+  replies: [],
 })
 
 describe("community feed helpers", () => {

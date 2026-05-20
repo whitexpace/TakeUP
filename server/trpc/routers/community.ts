@@ -134,6 +134,59 @@ type CommunityReplyNode = {
   replies: CommunityReplyNode[]
 }
 
+type ReplyFindManyArgs = {
+  where: { requestId: number | { in: number[] } }
+  orderBy: Array<{ createdAt: "asc" }>
+  select: {
+    id: true
+    requestId: true
+    parentReplyId: true
+    body: true
+    createdAt: true
+    updatedAt: true
+    author: {
+      select: {
+        id: true
+        username: true
+        firstName: true
+        middleName: true
+        lastName: true
+        email: true
+        avatarUrl: true
+      }
+    }
+    _count: { select: { upvotes: true } }
+    upvotes: {
+      where: { userId: string }
+      select: { id: true }
+    }
+  }
+}
+
+type ReplyFindManyRow = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  body: string
+  createdAt: Date
+  updatedAt: Date
+  author: {
+    id: string
+    username: string
+    firstName: string
+    middleName: string | null
+    lastName: string
+    email: string
+    avatarUrl: string | null
+  }
+  _count: { upvotes: number }
+  upvotes: Array<{ id: string }>
+}
+
+type ItemRequestReplyReader = {
+  findMany(args: ReplyFindManyArgs): Promise<ReplyFindManyRow[]>
+}
+
 const toDate = (value: Date | string | null | undefined) => {
   if (!value) return null
   return value instanceof Date ? value : new Date(value)
@@ -263,7 +316,11 @@ const mapOffer = (offer: OfferRow) => ({
   },
 })
 
-const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
+const mapRequest = (
+  request: RequestRow,
+  offers: OfferRow[],
+  replies: CommunityReplyNode[] = [],
+) => ({
   id: request.id,
   borrowerID: request.borrowerID,
   itemNeeded: request.itemNeeded,
@@ -290,6 +347,7 @@ const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
     avatar: request.borrowerAvatarUrl || "",
   },
   offers: offers.map(mapOffer),
+  replies,
 })
 
 const buildRequestWhereSql = (
@@ -353,7 +411,7 @@ const hasItemRequestReplyTable = async (prisma: {
       SELECT 1
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name = 'ItemRequestReply'
+        AND table_name = 'item_request_replies'
     ) AS "exists"
   `)
 
@@ -406,11 +464,11 @@ const buildRequestRowsQuery = (whereSql: Prisma.Sql, includeRepliesCount: boolea
       ? Prisma.sql`
         LEFT JOIN (
           SELECT
-            "requestId",
+            "request_id",
             COUNT(*)::int AS "repliesCount"
-          FROM "ItemRequestReply"
-          GROUP BY "requestId"
-        ) rc ON rc."requestId" = r."id"
+          FROM "item_request_replies"
+          GROUP BY "request_id"
+        ) rc ON rc."request_id" = r."id"
       `
       : Prisma.empty
   }
@@ -427,12 +485,21 @@ const fetchRequestRows = async (
     requestId?: number
     status?: ItemRequestStatus
     borrowerOnly?: boolean
+    limit?: number
+    skip?: number
   },
   viewerUserId: string | null,
 ) => {
   const whereSql = buildRequestWhereSql(options, viewerUserId)
   const includeRepliesCount = await hasItemRequestReplyTable(prisma)
-  return prisma.$queryRaw<RequestRow[]>(buildRequestRowsQuery(whereSql, includeRepliesCount))
+  const paginationSql = options.limit
+    ? Prisma.sql`LIMIT ${options.limit} OFFSET ${options.skip ?? 0}`
+    : Prisma.empty
+
+  return prisma.$queryRaw<RequestRow[]>(Prisma.sql`
+    ${buildRequestRowsQuery(whereSql, includeRepliesCount)}
+    ${paginationSql}
+  `)
 }
 
 const fetchOfferRows = async (
@@ -564,6 +631,7 @@ const fetchOfferRows = async (
 const fetchMappedRequests = async (
   prisma: {
     $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+    itemRequestReply: ItemRequestReplyReader
   },
   options: {
     requestId?: number
@@ -571,6 +639,9 @@ const fetchMappedRequests = async (
     borrowerOnly?: boolean
     includeCancelledOffers?: boolean
     offersLimit?: number
+    includeReplies?: boolean
+    limit?: number
+    skip?: number
   },
   viewerUserId: string | null,
 ) => {
@@ -585,6 +656,11 @@ const fetchMappedRequests = async (
           perRequestLimit: options.offersLimit,
         })
       : []
+  const shouldIncludeReplies =
+    options.includeReplies && requestIds.length > 0 && (await hasItemRequestReplyTable(prisma))
+  const repliesByRequestId = shouldIncludeReplies
+    ? await fetchReplyTrees(prisma, requestIds, viewerUserId)
+    : new Map<number, CommunityReplyNode[]>()
 
   const offersByRequestId = new Map<number, OfferRow[]>()
   for (const offer of offers) {
@@ -593,67 +669,29 @@ const fetchMappedRequests = async (
     offersByRequestId.set(offer.requestID, entries)
   }
 
-  return requests.map((request) => mapRequest(request, offersByRequestId.get(request.id) ?? []))
+  return requests.map((request) =>
+    mapRequest(
+      request,
+      offersByRequestId.get(request.id) ?? [],
+      repliesByRequestId.get(request.id) ?? [],
+    ),
+  )
 }
 
-const fetchReplyTree = async (
+const fetchReplyTrees = async (
   prisma: {
-    itemRequestReply: {
-      findMany(args: {
-        where: { requestId: number }
-        orderBy: Array<{ createdAt: "asc" }>
-        select: {
-          id: true
-          requestId: true
-          parentReplyId: true
-          body: true
-          createdAt: true
-          updatedAt: true
-          author: {
-            select: {
-              id: true
-              username: true
-              firstName: true
-              middleName: true
-              lastName: true
-              email: true
-              avatarUrl: true
-            }
-          }
-          _count: { select: { upvotes: true } }
-          upvotes: {
-            where: { userId: string }
-            select: { id: true }
-          }
-        }
-      }): Promise<
-        Array<{
-          id: string
-          requestId: number
-          parentReplyId: string | null
-          body: string
-          createdAt: Date
-          updatedAt: Date
-          author: {
-            id: string
-            username: string
-            firstName: string
-            middleName: string | null
-            lastName: string
-            email: string
-            avatarUrl: string | null
-          }
-          _count: { upvotes: number }
-          upvotes: Array<{ id: string }>
-        }>
-      >
-    }
+    itemRequestReply: ItemRequestReplyReader
   },
-  requestId: number,
+  requestIds: number[],
   viewerUserId: string | null,
 ) => {
+  if (requestIds.length === 0) {
+    return new Map<number, CommunityReplyNode[]>()
+  }
+
   const rows = await prisma.itemRequestReply.findMany({
-    where: { requestId },
+    where:
+      requestIds.length === 1 ? { requestId: requestIds[0]! } : { requestId: { in: requestIds } },
     orderBy: [{ createdAt: "asc" }],
     select: {
       id: true,
@@ -706,8 +744,26 @@ const fetchReplyTree = async (
     isUpvoted: row.upvotes.length > 0,
   }))
 
-  return buildReplyTree(normalizedRows)
+  const rowsByRequestId = new Map<number, ReplyRow[]>()
+  for (const row of normalizedRows) {
+    const entries = rowsByRequestId.get(row.requestId) ?? []
+    entries.push(row)
+    rowsByRequestId.set(row.requestId, entries)
+  }
+
+  const repliesByRequestId = new Map<number, CommunityReplyNode[]>()
+  for (const requestId of requestIds) {
+    repliesByRequestId.set(requestId, buildReplyTree(rowsByRequestId.get(requestId) ?? []))
+  }
+
+  return repliesByRequestId
 }
+
+const fetchReplyTree = async (
+  prisma: Parameters<typeof fetchReplyTrees>[0],
+  requestId: number,
+  viewerUserId: string | null,
+) => (await fetchReplyTrees(prisma, [requestId], viewerUserId)).get(requestId) ?? []
 
 const assertUserExists = async (
   prisma: {
