@@ -95,6 +95,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -317,6 +318,97 @@ describe("useChat", () => {
         imageUrl: "https://example.com/chat.jpg",
       },
     })
+  })
+
+  it("queues consecutive sends while showing both optimistic messages immediately", async () => {
+    vi.useFakeTimers()
+    let resolveFirst!: (message: ChatMessage) => void
+    let resolveSecond!: (message: ChatMessage) => void
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<ChatMessage>((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<ChatMessage>((resolve) => {
+            resolveSecond = resolve
+          }),
+      )
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+
+    vi.setSystemTime(new Date("2026-04-20T10:00:00.000Z"))
+    const firstSend = chat.sendMessage("First")
+    vi.setSystemTime(new Date("2026-04-20T10:00:00.001Z"))
+    const secondSend = chat.sendMessage("Second")
+
+    expect(chat.messages.value.map((message) => message.body)).toEqual(["First", "Second"])
+    expect(chat.messages.value.every((message) => message.isOptimistic)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `/api/chat/conversations/${CONV_ID_1}/messages`, {
+      method: "POST",
+      body: {
+        body: "First",
+        imageUrl: null,
+      },
+    })
+
+    resolveFirst(makeMessage("msg-first", { body: "First", createdAt: "2099-04-20T10:00:00.000Z" }))
+    await flushPromises()
+
+    expect(chat.messages.value.map((message) => message.body)).toEqual(["First", "Second"])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/chat/conversations/${CONV_ID_1}/messages`, {
+      method: "POST",
+      body: {
+        body: "Second",
+        imageUrl: null,
+      },
+    })
+
+    resolveSecond(
+      makeMessage("msg-second", {
+        body: "Second",
+        createdAt: "2100-04-20T10:01:00.000Z",
+      }),
+    )
+
+    await expect(firstSend).resolves.toMatchObject({ id: "msg-first" })
+    await expect(secondSend).resolves.toMatchObject({ id: "msg-second" })
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-first", "msg-second"])
+    expect(chat.messages.value.some((message) => message.isOptimistic)).toBe(false)
+  })
+
+  it("replaces a pending optimistic message when realtime echoes the saved row first", async () => {
+    let resolveSend!: (message: ChatMessage) => void
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<ChatMessage>((resolve) => {
+          resolveSend = resolve
+        }),
+    )
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+
+    const send = chat.sendMessage("Profanity-free message")
+    const savedMessage = makeMessage("msg-saved", { body: "Profanity-free message" })
+
+    chat.onActiveRealtimeMessage(savedMessage, "INSERT")
+
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-saved"])
+    expect(chat.messages.value[0]?.isOptimistic).toBeUndefined()
+
+    resolveSend(savedMessage)
+
+    await expect(send).resolves.toMatchObject({ id: "msg-saved" })
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-saved"])
   })
 
   it("merges polling receipt updates into the active conversation", async () => {
