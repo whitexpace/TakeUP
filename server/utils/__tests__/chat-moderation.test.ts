@@ -19,11 +19,24 @@ describe("sanitizeChatMessage", () => {
       "[censored] this and [censored] that",
     )
   })
+
+  it("censors links", () => {
+    expect(sanitizeChatMessage("Check https://example.com and www.test.ph/item")).toBe(
+      "Check [censored] and [censored]",
+    )
+  })
+
+  it("censors expanded Filipino and Cebuano profanity", () => {
+    expect(sanitizeChatMessage("yawa ka, punyeta, bogo")).toBe(
+      "[censored] ka, [censored], [censored]",
+    )
+  })
 })
 
 describe("containsModeratedContent", () => {
-  it("detects mixed personal-contact and profanity content", () => {
+  it("detects mixed personal-contact, links, and profanity content", () => {
     expect(containsModeratedContent("Email me then, bitch: sample@up.edu.ph")).toBe(true)
+    expect(containsModeratedContent("Open example.com later")).toBe(true)
   })
 
   it("returns false for clean content", () => {
