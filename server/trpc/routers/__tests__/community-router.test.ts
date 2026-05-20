@@ -151,7 +151,7 @@ describe("communityRouter", () => {
       itemNeeded: "Tripod",
       borrower: {
         userId: BORROWER_USER_ID,
-        name: "borrower1",
+        name: "Juan Cruz",
       },
       offersCount: 1,
     })
@@ -159,7 +159,7 @@ describe("communityRouter", () => {
     expect(result[0]?.offers[0]).toMatchObject({
       id: 20,
       itemName: "Camera",
-      lender: { userId: LENDER_USER_ID, name: "lender1" },
+      lender: { userId: LENDER_USER_ID, name: "Issa Santos" },
     })
     expect(result[0]?.replies).toEqual([])
   })
@@ -677,7 +677,7 @@ describe("communityRouter", () => {
     const result = await caller.notifications()
 
     expect(result).toEqual([
-      expect.objectContaining({ id: 20, read: false, actorName: "lender1" }),
+      expect.objectContaining({ id: 20, read: false, actorName: "Issa Santos" }),
       expect.objectContaining({ id: 21, read: true }),
     ])
   })
