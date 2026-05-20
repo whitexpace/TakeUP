@@ -178,6 +178,14 @@ export const useNotifications = () => {
     payload: RealtimeNotificationPayload,
     eventType: "INSERT" | "UPDATE",
   ) => {
+    if (
+      realtimeUserId &&
+      typeof payload.new.recipientUserId === "string" &&
+      payload.new.recipientUserId !== realtimeUserId
+    ) {
+      return
+    }
+
     const notification = mapRealtimeNotification(payload.new)
     if (!notification) return
 
@@ -267,7 +275,6 @@ export const useNotifications = () => {
             event: "INSERT",
             schema: "public",
             table: "AppNotification",
-            filter: `recipientUserId=eq.${currentUser.id}`,
           },
           (payload) => handleRealtimeNotification(payload, "INSERT"),
         )
@@ -277,7 +284,6 @@ export const useNotifications = () => {
             event: "UPDATE",
             schema: "public",
             table: "AppNotification",
-            filter: `recipientUserId=eq.${currentUser.id}`,
           },
           (payload) => handleRealtimeNotification(payload, "UPDATE"),
         )

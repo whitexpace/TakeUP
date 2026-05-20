@@ -1,6 +1,7 @@
 import {
   type BookingPaymentStatus as PrismaBookingPaymentStatus,
   type BookingStatus as PrismaBookingStatus,
+  type NotificationType as PrismaNotificationType,
   Prisma,
   PaymentMethod as PrismaPaymentMethod,
   TransactionStatus as PrismaTransactionStatus,
@@ -1121,7 +1122,7 @@ const buildBookingRequestNotification = (input: {
   itemName: string
   borrowerName: string
 }) => ({
-  type: "BOOKING_REQUESTED" as const,
+  type: "BOOKING_REQUESTED" as unknown as PrismaNotificationType,
   title: "New booking request",
   body: `${input.borrowerName} requested to book ${input.itemName}. Review the request before the rental starts.`,
   actionPath: `/account/transactions/${input.bookingId}`,

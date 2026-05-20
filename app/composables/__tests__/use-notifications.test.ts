@@ -17,6 +17,10 @@ let stateStore: Record<string, unknown> = {}
 
 beforeEach(() => {
   stateStore = {}
+  vi.stubGlobal("window", {
+    setTimeout,
+    clearTimeout,
+  })
   vi.stubGlobal("$fetch", vi.fn())
   vi.stubGlobal("useState", (key: string, init?: () => unknown) => {
     if (!stateStore[key]) {
@@ -99,5 +103,78 @@ describe("useNotifications", () => {
       method: "POST",
     })
     expect(notifications.notifications.value.every((notification) => notification.read)).toBe(true)
+  })
+
+  it("merges realtime booking request inserts for the current recipient", async () => {
+    const callbacks: Array<(payload: { new: Record<string, unknown> }) => void> = []
+    const channel = {
+      on: vi.fn((_type, _config, callback) => {
+        callbacks.push(callback)
+        return channel
+      }),
+      subscribe: vi.fn(),
+    }
+    const supabase = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "access-token" } },
+        }),
+        onAuthStateChange: vi.fn().mockReturnValue({
+          data: { subscription: { unsubscribe: vi.fn() } },
+        }),
+      },
+      realtime: { setAuth: vi.fn() },
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    }
+
+    vi.stubGlobal("useSupabaseClient", () => supabase)
+    vi.stubGlobal("useAuthUser", () => ({
+      authUser: ref({ id: "recipient-1" }),
+      fetch: vi.fn(),
+    }))
+    vi.stubGlobal("$fetch", vi.fn().mockResolvedValue([makeNotification()]))
+
+    const notifications = useNotifications()
+    await notifications.startNotificationRealtime()
+
+    expect(channel.on).toHaveBeenCalledWith(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "AppNotification",
+      },
+      expect.any(Function),
+    )
+
+    callbacks[0]?.({
+      new: {
+        ...makeNotification({
+          id: "notif-realtime",
+          body: "A borrower requested your item.",
+          createdAt: "2026-04-22T10:00:00.000Z",
+        }),
+        recipientUserId: "recipient-1",
+        readAt: null,
+      },
+    })
+
+    callbacks[0]?.({
+      new: {
+        ...makeNotification({
+          id: "notif-other",
+          createdAt: "2026-04-23T10:00:00.000Z",
+        }),
+        recipientUserId: "recipient-2",
+        readAt: null,
+      },
+    })
+
+    expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
+      "notif-realtime",
+    ])
+
+    notifications.stopNotificationRealtime()
   })
 })
