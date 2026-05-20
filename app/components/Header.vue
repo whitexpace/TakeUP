@@ -48,7 +48,6 @@ const {
   isLoading: isGlobalNotificationsLoading,
   loadNotifications: loadGlobalNotifications,
   startNotificationRealtime,
-  stopNotificationRealtime,
   markNotificationRead: globalMarkRead,
   markAllNotificationsRead: globalMarkAllRead,
 } = useNotifications()
@@ -323,7 +322,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", handlePointerDownOutside)
   activeScrollTarget?.removeEventListener("scroll", handleScroll)
-  stopNotificationRealtime()
   activeScrollTarget = null
   if (accountTypeLoadTimeout !== null) {
     clearTimeout(accountTypeLoadTimeout)

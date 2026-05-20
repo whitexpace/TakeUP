@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue"
-import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
 import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
 import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
@@ -30,8 +29,6 @@ const { warmRewards } = useRewardsPrefetch()
 
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
-const { notifications, loadNotifications } = useNotifications()
-
 const handleResize = () => {
   isMobile.value = window.innerWidth < 1024
   if (!isMobile.value && !isSidebarOpen.value) {
@@ -40,7 +37,6 @@ const handleResize = () => {
 }
 
 onMounted(() => {
-  void loadNotifications()
   if (user.value && !hasFreshAuthUserCache.value && !cachedAuthUser.value) {
     void fetchAuthUser()
   }
@@ -181,7 +177,6 @@ onUnmounted(() => {
 <template>
   <div class="min-h-screen bg-white">
     <Header
-      :notifications="notifications"
       scroll-container-selector=".custom-account-main-scrollbar"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >

@@ -1143,8 +1143,10 @@ const createBookingRequestNotification = async (
 ) => {
   const notification = buildBookingRequestNotification(input)
 
+  let createdNotification: Awaited<ReturnType<typeof prisma.appNotification.create>> | null = null
+
   try {
-    const createdNotification = await prisma.appNotification.create({
+    createdNotification = await prisma.appNotification.create({
       data: {
         recipientUserId: input.recipientUserId,
         actorUserId: input.actorUserId,
@@ -1164,10 +1166,13 @@ const createBookingRequestNotification = async (
         createdAt: true,
       },
     })
-    await broadcastAppNotification(event, createdNotification).catch(() => undefined)
-    return
   } catch (error) {
     console.warn("Prisma notification create failed; retrying booking notification via SQL", error)
+  }
+
+  if (createdNotification) {
+    await broadcastAppNotification(event, createdNotification).catch(() => undefined)
+    return
   }
 
   try {

@@ -4,7 +4,6 @@ import type { AppHeaderNotification } from "../types/notifications"
 
 const NOTIFICATION_FETCH_LIMIT = 20
 const REALTIME_SESSION_WAIT_MS = 5_000
-const REALTIME_REFRESH_DEBOUNCE_MS = 250
 const APP_NOTIFICATION_TYPES = new Set<AppHeaderNotification["type"]>([
   "BOOKING_REQUESTED",
   "BOOKING_RETURN_REQUESTED",
@@ -34,6 +33,7 @@ type ApiNotification = {
 
 type LoadNotificationsOptions = {
   background?: boolean
+  force?: boolean
 }
 
 let realtimeChannel: RealtimeChannel | null = null
@@ -41,7 +41,6 @@ let broadcastChannel: RealtimeChannel | null = null
 let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
 let realtimeUserId: string | null = null
 let realtimeSetupPromise: Promise<void> | null = null
-let realtimeRefreshTimer: number | null = null
 let hasWarnedMissingRealtimeSession = false
 
 const normalizeNotification = (notification: ApiNotification): AppHeaderNotification => ({
@@ -147,8 +146,10 @@ const logRealtimeStatus = (status: string, error?: Error) => {
 export const useNotifications = () => {
   const notifications = useState<AppHeaderNotification[]>("app-notifications", () => [])
   const isLoading = useState("app-notifications-loading", () => false)
+  const hasLoaded = useState("app-notifications-loaded", () => false)
 
   const loadNotifications = async (options: LoadNotificationsOptions = {}) => {
+    if (hasLoaded.value && !options.force) return
     if (isLoading.value) return
     if (!options.background) {
       isLoading.value = true
@@ -159,6 +160,7 @@ export const useNotifications = () => {
         query: { limit: NOTIFICATION_FETCH_LIMIT },
       })
       notifications.value = response.map(normalizeNotification)
+      hasLoaded.value = true
     } catch {
       if (!options.background) {
         notifications.value = []
@@ -179,19 +181,6 @@ export const useNotifications = () => {
       .slice(0, NOTIFICATION_FETCH_LIMIT)
   }
 
-  const scheduleRealtimeRefresh = () => {
-    if (typeof window === "undefined") return
-
-    if (realtimeRefreshTimer !== null) {
-      window.clearTimeout(realtimeRefreshTimer)
-    }
-
-    realtimeRefreshTimer = window.setTimeout(() => {
-      realtimeRefreshTimer = null
-      void loadNotifications({ background: true })
-    }, REALTIME_REFRESH_DEBOUNCE_MS)
-  }
-
   const handleRealtimeNotification = (
     payload: RealtimeNotificationPayload,
     eventType: "INSERT" | "UPDATE",
@@ -209,7 +198,6 @@ export const useNotifications = () => {
 
     if (eventType === "INSERT") {
       mergeRealtimeNotification(notification)
-      scheduleRealtimeRefresh()
       return
     }
 
@@ -223,7 +211,6 @@ export const useNotifications = () => {
     if (!notification) return
 
     mergeRealtimeNotification(notification)
-    scheduleRealtimeRefresh()
   }
 
   const stopNotificationRealtime = () => {
@@ -243,11 +230,6 @@ export const useNotifications = () => {
     realtimeAuthSubscription = null
     realtimeUserId = null
     realtimeSetupPromise = null
-
-    if (realtimeRefreshTimer !== null && typeof window !== "undefined") {
-      window.clearTimeout(realtimeRefreshTimer)
-      realtimeRefreshTimer = null
-    }
   }
 
   const setupRealtimeAuthListener = (supabase: ReturnType<typeof useSupabaseClient>) => {

@@ -57,6 +57,24 @@ describe("useNotifications", () => {
     expect(notifications.notifications.value[1]?.read).toBe(true)
   })
 
+  it("loads notifications only once unless forced", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce([makeNotification()])
+      .mockResolvedValueOnce([makeNotification({ id: "notif-forced" })])
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const notifications = useNotifications()
+    await notifications.loadNotifications()
+    await notifications.loadNotifications()
+    await notifications.loadNotifications({ force: true })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
+      "notif-forced",
+    ])
+  })
+
   it("falls back to an empty list when loading fails", async () => {
     vi.stubGlobal("$fetch", vi.fn().mockRejectedValue(new Error("boom")))
 
@@ -133,7 +151,8 @@ describe("useNotifications", () => {
       authUser: ref({ id: "recipient-1" }),
       fetch: vi.fn(),
     }))
-    vi.stubGlobal("$fetch", vi.fn().mockResolvedValue([makeNotification()]))
+    const fetchMock = vi.fn().mockResolvedValue([makeNotification()])
+    vi.stubGlobal("$fetch", fetchMock)
 
     const notifications = useNotifications()
     await notifications.startNotificationRealtime()
@@ -174,6 +193,7 @@ describe("useNotifications", () => {
     expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
       "notif-realtime",
     ])
+    expect(fetchMock).not.toHaveBeenCalled()
 
     notifications.stopNotificationRealtime()
   })
@@ -216,7 +236,8 @@ describe("useNotifications", () => {
       authUser: ref({ id: "recipient-1" }),
       fetch: vi.fn(),
     }))
-    vi.stubGlobal("$fetch", vi.fn().mockResolvedValue([makeNotification()]))
+    const fetchMock = vi.fn().mockResolvedValue([makeNotification()])
+    vi.stubGlobal("$fetch", fetchMock)
 
     const notifications = useNotifications()
     await notifications.startNotificationRealtime()
@@ -244,6 +265,7 @@ describe("useNotifications", () => {
     expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
       "notif-broadcast",
     ])
+    expect(fetchMock).not.toHaveBeenCalled()
 
     notifications.stopNotificationRealtime()
   })
