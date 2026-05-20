@@ -155,7 +155,8 @@ describe("cartRouter", () => {
     expect(result.items[0]).toMatchObject({
       id: ENTRY_ID,
       itemId: ITEM_ID,
-      lenderName: "lender1",
+      lenderName: "Lender One",
+      lenderUsername: "lender1",
       listingType: "Rent",
     })
   })

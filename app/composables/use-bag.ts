@@ -20,6 +20,7 @@ export interface BagItem {
   endTime: string
   lenderId: string
   lenderName: string
+  lenderUsername: string
   lenderAvatarUrl?: string | null
   listingType: "Rent" | "Borrow"
   createdAt: Date
