@@ -6,6 +6,12 @@ import {
   sessionCookieName,
 } from "../../utils/auth-session"
 import { verifySupabaseJwt } from "../../utils/verify-supabase-jwt"
+import {
+  buildAuthNameSyncData,
+  extractSupabaseProviderName,
+  fallbackAuthName,
+  type ParsedAuthName,
+} from "../../utils/auth-user-name"
 
 const userProfileSelect = {
   id: true,
@@ -46,6 +52,35 @@ export default defineEventHandler(async (event) => {
   // --- Verify the Supabase access token ---
   let email: string
   let supabaseSub: string
+  let providerName: ParsedAuthName | null = null
+
+  const fetchSupabaseUser = async () => {
+    try {
+      return await $fetch<Record<string, unknown>>(`${supabaseUrl}/auth/v1/user`, {
+        headers: { authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+      })
+    } catch {
+      throw createError({ statusCode: 401, statusMessage: "Invalid Supabase token." })
+    }
+  }
+
+  const getGoogleProviderSub = (supabaseUser: Record<string, unknown>, fallback: string) => {
+    const identities = Array.isArray(supabaseUser.identities) ? supabaseUser.identities : []
+    for (const entry of identities) {
+      if (entry && typeof entry === "object") {
+        const identity = entry as Record<string, unknown>
+        if (identity.provider === "google") {
+          return (
+            (identity.provider_id as string | undefined) ??
+            (identity.id as string | undefined) ??
+            fallback
+          )
+        }
+      }
+    }
+
+    return fallback
+  }
 
   // Fast path: verify locally if SUPABASE_JWT_SECRET is configured (eliminates external HTTP call)
   const localPayload = supabaseJwtSecret ? verifySupabaseJwt(accessToken, supabaseJwtSecret) : null
@@ -53,32 +88,21 @@ export default defineEventHandler(async (event) => {
   if (localPayload) {
     email = localPayload.email.toLowerCase()
     supabaseSub = localPayload.sub
+    providerName = extractSupabaseProviderName(localPayload)
+
+    if (!providerName) {
+      const supabaseUser = await fetchSupabaseUser()
+      providerName = extractSupabaseProviderName(supabaseUser)
+      supabaseSub = getGoogleProviderSub(supabaseUser, supabaseSub)
+    }
   } else {
     // Slow path: verify via Supabase API (fallback or only option)
-    let supabaseUser: Record<string, unknown>
-    try {
-      supabaseUser = await $fetch<Record<string, unknown>>(`${supabaseUrl}/auth/v1/user`, {
-        headers: { authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
-      })
-    } catch {
-      throw createError({ statusCode: 401, statusMessage: "Invalid Supabase token." })
-    }
+    const supabaseUser = await fetchSupabaseUser()
 
     email = (typeof supabaseUser.email === "string" ? supabaseUser.email : "").toLowerCase()
     supabaseSub = typeof supabaseUser.sub === "string" ? supabaseUser.sub : ""
-
-    const identities = Array.isArray(supabaseUser.identities) ? supabaseUser.identities : []
-    for (const entry of identities) {
-      if (entry && typeof entry === "object") {
-        const identity = entry as Record<string, unknown>
-        if (identity.provider === "google") {
-          supabaseSub =
-            (identity.provider_id as string | undefined) ??
-            (identity.id as string | undefined) ??
-            supabaseSub
-        }
-      }
-    }
+    providerName = extractSupabaseProviderName(supabaseUser)
+    supabaseSub = getGoogleProviderSub(supabaseUser, supabaseSub)
   }
 
   if (!email.endsWith("@up.edu.ph") && !email.endsWith("@gmail.com")) {
@@ -96,12 +120,14 @@ export default defineEventHandler(async (event) => {
   let isNewUser = false
   if (!user && supabaseSub) {
     const username = email.split("@")[0] ?? "user"
+    const nameParts = providerName ?? fallbackAuthName
     user = await prisma.user.create({
       data: {
         email,
         username,
-        firstName: username,
-        lastName: "User",
+        firstName: nameParts.firstName,
+        middleName: nameParts.middleName,
+        lastName: nameParts.lastName,
         googleSub: supabaseSub,
         accountType: "USER",
         status: "ACTIVE",
@@ -121,6 +147,15 @@ export default defineEventHandler(async (event) => {
     user = await prisma.user.update({
       where: { id: user.id },
       data: { status: "ACTIVE" },
+      select: userProfileSelect,
+    })
+  }
+
+  const nameSyncData = buildAuthNameSyncData(providerName, user, email)
+  if (nameSyncData) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: nameSyncData,
       select: userProfileSelect,
     })
   }

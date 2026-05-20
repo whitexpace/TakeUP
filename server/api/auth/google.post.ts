@@ -10,11 +10,17 @@ import {
 } from "../../utils/auth-session"
 import { AuthApiError } from "../../utils/auth-errors"
 import { verifyGoogleIdToken } from "../../utils/google-auth"
+import {
+  buildAuthNameSyncData,
+  fallbackAuthName,
+  type ParsedAuthName,
+} from "../../utils/auth-user-name"
 
 type IdentityInput = {
   googleSub: string
   email: string
   name: string
+  nameParts: ParsedAuthName | null
 }
 
 type AuthUserRow = {
@@ -33,6 +39,9 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
     googleSub: true,
     status: true,
     accountType: true,
+    firstName: true,
+    middleName: true,
+    lastName: true,
   } as const
 
   // Try to find existing user by googleSub
@@ -58,13 +67,15 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
 
     if (!user) {
       const emailPrefix = identity.email?.split("@")[0] ?? "user"
+      const nameParts = identity.nameParts ?? fallbackAuthName
       user = await db.user.create({
         data: {
           googleSub: identity.googleSub,
           email: identity.email,
           username: emailPrefix,
-          firstName: emailPrefix,
-          lastName: "User",
+          firstName: nameParts.firstName,
+          middleName: nameParts.middleName,
+          lastName: nameParts.lastName,
           accountType: "USER",
           status: "ACTIVE",
         },
@@ -76,6 +87,15 @@ async function upsertAuthUser(db: PrismaClient, identity: IdentityInput): Promis
     user = await db.user.update({
       where: { googleSub: identity.googleSub },
       data: { email: identity.email },
+      select: userSelect,
+    })
+  }
+
+  const nameSyncData = buildAuthNameSyncData(identity.nameParts, user, identity.email)
+  if (nameSyncData) {
+    user = await db.user.update({
+      where: { id: user.id },
+      data: nameSyncData,
       select: userSelect,
     })
   }
