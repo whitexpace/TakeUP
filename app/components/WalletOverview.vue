@@ -25,6 +25,7 @@ const props = withDefaults(
     withdrawNotice?: string
     gradient?: string
     isSystemWallet?: boolean
+    balance?: number
     onToggleBalance: () => void
     onTopUp?: (amount: number) => Promise<unknown>
     onWithdraw?: (amount: number) => Promise<unknown>
@@ -47,6 +48,7 @@ const props = withDefaults(
       "This is a pseudo withdrawal for demo purposes. No real money will be transferred.",
     gradient: "linear-gradient(135deg, #1a2340 0%, #2d3f6b 50%, #1e3a5f 100%)",
     isSystemWallet: false,
+    balance: 0,
     onTopUp: undefined,
     onWithdraw: undefined,
   },
@@ -60,6 +62,28 @@ const showWithdrawModal = ref(false)
 const withdrawAmountDisplay = ref("")
 const isSubmitting = ref(false)
 const transactionPage = ref(1)
+
+const topUpAmount = computed(() => {
+  const val = parseFloat(topUpAmountDisplay.value)
+  return Number.isNaN(val) ? 0 : val
+})
+
+const withdrawAmount = computed(() => {
+  const val = parseFloat(withdrawAmountDisplay.value)
+  return Number.isNaN(val) ? 0 : val
+})
+
+const isTopUpInvalid = computed(() => {
+  return topUpAmountDisplay.value.trim() !== "" && topUpAmount.value <= 0
+})
+
+const isWithdrawInvalid = computed(() => {
+  return withdrawAmountDisplay.value.trim() !== "" && withdrawAmount.value <= 0
+})
+
+const isWithdrawExceedsBalance = computed(() => {
+  return withdrawAmount.value > props.balance
+})
 
 const gridClass = computed(() => (props.showLinkedAccounts ? "lg:grid-cols-2" : "lg:grid-cols-1"))
 const transactionPageCount = computed(() =>
@@ -331,7 +355,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
           <div
             v-for="account in linkedAccounts"
             :key="account.id"
-            class="group flex items-center justify-between p-4 bg-white rounded-[14px] border border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 hover:shadow-md border-l-[3px] border-l-wahoo"
+            class="group flex items-center justify-between p-4 bg-white rounded-[14px] border border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 hover:shadow-md"
           >
             <div class="flex items-center gap-4">
               <div class="min-w-0">
@@ -598,13 +622,23 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                     inputmode="decimal"
                     placeholder=" "
                     class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[18px] font-bold text-noble-black transition-all duration-300"
+                    :class="{
+                      'border-cinnabar-red focus:border-cinnabar-red focus:shadow-[0_0_0_3px_rgba(224,53,49,0.1)]':
+                        isTopUpInvalid,
+                    }"
                     @input="handleAmountInput($event, 'topup')"
                   />
                   <label
                     for="top-up-amount"
                     class="absolute left-12 top-[18px] text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    :class="{ 'peer-focus:text-cinnabar-red': isTopUpInvalid }"
                     >Enter Amount (PHP)</label
                   >
+                </div>
+
+                <div v-if="isTopUpInvalid" class="flex items-center gap-1.5 text-cinnabar-red mt-1">
+                  <Icon name="ph:warning-circle" class="w-4 h-4" />
+                  <p class="text-[12px] font-medium">Please enter an amount greater than 0.</p>
                 </div>
 
                 <!-- Quick Select -->
@@ -635,7 +669,7 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             <button
               type="button"
               class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-              :disabled="isSubmitting || !topUpAmountDisplay"
+              :disabled="isSubmitting || !topUpAmountDisplay || isTopUpInvalid"
               @click="handleTopUp"
             >
               {{ isSubmitting ? "Processing..." : "Confirm Top Up" }}
@@ -680,9 +714,15 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             <div class="py-6">
               <div class="bg-blue-estate/[0.03] p-4 rounded-[16px] mb-8 flex items-start gap-3">
                 <Icon name="ph:info" class="text-blue-estate mt-0.5 shrink-0 w-[18px] h-[18px]" />
-                <p class="text-[13px] font-bold text-blue-estate/80 leading-relaxed">
-                  {{ withdrawNotice }}
-                </p>
+                <div class="space-y-1">
+                  <p class="text-[13px] font-bold text-blue-estate/80 leading-relaxed">
+                    {{ withdrawNotice }}
+                  </p>
+                  <p class="text-[12px] font-medium text-noble-black/40">
+                    Available balance:
+                    <span class="text-noble-black font-bold">{{ formattedBalance }}</span>
+                  </p>
+                </div>
               </div>
 
               <div class="space-y-6 pb-8">
@@ -700,13 +740,36 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
                     inputmode="decimal"
                     placeholder=" "
                     class="peer w-full pl-12 pr-4 pt-6 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[18px] font-bold text-noble-black transition-all duration-300"
+                    :class="{
+                      'border-cinnabar-red focus:border-cinnabar-red focus:shadow-[0_0_0_3px_rgba(224,53,49,0.1)]':
+                        isWithdrawInvalid || isWithdrawExceedsBalance,
+                    }"
                     @input="handleAmountInput($event, 'withdraw')"
                   />
                   <label
                     for="withdraw-amount"
                     class="absolute left-12 top-[18px] text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    :class="{
+                      'peer-focus:text-cinnabar-red': isWithdrawInvalid || isWithdrawExceedsBalance,
+                    }"
                     >Enter Amount (PHP)</label
                   >
+                </div>
+
+                <div
+                  v-if="isWithdrawInvalid"
+                  class="flex items-center gap-1.5 text-cinnabar-red mt-1"
+                >
+                  <Icon name="ph:warning-circle" class="w-4 h-4" />
+                  <p class="text-[12px] font-medium">Please enter an amount greater than 0.</p>
+                </div>
+
+                <div
+                  v-else-if="isWithdrawExceedsBalance"
+                  class="flex items-center gap-1.5 text-cinnabar-red mt-1"
+                >
+                  <Icon name="ph:warning-circle" class="w-4 h-4" />
+                  <p class="text-[12px] font-medium">Amount exceeds your available balance.</p>
                 </div>
 
                 <!-- Quick Select -->
@@ -737,7 +800,12 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
             <button
               type="button"
               class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-bold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-              :disabled="isSubmitting || !withdrawAmountDisplay"
+              :disabled="
+                isSubmitting ||
+                !withdrawAmountDisplay ||
+                isWithdrawInvalid ||
+                isWithdrawExceedsBalance
+              "
               @click="handleWithdraw"
             >
               {{ isSubmitting ? "Processing..." : "Confirm Withdrawal" }}

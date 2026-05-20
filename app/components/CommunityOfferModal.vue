@@ -217,11 +217,13 @@
                       </div>
                       <input
                         v-model="feeInput"
-                        type="number"
-                        min="0"
+                        type="text"
+                        inputmode="numeric"
                         placeholder="0"
                         class="w-full pl-10 pr-4 py-4 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[15px] text-noble-black transition-all duration-300 font-semibold"
                         :class="{ 'border-burning-orange/50': showFeeError }"
+                        @input="handlePriceInput"
+                        @keypress="blockInvalidPriceChars"
                         @blur="markTouched('fee')"
                       />
                     </div>
@@ -326,8 +328,8 @@
 
                 <!-- Availability Confirmation -->
                 <div class="pt-2">
-                  <label class="flex items-start gap-3 cursor-pointer group">
-                    <div class="relative mt-0.5">
+                  <label class="flex items-center gap-3 cursor-pointer group">
+                    <div class="relative">
                       <input
                         v-model="availabilityConfirmed"
                         type="checkbox"
@@ -676,6 +678,21 @@ const submitOffer = () => {
     condition: condition.value,
     rentalTerms: rentalTerms.value.trim(),
   })
+}
+
+const blockInvalidPriceChars = (event: KeyboardEvent) => {
+  if (["-", "e", "E", "+", "."].includes(event.key)) {
+    event.preventDefault()
+  }
+}
+
+const handlePriceInput = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const value = target.value
+  const sanitized = value.replace(/\D/g, "")
+  if (sanitized !== value) {
+    feeInput.value = sanitized
+  }
 }
 
 const emitCancel = () => {

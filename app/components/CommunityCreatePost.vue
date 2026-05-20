@@ -139,8 +139,8 @@
                   <span class="text-[13px] font-semibold text-gray-400 mr-1">₱</span>
                   <input
                     v-model="minimumPrice"
-                    type="number"
-                    min="0"
+                    type="text"
+                    inputmode="numeric"
                     placeholder="Min budget"
                     class="w-full bg-transparent text-[13px] text-gray-900 outline-none"
                     @keypress="blockInvalidPriceChars"
@@ -158,8 +158,8 @@
                   <span class="text-[13px] font-semibold text-gray-400 mr-1">₱</span>
                   <input
                     v-model="maximumPrice"
-                    type="number"
-                    min="0"
+                    type="text"
+                    inputmode="numeric"
                     placeholder="Max budget"
                     class="w-full bg-transparent text-[13px] text-gray-900 outline-none"
                     @keypress="blockInvalidPriceChars"
@@ -578,8 +578,8 @@ const handlePriceInput = (event: Event, field: "minimumPrice" | "maximumPrice") 
   const target = event.target as HTMLInputElement
   const value = target.value
 
-  // Remove negative signs, decimals, and other invalid chars for integers
-  const sanitized = value.replace(/[-eE+.]/g, "")
+  // Remove all non-digit characters for integers
+  const sanitized = value.replace(/\D/g, "")
   if (sanitized !== value) {
     if (field === "minimumPrice") minimumPrice.value = sanitized
     else maximumPrice.value = sanitized

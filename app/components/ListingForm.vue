@@ -472,9 +472,20 @@ const parseRateValue = (value: string) => {
   return digitsOnly ? Number(digitsOnly) : 0
 }
 
+const blockInvalidPriceChars = (event: KeyboardEvent) => {
+  if (["-", "e", "E", "+", "."].includes(event.key)) {
+    event.preventDefault()
+  }
+}
+
 const handleRateInput = (event: Event) => {
   const target = event.target as HTMLInputElement
-  form.rentalFee = target.value.replace(/[^0-9,]/g, "")
+  const value = target.value
+  const sanitized = value.replace(/\D/g, "")
+  if (sanitized !== value) {
+    target.value = sanitized
+  }
+  form.rentalFee = sanitized
 }
 
 const focusRate = () => {
@@ -493,7 +504,12 @@ const blurRate = () => {
 
 const handleReplacementCostInput = (event: Event) => {
   const target = event.target as HTMLInputElement
-  form.replacementCost = target.value.replace(/[^0-9,]/g, "")
+  const value = target.value
+  const sanitized = value.replace(/\D/g, "")
+  if (sanitized !== value) {
+    target.value = sanitized
+  }
+  form.replacementCost = sanitized
 }
 
 const focusReplacementCost = () => {
@@ -1540,6 +1556,7 @@ const availabilityRowErrors = computed(() =>
                   @input="handleRateInput"
                   @blur="blurRate"
                   @focus="focusRate"
+                  @keypress="blockInvalidPriceChars"
                 />
                 <div ref="rateUnitDropdownRef" class="relative">
                   <button
@@ -1588,6 +1605,7 @@ const availabilityRowErrors = computed(() =>
                   @input="handleReplacementCostInput"
                   @blur="blurReplacementCost"
                   @focus="focusReplacementCost"
+                  @keypress="blockInvalidPriceChars"
                 />
               </div>
               <p class="helper-text">
