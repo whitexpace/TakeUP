@@ -207,7 +207,13 @@ export const useChat = () => {
   }
 
   const mergeCachedMessages = (conversationId: string, incoming: ChatMessage[]) => {
-    const merged = mergeChatMessages(getCachedMessages(conversationId), incoming)
+    const cachedMessages = getCachedMessages(conversationId)
+    const cachedMessagesById = new Map(cachedMessages.map((message) => [message.id, message]))
+    const orderStableIncoming = incoming.map((message) => {
+      const cachedMessage = cachedMessagesById.get(message.id)
+      return cachedMessage ? { ...message, createdAt: cachedMessage.createdAt } : message
+    })
+    const merged = mergeChatMessages(cachedMessages, orderStableIncoming)
     setCachedMessages(conversationId, merged)
     return merged
   }
@@ -217,11 +223,15 @@ export const useChat = () => {
     optimisticId: string,
     savedMessage: ChatMessage,
   ) => {
-    const withoutOptimistic = getCachedMessages(conversationId).filter(
-      (message) => message.id !== optimisticId,
-    )
-    const merged = mergeChatMessages(withoutOptimistic, [savedMessage])
+    const cachedMessages = getCachedMessages(conversationId)
+    const optimisticMessage = cachedMessages.find((message) => message.id === optimisticId)
+    const orderStableMessage = optimisticMessage
+      ? { ...savedMessage, createdAt: optimisticMessage.createdAt }
+      : savedMessage
+    const withoutOptimistic = cachedMessages.filter((message) => message.id !== optimisticId)
+    const merged = mergeChatMessages(withoutOptimistic, [orderStableMessage])
     setCachedMessages(conversationId, merged)
+    return orderStableMessage
   }
 
   const removeCachedMessage = (conversationId: string, messageId: string) => {
@@ -248,9 +258,12 @@ export const useChat = () => {
       return false
     }
 
-    pendingSend.settledMessage = message
-    replaceOptimisticMessage(pendingSend.conversationId, pendingSend.optimisticId, message)
-    updateConversationFromMessage(message, false)
+    pendingSend.settledMessage = replaceOptimisticMessage(
+      pendingSend.conversationId,
+      pendingSend.optimisticId,
+      message,
+    )
+    updateConversationFromMessage(pendingSend.settledMessage, false)
     return true
   }
 
@@ -699,9 +712,12 @@ export const useChat = () => {
           )
 
           if (!pendingSend.settledMessage) {
-            replaceOptimisticMessage(pendingSend.conversationId, pendingSend.optimisticId, message)
-            updateConversationFromMessage(message, false)
-            pendingSend.settledMessage = message
+            pendingSend.settledMessage = replaceOptimisticMessage(
+              pendingSend.conversationId,
+              pendingSend.optimisticId,
+              message,
+            )
+            updateConversationFromMessage(pendingSend.settledMessage, false)
           }
 
           pendingSend.resolve(pendingSend.settledMessage)

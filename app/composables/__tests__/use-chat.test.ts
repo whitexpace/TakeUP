@@ -95,6 +95,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -320,6 +321,7 @@ describe("useChat", () => {
   })
 
   it("queues consecutive sends while showing both optimistic messages immediately", async () => {
+    vi.useFakeTimers()
     let resolveFirst!: (message: ChatMessage) => void
     let resolveSecond!: (message: ChatMessage) => void
     fetchMock
@@ -340,7 +342,9 @@ describe("useChat", () => {
     chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
     chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
 
+    vi.setSystemTime(new Date("2026-04-20T10:00:00.000Z"))
     const firstSend = chat.sendMessage("First")
+    vi.setSystemTime(new Date("2026-04-20T10:00:00.001Z"))
     const secondSend = chat.sendMessage("Second")
 
     expect(chat.messages.value.map((message) => message.body)).toEqual(["First", "Second"])
@@ -354,9 +358,10 @@ describe("useChat", () => {
       },
     })
 
-    resolveFirst(makeMessage("msg-first", { body: "First" }))
+    resolveFirst(makeMessage("msg-first", { body: "First", createdAt: "2099-04-20T10:00:00.000Z" }))
     await flushPromises()
 
+    expect(chat.messages.value.map((message) => message.body)).toEqual(["First", "Second"])
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/chat/conversations/${CONV_ID_1}/messages`, {
       method: "POST",
@@ -369,7 +374,7 @@ describe("useChat", () => {
     resolveSecond(
       makeMessage("msg-second", {
         body: "Second",
-        createdAt: "2026-04-20T10:01:00.000Z",
+        createdAt: "2100-04-20T10:01:00.000Z",
       }),
     )
 
