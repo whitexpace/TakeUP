@@ -67,6 +67,22 @@ type PendingUploadImage = {
   progress: number
 }
 
+type ListingPrefillSuggestion = {
+  skipped?: boolean
+  name?: string
+  description?: string
+  condition?: ItemCondition
+  categories?: ItemCategory[]
+  tags?: string[]
+  rentalFee?: number
+  replacementCost?: number
+  freeToBorrow?: boolean
+  rateOption?: "PER_HOUR" | "PER_DAY"
+  whatItemOffers?: string[]
+  whatIsIncluded?: string[]
+  knownIssues?: string
+}
+
 type AvailabilityRow = {
   id: string
   startDate: string
@@ -159,7 +175,11 @@ const images = ref<ListingImage[]>([])
 const pendingUploads = ref<PendingUploadImage[]>([])
 const primaryImageId = ref<string | null>(null)
 const imageUploadError = ref<string | null>(null)
+const aiPrefillError = ref<string | null>(null)
 const isUploadingImages = ref(false)
+const isGeneratingPrefill = ref(false)
+const lastPrefillImageUrl = ref<string | null>(null)
+const lastAppliedPrefill = ref<ListingPrefillSuggestion | null>(null)
 const lightboxImage = ref<ListingImage | null>(null)
 const showErrors = ref(false)
 const isDragging = ref(false)
@@ -638,6 +658,7 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
 
 const uploadFiles = async (files: File[]) => {
   imageUploadError.value = null
+  aiPrefillError.value = null
   if (files.length === 0) {
     resetGalleryInput()
     return
@@ -661,6 +682,9 @@ const uploadFiles = async (files: File[]) => {
     const uploaded = await Promise.all(uploadableFiles.map((f) => uploadFileWithProgress(f)))
     images.value = [...images.value, ...uploaded]
     if (!primaryImageId.value) primaryImageId.value = uploaded[0]!.id
+    if (uploaded[0]?.url) {
+      void maybePrefillFromImage(uploaded[0].url)
+    }
   } catch {
     imageUploadError.value = skippedMessage
       ? `Failed to upload images. ${skippedMessage}`
@@ -703,6 +727,166 @@ const removeTag = (tag: string) => {
 const addSuggestedTag = (tag: string) => {
   const t = tag.toLowerCase()
   if (!form.tags.includes(t)) form.tags.push(t)
+}
+
+const arraysEqual = (left: string[] | undefined, right: string[] | undefined) => {
+  if (!left || !right || left.length !== right.length) return false
+  return left.every((value, index) => value === right[index])
+}
+
+const getPrefillErrorMessage = (err: unknown) => {
+  const status =
+    (err as { statusCode?: number; status?: number })?.statusCode ??
+    (err as { status?: number })?.status
+  const serverMessage =
+    (err as { data?: { statusMessage?: string; message?: string } })?.data?.statusMessage ??
+    (err as { data?: { statusMessage?: string; message?: string } })?.data?.message ??
+    (err as { statusMessage?: string })?.statusMessage
+  if (serverMessage) return serverMessage
+  if (status === 503) return "AI prefill is temporarily unavailable."
+  if (status === 401) return "Sign in again to use AI prefill."
+  return "Unable to generate AI suggestions from this photo."
+}
+
+const applyListingPrefill = (prefill: ListingPrefillSuggestion) => {
+  const applied: ListingPrefillSuggestion = {}
+
+  if (!form.name.trim() && prefill.name) {
+    form.name = prefill.name
+    applied.name = prefill.name
+  }
+
+  if (!form.description.trim() && prefill.description) {
+    form.description = prefill.description
+    applied.description = prefill.description
+  }
+
+  if (!form.condition && prefill.condition) {
+    form.condition = prefill.condition
+    applied.condition = prefill.condition
+  }
+
+  if (form.categories.length === 0 && prefill.categories?.length) {
+    form.categories = prefill.categories
+    applied.categories = [...prefill.categories]
+  }
+
+  if (form.tags.length === 0 && prefill.tags?.length) {
+    form.tags = prefill.tags
+    applied.tags = [...prefill.tags]
+  }
+
+  if (form.freeToBorrow === null && typeof prefill.freeToBorrow === "boolean") {
+    form.freeToBorrow = prefill.freeToBorrow
+    applied.freeToBorrow = prefill.freeToBorrow
+  }
+
+  if (
+    form.freeToBorrow !== true &&
+    !form.rentalFee &&
+    typeof prefill.rentalFee === "number" &&
+    prefill.rentalFee > 0
+  ) {
+    form.rentalFee = formatRateValue(String(prefill.rentalFee))
+    applied.rentalFee = prefill.rentalFee
+  }
+
+  if (
+    !form.replacementCost &&
+    typeof prefill.replacementCost === "number" &&
+    prefill.replacementCost > 0
+  ) {
+    form.replacementCost = formatRateValue(String(prefill.replacementCost))
+    applied.replacementCost = prefill.replacementCost
+  }
+
+  if (prefill.rateOption && form.rateOption === "PER_DAY") {
+    form.rateOption = prefill.rateOption
+    applied.rateOption = prefill.rateOption
+  }
+
+  if (whatThisItemOffers.value.length === 0 && prefill.whatItemOffers?.length) {
+    whatThisItemOffers.value = prefill.whatItemOffers
+    applied.whatItemOffers = [...prefill.whatItemOffers]
+  }
+
+  if (whatsIncluded.value.length === 0 && prefill.whatIsIncluded?.length) {
+    whatsIncluded.value = prefill.whatIsIncluded
+    applied.whatIsIncluded = [...prefill.whatIsIncluded]
+  }
+
+  if (!form.knownIssues.trim() && prefill.knownIssues) {
+    form.knownIssues = prefill.knownIssues
+    applied.knownIssues = prefill.knownIssues
+  }
+
+  return Object.keys(applied).length > 0 ? applied : null
+}
+
+const maybePrefillFromImage = async (imageUrl: string) => {
+  if (isGeneratingPrefill.value || lastPrefillImageUrl.value === imageUrl) return
+
+  isGeneratingPrefill.value = true
+  aiPrefillError.value = null
+  lastPrefillImageUrl.value = imageUrl
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const prefill = await $fetch<ListingPrefillSuggestion>("/api/items/prefill", {
+      method: "POST",
+      headers: session?.access_token
+        ? {
+            authorization: `Bearer ${session.access_token}`,
+          }
+        : undefined,
+      body: { imageUrl },
+    })
+    if (prefill.skipped) {
+      lastAppliedPrefill.value = null
+      return
+    }
+
+    lastAppliedPrefill.value = applyListingPrefill(prefill)
+  } catch (err) {
+    aiPrefillError.value = getPrefillErrorMessage(err)
+  } finally {
+    isGeneratingPrefill.value = false
+  }
+}
+
+const clearAiPrefill = () => {
+  const prefill = lastAppliedPrefill.value
+  if (!prefill) return
+
+  if (prefill.name && form.name === prefill.name) form.name = ""
+  if (prefill.description && form.description === prefill.description) form.description = ""
+  if (prefill.condition && form.condition === prefill.condition) form.condition = ""
+  if (prefill.categories && arraysEqual(form.categories, prefill.categories)) form.categories = []
+  if (prefill.tags && arraysEqual(form.tags, prefill.tags)) form.tags = []
+  if (typeof prefill.freeToBorrow === "boolean" && form.freeToBorrow === prefill.freeToBorrow) {
+    form.freeToBorrow = null
+  }
+  if (prefill.rentalFee && form.rentalFee === formatRateValue(String(prefill.rentalFee))) {
+    form.rentalFee = ""
+  }
+  if (
+    prefill.replacementCost &&
+    form.replacementCost === formatRateValue(String(prefill.replacementCost))
+  ) {
+    form.replacementCost = ""
+  }
+  if (prefill.rateOption && form.rateOption === prefill.rateOption) form.rateOption = "PER_DAY"
+  if (prefill.whatItemOffers && arraysEqual(whatThisItemOffers.value, prefill.whatItemOffers)) {
+    whatThisItemOffers.value = []
+  }
+  if (prefill.whatIsIncluded && arraysEqual(whatsIncluded.value, prefill.whatIsIncluded)) {
+    whatsIncluded.value = []
+  }
+  if (prefill.knownIssues && form.knownIssues === prefill.knownIssues) form.knownIssues = ""
+
+  lastAppliedPrefill.value = null
 }
 
 const confirmCancel = () => {
@@ -1012,6 +1196,41 @@ const availabilityRowErrors = computed(() =>
           <p v-if="imageUploadError" class="text-[13px] font-medium text-cinnabar-red">
             {{ imageUploadError }}
           </p>
+          <div
+            v-if="isGeneratingPrefill || aiPrefillError || lastAppliedPrefill"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-cinnamon-ice/20 bg-white px-4 py-3"
+          >
+            <div class="flex items-center gap-2 text-[13px] font-semibold">
+              <Icon
+                :name="
+                  aiPrefillError
+                    ? 'ph:warning-circle'
+                    : isGeneratingPrefill
+                      ? 'ph:sparkle'
+                      : 'ph:check-circle'
+                "
+                class="h-4 w-4 shrink-0"
+                :class="aiPrefillError ? 'text-cinnabar-red' : 'text-burning-orange'"
+              />
+              <span :class="aiPrefillError ? 'text-cinnabar-red' : 'text-noble-black/60'">
+                {{
+                  aiPrefillError ??
+                  (isGeneratingPrefill
+                    ? "Analyzing photo for listing suggestions..."
+                    : "AI suggestions applied.")
+                }}
+              </span>
+            </div>
+            <button
+              v-if="lastAppliedPrefill"
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-full border border-cinnamon-ice/20 px-3 py-1 text-[12px] font-bold text-noble-black/50 transition-colors hover:border-cinnabar-red/30 hover:text-cinnabar-red"
+              @click="clearAiPrefill"
+            >
+              <Icon name="ph:x" class="h-3.5 w-3.5 shrink-0" />
+              Clear suggestions
+            </button>
+          </div>
           <div
             v-if="images.length > 0 || pendingUploads.length > 0"
             class="flex items-center gap-4 overflow-x-auto pt-5 pb-3 px-2 scrollbar-hide"

@@ -17,6 +17,9 @@ export default defineNuxtConfig({
   typescript: { strict: true },
   runtimeConfig: {
     googleClientId: process.env.GOOGLE_CLIENT_ID,
+    geminiApiKey:
+      process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
+    geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     jwtSecret: process.env.JWT_SECRET,
     supabaseJwtSecret: process.env.SUPABASE_JWT_SECRET,
     platformCommissionRatePercent: process.env.PLATFORM_COMMISSION_RATE_PERCENT ?? "5",
