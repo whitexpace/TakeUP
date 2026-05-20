@@ -942,7 +942,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col overflow-hidden bg-white pt-14 font-geist text-noble-black">
+  <div class="h-screen flex flex-col overflow-hidden bg-white pt-16 font-geist text-noble-black">
     <Header />
 
     <div class="relative flex flex-1 overflow-hidden">
@@ -1121,7 +1121,7 @@ onUnmounted(() => {
 
         <template v-else-if="activeConversation">
           <div
-            class="z-10 flex h-16 shrink-0 items-center justify-between border-b border-cinnamon-ice/20 bg-white px-4 shadow-sm lg:px-6"
+            class="z-10 flex min-h-[64px] shrink-0 items-center justify-between border-b border-cinnamon-ice/20 bg-white px-4 py-3 shadow-sm lg:px-6"
           >
             <div class="flex items-center gap-3">
               <button
@@ -1160,7 +1160,7 @@ onUnmounted(() => {
 
                 <div class="flex flex-col">
                   <span
-                    class="text-[15px] font-bold leading-tight group-hover:text-burning-orange transition-colors"
+                    class="text-[15px] font-bold group-hover:text-burning-orange transition-colors"
                     >{{ getParticipantName(activeConversation.otherParticipant) }}</span
                   >
                   <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
@@ -1192,7 +1192,7 @@ onUnmounted(() => {
                 </div>
 
                 <div class="flex flex-col">
-                  <span class="text-[15px] font-bold leading-tight">{{
+                  <span class="text-[15px] font-bold">{{
                     getParticipantName(activeConversation.otherParticipant)
                   }}</span>
                   <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
@@ -1204,7 +1204,7 @@ onUnmounted(() => {
 
             <div class="flex items-center gap-2">
               <button
-                class="rounded-full border border-burning-orange/60 px-3 py-2 text-[12px] font-semibold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-full border border-burning-orange/60 px-4 py-2 text-[12px] font-semibold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="isReporting"
                 @click="openReportModal"
               >
@@ -1213,20 +1213,11 @@ onUnmounted(() => {
               <NuxtLink
                 v-if="activeConversation.item"
                 :to="`/items/${activeConversation.item.id}`"
-                class="hidden rounded-full bg-burning-orange px-4 py-2 text-[13px] font-bold text-white shadow-sm transition-all duration-300 hover:bg-burning-orange/90 sm:block"
+                class="hidden rounded-full bg-burning-orange px-5 py-2 text-[13px] font-bold text-white shadow-sm transition-all duration-300 hover:bg-burning-orange/90 sm:block"
               >
                 View Item
               </NuxtLink>
             </div>
-          </div>
-
-          <div
-            v-if="activeConversation.isExpired"
-            class="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center"
-          >
-            <p class="text-xs font-medium text-amber-700">
-              {{ activeConversation.closedNotice }}
-            </p>
           </div>
 
           <div
@@ -1355,7 +1346,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-else class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4 pb-6">
+          <div v-else class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4">
             <div
               v-if="pendingImagePreviewUrl"
               class="mb-3 flex items-start gap-3 rounded-2xl border border-cinnamon-ice/20 bg-cream/70 p-3"
@@ -1393,7 +1384,7 @@ onUnmounted(() => {
               >
                 <!-- Aa Icon (Inside Left) -->
                 <div
-                  class="flex h-[44px] w-10 shrink-0 items-center justify-center pl-1 text-[15px] font-bold italic tracking-tighter text-noble-black/25 select-none"
+                  class="flex h-[44px] w-10 shrink-0 items-center justify-center pl-1 text-[15px] font-semibold tracking-tighter text-noble-black/25 select-none"
                 >
                   Aa
                 </div>
