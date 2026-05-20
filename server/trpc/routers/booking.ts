@@ -51,6 +51,7 @@ import {
 } from "../../utils/wallet"
 import { asWalletPrisma } from "../../utils/prisma"
 import { calculatePlatformCommissionAmount } from "../../utils/platform-commission"
+import { broadcastAppNotification } from "../../utils/app-notification-realtime"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -1130,6 +1131,7 @@ const buildBookingRequestNotification = (input: {
 })
 
 const createBookingRequestNotification = async (
+  event: Context["event"],
   prisma: Pick<Context["prisma"], "$executeRaw" | "appNotification">,
   input: {
     recipientUserId: string
@@ -1142,20 +1144,35 @@ const createBookingRequestNotification = async (
   const notification = buildBookingRequestNotification(input)
 
   try {
-    await prisma.appNotification.create({
+    const createdNotification = await prisma.appNotification.create({
       data: {
         recipientUserId: input.recipientUserId,
         actorUserId: input.actorUserId,
         bookingId: input.bookingId,
         ...notification,
       },
+      select: {
+        id: true,
+        recipientUserId: true,
+        actorUserId: true,
+        bookingId: true,
+        type: true,
+        title: true,
+        body: true,
+        actionPath: true,
+        readAt: true,
+        createdAt: true,
+      },
     })
+    await broadcastAppNotification(event, createdNotification).catch(() => undefined)
     return
   } catch (error) {
     console.warn("Prisma notification create failed; retrying booking notification via SQL", error)
   }
 
   try {
+    const notificationId = randomUUID()
+    const createdAt = new Date()
     await prisma.$executeRaw`
       INSERT INTO public."AppNotification" (
         "id",
@@ -1165,19 +1182,30 @@ const createBookingRequestNotification = async (
         "type",
         "title",
         "body",
-        "actionPath"
+        "actionPath",
+        "createdAt"
       )
       VALUES (
-        ${randomUUID()},
+        ${notificationId},
         ${input.recipientUserId},
         ${input.actorUserId},
         ${input.bookingId},
         ${notification.type}::"NotificationType",
         ${notification.title},
         ${notification.body},
-        ${notification.actionPath}
+        ${notification.actionPath},
+        ${createdAt}
       )
     `
+    await broadcastAppNotification(event, {
+      id: notificationId,
+      recipientUserId: input.recipientUserId,
+      actorUserId: input.actorUserId,
+      bookingId: input.bookingId,
+      ...notification,
+      readAt: null,
+      createdAt,
+    }).catch(() => undefined)
   } catch (error) {
     console.error("Failed to create booking request notification", error)
   }
@@ -1331,7 +1359,7 @@ export const bookingRouter = router({
       },
     })
 
-    await createBookingRequestNotification(ctx.prisma, {
+    await createBookingRequestNotification(ctx.event, ctx.prisma, {
       recipientUserId: item.lenderId,
       actorUserId: ctx.user.id,
       bookingId: booking.id,

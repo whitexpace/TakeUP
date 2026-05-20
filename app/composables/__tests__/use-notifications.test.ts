@@ -177,4 +177,74 @@ describe("useNotifications", () => {
 
     notifications.stopNotificationRealtime()
   })
+
+  it("merges realtime broadcast notifications for the current user", async () => {
+    const handlers: Record<string, (payload: { payload: unknown }) => void> = {}
+    const channels: Record<
+      string,
+      { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.fn> }
+    > = {}
+    const createChannel = (topic: string) => {
+      const channel = {
+        on: vi.fn((_type, config: { event?: string }, callback) => {
+          if (config.event) {
+            handlers[`${topic}:${config.event}`] = callback
+          }
+          return channel
+        }),
+        subscribe: vi.fn(),
+      }
+      channels[topic] = channel
+      return channel
+    }
+    const supabase = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "access-token" } },
+        }),
+        onAuthStateChange: vi.fn().mockReturnValue({
+          data: { subscription: { unsubscribe: vi.fn() } },
+        }),
+      },
+      realtime: { setAuth: vi.fn() },
+      channel: vi.fn((topic: string) => createChannel(topic)),
+      removeChannel: vi.fn(),
+    }
+
+    vi.stubGlobal("useSupabaseClient", () => supabase)
+    vi.stubGlobal("useAuthUser", () => ({
+      authUser: ref({ id: "recipient-1" }),
+      fetch: vi.fn(),
+    }))
+    vi.stubGlobal("$fetch", vi.fn().mockResolvedValue([makeNotification()]))
+
+    const notifications = useNotifications()
+    await notifications.startNotificationRealtime()
+
+    expect(channels["app-notifications-user-recipient-1"]?.on).toHaveBeenCalledWith(
+      "broadcast",
+      { event: "notification" },
+      expect.any(Function),
+    )
+
+    handlers["app-notifications-user-recipient-1:notification"]?.({
+      payload: {
+        notification: {
+          ...makeNotification({
+            id: "notif-broadcast",
+            body: "A borrower requested your item.",
+            createdAt: "2026-04-24T10:00:00.000Z",
+          }),
+          recipientUserId: "recipient-1",
+          readAt: null,
+        },
+      },
+    })
+
+    expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
+      "notif-broadcast",
+    ])
+
+    notifications.stopNotificationRealtime()
+  })
 })

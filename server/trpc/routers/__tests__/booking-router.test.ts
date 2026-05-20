@@ -6,10 +6,12 @@ const {
   creditToWalletMock,
   creditCommissionToSystemWalletMock,
   findSystemCommissionTransactionMock,
+  broadcastAppNotificationMock,
 } = vi.hoisted(() => ({
   creditToWalletMock: vi.fn(),
   creditCommissionToSystemWalletMock: vi.fn(),
   findSystemCommissionTransactionMock: vi.fn(),
+  broadcastAppNotificationMock: vi.fn(),
 }))
 
 vi.mock("../../../utils/wallet", async () => {
@@ -23,6 +25,10 @@ vi.mock("../../../utils/wallet", async () => {
     findSystemCommissionTransaction: findSystemCommissionTransactionMock,
   }
 })
+
+vi.mock("../../../utils/app-notification-realtime", () => ({
+  broadcastAppNotification: broadcastAppNotificationMock,
+}))
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const ITEM_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -147,7 +153,18 @@ const makeContext = () => {
       findFirst: vi.fn().mockResolvedValue(null),
     },
     appNotification: {
-      create: vi.fn().mockResolvedValue({ id: "notif-1" }),
+      create: vi.fn().mockResolvedValue({
+        id: "notif-1",
+        recipientUserId: LENDER_ID,
+        actorUserId: USER_ID,
+        bookingId: BOOKING_ID,
+        type: "BOOKING_REQUESTED",
+        title: "New booking request",
+        body: "Test User requested to book Camera. Review the request before the rental starts.",
+        actionPath: `/account/transactions/${BOOKING_ID}`,
+        readAt: null,
+        createdAt: new Date("2026-03-20T00:00:00.000Z"),
+      }),
     },
     booking,
   }
@@ -171,9 +188,11 @@ describe("bookingRouter", () => {
     creditToWalletMock.mockReset()
     creditCommissionToSystemWalletMock.mockReset()
     findSystemCommissionTransactionMock.mockReset()
+    broadcastAppNotificationMock.mockReset()
     creditToWalletMock.mockResolvedValue(null)
     creditCommissionToSystemWalletMock.mockResolvedValue(null)
     findSystemCommissionTransactionMock.mockResolvedValue(null)
+    broadcastAppNotificationMock.mockResolvedValue(undefined)
   })
 
   it("creates a booking using the authenticated user as borrower and item owner as lender", async () => {
@@ -232,6 +251,14 @@ describe("bookingRouter", () => {
         }),
       }),
     )
+    expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+      ctx.event,
+      expect.objectContaining({
+        id: "notif-1",
+        recipientUserId: LENDER_ID,
+        type: "BOOKING_REQUESTED",
+      }),
+    )
     expect(createdBooking.item.thumbnailImage).toBe("/images/camera-primary.jpg")
   })
 
@@ -282,6 +309,14 @@ describe("bookingRouter", () => {
       expect(createdBooking.id).toBe(BOOKING_ID)
       expect(ctx.prisma.appNotification.create).toHaveBeenCalledTimes(1)
       expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+        ctx.event,
+        expect.objectContaining({
+          recipientUserId: LENDER_ID,
+          type: "BOOKING_REQUESTED",
+          title: "New booking request",
+        }),
+      )
       expect(consoleWarn).toHaveBeenCalledWith(
         "Prisma notification create failed; retrying booking notification via SQL",
         expect.any(Error),

@@ -18,6 +18,10 @@ type RealtimeNotificationPayload = {
   new: Record<string, unknown>
 }
 
+type BroadcastNotificationPayload = {
+  payload: unknown
+}
+
 type ApiNotification = {
   id: string
   type: AppHeaderNotification["type"]
@@ -33,6 +37,7 @@ type LoadNotificationsOptions = {
 }
 
 let realtimeChannel: RealtimeChannel | null = null
+let broadcastChannel: RealtimeChannel | null = null
 let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
 let realtimeUserId: string | null = null
 let realtimeSetupPromise: Promise<void> | null = null
@@ -73,6 +78,19 @@ const mapRealtimeNotification = (row: Record<string, unknown>): AppHeaderNotific
     read: row.readAt !== null && row.readAt !== undefined,
   }
 }
+
+const mapBroadcastNotification = (value: unknown): AppHeaderNotification | null => {
+  if (typeof value !== "object" || value === null) {
+    return null
+  }
+
+  const payload = value as { notification?: Record<string, unknown> }
+  if (!payload.notification) return null
+
+  return mapRealtimeNotification(payload.notification)
+}
+
+const getNotificationBroadcastTopic = (userId: string) => `app-notifications-user-${userId}`
 
 const getRealtimeAccessToken = async (supabase: ReturnType<typeof useSupabaseClient>) => {
   const {
@@ -200,11 +218,25 @@ export const useNotifications = () => {
     )
   }
 
+  const handleBroadcastNotification = (payload: BroadcastNotificationPayload) => {
+    const notification = mapBroadcastNotification(payload.payload)
+    if (!notification) return
+
+    mergeRealtimeNotification(notification)
+    scheduleRealtimeRefresh()
+  }
+
   const stopNotificationRealtime = () => {
     if (realtimeChannel) {
       const supabase = useSupabaseClient()
       void supabase.removeChannel(realtimeChannel)
       realtimeChannel = null
+    }
+
+    if (broadcastChannel) {
+      const supabase = useSupabaseClient()
+      void supabase.removeChannel(broadcastChannel)
+      broadcastChannel = null
     }
 
     realtimeAuthSubscription?.unsubscribe()
@@ -287,6 +319,11 @@ export const useNotifications = () => {
           },
           (payload) => handleRealtimeNotification(payload, "UPDATE"),
         )
+        .subscribe((status, error) => logRealtimeStatus(status, error))
+
+      broadcastChannel = supabase
+        .channel(getNotificationBroadcastTopic(currentUser.id))
+        .on("broadcast", { event: "notification" }, handleBroadcastNotification)
         .subscribe((status, error) => logRealtimeStatus(status, error))
     })().finally(() => {
       realtimeSetupPromise = null
