@@ -6,6 +6,7 @@ import {
   isChatClosed,
   type ChatClosureState,
 } from "#shared/chat-rules"
+import { sanitizeChatMessage } from "#shared/chat-moderation"
 
 export type ChatMessage = {
   id: string
@@ -92,6 +93,15 @@ type MessagePageState = {
 
 type RealtimeMessageEvent = "INSERT" | "UPDATE"
 
+type PendingSend = {
+  optimisticId: string
+  conversationId: string
+  body: string
+  imageUrl: string | null
+  resolve: (message: ChatMessage | null) => void
+  settledMessage: ChatMessage | null
+}
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (
     typeof error === "object" &&
@@ -164,6 +174,8 @@ export const useChat = () => {
     "chat-message-load-in-flight",
     () => ({}),
   )
+  const pendingSendQueue: PendingSend[] = []
+  let isDrainingSendQueue = false
 
   const getCachedMessages = (conversationId: string) => messageCache.value[conversationId] ?? []
   const hasLoadedMessagePage = (conversationId: string) =>
@@ -217,6 +229,29 @@ export const useChat = () => {
       conversationId,
       getCachedMessages(conversationId).filter((message) => message.id !== messageId),
     )
+  }
+
+  const resolvePendingSendFromServerMessage = (message: ChatMessage) => {
+    if (pendingSendQueue.length === 0 || isMessageFromOtherParticipant(message)) {
+      return false
+    }
+
+    const pendingSend = pendingSendQueue.find(
+      (entry) =>
+        !entry.settledMessage &&
+        entry.conversationId === message.conversationId &&
+        sanitizeChatMessage(entry.body) === message.body &&
+        entry.imageUrl === message.imageUrl,
+    )
+
+    if (!pendingSend) {
+      return false
+    }
+
+    pendingSend.settledMessage = message
+    replaceOptimisticMessage(pendingSend.conversationId, pendingSend.optimisticId, message)
+    updateConversationFromMessage(message, false)
+    return true
   }
 
   const hasProcessedRealtimeInsert = (messageId: string) => {
@@ -640,14 +675,81 @@ export const useChat = () => {
     await loadMessages(activeConversation.value.conversationId, nextCursor.value)
   }
 
-  const sendMessage = async (body: string, imageUrl?: string | null) => {
-    if (!activeConversation.value || isSending.value || activeConversation.value.isExpired) {
+  const drainSendQueue = async () => {
+    if (isDrainingSendQueue) return
+
+    isDrainingSendQueue = true
+    isSending.value = true
+
+    try {
+      while (pendingSendQueue.length > 0) {
+        const pendingSend = pendingSendQueue[0]
+        if (!pendingSend) break
+
+        try {
+          const message = await $fetch<ChatMessage>(
+            `/api/chat/conversations/${encodeURIComponent(pendingSend.conversationId)}/messages`,
+            {
+              method: "POST",
+              body: {
+                body: pendingSend.body,
+                imageUrl: pendingSend.imageUrl,
+              },
+            },
+          )
+
+          if (!pendingSend.settledMessage) {
+            replaceOptimisticMessage(pendingSend.conversationId, pendingSend.optimisticId, message)
+            updateConversationFromMessage(message, false)
+            pendingSend.settledMessage = message
+          }
+
+          pendingSend.resolve(pendingSend.settledMessage)
+        } catch (e: unknown) {
+          if (!pendingSend.settledMessage) {
+            removeCachedMessage(pendingSend.conversationId, pendingSend.optimisticId)
+          }
+
+          const message = getErrorMessage(e, "Failed to send message")
+          error.value = message
+
+          const closureState = getChatClosureStateFromNotice(message)
+          const conversation = conversations.value.find(
+            (entry) => entry.conversationId === pendingSend.conversationId,
+          )
+
+          if (closureState) {
+            updateConversationClosureState(pendingSend.conversationId, closureState, message)
+          } else if (conversation && message.toLowerCase().includes("read-only")) {
+            updateConversationClosureState(
+              pendingSend.conversationId,
+              conversation.closureState,
+              message,
+            )
+          }
+
+          pendingSend.resolve(pendingSend.settledMessage)
+        } finally {
+          pendingSendQueue.shift()
+        }
+      }
+    } finally {
+      isDrainingSendQueue = false
+      isSending.value = pendingSendQueue.length > 0
+
+      if (pendingSendQueue.length > 0) {
+        void drainSendQueue()
+      }
+    }
+  }
+
+  const sendMessage = (body: string, imageUrl?: string | null) => {
+    if (!activeConversation.value || activeConversation.value.isExpired) {
       return null
     }
 
     if (!body.trim() && !imageUrl) return null
 
-    isSending.value = true
     error.value = null
     const conversationId = activeConversation.value.conversationId
     const optimisticMessage: ChatMessage = {
@@ -665,48 +767,19 @@ export const useChat = () => {
     mergeCachedMessages(conversationId, [optimisticMessage])
     updateConversationFromMessage(optimisticMessage, false)
 
-    try {
-      const message = await $fetch<ChatMessage>(
-        `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
-        {
-          method: "POST",
-          body: {
-            body,
-            imageUrl: imageUrl ?? null,
-          },
-        },
-      )
+    const sendPromise = new Promise<ChatMessage | null>((resolve) => {
+      pendingSendQueue.push({
+        optimisticId: optimisticMessage.id,
+        conversationId,
+        body,
+        imageUrl: imageUrl ?? null,
+        resolve,
+        settledMessage: null,
+      })
+    })
 
-      replaceOptimisticMessage(conversationId, optimisticMessage.id, message)
-      updateConversationFromMessage(message, false)
-      return message
-    } catch (e: unknown) {
-      removeCachedMessage(conversationId, optimisticMessage.id)
-      const message = getErrorMessage(e, "Failed to send message")
-      error.value = message
-
-      if (activeConversation.value) {
-        const closureState = getChatClosureStateFromNotice(message)
-
-        if (closureState) {
-          updateConversationClosureState(
-            activeConversation.value.conversationId,
-            closureState,
-            message,
-          )
-        } else if (message.toLowerCase().includes("read-only")) {
-          updateConversationClosureState(
-            activeConversation.value.conversationId,
-            activeConversation.value.closureState,
-            message,
-          )
-        }
-      }
-
-      return null
-    } finally {
-      isSending.value = false
-    }
+    void drainSendQueue()
+    return sendPromise
   }
 
   const reportConversation = async (description?: string) => {
@@ -770,6 +843,10 @@ export const useChat = () => {
       return
     }
 
+    if (eventType === "INSERT" && resolvePendingSendFromServerMessage(message)) {
+      return
+    }
+
     const alreadyKnown = getCachedMessages(message.conversationId).some(
       (entry) => entry.id === message.id,
     )
@@ -793,6 +870,10 @@ export const useChat = () => {
     if (!conversation) {
       void loadConversations({ background: true })
       void loadUnreadCount()
+      return
+    }
+
+    if (eventType === "INSERT" && resolvePendingSendFromServerMessage(message)) {
       return
     }
 

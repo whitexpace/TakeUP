@@ -35,7 +35,6 @@ const {
   isLoadingConversations,
   isLoadingMessages,
   isOpeningConversation,
-  isSending,
   isReporting,
   error,
   hasMoreMessages,
@@ -95,7 +94,6 @@ const filteredConversations = computed(() =>
 const canSendMessage = computed(
   () =>
     Boolean(newMessage.value.trim() || pendingImageFile.value) &&
-    !isSending.value &&
     !isUploadingImage.value &&
     !activeConversation.value?.isExpired,
 )
