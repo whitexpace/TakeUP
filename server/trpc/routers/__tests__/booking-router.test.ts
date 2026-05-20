@@ -219,6 +219,35 @@ describe("bookingRouter", () => {
     expect(createdBooking.item.thumbnailImage).toBe("/images/camera-primary.jpg")
   })
 
+  it("rejects create when the borrower owns the item", async () => {
+    const ctx = makeContext()
+    ctx.prisma.item.findUnique.mockResolvedValueOnce({
+      id: ITEM_ID,
+      lenderId: USER_ID,
+      rateOption: "PER_DAY",
+      rentalFee: 200,
+      freeToBorrow: false,
+      status: "AVAILABLE",
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        paymentMethod: "GCASH",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "You cannot book your own item.",
+    })
+
+    expect(ctx.prisma.lender.upsert).not.toHaveBeenCalled()
+    expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
+    expect(ctx.prisma.item.update).not.toHaveBeenCalled()
+  })
+
   it("filters list by borrower role", async () => {
     const ctx = makeContext()
     const caller = bookingRouter.createCaller(ctx as never)
