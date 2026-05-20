@@ -10,6 +10,7 @@ import {
   RefundReason,
   type Booking,
 } from "@prisma/client"
+import { randomUUID } from "node:crypto"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
 import { router } from "../init"
@@ -1129,7 +1130,7 @@ const buildBookingRequestNotification = (input: {
 })
 
 const createBookingRequestNotification = async (
-  prisma: Pick<Context["prisma"], "appNotification">,
+  prisma: Pick<Context["prisma"], "$executeRaw" | "appNotification">,
   input: {
     recipientUserId: string
     actorUserId: string
@@ -1138,15 +1139,45 @@ const createBookingRequestNotification = async (
     borrowerName: string
   },
 ) => {
+  const notification = buildBookingRequestNotification(input)
+
   try {
     await prisma.appNotification.create({
       data: {
         recipientUserId: input.recipientUserId,
         actorUserId: input.actorUserId,
         bookingId: input.bookingId,
-        ...buildBookingRequestNotification(input),
+        ...notification,
       },
     })
+    return
+  } catch (error) {
+    console.warn("Prisma notification create failed; retrying booking notification via SQL", error)
+  }
+
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO public."AppNotification" (
+        "id",
+        "recipientUserId",
+        "actorUserId",
+        "bookingId",
+        "type",
+        "title",
+        "body",
+        "actionPath"
+      )
+      VALUES (
+        ${randomUUID()},
+        ${input.recipientUserId},
+        ${input.actorUserId},
+        ${input.bookingId},
+        ${notification.type}::"NotificationType",
+        ${notification.title},
+        ${notification.body},
+        ${notification.actionPath}
+      )
+    `
   } catch (error) {
     console.error("Failed to create booking request notification", error)
   }

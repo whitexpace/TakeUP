@@ -110,7 +110,7 @@ const makeContext = () => {
     delete: vi.fn(),
   }
 
-  const prisma = {
+  const prismaBase = {
     $transaction: vi.fn(),
     borrower: {
       upsert: vi.fn().mockResolvedValue({ userId: USER_ID }),
@@ -150,6 +150,9 @@ const makeContext = () => {
       create: vi.fn().mockResolvedValue({ id: "notif-1" }),
     },
     booking,
+  }
+  const prisma = prismaBase as typeof prismaBase & {
+    $executeRaw?: ReturnType<typeof vi.fn>
   }
 
   prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) =>
@@ -261,9 +264,10 @@ describe("bookingRouter", () => {
     expect(ctx.prisma.item.update).not.toHaveBeenCalled()
   })
 
-  it("does not fail booking creation when the lender notification cannot be created", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+  it("falls back to raw SQL when Prisma cannot create a booking request notification", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {})
     const ctx = makeContext()
+    ctx.prisma.$executeRaw = vi.fn().mockResolvedValue(1)
     ctx.prisma.appNotification.create.mockRejectedValueOnce(new Error("notification enum missing"))
     const caller = bookingRouter.createCaller(ctx as never)
 
@@ -277,11 +281,41 @@ describe("bookingRouter", () => {
 
       expect(createdBooking.id).toBe(BOOKING_ID)
       expect(ctx.prisma.appNotification.create).toHaveBeenCalledTimes(1)
+      expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(consoleWarn).toHaveBeenCalledWith(
+        "Prisma notification create failed; retrying booking notification via SQL",
+        expect.any(Error),
+      )
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it("does not fail booking creation when both notification write paths fail", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    const ctx = makeContext()
+    ctx.prisma.$executeRaw = vi.fn().mockRejectedValueOnce(new Error("database enum missing"))
+    ctx.prisma.appNotification.create.mockRejectedValueOnce(new Error("notification enum missing"))
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    try {
+      const createdBooking = await caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        paymentMethod: "GCASH",
+      })
+
+      expect(createdBooking.id).toBe(BOOKING_ID)
+      expect(ctx.prisma.appNotification.create).toHaveBeenCalledTimes(1)
+      expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
       expect(consoleError).toHaveBeenCalledWith(
         "Failed to create booking request notification",
         expect.any(Error),
       )
     } finally {
+      consoleWarn.mockRestore()
       consoleError.mockRestore()
     }
   })
