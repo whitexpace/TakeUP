@@ -550,7 +550,7 @@ const transactionStatusTimelineLabels: Record<
     description: "The item is in use.",
   },
   [PrismaTransactionStatus.RETURNED]: {
-    label: "Returned",
+    label: "Item Returned",
     description: "The item return was recorded in the transaction log.",
   },
   [PrismaTransactionStatus.COMPLETED]: {
@@ -625,7 +625,7 @@ const buildBookingTimeline = (
   )
   addBookingEvent(
     "booking-returned",
-    "Returned",
+    "Item Returned",
     "Borrower proof of item return upload timestamp from the booking record.",
     booking.borrowerReturnProofUploadedAt ??
       (getFirstStatusLogAt(transaction, PrismaTransactionStatus.RETURNED)

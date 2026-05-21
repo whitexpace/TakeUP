@@ -216,7 +216,7 @@ const timeline = computed(() => {
         proofUrl = booking.value.lenderHandoffProofUrl
         proofLabel = "View lending proof"
       }
-    } else if (entry.label === "Returned") {
+    } else if (entry.label === "Returned" || entry.label === "Item Returned") {
       if (booking.value && booking.value.refundAmount > 0) {
         description = `Early return initiated · Refund of ₱${booking.value.refundAmount} triggered`
       }
