@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, onMounted, onUnmounted } from "vue"
 import { useBag, type BagItem } from "../../composables/use-bag"
 import UserAvatar from "../../components/UserAvatar.vue"
 import Header from "../../components/Header.vue"
@@ -192,6 +192,40 @@ const confirmationData = ref<{
   total: 0,
 })
 
+// Scroll to hide logic for bottom checkout bar
+const isBottomBarVisible = ref(true)
+const lastScrollY = ref(0)
+const scrollThreshold = 10
+
+const handleScroll = () => {
+  const currentScrollY = window.scrollY
+
+  // Always show at the very top
+  if (currentScrollY < 50) {
+    isBottomBarVisible.value = true
+    lastScrollY.value = currentScrollY
+    return
+  }
+
+  if (Math.abs(currentScrollY - lastScrollY.value) < scrollThreshold) return
+
+  if (currentScrollY > lastScrollY.value) {
+    isBottomBarVisible.value = false // Scrolling down
+  } else {
+    isBottomBarVisible.value = true // Scrolling up
+  }
+
+  lastScrollY.value = currentScrollY
+}
+
+onMounted(() => {
+  window.addEventListener("scroll", handleScroll, { passive: true })
+})
+
+onUnmounted(() => {
+  window.removeEventListener("scroll", handleScroll)
+})
+
 const formatDate = (value: Date | null | string) => {
   if (!value) return ""
   const d = typeof value === "string" ? new Date(value) : value
@@ -367,17 +401,17 @@ const performLenderBookings = async () => {
   <div class="min-h-screen bg-white font-geist">
     <Header />
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12 pt-24">
-      <div class="mb-10">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-12 pt-24 pb-32 lg:pb-12">
+      <div class="mb-8 md:mb-10">
         <div class="space-y-2">
           <h1
-            class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+            class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black leading-tight tracking-tight"
           >
             My Bag
           </h1>
           <div class="h-[2px] w-10 bg-burning-orange rounded-full"></div>
         </div>
-        <p class="mt-2 font-geist text-[16px] font-light text-noble-black/50">
+        <p class="mt-2 font-geist text-[14px] sm:text-[16px] font-light text-noble-black/50">
           Review and manage items you want to book
         </p>
       </div>
@@ -440,7 +474,7 @@ const performLenderBookings = async () => {
           <div class="flex flex-col">
             <!-- Select All Bar -->
             <div
-              class="flex items-center justify-between py-4 px-8 border-b border-gray-100 bg-white"
+              class="flex items-center justify-between py-4 px-4 sm:px-8 border-b border-gray-100 bg-white"
             >
               <div class="flex items-center gap-3">
                 <button
@@ -470,7 +504,7 @@ const performLenderBookings = async () => {
               <div v-for="(group, lenderId) in groupedItems" :key="lenderId" class="flex flex-col">
                 <!-- Lender Header -->
                 <div
-                  class="flex items-center gap-4 py-3 px-8 border-b border-gray-100 bg-gray-50/50"
+                  class="flex items-center gap-4 py-3 px-4 sm:px-8 border-b border-gray-100 bg-gray-50/50"
                 >
                   <button
                     class="w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all"
@@ -511,13 +545,14 @@ const performLenderBookings = async () => {
                   <div
                     v-for="item in group.items"
                     :key="item.id"
-                    class="flex items-center gap-6 py-6 px-8 border-b border-gray-50 last:border-b-0 hover:bg-gray-50/30 transition-all group"
+                    class="flex items-start sm:items-center gap-3 xs:gap-4 sm:gap-6 py-4 xs:py-6 px-4 sm:px-8 border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-all group"
                   >
+                    <!-- Checkbox -->
                     <button
-                      class="w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all shrink-0"
+                      class="w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all shrink-0 mt-2 sm:mt-0"
                       :class="
                         selectedItemIds.has(item.id)
-                          ? 'bg-burning-orange border-burning-orange'
+                          ? 'bg-burning-orange border-burning-orange shadow-sm'
                           : 'border-gray-300 bg-white hover:border-burning-orange'
                       "
                       @click="toggleItemSelect(item.id)"
@@ -529,25 +564,27 @@ const performLenderBookings = async () => {
                       />
                     </button>
 
+                    <!-- Image -->
                     <NuxtLink
                       :to="`/items/${item.itemId}`"
-                      class="w-[72px] h-[72px] rounded-[12px] overflow-hidden bg-gray-50 shrink-0 border border-gray-100 transition-opacity hover:opacity-80"
+                      class="w-16 h-16 xs:w-[72px] xs:h-[72px] rounded-[10px] xs:rounded-[12px] overflow-hidden bg-gray-50 shrink-0 border border-gray-100 transition-opacity hover:opacity-80"
                     >
                       <img :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
                     </NuxtLink>
 
+                    <!-- Content -->
                     <div class="flex-1 min-w-0">
-                      <div class="flex flex-col gap-1.5">
+                      <div class="flex flex-col gap-1 xs:gap-1.5">
                         <NuxtLink :to="`/items/${item.itemId}`" class="group/name">
                           <h3
-                            class="text-[15px] font-semibold text-noble-black truncate transition-colors group-hover/name:text-burning-orange"
+                            class="text-[14px] xs:text-[15px] font-semibold text-noble-black truncate transition-colors group-hover/name:text-burning-orange"
                           >
                             {{ item.name }}
                           </h3>
                         </NuxtLink>
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-col xs:flex-row xs:items-center gap-1 xs:gap-2">
                           <span
-                            class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-[6px] uppercase"
+                            class="w-fit text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded-[5px] uppercase"
                             :class="
                               item.listingType === 'Rent'
                                 ? 'bg-cinnamon-ice text-black'
@@ -556,14 +593,39 @@ const performLenderBookings = async () => {
                           >
                             {{ item.listingType }}
                           </span>
-                          <span class="text-[13px] text-gray-400 font-medium">
+                          <span
+                            class="text-[11px] xs:text-[12px] sm:text-[13px] text-gray-400 font-medium truncate"
+                          >
                             {{ calculateDuration(item) }} · {{ formatDateRange(item) }}
                           </span>
+                        </div>
+
+                        <!-- Price (Mobile only) -->
+                        <div class="flex items-center justify-between mt-1 sm:hidden">
+                          <div class="flex items-baseline gap-1">
+                            <span class="text-[15px] font-bold text-burning-orange">{{
+                              formatPesoAmount(calculateItemTotal(item))
+                            }}</span>
+                            <span
+                              v-if="item.listingType === 'Rent'"
+                              class="text-[10px] text-gray-400"
+                            >
+                              ({{ formatPesoAmount(item.price) }}/{{ item.priceUnit }})
+                            </span>
+                          </div>
+                          <button
+                            class="p-1 text-gray-300 hover:text-cinnabar-red transition-all"
+                            title="Remove from bag"
+                            @click="handleDeleteItem(item.id)"
+                          >
+                            <Icon name="ph:trash" class="w-[18px] h-[18px]" />
+                          </button>
                         </div>
                       </div>
                     </div>
 
-                    <div class="flex items-center gap-6 shrink-0">
+                    <!-- Price & Actions (Desktop only) -->
+                    <div class="hidden sm:flex items-center gap-6 shrink-0">
                       <div class="flex flex-col items-end">
                         <span class="text-[16px] font-bold text-burning-orange leading-none">{{
                           formatPesoAmount(calculateItemTotal(item))
@@ -590,9 +652,9 @@ const performLenderBookings = async () => {
           </div>
         </div>
 
-        <!-- Right Side: Order Summary -->
-        <div class="space-y-6">
-          <div class="bg-white border border-gray-100 rounded-[16px] p-6 shadow-sm">
+        <!-- Right Side: Order Summary (Hidden on mobile) -->
+        <div class="hidden lg:block space-y-6">
+          <div class="bg-white border border-gray-100 rounded-[16px] p-6 shadow-sm sticky top-24">
             <h2 class="text-[17px] font-semibold text-noble-black mb-6">Order Summary</h2>
 
             <div class="space-y-4 mb-6">
@@ -621,7 +683,7 @@ const performLenderBookings = async () => {
                 :disabled="selectedItemIds.size === 0 || isSubmitting"
                 @click="handleRequestBooking"
               >
-                {{ isSubmitting ? "Requesting..." : "Request Booking" }}
+                {{ isSubmitting ? "Requesting..." : "Checkout" }}
               </button>
 
               <NuxtLink
@@ -658,6 +720,49 @@ const performLenderBookings = async () => {
         </div>
       </div>
     </main>
+
+    <!-- Mobile Bottom Checkout Bar (Fixed) -->
+    <div
+      v-if="bagItems.length > 0"
+      class="lg:hidden fixed bottom-16 left-0 w-full bg-white border-t border-gray-100 z-[1000] px-4 py-3 flex items-center justify-between shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-safe transition-transform duration-300 ease-in-out"
+      :class="!isBottomBarVisible ? 'translate-y-full' : 'translate-y-0'"
+    >
+      <div class="flex items-center gap-3">
+        <button
+          class="w-5 h-5 rounded-[6px] border flex items-center justify-center transition-all shrink-0"
+          :class="
+            isAllSelected
+              ? 'bg-burning-orange border-burning-orange shadow-sm'
+              : 'border-gray-300 bg-white'
+          "
+          @click="toggleSelectAll"
+        >
+          <Icon v-if="isAllSelected" name="ph:check" class="w-3 h-3 text-white" />
+        </button>
+        <span class="text-[12px] font-bold text-noble-black uppercase tracking-wider">All</span>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="flex flex-col items-end">
+          <div class="flex items-baseline gap-1">
+            <span class="text-[12px] text-gray-400 font-medium">Total:</span>
+            <span class="text-[17px] font-black text-burning-orange">{{
+              formatPesoAmount(totalAmount)
+            }}</span>
+          </div>
+          <span class="text-[10px] text-gray-400 leading-none"
+            >{{ selectedItemIds.size }} items selected</span
+          >
+        </div>
+        <button
+          class="h-11 px-8 bg-burning-orange text-white rounded-full font-bold text-[14px] shadow-lg shadow-burning-orange/20 active:scale-95 transition-all disabled:opacity-50"
+          :disabled="selectedItemIds.size === 0 || isSubmitting"
+          @click="handleRequestBooking"
+        >
+          {{ isSubmitting ? "..." : "Checkout" }}
+        </button>
+      </div>
+    </div>
 
     <!-- Payment Modal (Wallet) -->
     <Teleport to="body">

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[210px] max-w-[280px] mx-auto relative group"
+    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full xs:min-w-[210px] max-w-[280px] mx-auto relative group"
     :class="canNavigate ? 'cursor-pointer' : ''"
     @pointerenter="warmLinkedDestination"
     @focusin="warmLinkedDestination"
@@ -19,7 +19,7 @@
     />
 
     <!-- Image Section (Compact: 180px) -->
-    <div class="relative h-[180px] w-full bg-noble-black/5 rounded-t-[14px]">
+    <div class="relative h-[140px] xs:h-[180px] w-full bg-noble-black/5 rounded-t-[14px]">
       <!-- Dedicated container for image scale & rounded top -->
       <div class="absolute inset-0 overflow-hidden rounded-t-[14px]">
         <img
@@ -85,7 +85,9 @@
     <div class="p-3 flex-1 flex flex-col justify-between bg-white min-h-0 rounded-b-[14px]">
       <!-- Row 1: Category & Trending -->
       <div class="flex items-center justify-between gap-2 mb-1 min-w-0">
-        <div class="text-[11px] font-bold text-burning-orange truncate uppercase tracking-wider">
+        <div
+          class="text-[9px] xs:text-[11px] font-bold text-burning-orange truncate uppercase tracking-wider"
+        >
           {{ category }}
         </div>
 
@@ -103,27 +105,36 @@
       </div>
 
       <!-- Row 2: Item Name (14px truncated) -->
-      <h3 class="text-[14px] font-light text-noble-black leading-tight truncate mb-2">
+      <h3
+        class="text-[13px] xs:text-[14px] font-light text-noble-black leading-tight truncate mb-2"
+      >
         {{ name }}
       </h3>
 
       <!-- Row 3: Price & Rating (Unified Row) -->
       <div class="flex items-center justify-between gap-2 mt-auto">
         <div class="flex items-center gap-1 min-w-0">
-          <span class="text-[15px] font-bold text-burning-orange leading-none">₱{{ price }}</span>
-          <span class="text-[11px] font-light text-noble-black/40 leading-none"
+          <span class="text-[14px] xs:text-[15px] font-bold text-burning-orange leading-none"
+            >₱{{ price }}</span
+          >
+          <span class="text-[10px] xs:text-[11px] font-light text-noble-black/40 leading-none"
             >/{{ displayPriceUnit }}</span
           >
         </div>
 
         <!-- Refined Rating -->
-        <div v-if="hasGoodRating && !isManagement" class="flex items-center gap-2 shrink-0">
+        <div
+          v-if="hasGoodRating && !isManagement"
+          class="flex items-center gap-1.5 xs:gap-2 shrink-0"
+        >
           <Icon
             name="ph:star-fill"
-            class="w-3.5 h-3.5 text-burning-orange shrink-0 -translate-y-[0.5px]"
+            class="w-3 xs:w-3.5 h-3 xs:h-3.5 text-burning-orange shrink-0 -translate-y-[0.5px]"
           />
-          <span class="text-[13px] font-light text-noble-black leading-none">{{ rating }}</span>
-          <span class="text-[12px] font-light text-noble-black/50 leading-none"
+          <span class="text-[12px] xs:text-[13px] font-light text-noble-black leading-none">{{
+            rating
+          }}</span>
+          <span class="text-[11px] xs:text-[12px] font-light text-noble-black/50 leading-none"
             >({{ reviews }})</span
           >
         </div>

@@ -36,6 +36,9 @@ export default <Config>{
         rewon: ["Rewon", "sans-serif"],
         montravia: ["Nv Montravia", "serif"],
       },
+      screens: {
+        xs: "475px",
+      },
     },
   },
   plugins: [],

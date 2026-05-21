@@ -74,11 +74,11 @@
               >
               <!-- Unified Date Range Input -->
               <div
-                class="w-full flex items-center border-[1.5px] border-cinnamon-ice/30 rounded-[10px] p-1 bg-white"
+                class="w-full grid grid-cols-2 lg:flex lg:items-center border-[1.5px] border-cinnamon-ice/30 rounded-[10px] p-1 bg-white"
                 :class="{ 'border-burning-orange/50': showDateRangeError }"
               >
                 <!-- Start Date/Time Stacked -->
-                <div class="flex-1 flex flex-col px-3 py-1">
+                <div class="flex-1 flex flex-col px-3 py-1 min-w-0">
                   <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wider"
                     >Start</span
                   >
@@ -98,12 +98,12 @@
                   </div>
                 </div>
 
-                <div class="px-1 text-gray-300">
+                <div class="hidden lg:flex px-1 text-gray-300">
                   <Icon name="ph:arrow-right" class="w-[14px] h-[14px]" />
                 </div>
 
                 <!-- End Date/Time Stacked -->
-                <div class="flex-1 flex flex-col px-3 py-1">
+                <div class="flex-1 flex flex-col px-3 py-1 min-w-0">
                   <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wider"
                     >End</span
                   >

@@ -9,7 +9,7 @@
 
     <main
       ref="feedMainRef"
-      class="flex-1 overflow-y-auto custom-main-scrollbar bg-white h-screen pt-14"
+      class="flex-1 overflow-y-auto custom-main-scrollbar bg-white h-screen pt-14 pb-32 lg:pb-0"
     >
       <div class="container mx-auto px-4 py-8 pt-10 max-w-[1440px]">
         <div class="flex flex-col lg:flex-row gap-10">
@@ -41,6 +41,72 @@
               </p>
             </div>
 
+            <!-- Mobile Trending Section (Reddit Vibes) -->
+            <div class="lg:hidden flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-[11px] font-bold tracking-[1.5px] text-noble-black/40 uppercase">
+                  Trending Now
+                </h2>
+                <Icon name="ph:fire-simple" class="text-burning-orange w-4 h-4" />
+              </div>
+              <div class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4">
+                <div
+                  v-for="(item, index) in trendingItems"
+                  :key="item.id"
+                  class="flex-none w-[180px] bg-white border border-gray-100 rounded-2xl p-4 shadow-sm active:scale-95 transition-all"
+                >
+                  <div class="flex items-start gap-2 mb-2">
+                    <span class="text-[13px] font-bold text-gray-200">#{{ index + 1 }}</span>
+                    <h3
+                      class="text-[13px] font-bold text-gray-900 leading-tight line-clamp-2 min-h-[32px]"
+                    >
+                      {{ item.title }}
+                    </h3>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <Icon name="ph:trend-up" class="w-3 h-3 text-burning-orange" />
+                    <span class="text-[11px] text-noble-black/40 font-medium"
+                      >{{ item.offersCount }} offers</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mobile User Activity Stats -->
+            <div class="lg:hidden grid grid-cols-3 gap-3">
+              <div
+                class="bg-gray-50 rounded-2xl p-3 flex flex-col items-center text-center border border-gray-100/50"
+              >
+                <span class="text-[16px] font-black text-noble-black">{{
+                  userActivity.postsMade
+                }}</span>
+                <span class="text-[9px] font-bold text-noble-black/40 uppercase tracking-tighter"
+                  >Posts</span
+                >
+              </div>
+              <div
+                class="bg-gray-50 rounded-2xl p-3 flex flex-col items-center text-center border border-gray-100/50"
+              >
+                <span class="text-[16px] font-black text-noble-black">{{
+                  userActivity.offersSent
+                }}</span>
+                <span class="text-[9px] font-bold text-noble-black/40 uppercase tracking-tighter"
+                  >Sent</span
+                >
+              </div>
+              <div
+                class="bg-gray-50 rounded-2xl p-3 flex flex-col items-center text-center border border-gray-100/50"
+              >
+                <span class="text-[16px] font-black text-noble-black">{{
+                  userActivity.offersReceived
+                }}</span>
+                <span class="text-[9px] font-bold text-noble-black/40 uppercase tracking-tighter"
+                  >Offers</span
+                >
+              </div>
+            </div>
+
             <CommunityCreatePost
               ref="createPostRef"
               :user-avatar="currentUserAvatar"
@@ -70,11 +136,11 @@
                 v-for="filter in availableFilters"
                 :key="filter.value"
                 type="button"
-                class="px-4 py-1.5 rounded-full text-[13px] font-medium transition-all border-[1.5px]"
+                class="px-4 py-2 sm:py-1.5 rounded-full text-[13px] font-bold transition-all border-[1.5px]"
                 :class="
                   activeFilter === filter.value
-                    ? 'bg-burning-orange/10 border-burning-orange/30 text-burning-orange'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    ? 'bg-burning-orange text-white border-burning-orange shadow-md shadow-burning-orange/10'
+                    : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
                 "
                 @click="activeFilter = filter.value"
               >

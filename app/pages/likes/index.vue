@@ -338,11 +338,11 @@ watch(
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl py-8 pt-20 sm:pt-24">
-    <div class="mb-8">
+  <div class="mx-auto max-w-7xl py-8 pt-16 sm:pt-24">
+    <div class="mb-8 md:mb-10">
       <div class="space-y-2">
         <h1
-          class="font-geist text-[36px] font-medium leading-tight text-noble-black tracking-tight"
+          class="font-geist text-[28px] sm:text-[36px] font-medium leading-tight text-noble-black tracking-tight"
         >
           Liked Items
         </h1>
@@ -376,8 +376,8 @@ watch(
         <input
           v-model="searchInput"
           type="text"
-          placeholder="Search for your liked items..."
-          class="flex-1 bg-transparent px-2 font-geist font-medium text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
+          placeholder="Search items..."
+          class="flex-1 bg-transparent px-1 sm:px-2 font-geist font-medium text-[14px] sm:text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
           @focus="onSearchFocus"
           @blur="onSearchBlur"
           @keydown.down.prevent="moveSuggestionHighlight(1)"
@@ -387,10 +387,11 @@ watch(
 
         <!-- Integrated Search Button -->
         <button
-          class="h-9 px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
+          class="h-9 px-4 sm:px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[12px] sm:text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
           @click="applySearch"
         >
-          Search
+          <span class="hidden xs:inline">Search</span>
+          <Icon name="ph:magnifying-glass" class="xs:hidden w-4 h-4" />
         </button>
 
         <!-- Suggestions Dropdown -->
@@ -476,7 +477,7 @@ watch(
     <div class="">
       <div
         v-if="cardItems.length > 0 || isLoading"
-        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
+        class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 xs:gap-4 sm:gap-8"
       >
         <ItemCard
           v-for="item in cardItems"

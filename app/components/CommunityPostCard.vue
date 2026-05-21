@@ -1,31 +1,31 @@
 <template>
   <div
     ref="cardRef"
-    class="relative flex flex-col gap-4 rounded-[24px] border border-gray-100 bg-white p-6 transition-all duration-300 hover:shadow-lg group/card"
+    class="relative flex flex-col gap-3 sm:gap-4 rounded-[20px] sm:rounded-[24px] border border-gray-100 bg-white p-4 sm:p-6 transition-all duration-300 hover:shadow-lg group/card"
   >
     <!-- Card Header -->
     <div class="flex items-start justify-between">
-      <div class="flex items-center gap-3 min-w-0">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
         <NuxtLink :to="`/profile/${request.borrower.username}`" class="shrink-0">
           <UserAvatar
             :avatar-url="request.borrower.avatar"
             :user-name="request.borrower.name"
-            class="h-9 w-9 rounded-full"
+            class="h-8 w-8 sm:h-9 sm:w-9 rounded-full"
           />
         </NuxtLink>
         <div class="min-w-0 flex flex-col">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 sm:gap-2">
             <NuxtLink
               :to="`/profile/${request.borrower.username}`"
-              class="text-[15px] font-bold text-gray-900 hover:text-burning-orange transition-colors truncate"
+              class="text-[13px] sm:text-[15px] font-bold text-gray-900 hover:text-burning-orange transition-colors truncate"
             >
               {{ request.borrower.name }}
             </NuxtLink>
-            <span class="text-[12px] text-gray-400">{{
+            <span class="text-[11px] sm:text-[12px] text-gray-400 font-medium tracking-tight">{{
               formatRelativeTime(request.createdAt)
             }}</span>
           </div>
-          <span class="text-[13px] text-noble-black/50 truncate">
+          <span class="text-[11px] sm:text-[13px] text-noble-black/40 truncate leading-none">
             @{{ request.borrower.username }}
           </span>
         </div>
@@ -88,14 +88,14 @@
     </div>
 
     <!-- Title and Body Content -->
-    <div class="flex gap-4">
-      <div class="flex-1 flex flex-col gap-2">
-        <h3 class="text-[16px] font-medium text-gray-900 leading-tight">
+    <div class="flex gap-3 sm:gap-4">
+      <div class="flex-1 flex flex-col gap-1 sm:gap-2">
+        <h3 class="text-[15px] sm:text-[16px] font-bold text-gray-900 leading-tight">
           {{ request.itemNeeded }}
         </h3>
         <div class="relative">
           <p
-            class="text-[14px] text-gray-500 leading-relaxed transition-all duration-300"
+            class="text-[13px] sm:text-[14px] text-gray-500 leading-relaxed transition-all duration-300"
             :class="{ 'line-clamp-2': !isExpandedBody }"
           >
             {{ request.description }}
@@ -113,7 +113,7 @@
       <!-- Compact Reference Image -->
       <div
         v-if="request.referenceImageUrl"
-        class="shrink-0 w-[120px] h-[90px] rounded-[10px] overflow-hidden border border-gray-100 bg-gray-50"
+        class="shrink-0 w-20 h-20 xs:w-[120px] xs:h-[90px] rounded-[10px] overflow-hidden border border-gray-100 bg-gray-50"
       >
         <img
           :src="request.referenceImageUrl"
@@ -125,60 +125,60 @@
     </div>
 
     <!-- Metadata Row -->
-    <div class="flex flex-wrap items-center justify-between gap-4 pt-2">
-      <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <!-- Date Chip -->
         <div
-          class="flex items-center gap-1.5 bg-gray-100 rounded-[8px] px-2.5 py-1 text-[12px] text-gray-500"
+          class="flex items-center gap-1 bg-gray-100 rounded-[6px] px-2 py-0.5 text-[11px] sm:text-[12px] text-gray-500"
         >
-          <Icon name="ph:calendar-blank" class="w-[14px] h-[14px] text-gray-400 shrink-0" />
+          <Icon name="ph:calendar-blank" class="w-[12px] h-[12px] text-gray-400 shrink-0" />
           {{ formatDateRange(request.requestedDates) }}
         </div>
 
         <!-- Budget Chip -->
         <div
-          class="flex items-center gap-1.5 bg-gray-100 rounded-[8px] px-2.5 py-1 text-[12px] text-gray-500"
+          class="flex items-center gap-1 bg-gray-100 rounded-[6px] px-2 py-0.5 text-[11px] sm:text-[12px] text-gray-500"
         >
-          <Icon name="ph:wallet" class="w-[14px] h-[14px] text-gray-400 shrink-0" />
+          <Icon name="ph:wallet" class="w-[12px] h-[12px] text-gray-400 shrink-0" />
           {{ formatPriceRange(request.priceRange) }}
         </div>
 
         <span
           v-if="currentUserOffer && !isOwner"
-          class="bg-blue-estate/5 border border-blue-estate/10 rounded-full px-2.5 py-0.5 text-[11px] font-bold text-blue-estate"
+          class="bg-blue-estate/5 border border-blue-estate/10 rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-blue-estate"
         >
           Your offer: {{ formatOfferStatus(currentUserOffer.status) }}
         </span>
       </div>
 
       <!-- Action Button Group -->
-      <div class="flex items-center gap-4 ml-auto">
+      <div class="flex items-center gap-3 sm:gap-4 ml-auto">
         <button
-          class="flex items-center gap-1.5 text-[13px] font-bold text-noble-black/40 hover:text-blue-estate transition-colors group/comment-btn"
+          class="flex items-center gap-1.5 text-[12px] sm:text-[13px] font-bold text-noble-black/40 hover:text-blue-estate transition-colors group/comment-btn"
           @click="showComments = !showComments"
         >
           <Icon
             name="ph:chat-circle"
-            class="w-[18px] h-[18px] group-hover/comment-btn:scale-110 transition-transform"
+            class="w-[16px] sm:w-[18px] h-[16px] sm:h-[18px] group-hover/comment-btn:scale-110 transition-transform"
           />
           <span class="font-geist">{{ totalRepliesCount }}</span>
         </button>
 
-        <span class="w-[1px] h-4 bg-gray-100"></span>
+        <span class="w-[1px] h-3 bg-gray-100"></span>
 
-        <span class="flex items-center gap-1.5 text-[12px] text-gray-400">
+        <span class="flex items-center gap-1.5 text-[11px] sm:text-[12px] text-gray-400">
           {{ request.offersCount }} {{ request.offersCount === 1 ? "offer" : "offers" }}
         </span>
         <button
           v-if="!isOwner && request.status === 'OPEN'"
-          class="h-8 px-4 bg-burning-orange text-white rounded-[8px] text-[13px] font-bold transition-all hover:brightness-110 active:scale-95 shadow-sm"
+          class="h-8 px-3 sm:px-4 bg-burning-orange text-white rounded-[8px] text-[12px] sm:text-[13px] font-bold transition-all hover:brightness-110 active:scale-95 shadow-sm"
           @click="handleOfferAction"
         >
           {{ currentUserOffer ? "Update Offer" : "Make Offer" }}
         </button>
         <button
           v-else-if="isOwner && request.offers.length > 0"
-          class="h-8 px-4 border-[1.5px] border-blue-estate text-blue-estate rounded-[8px] text-[13px] font-semibold transition-all hover:bg-blue-estate/5 active:scale-95"
+          class="h-8 px-3 sm:px-4 border-[1.5px] border-blue-estate text-blue-estate rounded-[8px] text-[12px] sm:text-[13px] font-semibold transition-all hover:bg-blue-estate/5 active:scale-95"
           @click="toggleOffers"
         >
           {{ showOffers ? "Hide Offers" : "View Offers" }}

@@ -138,30 +138,33 @@ const CATEGORY_UI_MAP: Record<string, { label: string; image: string }> = {
 
 // Flexible Bento Span generator
 const getGridSpan = (index: number, total: number) => {
-  if (total === 1) return "md:col-span-4 md:row-span-2"
-  if (total === 2) return "md:col-span-2 md:row-span-2"
+  // Mobile: alternating 2-1nd spans for "bento" feel in 2nd column grid
+  const mobileSpan = index === 0 || index === 5 ? "col-span-2" : "col-span-1"
+
+  if (total === 1) return `${mobileSpan} md:col-span-4 md:row-span-2`
+  if (total === 2) return `${mobileSpan} md:col-span-2 md:row-span-2`
   if (total === 3) {
-    if (index === 0) return "md:col-span-2 md:row-span-2"
-    return "md:col-span-2 md:row-span-1"
+    if (index === 0) return `${mobileSpan} md:col-span-2 md:row-span-2`
+    return `${mobileSpan} md:col-span-2 md:row-span-1`
   }
-  if (total === 4) return "md:col-span-2 md:row-span-1"
+  if (total === 4) return `${mobileSpan} md:col-span-2 md:row-span-1`
 
   // 5 items (Standard Layout)
   if (total === 5) {
-    if (index === 0) return "md:col-span-2 md:row-span-1"
-    if (index === 1) return "md:col-span-1 md:row-span-2"
-    if (index === 2) return "md:col-span-1 md:row-span-1"
-    if (index === 3) return "md:col-span-2 md:row-span-1"
-    return "md:col-span-1 md:row-span-1"
+    if (index === 0) return `${mobileSpan} md:col-span-2 md:row-span-1`
+    if (index === 1) return `${mobileSpan} md:col-span-1 md:row-span-2`
+    if (index === 2) return `${mobileSpan} md:col-span-1 md:row-span-1`
+    if (index === 3) return `${mobileSpan} md:col-span-2 md:row-span-1`
+    return `${mobileSpan} md:col-span-1 md:row-span-1`
   }
 
   // 6 items (Full Fill Layout)
-  if (index === 0) return "md:col-span-2 md:row-span-1"
-  if (index === 1) return "md:col-span-1 md:row-span-1"
-  if (index === 2) return "md:col-span-1 md:row-span-1"
-  if (index === 3) return "md:col-span-1 md:row-span-1"
-  if (index === 4) return "md:col-span-1 md:row-span-1"
-  return "md:col-span-2 md:row-span-1"
+  if (index === 0) return `${mobileSpan} md:col-span-2 md:row-span-1`
+  if (index === 1) return `${mobileSpan} md:col-span-1 md:row-span-1`
+  if (index === 2) return `${mobileSpan} md:col-span-1 md:row-span-1`
+  if (index === 3) return `${mobileSpan} md:col-span-1 md:row-span-1`
+  if (index === 4) return `${mobileSpan} md:col-span-1 md:row-span-1`
+  return `${mobileSpan} md:col-span-2 md:row-span-1`
 }
 
 const dynamicCategories = computed(() => {
@@ -306,29 +309,40 @@ const handleGoogleLogin = async () => {
             class="w-full lg:w-[60%] flex flex-col items-center text-center lg:items-start lg:text-left"
           >
             <h1
-              class="font-montravia text-[56px] md:text-[72px] text-white leading-[1.05] mb-8 drop-shadow-sm"
+              class="font-montravia text-[32px] xs:text-[40px] sm:text-[56px] md:text-[72px] text-white leading-[0.95] sm:leading-[1.1] md:leading-[1.05] mb-4 sm:mb-6 md:mb-8 drop-shadow-sm"
             >
               Share what you <span class="text-burning-orange italic">have</span>.<br />
               Get what you <span class="text-burning-orange italic">need</span>.
             </h1>
             <p
-              class="text-[18px] md:text-[22px] text-white/80 font-light max-w-[580px] leading-relaxed mb-12"
+              class="text-[14px] xs:text-[15px] sm:text-[18px] md:text-[22px] text-white/80 font-light max-w-[580px] leading-relaxed mb-6 sm:mb-8 md:mb-12"
             >
               The premier peer-to-peer sharing marketplace exclusively for the UP Cebu community.
               Borrow gear for free or rent items for your projects.
             </p>
 
-            <div class="flex items-center gap-10">
-              <div v-for="(stat, i) in stats" :key="stat.label" class="flex items-center">
-                <div class="flex flex-col">
-                  <span class="text-[32px] font-bold text-white leading-none mb-1">{{
-                    stat.value
-                  }}</span>
-                  <span class="text-[14px] text-white/60 font-medium tracking-wide uppercase">{{
-                    stat.label
-                  }}</span>
+            <div
+              class="grid grid-cols-3 sm:flex sm:flex-row items-center gap-4 sm:gap-10 w-full sm:w-auto"
+            >
+              <div
+                v-for="(stat, i) in stats"
+                :key="stat.label"
+                class="flex items-center justify-center sm:justify-start"
+              >
+                <div class="flex flex-col items-center sm:items-start text-center sm:text-left">
+                  <span
+                    class="text-[18px] xs:text-[24px] sm:text-[28px] md:text-[32px] font-bold text-white leading-none mb-1"
+                    >{{ stat.value }}</span
+                  >
+                  <span
+                    class="text-[8px] xs:text-[10px] sm:text-[12px] md:text-[14px] text-white/60 font-medium tracking-tight sm:tracking-wide uppercase"
+                    >{{ stat.label }}</span
+                  >
                 </div>
-                <div v-if="i < stats.length - 1" class="h-10 w-px bg-white/20 ml-10"></div>
+                <div
+                  v-if="i < stats.length - 1"
+                  class="hidden sm:block h-10 w-px bg-white/20 ml-10"
+                ></div>
               </div>
             </div>
           </div>
@@ -336,30 +350,34 @@ const handleGoogleLogin = async () => {
           <div class="w-full lg:w-[40%] flex justify-center lg:justify-end">
             <div
               ref="signInRef"
-              class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-[24px] shadow-2xl w-full max-w-[440px] p-10 lg:p-12 transition-all duration-500 overflow-hidden"
+              class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-[24px] shadow-2xl w-full max-w-[440px] p-6 xs:p-8 sm:p-10 lg:p-12 transition-all duration-500 overflow-hidden"
               :class="{
                 'scale-[1.03] border-burning-orange/50 bg-white/20 shadow-[0_0_80px_rgba(255,113,36,0.15)] ring-4 ring-burning-orange/5':
                   isSignInHighlighted,
               }"
             >
-              <h2 class="text-[24px] font-bold text-white mb-2">Get started today.</h2>
-              <p class="text-[14px] text-white/60 mb-10">
+              <h2 class="text-[20px] xs:text-[24px] font-bold text-white mb-1 xs:mb-2">
+                Get started today.
+              </h2>
+              <p class="text-[13px] xs:text-[14px] text-white/60 mb-6 xs:mb-8 sm:mb-10">
                 Sign in with your UP mail to join the community.
               </p>
 
               <button
-                class="w-full h-14 bg-burning-orange rounded-[12px] flex items-center justify-center gap-3 hover:brightness-110 transition-all duration-300 disabled:opacity-50 group mb-6 active:scale-95 shadow-lg shadow-burning-orange/20"
+                class="w-full h-12 xs:h-14 bg-burning-orange rounded-[12px] flex items-center justify-center gap-3 hover:brightness-110 transition-all duration-300 disabled:opacity-50 group mb-4 xs:mb-6 active:scale-95 shadow-lg shadow-burning-orange/20"
                 :disabled="loginStatus === 'loading' || loginStatus === 'success'"
                 @click="handleGoogleLogin"
               >
                 <div class="p-1 bg-white rounded-full">
                   <img src="/images/google-icon.svg" alt="Google" class="w-5 h-5 block" />
                 </div>
-                <span class="text-white font-semibold text-[15px]">Continue with Google</span>
+                <span class="text-white font-semibold text-[14px] xs:text-[15px]"
+                  >Continue with Google</span
+                >
               </button>
 
-              <div class="h-px bg-white/10 w-full mb-6"></div>
-              <p class="text-[12px] text-white/40 text-center leading-relaxed">
+              <div class="h-px bg-white/10 w-full mb-4 xs:mb-6"></div>
+              <p class="text-[11px] xs:text-[12px] text-white/40 text-center leading-relaxed">
                 Accounts ending with <span class="text-white font-semibold">up.edu.ph</span> are
                 accepted.
               </p>
@@ -370,7 +388,7 @@ const handleGoogleLogin = async () => {
     </section>
 
     <!-- 2. Trust Badges Row (Infinite Scrolling Ticker) -->
-    <div class="bg-white py-8 border-b border-cinnamon-ice/10 relative overflow-hidden">
+    <div class="bg-white py-5 sm:py-8 border-b border-cinnamon-ice/10 relative overflow-hidden">
       <div
         class="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"
       ></div>
@@ -380,7 +398,7 @@ const handleGoogleLogin = async () => {
 
       <div class="flex w-max animate-infinite-scroll hover:[animation-play-state:paused]">
         <!-- Set 1 -->
-        <div class="flex items-center gap-x-20 pr-20 shrink-0">
+        <div class="flex items-center gap-x-12 sm:gap-x-20 pr-12 sm:pr-20 shrink-0">
           <FeatureItem
             v-for="badge in [...trustBadges, ...trustBadges, ...trustBadges]"
             :key="`set1-${badge}-${Math.random()}`"
@@ -389,7 +407,10 @@ const handleGoogleLogin = async () => {
           />
         </div>
         <!-- Set 2 (Identical Duplicate) -->
-        <div class="flex items-center gap-x-20 pr-20 shrink-0" aria-hidden="true">
+        <div
+          class="flex items-center gap-x-12 sm:gap-x-20 pr-12 sm:pr-20 shrink-0"
+          aria-hidden="true"
+        >
           <FeatureItem
             v-for="badge in [...trustBadges, ...trustBadges, ...trustBadges]"
             :key="`set2-${badge}-${Math.random()}`"
@@ -401,32 +422,34 @@ const handleGoogleLogin = async () => {
     </div>
 
     <!-- 3. Borrow Locally Branded Panel (Dark) -->
-    <section class="bg-noble-black py-24 lg:py-32 overflow-hidden">
+    <section class="bg-noble-black py-20 lg:py-32 overflow-hidden">
       <div class="max-w-7xl mx-auto px-6">
         <div class="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
-          <div class="w-full lg:w-1/2">
-            <h2 class="font-montravia text-[42px] lg:text-[56px] text-white leading-[1.1] mb-8">
+          <div class="w-full lg:w-1/2 text-center lg:text-left">
+            <h2
+              class="font-montravia text-[32px] sm:text-[42px] lg:text-[56px] text-white leading-[1.2] lg:leading-[1.1] mb-6 md:mb-8"
+            >
               Borrow <span class="text-burning-orange">LOCALLY</span>. <br />
               Lend <span class="text-white/60 font-light italic">SAFELY</span>. <br />
               Save <span class="text-burning-orange">MONEY</span>.
             </h2>
             <p
-              class="text-[17px] lg:text-[19px] text-white/50 font-light leading-relaxed mb-12 max-w-[500px]"
+              class="text-[15px] sm:text-[17px] lg:text-[19px] text-white/50 font-light leading-relaxed mb-10 md:mb-12 max-w-[500px] mx-auto lg:mx-0"
             >
               Join 500+ verified UP Cebu students already sharing 1,500+ items on campus. No
               “neighbors” — just students within your trusted community.
             </p>
-            <div class="flex flex-col sm:flex-row gap-5">
+            <div class="flex flex-row gap-3 sm:gap-5 justify-center lg:justify-start">
               <button
                 type="button"
-                class="h-12 px-10 bg-burning-orange text-white rounded-[14px] font-bold text-[15px] flex items-center justify-center hover:brightness-110 transition-all active:scale-95 shadow-lg shadow-burning-orange/20"
+                class="flex-1 sm:flex-none h-12 px-4 sm:px-10 bg-burning-orange text-white rounded-[14px] font-bold text-[13px] sm:text-[15px] flex items-center justify-center hover:brightness-110 transition-all active:scale-95 shadow-lg shadow-burning-orange/20"
                 @click="scrollToSignIn"
               >
                 Borrow Now
               </button>
               <button
                 type="button"
-                class="h-12 px-10 border-[1.5px] border-white/15 text-white rounded-[14px] font-bold text-[15px] flex items-center justify-center hover:bg-white/5 transition-all active:scale-95"
+                class="flex-1 sm:flex-none h-12 px-4 sm:px-10 border-[1.5px] border-white/15 text-white rounded-[14px] font-bold text-[13px] sm:text-[15px] flex items-center justify-center hover:bg-white/5 transition-all active:scale-95"
                 @click="scrollToSignIn"
               >
                 Lend an Item
@@ -465,20 +488,22 @@ const handleGoogleLogin = async () => {
     </section>
 
     <!-- 4. Browse Categories (Dynamic Editorial Bento Grid - Light) -->
-    <section ref="categoriesRef" class="py-24 lg:py-32 bg-white">
+    <section ref="categoriesRef" class="py-20 lg:py-32 bg-white">
       <div class="max-w-7xl mx-auto px-6">
-        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-12">
-          <div>
-            <h2 class="font-montravia text-[36px] text-noble-black mb-2 leading-none">
+        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10 md:mb-12">
+          <div class="text-center lg:text-left">
+            <h2
+              class="font-montravia text-[28px] sm:text-[36px] text-noble-black mb-2 leading-none"
+            >
               Browse Categories
             </h2>
-            <p class="text-[14px] text-noble-black/40 font-light">
+            <p class="text-[13px] sm:text-[14px] text-noble-black/40 font-light">
               Find exactly what you need from verified UP Cebu students.
             </p>
           </div>
           <button
             type="button"
-            class="text-burning-orange font-semibold text-[13px] flex items-center gap-1 hover:underline"
+            class="text-burning-orange font-semibold text-[13px] flex items-center justify-center lg:justify-start gap-1 hover:underline"
             @click="scrollToSignIn"
           >
             View Categories <span class="text-[16px]">→</span>
@@ -488,32 +513,32 @@ const handleGoogleLogin = async () => {
         <!-- Skeleton Loading State -->
         <div
           v-if="isLoadingMetadata"
-          class="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-auto md:h-[600px]"
+          class="grid grid-cols-2 md:grid-cols-4 md:grid-rows-2 gap-3 md:gap-4 h-auto md:h-[600px]"
         >
           <div
             v-for="i in 5"
             :key="i"
             :class="[
-              i === 1 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 1 ? 'col-span-2 md:col-span-2 md:row-span-1' : 'col-span-1',
               i === 2 ? 'md:col-span-1 md:row-span-2' : '',
               i === 3 ? 'md:col-span-1 md:row-span-1' : '',
-              i === 4 ? 'md:col-span-2 md:row-span-1' : '',
+              i === 4 ? 'col-span-2 md:col-span-2 md:row-span-1' : '',
               i === 5 ? 'md:col-span-1 md:row-span-1' : '',
-              'bg-noble-black/5 rounded-[24px] animate-pulse border border-cinnamon-ice/10',
+              'bg-noble-black/5 rounded-[20px] md:rounded-[24px] animate-pulse border border-cinnamon-ice/10 h-[180px] md:h-auto',
             ]"
           ></div>
         </div>
 
         <div
           v-else
-          class="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-auto md:h-[600px]"
+          class="grid grid-cols-2 md:grid-cols-4 md:grid-rows-2 gap-3 md:gap-4 h-auto md:h-[600px]"
         >
           <div
             v-for="cat in dynamicCategories"
             :key="cat.title"
             :class="[
               cat.class,
-              'relative rounded-[24px] overflow-hidden group cursor-pointer shadow-sm border border-cinnamon-ice/10 transition-all duration-500 hover:scale-[1.01] hover:shadow-2xl',
+              'relative rounded-[20px] md:rounded-[24px] overflow-hidden group cursor-pointer shadow-sm border border-cinnamon-ice/10 transition-all duration-500 hover:scale-[1.01] hover:shadow-2xl h-[180px] md:h-auto',
             ]"
           >
             <img
@@ -524,13 +549,15 @@ const handleGoogleLogin = async () => {
               class="absolute inset-0 bg-noble-black/45 group-hover:bg-noble-black/30 transition-colors duration-500"
             ></div>
 
-            <div class="absolute inset-0 p-8 flex flex-col justify-between z-10">
-              <h3 class="text-white text-[20px] font-bold tracking-tight drop-shadow-md">
+            <div class="absolute inset-0 p-4 sm:p-8 flex flex-col justify-between z-10">
+              <h3
+                class="text-white text-[16px] sm:text-[20px] font-bold tracking-tight drop-shadow-md"
+              >
                 {{ cat.title }}
               </h3>
               <div class="flex justify-end">
                 <span
-                  class="bg-burning-orange text-white text-[11px] font-bold uppercase tracking-widest px-4 py-2 rounded-full shadow-lg"
+                  class="bg-burning-orange text-white text-[9px] sm:text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-lg"
                 >
                   {{ cat.subtitle }}
                 </span>
@@ -542,24 +569,24 @@ const handleGoogleLogin = async () => {
     </section>
 
     <!-- 5. Popular on Campus (Dark Spotlight) -->
-    <section ref="popularItemsRef" class="py-32 bg-noble-black overflow-hidden relative">
+    <section ref="popularItemsRef" class="py-20 lg:py-32 bg-noble-black overflow-hidden relative">
       <div
         class="absolute top-0 right-0 w-[500px] h-[500px] bg-burning-orange/5 rounded-full blur-[100px] -mr-64 -mt-64"
       ></div>
 
       <div class="max-w-7xl mx-auto px-6 relative z-10">
-        <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
-          <div>
-            <h2 class="font-montravia text-[36px] text-white mb-2 leading-none">
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 md:mb-16">
+          <div class="text-center md:text-left">
+            <h2 class="font-montravia text-[28px] sm:text-[36px] text-white mb-2 leading-none">
               Popular on Campus
             </h2>
-            <p class="text-[14px] text-white/40 font-light">
+            <p class="text-[13px] sm:text-[14px] text-white/40 font-light">
               Most borrowed items this week across the UP Cebu community
             </p>
           </div>
           <button
             type="button"
-            class="text-white font-semibold text-[13px] flex items-center gap-3 group"
+            class="text-white font-semibold text-[13px] flex items-center justify-center md:justify-start gap-3 group"
             @click="scrollToSignIn"
           >
             <span
@@ -624,31 +651,31 @@ const handleGoogleLogin = async () => {
     <!-- Simple Footer -->
     <footer class="bg-white border-t border-cinnamon-ice/10 h-auto md:h-20">
       <div
-        class="max-w-7xl mx-auto h-full px-6 py-8 md:py-0 flex flex-col md:flex-row justify-between items-center gap-6 text-[11px] text-noble-black/40 uppercase tracking-widest font-bold"
+        class="max-w-7xl mx-auto h-full px-6 py-6 md:py-0 flex flex-row justify-between items-center gap-4 text-[9px] xs:text-[11px] text-noble-black/40 uppercase tracking-widest font-bold"
       >
-        <div class="flex items-center gap-4 group cursor-default">
+        <div class="flex items-center gap-2 xs:gap-4 group cursor-default">
           <img
             src="/images/takeup-logo.png"
             alt="TakeUP"
-            class="h-6 w-auto grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
+            class="h-4 xs:h-6 w-auto grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
           />
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1.5 xs:gap-3">
             <span
               class="text-noble-black/60 group-hover:text-burning-orange transition-colors duration-300"
-              >TakeUP Marketplace</span
+              >TakeUP<span class="hidden sm:inline"> Marketplace</span></span
             >
             <span class="w-1 h-1 bg-noble-black/10 rounded-full"></span>
             <span>&copy; 2026</span>
           </div>
         </div>
 
-        <div class="flex items-center gap-2.5 group cursor-default">
-          <span class="opacity-50">Developed by</span>
-          <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 xs:gap-2.5 group cursor-default">
+          <span class="opacity-50 hidden xs:inline">Developed by</span>
+          <div class="flex items-center gap-1.5 xs:gap-2">
             <img
               src="/images/team-logo.png"
               alt="White Space"
-              class="h-5 w-auto grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
+              class="h-4 xs:h-5 w-auto grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
             />
             <span
               class="text-noble-black/60 group-hover:text-burning-orange transition-colors duration-300"
