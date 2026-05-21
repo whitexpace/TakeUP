@@ -16,6 +16,7 @@ definePageMeta({
 const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
 const REALTIME_SESSION_WAIT_MS = 5_000
+const REALTIME_RETRY_MS = 1_500
 
 type RealtimeMessagePayload = {
   new: Record<string, unknown>
@@ -46,6 +47,7 @@ const {
   onInboxRealtimeMessage,
   closeConversation,
   loadMoreMessages,
+  prefetchConversationMessagesForInbox,
 } = useChat()
 
 const route = useRoute()
@@ -57,6 +59,7 @@ const realtimeChannelId = createRealtimeChannelId()
 const isMobile = ref(false)
 const searchQuery = ref("")
 const newMessage = ref("")
+const replyToMessage = ref<ChatMessage | null>(null)
 const showWarning = ref(false)
 const showEmojiPicker = ref(false)
 const showReportModal = ref(false)
@@ -69,6 +72,8 @@ const pendingImageFile = ref<File | null>(null)
 const pendingImagePreviewUrl = ref<string | null>(null)
 const pendingConversationTransactionId = ref<string | null>(null)
 const shouldStickToBottom = ref(true)
+const prefetchedConversationCount = ref(0)
+const isLoadingEarlierMessages = ref(false)
 
 const chatAreaRef = ref<HTMLElement | null>(null)
 const sidebarScrollRef = ref<HTMLElement | null>(null)
@@ -210,6 +215,64 @@ const updateStickToBottom = () => {
   shouldStickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 120
 }
 
+const prefetchInboxMessages = (startIndex: number, count = 8) => {
+  if (startIndex >= sortedConversations.value.length) return
+  prefetchConversationMessagesForInbox({ startIndex, initialCount: count })
+  prefetchedConversationCount.value = Math.max(
+    prefetchedConversationCount.value,
+    Math.min(sortedConversations.value.length, startIndex + count),
+  )
+}
+
+const prefetchInitialInboxMessages = () => {
+  if (prefetchedConversationCount.value > 0) return
+  prefetchInboxMessages(0)
+}
+
+const handleSidebarScroll = () => {
+  const element = sidebarScrollRef.value
+  if (!element || prefetchedConversationCount.value >= sortedConversations.value.length) return
+
+  const approximateConversationHeight = 84
+  const prefetchThreshold =
+    prefetchedConversationCount.value * approximateConversationHeight - element.clientHeight - 160
+
+  if (element.scrollTop >= Math.max(0, prefetchThreshold)) {
+    prefetchInboxMessages(prefetchedConversationCount.value)
+  }
+}
+
+const handleChatScroll = () => {
+  updateStickToBottom()
+
+  const element = chatAreaRef.value
+  if (
+    !element ||
+    isLoadingEarlierMessages.value ||
+    isLoadingMessages.value ||
+    !hasMoreMessages.value ||
+    element.scrollTop > 120
+  ) {
+    return
+  }
+
+  const previousScrollHeight = element.scrollHeight
+  const previousScrollTop = element.scrollTop
+  isLoadingEarlierMessages.value = true
+
+  void loadMoreMessages()
+    .then(() => {
+      nextTick(() => {
+        if (!chatAreaRef.value) return
+        chatAreaRef.value.scrollTop =
+          chatAreaRef.value.scrollHeight - previousScrollHeight + previousScrollTop
+      })
+    })
+    .finally(() => {
+      isLoadingEarlierMessages.value = false
+    })
+}
+
 const adjustTextareaHeight = () => {
   const element = textareaRef.value
   if (!element) return
@@ -227,6 +290,7 @@ const clearComposerImage = () => {
 
 const resetComposer = () => {
   newMessage.value = ""
+  replyToMessage.value = null
   composerError.value = null
   showEmojiPicker.value = false
   clearComposerImage()
@@ -276,6 +340,27 @@ const getChatTime = (conversation: (typeof sortedConversations.value)[0]) => {
 
 const getClosedConversationLabel = (conversation: NonNullable<typeof activeConversation.value>) =>
   getChatClosedPreviewLabel(conversation.closureState) ?? "Chat unavailable"
+
+const getMessageAuthorLabel = (senderUserId: string) =>
+  senderUserId === activeConversation.value?.otherParticipant?.id
+    ? getParticipantName(activeConversation.value.otherParticipant)
+    : "You"
+
+const getMessageReplyPreview = (message: Pick<ChatMessage, "body" | "imageUrl"> | null) => {
+  if (!message) return "Original message unavailable"
+  const body = sanitizeChatMessage(message.body).trim()
+  return body || (message.imageUrl ? "Photo" : "Message")
+}
+
+const startReplyToMessage = (message: ChatMessage) => {
+  if (activeConversation.value?.isExpired) return
+  replyToMessage.value = message
+  nextTick(() => textareaRef.value?.focus())
+}
+
+const clearReplyToMessage = () => {
+  replyToMessage.value = null
+}
 
 let openConversationPromise: Promise<void> | null = null
 let openConversationTransactionId: string | null = null
@@ -443,7 +528,7 @@ const handleSendMessage = async () => {
       imageUrl = await uploadChatImage(pendingImageFile.value)
     }
 
-    const sendPromise = sendChatMessage(body, imageUrl)
+    const sendPromise = sendChatMessage(body, imageUrl, replyToMessage.value)
     resetComposer()
     scrollToBottom()
 
@@ -541,6 +626,10 @@ let activeRealtimeGeneration = 0
 let activeBroadcastGeneration = 0
 let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
 let hasWarnedMissingRealtimeSession = false
+let inboxRealtimeRetryId: number | null = null
+let activeRealtimeRetryId: number | null = null
+let inboxBroadcastRetryId: number | null = null
+let activeBroadcastRetryId: number | null = null
 
 const getConversationBroadcastTopic = (conversationId: string) =>
   `chat-conversation-${conversationId}`
@@ -611,10 +700,98 @@ const ensureRealtimeAuth = async () => {
   return true
 }
 
+const shouldRetryRealtimeStatus = (status: string) =>
+  status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"
+
 const logRealtimeStatus = (channelName: string, status: string, error?: Error) => {
-  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+  if (shouldRetryRealtimeStatus(status)) {
     console.warn(`[chat realtime] ${channelName} ${status}`, error)
   }
+}
+
+const clearRealtimeRetryTimers = () => {
+  if (inboxRealtimeRetryId !== null) {
+    window.clearTimeout(inboxRealtimeRetryId)
+    inboxRealtimeRetryId = null
+  }
+  if (activeRealtimeRetryId !== null) {
+    window.clearTimeout(activeRealtimeRetryId)
+    activeRealtimeRetryId = null
+  }
+  if (inboxBroadcastRetryId !== null) {
+    window.clearTimeout(inboxBroadcastRetryId)
+    inboxBroadcastRetryId = null
+  }
+  if (activeBroadcastRetryId !== null) {
+    window.clearTimeout(activeBroadcastRetryId)
+    activeBroadcastRetryId = null
+  }
+}
+
+const scheduleInboxRealtimeRetry = () => {
+  if (typeof window === "undefined" || inboxRealtimeRetryId !== null) return
+
+  const channel = inboxRealtimeChannel
+  inboxRealtimeChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  inboxRealtimeRetryId = window.setTimeout(() => {
+    inboxRealtimeRetryId = null
+    void setupInboxRealtime()
+  }, REALTIME_RETRY_MS)
+}
+
+const scheduleActiveRealtimeRetry = (conversationId: string, generation: number) => {
+  if (typeof window === "undefined" || activeRealtimeRetryId !== null) return
+  if (generation !== activeRealtimeGeneration) return
+
+  const channel = activeRealtimeChannel
+  activeRealtimeChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  activeRealtimeRetryId = window.setTimeout(() => {
+    activeRealtimeRetryId = null
+    if (generation === activeRealtimeGeneration && activeConversationId.value === conversationId) {
+      void setupActiveRealtime(conversationId)
+    }
+  }, REALTIME_RETRY_MS)
+}
+
+const scheduleInboxBroadcastRetry = () => {
+  if (typeof window === "undefined" || inboxBroadcastRetryId !== null) return
+
+  const channel = inboxBroadcastChannel
+  inboxBroadcastChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  inboxBroadcastRetryId = window.setTimeout(() => {
+    inboxBroadcastRetryId = null
+    void setupInboxBroadcast()
+  }, REALTIME_RETRY_MS)
+}
+
+const scheduleActiveBroadcastRetry = (conversationId: string, generation: number) => {
+  if (typeof window === "undefined" || activeBroadcastRetryId !== null) return
+  if (generation !== activeBroadcastGeneration) return
+
+  const channel = activeBroadcastChannel
+  activeBroadcastChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  activeBroadcastRetryId = window.setTimeout(() => {
+    activeBroadcastRetryId = null
+    if (generation === activeBroadcastGeneration && activeConversationId.value === conversationId) {
+      void setupActiveBroadcast(conversationId)
+    }
+  }, REALTIME_RETRY_MS)
 }
 
 const setupRealtimeAuthListener = () => {
@@ -654,6 +831,8 @@ const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null =>
 
   const body = typeof row.body === "string" ? row.body : ""
   const imageUrl = typeof row.image_url === "string" ? row.image_url : null
+  const replyToMessageId =
+    typeof row.reply_to_message_id === "string" ? row.reply_to_message_id : null
   const isRead = typeof row.is_read === "boolean" ? row.is_read : false
   const readAt = typeof row.read_at === "string" ? row.read_at : null
 
@@ -661,11 +840,13 @@ const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null =>
     id: row.id,
     conversationId: row.conversation_id,
     senderUserId: row.sender_user_id,
+    replyToMessageId,
     body,
     imageUrl,
     isRead,
     readAt,
     createdAt: row.created_at,
+    replyToMessage: null,
   }
 }
 
@@ -687,15 +868,37 @@ const mapBroadcastMessage = (value: unknown): ChatMessage | null => {
     return null
   }
 
+  const rawReplyToMessage =
+    typeof message.replyToMessage === "object" && message.replyToMessage !== null
+      ? (message.replyToMessage as Record<string, unknown>)
+      : null
+  const replyToMessage =
+    rawReplyToMessage &&
+    typeof rawReplyToMessage.id === "string" &&
+    typeof rawReplyToMessage.senderUserId === "string" &&
+    typeof rawReplyToMessage.createdAt === "string"
+      ? {
+          id: rawReplyToMessage.id,
+          senderUserId: rawReplyToMessage.senderUserId,
+          body: typeof rawReplyToMessage.body === "string" ? rawReplyToMessage.body : "",
+          imageUrl:
+            typeof rawReplyToMessage.imageUrl === "string" ? rawReplyToMessage.imageUrl : null,
+          createdAt: rawReplyToMessage.createdAt,
+        }
+      : null
+
   return {
     id: message.id,
     conversationId: message.conversationId,
     senderUserId: message.senderUserId,
+    replyToMessageId:
+      typeof message.replyToMessageId === "string" ? message.replyToMessageId : null,
     body: typeof message.body === "string" ? message.body : "",
     imageUrl: typeof message.imageUrl === "string" ? message.imageUrl : null,
     isRead: typeof message.isRead === "boolean" ? message.isRead : false,
     readAt: typeof message.readAt === "string" ? message.readAt : null,
     createdAt: message.createdAt,
+    replyToMessage,
   }
 }
 
@@ -737,6 +940,11 @@ const handleActiveRealtimeMessage = (
 }
 
 const stopActiveRealtime = async () => {
+  if (activeRealtimeRetryId !== null) {
+    window.clearTimeout(activeRealtimeRetryId)
+    activeRealtimeRetryId = null
+  }
+
   const channel = activeRealtimeChannel
   activeRealtimeChannel = null
 
@@ -746,6 +954,11 @@ const stopActiveRealtime = async () => {
 }
 
 const stopActiveBroadcast = async () => {
+  if (activeBroadcastRetryId !== null) {
+    window.clearTimeout(activeBroadcastRetryId)
+    activeBroadcastRetryId = null
+  }
+
   const channel = activeBroadcastChannel
   activeBroadcastChannel = null
 
@@ -765,7 +978,12 @@ const setupInboxBroadcast = async () => {
   inboxBroadcastChannel = supabase
     .channel(getUserBroadcastTopic(currentUser.id))
     .on("broadcast", { event: "message" }, handleBroadcastMessage)
-    .subscribe((status, error) => logRealtimeStatus("inbox broadcast", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("inbox broadcast", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleInboxBroadcastRetry()
+      }
+    })
 }
 
 const setupActiveBroadcast = async (conversationId: string | null) => {
@@ -779,7 +997,12 @@ const setupActiveBroadcast = async (conversationId: string | null) => {
   activeBroadcastChannel = supabase
     .channel(getConversationBroadcastTopic(conversationId))
     .on("broadcast", { event: "message" }, handleBroadcastMessage)
-    .subscribe((status, error) => logRealtimeStatus("active broadcast", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("active broadcast", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleActiveBroadcastRetry(conversationId, generation)
+      }
+    })
 }
 
 const setupInboxRealtime = async () => {
@@ -796,7 +1019,12 @@ const setupInboxRealtime = async () => {
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) =>
       handleInboxRealtimeMessage(payload, "UPDATE"),
     )
-    .subscribe((status, error) => logRealtimeStatus("inbox", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("inbox", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleInboxRealtimeRetry()
+      }
+    })
 }
 
 const setupActiveRealtime = async (conversationId: string | null) => {
@@ -834,12 +1062,18 @@ const setupActiveRealtime = async (conversationId: string | null) => {
       },
       (payload) => handleActiveRealtimeMessage(payload, "UPDATE"),
     )
-    .subscribe((status, error) => logRealtimeStatus("active", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("active", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleActiveRealtimeRetry(conversationId, generation)
+      }
+    })
 }
 
 const stopRealtime = () => {
   activeRealtimeGeneration += 1
   activeBroadcastGeneration += 1
+  clearRealtimeRetryTimers()
   void stopActiveRealtime()
   void stopActiveBroadcast()
 
@@ -870,6 +1104,14 @@ watch(
   { deep: true },
 )
 watch([newMessage, pendingImagePreviewUrl], () => nextTick(adjustTextareaHeight))
+watch(
+  () => sortedConversations.value.length,
+  (conversationCount) => {
+    if (conversationCount > 0) {
+      prefetchInitialInboxMessages()
+    }
+  },
+)
 watch(
   () => activeConversation.value?.isExpired,
   (isExpired) => {
@@ -919,6 +1161,7 @@ onMounted(async () => {
   void setupInboxRealtime()
 
   await loadConversations({ background: sortedConversations.value.length > 0 })
+  prefetchInitialInboxMessages()
 
   if (routeTransactionId.value) {
     await openConversationFromRoute(routeTransactionId.value)
@@ -985,7 +1228,11 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div ref="sidebarScrollRef" class="custom-chat-scrollbar flex-1 overflow-y-auto">
+        <div
+          ref="sidebarScrollRef"
+          class="custom-chat-scrollbar flex-1 overflow-y-auto"
+          @scroll="handleSidebarScroll"
+        >
           <div
             v-if="isLoadingConversations && !sortedConversations.length"
             class="px-2 pt-2 space-y-1"
@@ -1255,7 +1502,7 @@ onUnmounted(() => {
           <div
             ref="chatAreaRef"
             class="custom-chat-scrollbar flex flex-1 flex-col gap-6 overflow-y-auto p-6"
-            @scroll="updateStickToBottom"
+            @scroll="handleChatScroll"
           >
             <div v-if="hasMoreMessages" class="flex justify-center">
               <button
@@ -1289,7 +1536,7 @@ onUnmounted(() => {
               <div
                 v-for="message in messages"
                 :key="message.id"
-                class="flex max-w-[85%] flex-col lg:max-w-[75%] min-w-0"
+                class="group/message flex max-w-[85%] flex-col lg:max-w-[75%] min-w-0"
                 :class="[
                   message.senderUserId !== activeConversation.otherParticipant?.id
                     ? 'self-end items-end'
@@ -1297,26 +1544,60 @@ onUnmounted(() => {
                 ]"
               >
                 <div
-                  class="relative rounded-[18px] px-3.5 py-2 text-[15px] leading-relaxed shadow-sm min-w-0"
+                  class="flex items-end gap-2"
                   :class="[
                     message.senderUserId !== activeConversation.otherParticipant?.id
-                      ? 'rounded-tr-none bg-burning-orange text-white'
-                      : 'rounded-tl-none border border-gray-100 bg-gray-100/70 text-noble-black',
+                      ? 'flex-row-reverse'
+                      : 'flex-row',
                   ]"
                 >
-                  <img
-                    v-if="message.imageUrl"
-                    :src="message.imageUrl"
-                    alt="Chat attachment"
-                    class="mb-3 max-h-64 w-full rounded-2xl object-cover"
-                    @load="handleMessageImageLoad"
-                  />
-                  <p
-                    v-if="message.body.trim()"
-                    class="whitespace-pre-wrap break-all md:break-words overflow-hidden"
+                  <div
+                    class="relative rounded-[18px] px-3.5 py-2 text-[15px] leading-relaxed shadow-sm min-w-0"
+                    :class="[
+                      message.senderUserId !== activeConversation.otherParticipant?.id
+                        ? 'rounded-tr-none bg-burning-orange text-white'
+                        : 'rounded-tl-none border border-gray-100 bg-gray-100/70 text-noble-black',
+                    ]"
                   >
-                    {{ sanitizeChatMessage(message.body) }}
-                  </p>
+                    <div
+                      v-if="message.replyToMessage"
+                      class="mb-2 max-w-full rounded-xl border-l-2 px-3 py-2 text-xs"
+                      :class="[
+                        message.senderUserId !== activeConversation.otherParticipant?.id
+                          ? 'border-white/70 bg-white/15 text-white/85'
+                          : 'border-burning-orange/60 bg-white/80 text-noble-black/65',
+                      ]"
+                    >
+                      <p class="truncate font-bold">
+                        {{ getMessageAuthorLabel(message.replyToMessage.senderUserId) }}
+                      </p>
+                      <p class="truncate">
+                        {{ getMessageReplyPreview(message.replyToMessage) }}
+                      </p>
+                    </div>
+                    <img
+                      v-if="message.imageUrl"
+                      :src="message.imageUrl"
+                      alt="Chat attachment"
+                      class="mb-3 max-h-64 w-full rounded-2xl object-cover"
+                      @load="handleMessageImageLoad"
+                    />
+                    <p
+                      v-if="message.body.trim()"
+                      class="whitespace-pre-wrap break-all md:break-words overflow-hidden"
+                    >
+                      {{ sanitizeChatMessage(message.body) }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    title="Reply"
+                    aria-label="Reply"
+                    class="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-noble-black/45 opacity-70 shadow-sm transition hover:text-burning-orange hover:opacity-100 md:opacity-0 md:group-hover/message:opacity-100"
+                    @click="startReplyToMessage(message)"
+                  >
+                    <Icon name="ph:arrow-bend-up-left" class="shrink-0" size="16" />
+                  </button>
                 </div>
 
                 <span
@@ -1372,6 +1653,34 @@ onUnmounted(() => {
           </div>
 
           <div v-else class="relative shrink-0 border-t border-gray-100 bg-white p-3 lg:p-4">
+            <div
+              v-if="replyToMessage"
+              class="mb-3 flex items-center gap-3 rounded-2xl border border-cinnamon-ice/20 bg-gray-50 px-3 py-2"
+            >
+              <div
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-burning-orange/10 text-burning-orange"
+              >
+                <Icon name="ph:arrow-bend-up-left" class="shrink-0" size="18" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-bold text-noble-black">
+                  Replying to {{ getMessageAuthorLabel(replyToMessage.senderUserId) }}
+                </p>
+                <p class="truncate text-xs text-noble-black/50">
+                  {{ getMessageReplyPreview(replyToMessage) }}
+                </p>
+              </div>
+              <button
+                type="button"
+                title="Cancel reply"
+                aria-label="Cancel reply"
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-noble-black/45 transition hover:bg-white hover:text-cinnabar-red"
+                @click="clearReplyToMessage"
+              >
+                <Icon name="ph:x" class="shrink-0" size="16" />
+              </button>
+            </div>
+
             <div
               v-if="pendingImagePreviewUrl"
               class="mb-3 flex items-start gap-3 rounded-2xl border border-cinnamon-ice/20 bg-cream/70 p-3"

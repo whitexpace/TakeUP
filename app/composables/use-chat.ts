@@ -12,12 +12,22 @@ export type ChatMessage = {
   id: string
   conversationId: string
   senderUserId: string
+  replyToMessageId: string | null
   body: string
   imageUrl: string | null
   isRead: boolean
   readAt: string | null
   createdAt: string
+  replyToMessage: ChatMessageReplyPreview | null
   isOptimistic?: boolean
+}
+
+export type ChatMessageReplyPreview = {
+  id: string
+  senderUserId: string
+  body: string
+  imageUrl: string | null
+  createdAt: string
 }
 
 export type ChatParticipant = {
@@ -84,6 +94,7 @@ type LoadMessagesOptions = {
 
 type PrefetchConversationsOptions = {
   initialCount?: number
+  startIndex?: number
 }
 
 type MessagePageState = {
@@ -96,6 +107,7 @@ type RealtimeMessageEvent = "INSERT" | "UPDATE"
 type PendingSend = {
   optimisticId: string
   conversationId: string
+  replyToMessageId: string | null
   body: string
   imageUrl: string | null
   resolve: (message: ChatMessage | null) => void
@@ -144,6 +156,14 @@ const getConversationDetailFromSummary = (
 const createOptimisticMessageId = () =>
   `temp-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
 
+const getReplyPreviewFromMessage = (message: ChatMessage): ChatMessageReplyPreview => ({
+  id: message.id,
+  senderUserId: message.senderUserId,
+  body: message.body,
+  imageUrl: message.imageUrl,
+  createdAt: message.createdAt,
+})
+
 export const useChat = () => {
   const conversations = useState<ConversationSummary[]>("chat-conversations", () => [])
   const activeConversation = useState<ConversationDetail | null>(
@@ -175,6 +195,7 @@ export const useChat = () => {
     () => ({}),
   )
   const pendingSendQueue: PendingSend[] = []
+  const messageLoadPromises = new Map<string, Promise<void>>()
   let isDrainingSendQueue = false
 
   const getCachedMessages = (conversationId: string) => messageCache.value[conversationId] ?? []
@@ -211,7 +232,20 @@ export const useChat = () => {
     const cachedMessagesById = new Map(cachedMessages.map((message) => [message.id, message]))
     const orderStableIncoming = incoming.map((message) => {
       const cachedMessage = cachedMessagesById.get(message.id)
-      return cachedMessage ? { ...message, createdAt: cachedMessage.createdAt } : message
+      const replySource = message.replyToMessageId
+        ? cachedMessagesById.get(message.replyToMessageId)
+        : null
+      const replyToMessage =
+        message.replyToMessage ?? (replySource ? getReplyPreviewFromMessage(replySource) : null)
+      const hydratedMessage = { ...message, replyToMessage }
+
+      return cachedMessage
+        ? {
+            ...hydratedMessage,
+            createdAt: cachedMessage.createdAt,
+            replyToMessage: hydratedMessage.replyToMessage ?? cachedMessage.replyToMessage,
+          }
+        : hydratedMessage
     })
     const merged = mergeChatMessages(cachedMessages, orderStableIncoming)
     setCachedMessages(conversationId, merged)
@@ -226,7 +260,11 @@ export const useChat = () => {
     const cachedMessages = getCachedMessages(conversationId)
     const optimisticMessage = cachedMessages.find((message) => message.id === optimisticId)
     const orderStableMessage = optimisticMessage
-      ? { ...savedMessage, createdAt: optimisticMessage.createdAt }
+      ? {
+          ...savedMessage,
+          createdAt: optimisticMessage.createdAt,
+          replyToMessage: savedMessage.replyToMessage ?? optimisticMessage.replyToMessage,
+        }
       : savedMessage
     const withoutOptimistic = cachedMessages.filter((message) => message.id !== optimisticId)
     const merged = mergeChatMessages(withoutOptimistic, [orderStableMessage])
@@ -250,6 +288,7 @@ export const useChat = () => {
       (entry) =>
         !entry.settledMessage &&
         entry.conversationId === message.conversationId &&
+        entry.replyToMessageId === message.replyToMessageId &&
         sanitizeChatMessage(entry.body) === message.body &&
         entry.imageUrl === message.imageUrl,
     )
@@ -480,6 +519,7 @@ export const useChat = () => {
 
     const loadKey = `${conversationId}:${cursor ?? "latest"}`
     if (messageLoadInFlight.value[loadKey]) {
+      await messageLoadPromises.get(loadKey)
       return
     }
 
@@ -489,7 +529,7 @@ export const useChat = () => {
       isLoadingMessages.value = true
     }
 
-    try {
+    const loadPromise = (async () => {
       const params: Record<string, string> = { conversationId }
       if (cursor) params.cursor = cursor
 
@@ -498,8 +538,6 @@ export const useChat = () => {
         nextCursor: string | null
         hasMore: boolean
       }>("/api/chat/messages", { params })
-
-      if (!shouldApplyResult()) return
 
       const pageState = {
         nextCursor: data.nextCursor,
@@ -522,11 +560,18 @@ export const useChat = () => {
           pageState,
         )
       }
+    })()
+
+    messageLoadPromises.set(loadKey, loadPromise)
+
+    try {
+      await loadPromise
     } catch (err: unknown) {
       if (shouldApplyResult() && !options.background) {
         error.value = getErrorMessage(err, "Failed to load messages.")
       }
     } finally {
+      messageLoadPromises.delete(loadKey)
       clearMessageLoadInFlight(loadKey)
 
       if (shouldApplyResult() && !options.background) {
@@ -673,10 +718,11 @@ export const useChat = () => {
 
   const prefetchConversationMessagesForInbox = (options: PrefetchConversationsOptions = {}) => {
     const initialCount = options.initialCount ?? 8
+    const startIndex = options.startIndex ?? 0
     const conversationIds = sortedConversations.value.map(
       (conversation) => conversation.conversationId,
     )
-    const priorityConversationIds = conversationIds.slice(0, initialCount)
+    const priorityConversationIds = conversationIds.slice(startIndex, startIndex + initialCount)
 
     void Promise.allSettled(
       priorityConversationIds.map((conversationId) => prefetchConversationMessages(conversationId)),
@@ -707,6 +753,7 @@ export const useChat = () => {
               body: {
                 body: pendingSend.body,
                 imageUrl: pendingSend.imageUrl,
+                replyToMessageId: pendingSend.replyToMessageId,
               },
             },
           )
@@ -759,7 +806,11 @@ export const useChat = () => {
     }
   }
 
-  const sendMessage = (body: string, imageUrl?: string | null) => {
+  const sendMessage = (
+    body: string,
+    imageUrl?: string | null,
+    replyToMessage?: ChatMessage | null,
+  ) => {
     if (!activeConversation.value || activeConversation.value.isExpired) {
       return null
     }
@@ -768,15 +819,18 @@ export const useChat = () => {
 
     error.value = null
     const conversationId = activeConversation.value.conversationId
+    const replyPreview = replyToMessage ? getReplyPreviewFromMessage(replyToMessage) : null
     const optimisticMessage: ChatMessage = {
       id: createOptimisticMessageId(),
       conversationId,
       senderUserId: "local-user",
+      replyToMessageId: replyToMessage?.id ?? null,
       body,
       imageUrl: imageUrl ?? null,
       isRead: false,
       readAt: null,
       createdAt: new Date().toISOString(),
+      replyToMessage: replyPreview,
       isOptimistic: true,
     }
 
@@ -787,6 +841,7 @@ export const useChat = () => {
       pendingSendQueue.push({
         optimisticId: optimisticMessage.id,
         conversationId,
+        replyToMessageId: optimisticMessage.replyToMessageId,
         body,
         imageUrl: imageUrl ?? null,
         resolve,

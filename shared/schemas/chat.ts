@@ -6,6 +6,7 @@ export const MAX_CHAT_REPORT_DESCRIPTION_LENGTH = 1000
 export const sendMessageSchema = z
   .object({
     conversationId: z.string().uuid(),
+    replyToMessageId: z.string().uuid().nullable().optional(),
     body: z
       .string()
       .max(MAX_MESSAGE_LENGTH, `Message cannot exceed ${MAX_MESSAGE_LENGTH} characters`)

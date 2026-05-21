@@ -85,6 +85,7 @@ const messageBaseSelect = {
   id: true,
   conversationId: true,
   senderUserId: true,
+  replyToMessageId: true,
   body: true,
   isRead: true,
   readAt: true,
@@ -107,8 +108,17 @@ type BaseMessageRecord = Prisma.MessageGetPayload<{
   select: typeof messageBaseSelect
 }>
 
+type MessageReplyPreview = {
+  id: string
+  senderUserId: string
+  body: string
+  imageUrl: string | null
+  createdAt: Date
+}
+
 type ChatMessageRecord = BaseMessageRecord & {
   imageUrl: string | null
+  replyToMessage: MessageReplyPreview | null
 }
 
 type MessageGroupByRow = {
@@ -283,20 +293,84 @@ const hydrateMessageImageUrls = async (
     return []
   }
 
-  const imageRows = await prisma.$queryRaw<Array<{ id: string; imageUrl: string | null }>>(
-    Prisma.sql`
-      SELECT "id", "image_url" AS "imageUrl"
-      FROM "messages"
-      WHERE "id" IN (${Prisma.join(messages.map((message) => message.id))})
-    `,
-  )
+  const imageRows = await prisma.$queryRaw<
+    Array<{
+      id: string
+      imageUrl: string | null
+      replyId: string | null
+      replySenderUserId: string | null
+      replyBody: string | null
+      replyImageUrl: string | null
+      replyCreatedAt: Date | null
+    }>
+  >(Prisma.sql`
+    SELECT
+      m."id",
+      m."image_url" AS "imageUrl",
+      r."id" AS "replyId",
+      r."sender_user_id" AS "replySenderUserId",
+      r."body" AS "replyBody",
+      r."image_url" AS "replyImageUrl",
+      r."created_at" AS "replyCreatedAt"
+    FROM "messages" m
+    LEFT JOIN "messages" r ON r."id" = m."reply_to_message_id"
+    WHERE m."id" IN (${Prisma.join(messages.map((message) => message.id))})
+  `)
 
   const imageUrlByMessageId = new Map(imageRows.map((row) => [row.id, row.imageUrl] as const))
+  const replyByMessageId = new Map(
+    imageRows.map((row) => [
+      row.id,
+      row.replyId && row.replySenderUserId && row.replyBody !== null && row.replyCreatedAt
+        ? {
+            id: row.replyId,
+            senderUserId: row.replySenderUserId,
+            body: row.replyBody,
+            imageUrl: row.replyImageUrl,
+            createdAt: row.replyCreatedAt,
+          }
+        : null,
+    ]),
+  )
 
   return messages.map((message) => ({
     ...message,
+    replyToMessageId: message.replyToMessageId ?? null,
     imageUrl: imageUrlByMessageId.get(message.id) ?? null,
+    replyToMessage: replyByMessageId.get(message.id) ?? null,
   }))
+}
+
+const getReplyPreviewForMessage = async (
+  prisma: Context["prisma"],
+  input: { conversationId: string; replyToMessageId: string | null | undefined },
+) => {
+  if (!input.replyToMessageId) {
+    return null
+  }
+
+  const rows = await prisma.$queryRaw<MessageReplyPreview[]>(Prisma.sql`
+    SELECT
+      "id",
+      "sender_user_id" AS "senderUserId",
+      "body",
+      "image_url" AS "imageUrl",
+      "created_at" AS "createdAt"
+    FROM "messages"
+    WHERE "id" = ${input.replyToMessageId}
+      AND "conversation_id" = ${input.conversationId}
+    LIMIT 1
+  `)
+
+  const replyToMessage = rows[0] ?? null
+  if (!replyToMessage) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "You can only reply to a message in this conversation.",
+    })
+  }
+
+  return replyToMessage
 }
 
 const getConversationByTransaction = async (
@@ -464,10 +538,16 @@ export const chatRouter = router({
       })
     }
 
+    const replyToMessage = await getReplyPreviewForMessage(ctx.prisma, {
+      conversationId: input.conversationId,
+      replyToMessageId: input.replyToMessageId,
+    })
+
     const message = await ctx.prisma.message.create({
       data: {
         conversationId: input.conversationId,
         senderUserId: ctx.user.id,
+        replyToMessageId: input.replyToMessageId ?? null,
         body: sanitizeChatMessage(input.body),
       },
       select: messageBaseSelect,
@@ -485,7 +565,9 @@ export const chatRouter = router({
 
     return {
       ...message,
+      replyToMessageId: message.replyToMessageId ?? input.replyToMessageId ?? null,
       imageUrl: input.imageUrl ?? null,
+      replyToMessage,
     }
   }),
 
