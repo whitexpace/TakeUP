@@ -940,18 +940,24 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col overflow-hidden bg-white pt-16 font-geist text-noble-black">
+  <div
+    class="h-screen flex flex-col overflow-hidden bg-white font-geist text-noble-black pt-16 pb-16 lg:pb-0"
+  >
     <Header />
 
     <div class="relative flex flex-1 overflow-hidden">
+      <!-- Conversation List (Inbox) -->
       <aside
-        class="relative flex w-full shrink-0 flex-col overflow-hidden border-r border-cinnamon-ice/20 bg-white transition-all duration-300 lg:w-80"
+        class="flex flex-col bg-white transition-all duration-300"
         :class="[
-          isMobile && routeTransactionId ? '-translate-x-full absolute inset-0' : 'translate-x-0',
+          isMobile
+            ? 'absolute inset-0 z-10 ' +
+              (routeTransactionId ? '-translate-x-full invisible' : 'translate-x-0 visible')
+            : 'relative w-80 shrink-0 border-r border-cinnamon-ice/20 visible',
         ]"
       >
         <div class="flex items-center justify-between pt-6 px-4 pb-4">
-          <h1 class="font-geist text-2xl font-semibold tracking-tight">Inbox</h1>
+          <h1 class="font-geist text-2xl font-bold tracking-tight">Inbox</h1>
         </div>
 
         <div class="px-4 pb-4">
@@ -959,33 +965,40 @@ onUnmounted(() => {
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search conversations..."
-              class="w-full rounded-full border border-cinnamon-ice/30 bg-cream/50 py-2 pl-11 pr-4 text-[14px] outline-none transition-all duration-300 focus:border-burning-orange/50 focus:bg-white"
+              placeholder="Search"
+              class="w-full rounded-xl border-none bg-gray-100 py-2.5 pl-11 pr-4 text-[15px] outline-none transition-all duration-300 focus:bg-gray-200/80"
             />
             <button
               v-if="searchQuery"
               type="button"
-              class="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-noble-black/30 hover:text-burning-orange transition-colors"
+              class="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-noble-black/30 hover:text-noble-black/60 transition-colors"
               @click="searchQuery = ''"
             >
-              <Icon name="ph:x" size="16" />
+              <Icon name="ph:x" size="18" />
             </button>
             <Icon
               v-else
               name="ph:magnifying-glass"
-              class="absolute left-4 top-1/2 -translate-y-1/2 shrink-0 text-noble-black/30 transition-colors group-focus-within:text-burning-orange"
-              size="16"
+              class="absolute left-4 top-1/2 -translate-y-1/2 shrink-0 text-noble-black/30 transition-colors group-focus-within:text-noble-black/60"
+              size="18"
             />
           </div>
         </div>
 
         <div ref="sidebarScrollRef" class="custom-chat-scrollbar flex-1 overflow-y-auto">
-          <div v-if="isLoadingConversations && !sortedConversations.length" class="space-y-4 p-4">
-            <div v-for="index in 6" :key="index" class="flex animate-pulse gap-3">
-              <div class="h-12 w-12 rounded-full bg-noble-black/10"></div>
-              <div class="flex-1 space-y-2 py-1">
-                <div class="h-3 w-3/4 rounded bg-noble-black/20"></div>
-                <div class="h-2 w-1/2 rounded bg-noble-black/10"></div>
+          <div
+            v-if="isLoadingConversations && !sortedConversations.length"
+            class="px-2 pt-2 space-y-1"
+          >
+            <div
+              v-for="index in 8"
+              :key="index"
+              class="flex animate-pulse items-center gap-3 px-4 py-3 rounded-xl"
+            >
+              <div class="h-14 w-14 rounded-full bg-noble-black/5 shrink-0"></div>
+              <div class="flex-1 space-y-2.5 min-w-0">
+                <div class="h-3 w-1/3 rounded bg-noble-black/10"></div>
+                <div class="h-2.5 w-3/4 rounded bg-noble-black/5"></div>
               </div>
             </div>
           </div>
@@ -1021,18 +1034,18 @@ onUnmounted(() => {
               v-for="conversation in filteredConversations"
               v-else
               :key="conversation.conversationId"
-              class="group relative cursor-pointer px-4 py-3 transition-all duration-200"
+              class="group relative cursor-pointer px-4 py-3 transition-all duration-200 mx-2 rounded-xl mb-1"
               :class="[
                 selectedConversationTransactionId === conversation.transactionId
-                  ? 'bg-cream'
-                  : 'hover:bg-cream/40',
+                  ? 'bg-gray-100'
+                  : 'hover:bg-gray-50',
               ]"
               @click="handleSelectChat(conversation.transactionId)"
             >
-              <div class="flex items-start gap-3">
+              <div class="flex items-center gap-3">
                 <div
                   v-if="conversation.otherParticipant?.avatarUrl"
-                  class="h-12 w-12 shrink-0 overflow-hidden rounded-full"
+                  class="h-14 w-14 shrink-0 overflow-hidden rounded-full"
                 >
                   <img
                     :src="conversation.otherParticipant.avatarUrl"
@@ -1042,7 +1055,7 @@ onUnmounted(() => {
                 </div>
                 <div
                   v-else
-                  class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm"
+                  class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white shadow-sm"
                   :class="
                     getAvatarColor(conversation.otherParticipant?.id ?? conversation.conversationId)
                   "
@@ -1051,82 +1064,92 @@ onUnmounted(() => {
                 </div>
 
                 <div class="min-w-0 flex-1">
-                  <div class="mb-0.5 flex items-start justify-between">
-                    <span
-                      class="truncate text-[15px] font-bold"
-                      :class="{ 'text-burning-orange': conversation.unreadCount > 0 }"
-                    >
+                  <div class="mb-0.5 flex items-center justify-between gap-2">
+                    <span class="truncate text-[15px] font-bold text-noble-black">
                       {{ getParticipantName(conversation.otherParticipant) }}
                     </span>
-                    <span class="ml-2 shrink-0 whitespace-nowrap text-[11px] text-noble-black/40">
+                    <span class="shrink-0 text-[11px] text-noble-black/40">
                       {{ getChatTime(conversation) }}
                     </span>
                   </div>
-                  <div
-                    v-if="conversation.item"
-                    class="mb-1 truncate text-[12px] italic text-noble-black/50"
-                  >
-                    {{ conversation.item.name }}
-                  </div>
                   <p
-                    class="truncate text-[13px] text-noble-black/60"
-                    :class="{ 'font-semibold text-noble-black/80': conversation.unreadCount > 0 }"
+                    class="truncate text-[13px]"
+                    :class="[
+                      conversation.unreadCount > 0
+                        ? 'font-bold text-noble-black'
+                        : 'text-noble-black/50',
+                    ]"
                   >
                     {{ getChatPreview(conversation) }}
                   </p>
                 </div>
-              </div>
 
-              <div
-                v-if="conversation.unreadCount > 0"
-                class="absolute right-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-burning-orange shadow-sm"
-              ></div>
+                <div
+                  v-if="conversation.unreadCount > 0"
+                  class="ml-2 h-3 w-3 shrink-0 rounded-full bg-burning-orange"
+                ></div>
+              </div>
             </div>
           </template>
         </div>
       </aside>
 
+      <!-- Message View (Active Conversation) -->
       <main
-        class="relative flex flex-1 flex-col overflow-hidden bg-cream transition-all duration-300"
+        class="flex flex-1 flex-col overflow-hidden bg-gray-50 transition-all duration-300"
         :class="[
-          isMobile && !routeTransactionId ? 'translate-x-full absolute inset-0' : 'translate-x-0',
+          isMobile
+            ? 'absolute inset-0 z-20 ' +
+              (!routeTransactionId ? 'translate-x-full invisible' : 'translate-x-0 visible')
+            : 'relative visible',
         ]"
       >
+        <!-- Updated Message View Skeleton -->
         <div
           v-if="shouldShowConversationSkeleton"
-          class="flex flex-1 flex-col p-6 gap-6 animate-pulse bg-cream"
+          class="flex flex-1 flex-col animate-pulse bg-gray-50"
         >
-          <div class="flex items-center gap-4 mb-4">
-            <div class="h-10 w-10 rounded-full bg-noble-black/10"></div>
-            <div class="space-y-2">
-              <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
-              <div class="h-3 w-24 bg-noble-black/10 rounded"></div>
+          <!-- Header Placeholder -->
+          <div
+            class="z-10 flex min-h-[64px] shrink-0 items-center border-b border-cinnamon-ice/10 bg-white px-4 py-3 lg:px-6"
+          >
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-full bg-noble-black/5"></div>
+              <div class="space-y-2">
+                <div class="h-4 w-32 bg-noble-black/10 rounded"></div>
+                <div class="h-3 w-24 bg-noble-black/5 rounded"></div>
+              </div>
             </div>
           </div>
-          <div
-            v-for="i in 4"
-            :key="i"
-            class="flex flex-col"
-            :class="i % 2 === 0 ? 'items-end' : 'items-start'"
-          >
+
+          <!-- Content Placeholder -->
+          <div class="flex-1 p-6 space-y-6">
             <div
-              class="h-12 w-2/3 rounded-2xl bg-noble-black/10"
-              :class="i % 2 === 0 ? 'rounded-tr-none' : 'rounded-tl-none'"
-            ></div>
-            <div class="h-2 w-20 bg-noble-black/5 rounded mt-2"></div>
+              v-for="i in 4"
+              :key="i"
+              class="flex flex-col"
+              :class="i % 2 === 0 ? 'items-end' : 'items-start'"
+            >
+              <div
+                class="h-11 w-2/3 rounded-[18px] bg-noble-black/10"
+                :class="i % 2 === 0 ? 'rounded-tr-none' : 'rounded-tl-none'"
+              ></div>
+              <div class="h-2 w-20 bg-noble-black/5 rounded mt-2"></div>
+            </div>
           </div>
         </div>
 
         <template v-else-if="activeConversation">
+          <!-- Chat Header -->
           <div
-            class="z-10 flex min-h-[64px] shrink-0 items-center justify-between border-b border-cinnamon-ice/20 bg-white px-4 py-3 shadow-sm lg:px-6"
+            class="z-10 flex min-h-[64px] shrink-0 items-center justify-between border-b border-cinnamon-ice/10 bg-white/95 backdrop-blur-md px-3 py-2 shadow-sm lg:px-6 sticky top-0"
           >
             <div class="flex items-center gap-3">
               <button
-                class="-ml-2 rounded-full p-2 transition-colors hover:bg-cream lg:hidden"
+                class="-ml-1 rounded-full p-2 transition-colors hover:bg-gray-100 lg:hidden"
                 @click="handleCloseChat"
               >
-                <Icon name="ph:caret-left" class="shrink-0" size="20" />
+                <Icon name="ph:caret-left-bold" class="text-burning-orange" size="24" />
               </button>
 
               <NuxtLink
@@ -1156,14 +1179,16 @@ onUnmounted(() => {
                   {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
                 </div>
 
-                <div class="flex flex-col">
+                <div class="flex flex-col min-w-0">
                   <span
-                    class="text-[15px] font-bold group-hover:text-burning-orange transition-colors"
+                    class="text-[15px] font-bold leading-tight truncate group-hover:text-burning-orange transition-colors"
                     >{{ getParticipantName(activeConversation.otherParticipant) }}</span
                   >
-                  <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
-                    activeConversation.item.name
-                  }}</span>
+                  <span
+                    v-if="activeConversation.item"
+                    class="text-[11px] text-noble-black/40 truncate leading-tight"
+                    >{{ activeConversation.item.name }}</span
+                  >
                 </div>
               </NuxtLink>
               <div v-else class="flex items-center gap-3">
@@ -1189,20 +1214,22 @@ onUnmounted(() => {
                   {{ getInitials(getParticipantName(activeConversation.otherParticipant)) }}
                 </div>
 
-                <div class="flex flex-col">
-                  <span class="text-[15px] font-bold">{{
+                <div class="flex flex-col min-w-0">
+                  <span class="text-[15px] font-bold leading-tight truncate">{{
                     getParticipantName(activeConversation.otherParticipant)
                   }}</span>
-                  <span v-if="activeConversation.item" class="text-[12px] text-noble-black/50">{{
-                    activeConversation.item.name
-                  }}</span>
+                  <span
+                    v-if="activeConversation.item"
+                    class="text-[11px] text-noble-black/40 truncate leading-tight"
+                    >{{ activeConversation.item.name }}</span
+                  >
                 </div>
               </div>
             </div>
 
             <div class="flex items-center gap-2">
               <button
-                class="rounded-full border border-burning-orange/60 px-4 py-2 text-[12px] font-semibold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-full border border-burning-orange/60 px-3 xs:px-4 py-1.5 xs:py-2 text-[11px] xs:text-[12px] font-semibold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="isReporting"
                 @click="openReportModal"
               >
@@ -1211,7 +1238,7 @@ onUnmounted(() => {
               <NuxtLink
                 v-if="activeConversation.item"
                 :to="`/items/${activeConversation.item.id}`"
-                class="hidden rounded-full bg-burning-orange px-5 py-2 text-[13px] font-bold text-white shadow-sm transition-all duration-300 hover:bg-burning-orange/90 sm:block"
+                class="flex h-8 xs:h-9 px-3 xs:px-4 items-center justify-center bg-gray-100 text-noble-black/70 rounded-full text-[11px] xs:text-[13px] font-bold hover:bg-gray-200 transition-all"
               >
                 View Item
               </NuxtLink>
@@ -1262,7 +1289,7 @@ onUnmounted(() => {
               <div
                 v-for="message in messages"
                 :key="message.id"
-                class="flex max-w-[85%] flex-col lg:max-w-[70%] min-w-0"
+                class="flex max-w-[85%] flex-col lg:max-w-[75%] min-w-0"
                 :class="[
                   message.senderUserId !== activeConversation.otherParticipant?.id
                     ? 'self-end items-end'
@@ -1270,11 +1297,11 @@ onUnmounted(() => {
                 ]"
               >
                 <div
-                  class="relative rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm min-w-0"
+                  class="relative rounded-[18px] px-3.5 py-2 text-[15px] leading-relaxed shadow-sm min-w-0"
                   :class="[
                     message.senderUserId !== activeConversation.otherParticipant?.id
-                      ? 'rounded-tr-none bg-blue-estate text-white'
-                      : 'rounded-tl-none border border-cinnamon-ice/30 bg-white text-noble-black',
+                      ? 'rounded-tr-none bg-burning-orange text-white'
+                      : 'rounded-tl-none border border-gray-100 bg-gray-100/70 text-noble-black',
                   ]"
                 >
                   <img
@@ -1344,7 +1371,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-else class="relative shrink-0 border-t border-cinnamon-ice/20 bg-white p-4">
+          <div v-else class="relative shrink-0 border-t border-gray-100 bg-white p-3 lg:p-4">
             <div
               v-if="pendingImagePreviewUrl"
               class="mb-3 flex items-start gap-3 rounded-2xl border border-cinnamon-ice/20 bg-cream/70 p-3"
@@ -1367,74 +1394,62 @@ onUnmounted(() => {
             </div>
 
             <div class="flex items-end gap-2 lg:gap-3">
-              <!-- Photo Icon (Outside) -->
+              <!-- Photo Icon -->
               <button
-                class="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-noble-black/40 transition-colors hover:bg-cream hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-50"
                 type="button"
                 :disabled="isUploadingImage"
                 @click="triggerPhotoPicker"
               >
-                <Icon name="ph:image" class="shrink-0" size="22" />
+                <Icon name="ph:image" class="shrink-0" size="24" />
               </button>
 
               <div
-                class="relative flex flex-1 items-end rounded-[24px] border border-cinnamon-ice/20 bg-cream transition-all duration-300 focus-within:border-burning-orange/50"
+                class="relative flex flex-1 items-end rounded-[20px] bg-gray-100 px-3 py-1.5 transition-all duration-300"
               >
-                <!-- Aa Icon (Inside Left) -->
-                <div
-                  class="flex h-[44px] w-10 shrink-0 items-center justify-center pl-1 text-[15px] font-semibold tracking-tighter text-noble-black/25 select-none"
-                >
-                  Aa
-                </div>
-
                 <textarea
                   ref="textareaRef"
                   v-model="newMessage"
                   rows="1"
                   :disabled="isUploadingImage"
-                  placeholder="Type your message..."
-                  class="custom-chat-scrollbar w-full resize-none bg-transparent px-1 py-[11px] text-[14px] leading-relaxed outline-none placeholder:text-noble-black/30"
-                  style="min-height: 44px; max-height: 140px"
+                  placeholder="Message..."
+                  class="custom-chat-scrollbar w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-snug outline-none placeholder:text-noble-black/40"
+                  style="min-height: 24px; max-height: 120px"
                   @input="handleComposerInput"
                   @keydown="handleKeydown"
                 ></textarea>
 
-                <div ref="emojiMenuRef" class="relative">
-                  <button
-                    class="flex h-[44px] w-10 shrink-0 items-center justify-center pr-1 text-noble-black/40 transition-colors hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-50"
-                    type="button"
-                    @click.stop="toggleEmojiPicker"
-                  >
-                    <Icon name="ph:smiley" class="shrink-0" size="20" />
-                  </button>
+                <button
+                  class="flex h-8 w-8 shrink-0 items-center justify-center text-burning-orange transition-colors hover:bg-burning-orange/10 rounded-full"
+                  type="button"
+                  @click.stop="toggleEmojiPicker"
+                >
+                  <Icon name="ph:smiley" class="shrink-0" size="22" />
+                </button>
 
-                  <div
-                    v-if="showEmojiPicker"
-                    class="absolute bottom-12 right-0 z-20 grid w-52 grid-cols-4 gap-2 rounded-2xl border border-cinnamon-ice/20 bg-white p-3 shadow-xl"
+                <div
+                  v-if="showEmojiPicker"
+                  class="absolute bottom-12 right-0 z-20 grid w-52 grid-cols-4 gap-2 rounded-2xl border border-cinnamon-ice/20 bg-white p-3 shadow-xl"
+                >
+                  <button
+                    v-for="emoji in EMOJI_OPTIONS"
+                    :key="emoji"
+                    class="rounded-xl px-2 py-2 text-lg transition-colors hover:bg-cream"
+                    type="button"
+                    @click="handleEmojiSelect(emoji)"
                   >
-                    <button
-                      v-for="emoji in EMOJI_OPTIONS"
-                      :key="emoji"
-                      class="rounded-xl px-2 py-2 text-lg transition-colors hover:bg-cream"
-                      type="button"
-                      @click="handleEmojiSelect(emoji)"
-                    >
-                      {{ emoji }}
-                    </button>
-                  </div>
+                    {{ emoji }}
+                  </button>
                 </div>
               </div>
 
               <button
-                class="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-white shadow-md transition-all duration-300"
-                :class="[
-                  'bg-burning-orange hover:bg-burning-orange/90',
-                  { 'cursor-not-allowed opacity-50 grayscale': !canSendMessage },
-                ]"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-burning-orange transition-all duration-300"
+                :class="[{ 'opacity-40 grayscale': !canSendMessage }]"
                 :disabled="!canSendMessage"
                 @click="handleSendMessage"
               >
-                <Icon name="ph:paper-plane-tilt" class="shrink-0" size="20" />
+                <Icon name="ph:paper-plane-tilt-fill" class="shrink-0" size="24" />
               </button>
             </div>
 
@@ -1457,7 +1472,7 @@ onUnmounted(() => {
 
         <div
           v-else-if="error"
-          class="flex flex-1 flex-col items-center justify-center bg-cream px-6 text-center"
+          class="flex flex-1 flex-col items-center justify-center bg-gray-50 px-6 text-center"
         >
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-cinnamon-ice/20 bg-white text-cinnabar-red/70 shadow-sm"
@@ -1470,7 +1485,7 @@ onUnmounted(() => {
 
         <div
           v-else
-          class="flex flex-1 flex-col items-center justify-center bg-cream px-6 text-center opacity-50"
+          class="flex flex-1 flex-col items-center justify-center bg-gray-50 px-6 text-center opacity-50"
         >
           <div
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"

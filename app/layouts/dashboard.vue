@@ -77,7 +77,7 @@
 
       <!-- Main Content Area -->
       <main
-        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative px-6 sm:px-10 lg:px-16 xl:px-24"
+        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative px-6 sm:px-10 lg:px-16 xl:px-24 pb-20 lg:pb-0"
         :class="isHeaderVisible ? 'pt-14' : 'pt-0'"
       >
         <slot />

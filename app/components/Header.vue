@@ -347,7 +347,7 @@ onBeforeUnmount(() => {
       :class="[showNav ? 'lg:w-80' : '', customPadding || 'px-4 sm:px-6']"
     >
       <slot name="left" />
-      <NuxtLink to="/dashboard" class="flex items-center gap-3">
+      <NuxtLink :to="user ? '/dashboard' : '/'" class="flex items-center gap-3">
         <img src="/images/takeup-logo.png" alt="TakeUP Logo" class="h-8 w-auto" />
       </NuxtLink>
     </div>
@@ -393,7 +393,7 @@ onBeforeUnmount(() => {
 
       <template v-if="!hideIcons">
         <!-- Notification Icon -->
-        <div class="relative hidden md:flex items-stretch group/tooltip">
+        <div class="relative flex items-stretch group/tooltip">
           <button
             class="nav-link flex items-center px-2 text-noble-black transition-colors duration-300 ease-in-out hover:text-burning-orange group"
             :class="{ 'active-nav-link': showNotifications }"
@@ -425,11 +425,11 @@ onBeforeUnmount(() => {
           <transition name="notifications-menu">
             <div
               v-if="showNotifications"
-              class="absolute right-0 top-[calc(100%+12px)] z-[1100] w-[380px] rounded-[16px] border border-gray-100 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex flex-col max-h-[480px]"
+              class="fixed md:absolute left-4 right-4 md:left-auto md:right-0 top-[72px] md:top-[calc(100%+12px)] z-[1100] w-auto md:w-[380px] rounded-[16px] border border-gray-100 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex flex-col max-h-[70vh] md:max-h-[480px]"
             >
-              <!-- Triangle Pointer -->
+              <!-- Triangle Pointer (Hidden on mobile) -->
               <div
-                class="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-100 rotate-45"
+                class="hidden md:block absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-100 rotate-45"
               ></div>
 
               <!-- Header Row -->
@@ -551,7 +551,7 @@ onBeforeUnmount(() => {
           </transition>
         </div>
 
-        <!-- Chat Icon -->
+        <!-- Chat Icon (Hidden on mobile) -->
         <div class="relative hidden md:flex items-stretch group/tooltip">
           <NuxtLink
             to="/chat"
@@ -577,7 +577,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Heart Icon (Likes) -->
+        <!-- Heart Icon (Likes) (Hidden on mobile) -->
         <div class="relative hidden md:flex items-stretch group/tooltip">
           <NuxtLink
             to="/likes"
@@ -605,7 +605,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Cart Icon -->
-        <div class="relative hidden md:flex items-stretch group/tooltip">
+        <div class="relative flex items-stretch group/tooltip">
           <NuxtLink
             to="/bag"
             class="nav-link relative flex items-center px-2 text-noble-black hover:text-burning-orange transition-colors duration-300 ease-in-out group"
@@ -631,7 +631,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Vertical Divider -->
-        <div class="flex items-center px-2 sm:px-3">
+        <div class="hidden md:flex items-center px-2 sm:px-3">
           <div class="h-6 w-px bg-cinnamon-ice/30"></div>
         </div>
 
@@ -657,8 +657,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Account Icon -->
-        <div class="relative flex items-stretch group/tooltip">
+        <!-- Account Icon (Hidden on mobile) -->
+        <div class="relative hidden md:flex items-stretch group/tooltip">
           <NuxtLink
             to="/account"
             :prefetch-on="{ interaction: true }"
@@ -692,6 +692,75 @@ onBeforeUnmount(() => {
       </template>
     </div>
   </header>
+
+  <!-- Mobile Bottom Navigation (Authenticated Only) -->
+  <nav
+    v-if="user && showNav"
+    class="lg:hidden fixed bottom-0 left-0 w-full h-16 bg-white/95 backdrop-blur-md border-t border-cinnamon-ice/20 z-[1000] grid grid-cols-5 items-center px-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.03)] transition-transform duration-300 ease-in-out"
+    :class="!isVisible ? 'translate-y-full' : 'translate-y-0'"
+  >
+    <!-- Feed -->
+    <NuxtLink
+      to="/feed"
+      class="flex flex-col items-center transition-colors justify-self-center"
+      active-class="text-burning-orange"
+      inactive-class="text-noble-black/40"
+    >
+      <Icon name="ph:rows" class="w-6 h-6" />
+    </NuxtLink>
+
+    <!-- Likes -->
+    <NuxtLink
+      to="/likes"
+      class="flex flex-col items-center transition-colors justify-self-center relative"
+      active-class="text-burning-orange"
+      inactive-class="text-noble-black/40"
+    >
+      <Icon name="ph:heart" class="w-6 h-6" />
+      <span
+        v-if="likesCount > 0"
+        class="absolute -top-1 -right-1 flex h-[16px] min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[9px] font-bold text-white shadow-sm"
+      >
+        {{ likesCount }}
+      </span>
+    </NuxtLink>
+
+    <!-- Plus Button (Add Item) -->
+    <div class="flex justify-center items-center">
+      <NuxtLink
+        to="/account/listings/new"
+        class="flex items-center justify-center w-12 h-12 bg-burning-orange rounded-full text-white shadow-lg shadow-burning-orange/30 active:scale-95 transition-transform"
+      >
+        <Icon name="ph:plus-bold" class="w-6 h-6" />
+      </NuxtLink>
+    </div>
+
+    <!-- Chat -->
+    <NuxtLink
+      to="/chat"
+      class="flex flex-col items-center transition-colors relative justify-self-center"
+      active-class="text-burning-orange"
+      inactive-class="text-noble-black/40"
+    >
+      <Icon name="ph:chat-centered-text" class="w-6 h-6" />
+      <span
+        v-if="chatUnreadCount > 0"
+        class="absolute -top-1 -right-1 flex h-[16px] min-w-[16px] items-center justify-center rounded-full border-[1.5px] border-white bg-burning-orange px-1 text-[9px] font-bold text-white shadow-sm"
+      >
+        {{ chatUnreadCount }}
+      </span>
+    </NuxtLink>
+
+    <!-- Account -->
+    <NuxtLink
+      to="/account"
+      class="flex flex-col items-center transition-colors justify-self-center"
+      active-class="text-burning-orange"
+      inactive-class="text-noble-black/40"
+    >
+      <Icon name="ph:user" class="w-6 h-6" />
+    </NuxtLink>
+  </nav>
 </template>
 
 <style scoped>
