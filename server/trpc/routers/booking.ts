@@ -1934,7 +1934,6 @@ export const bookingRouter = router({
             create: { transactionId: syncedTransaction.id },
           })
         }
-
       }
 
       // Wallet Refund on cancellation of a paid PENDING booking
