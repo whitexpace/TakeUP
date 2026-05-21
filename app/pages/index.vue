@@ -69,7 +69,7 @@ const MOCK_POPULAR_ITEMS: Array<{
     id: "m3",
     type: "Rent",
     image: "/images/popular/camera.jpg",
-    category: "Photography",
+    category: "Electronics",
     name: "Sony A7 IV Kit",
     price: "500",
     rating: 5.0,
@@ -81,7 +81,7 @@ const MOCK_POPULAR_ITEMS: Array<{
     id: "m4",
     type: "Rent",
     image: "/images/popular/dress.jpg",
-    category: "Attire",
+    category: "Clothing",
     name: "Long Green Dress",
     price: "100",
     rating: 4.8,
@@ -94,35 +94,46 @@ const MOCK_POPULAR_ITEMS: Array<{
 const displayPopularItems = computed(() => {
   const items = itemsResponse.value?.items || []
   if (items.length > 0) {
-    return items.map((item) => ({
-      id: item.id,
-      type: (item.freeToBorrow ? "Borrow" : "Rent") as "Borrow" | "Rent",
-      image: item.thumbnailImage,
-      category: item.categories[0] || "Others",
-      name: item.name,
-      price: item.freeToBorrow ? "Free" : item.rentalFee,
-      rating: item.rating ?? 0,
-      reviews: item.bookingCount ?? 0,
-      isTrending: trendingIds.value.has(item.id),
-      owner: item.ownerName || "user",
-    }))
+    return items.map((item) => {
+      const categoryKey = item.categories[0] || "OTHERS"
+      const uiCategory = CATEGORY_UI_MAP[categoryKey] || { label: "Others" }
+
+      return {
+        id: item.id,
+        type: (item.freeToBorrow ? "Borrow" : "Rent") as "Borrow" | "Rent",
+        image: item.thumbnailImage,
+        category: uiCategory.label,
+        name: item.name,
+        price: item.freeToBorrow ? "Free" : item.rentalFee,
+        rating: item.rating ?? 0,
+        reviews: item.bookingCount ?? 0,
+        isTrending: trendingIds.value.has(item.id),
+        owner: item.ownerName || "user",
+      }
+    })
   }
   return MOCK_POPULAR_ITEMS
 })
 
 const CATEGORY_UI_MAP: Record<string, { label: string; image: string }> = {
-  BOOKS: { label: "Books & Academics", image: "/images/books.jpg" },
-  ELECTRONICS: { label: "Electronics", image: "/images/electronics.jpg" },
-  SPORTS_OUTDOORS: { label: "Sports Equipment", image: "/images/sports.jpg" },
-  SCHOOL_SUPPLIES: { label: "Dorm Essentials", image: "/images/dorm.jpg" },
-  MUSIC_AUDIO: { label: "Music & Audio", image: "/images/music.jpg" },
-  TOOLS: { label: "Tools", image: "/images/categories/camera.png" },
-  CLOTHING: { label: "Attire", image: "/images/attire.jpg" },
-  HOME_APPLIANCES: { label: "Home & Appliances", image: "/images/categories/lamp.png" },
-  TOYS_GAMES: { label: "Toys & Games", image: "/images/categories/disco-ball.png" },
-  PET_SUPPLIES: { label: "Pet Supplies", image: "/images/pet.jpg" },
-  OTHER: { label: "Others", image: "/images/categories/palette.png" },
-  OTHERS: { label: "Others", image: "/images/categories/palette.png" },
+  ELECTRONICS: { label: "Electronics", image: "/images/categories/electronics.jpg" },
+  BOOKS: { label: "Books & Academics", image: "/images/categories/books_academics.jpg" },
+  CLOTHING: { label: "Clothing", image: "/images/categories/clothing.jpg" },
+  TOOLS: { label: "Tools", image: "/images/categories/tools.jpg" },
+  HOME_APPLIANCES: { label: "Home Appliances", image: "/images/categories/home_appliances.jpg" },
+  SPORTS_OUTDOORS: { label: "Sports & Outdoors", image: "/images/categories/sports_outdoors.jpg" },
+  MUSIC_AUDIO: { label: "Music & Audio", image: "/images/categories/music_audio.jpg" },
+  TOYS_GAMES: { label: "Toys & Games", image: "/images/categories/toys_games.jpg" },
+  FURNITURE: { label: "Furniture", image: "/images/categories/furniture.jpg" },
+  VEHICLES_ACCESSORIES: {
+    label: "Vehicle Accessories",
+    image: "/images/categories/vehicles_accessories.jpg",
+  },
+  HEALTH_BEAUTY: { label: "Health & Beauty", image: "/images/categories/health_beauty.jpg" },
+  SCHOOL_SUPPLIES: { label: "Dorm Essentials", image: "/images/categories/dorm_essentials.jpg" },
+  PET_SUPPLIES: { label: "Pet Supplies", image: "/images/categories/pet-supplies.jpg" },
+  OTHER: { label: "Others", image: "/images/landing-pic1.jpg" },
+  OTHERS: { label: "Others", image: "/images/landing-pic1.jpg" },
 }
 
 // Flexible Bento Span generator
@@ -295,10 +306,10 @@ const handleGoogleLogin = async () => {
             class="w-full lg:w-[60%] flex flex-col items-center text-center lg:items-start lg:text-left"
           >
             <h1
-              class="font-montravia italic text-[56px] md:text-[72px] text-white leading-[1.05] mb-8 drop-shadow-sm"
+              class="font-montravia text-[56px] md:text-[72px] text-white leading-[1.05] mb-8 drop-shadow-sm"
             >
-              Share what you <span class="text-burning-orange not-italic">have</span>.<br />
-              Get what you <span class="text-burning-orange not-italic">need</span>.
+              Share what you <span class="text-burning-orange italic">have</span>.<br />
+              Get what you <span class="text-burning-orange italic">need</span>.
             </h1>
             <p
               class="text-[18px] md:text-[22px] text-white/80 font-light max-w-[580px] leading-relaxed mb-12"
@@ -333,7 +344,7 @@ const handleGoogleLogin = async () => {
             >
               <h2 class="text-[24px] font-bold text-white mb-2">Get started today.</h2>
               <p class="text-[14px] text-white/60 mb-10">
-                Sign in with your Google account to join the community.
+                Sign in with your UP mail to join the community.
               </p>
 
               <button
@@ -349,8 +360,8 @@ const handleGoogleLogin = async () => {
 
               <div class="h-px bg-white/10 w-full mb-6"></div>
               <p class="text-[12px] text-white/40 text-center leading-relaxed">
-                Accounts ending with <span class="text-white font-semibold">up.edu.ph</span> or
-                <span class="text-white font-semibold">gmail.com</span> are accepted
+                Accounts ending with <span class="text-white font-semibold">up.edu.ph</span> are
+                accepted.
               </p>
             </div>
           </div>
@@ -359,7 +370,7 @@ const handleGoogleLogin = async () => {
     </section>
 
     <!-- 2. Trust Badges Row (Infinite Scrolling Ticker) -->
-    <div class="bg-white py-8 border-b border-cinnamon-ice/10 relative overflow-hidden group">
+    <div class="bg-white py-8 border-b border-cinnamon-ice/10 relative overflow-hidden">
       <div
         class="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"
       ></div>
@@ -367,40 +378,24 @@ const handleGoogleLogin = async () => {
         class="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none"
       ></div>
 
-      <div
-        class="flex whitespace-nowrap animate-infinite-scroll hover:[animation-play-state:paused]"
-      >
-        <div class="flex items-center gap-x-20 px-10">
-          <div
-            v-for="badge in trustBadges"
-            :key="`set1-${badge}`"
-            class="flex items-center gap-3 transition-all duration-300"
-          >
-            <div
-              class="w-6 h-6 rounded-full bg-success-green/5 flex items-center justify-center border border-success-green/10 shrink-0"
-            >
-              <Icon name="ph:check" class="text-success-green w-3.5 h-3.5" />
-            </div>
-            <span class="text-[12px] text-noble-black/40 font-semibold tracking-widest uppercase">{{
-              badge
-            }}</span>
-          </div>
+      <div class="flex w-max animate-infinite-scroll hover:[animation-play-state:paused]">
+        <!-- Set 1 -->
+        <div class="flex items-center gap-x-20 pr-20 shrink-0">
+          <FeatureItem
+            v-for="badge in [...trustBadges, ...trustBadges, ...trustBadges]"
+            :key="`set1-${badge}-${Math.random()}`"
+            :text="badge"
+            class="!gap-3 uppercase tracking-widest font-semibold"
+          />
         </div>
-        <div class="flex items-center gap-x-20 px-10" aria-hidden="true">
-          <div
-            v-for="badge in trustBadges"
-            :key="`set2-${badge}`"
-            class="flex items-center gap-3 transition-all duration-300"
-          >
-            <div
-              class="w-6 h-6 rounded-full bg-success-green/5 flex items-center justify-center border border-success-green/10 shrink-0"
-            >
-              <Icon name="ph:check" class="text-success-green w-3.5 h-3.5" />
-            </div>
-            <span class="text-[12px] text-noble-black/40 font-semibold tracking-widest uppercase">{{
-              badge
-            }}</span>
-          </div>
+        <!-- Set 2 (Identical Duplicate) -->
+        <div class="flex items-center gap-x-20 pr-20 shrink-0" aria-hidden="true">
+          <FeatureItem
+            v-for="badge in [...trustBadges, ...trustBadges, ...trustBadges]"
+            :key="`set2-${badge}-${Math.random()}`"
+            :text="badge"
+            class="!gap-3 uppercase tracking-widest font-semibold"
+          />
         </div>
       </div>
     </div>
@@ -555,10 +550,10 @@ const handleGoogleLogin = async () => {
       <div class="max-w-7xl mx-auto px-6 relative z-10">
         <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
           <div>
-            <h2 class="font-montravia text-[48px] italic text-white mb-2 leading-none">
+            <h2 class="font-montravia text-[36px] text-white mb-2 leading-none">
               Popular on Campus
             </h2>
-            <p class="text-[15px] text-white/40 font-light tracking-wide">
+            <p class="text-[14px] text-white/40 font-light">
               Most borrowed items this week across the UP Cebu community
             </p>
           </div>
@@ -627,16 +622,40 @@ const handleGoogleLogin = async () => {
     </section>
 
     <!-- Simple Footer -->
-    <footer class="bg-white border-t border-cinnamon-ice/10 h-auto md:h-16">
+    <footer class="bg-white border-t border-cinnamon-ice/10 h-auto md:h-20">
       <div
-        class="max-w-7xl mx-auto h-full px-6 py-6 md:py-0 flex flex-col md:flex-row justify-between items-center gap-4 text-[11px] text-noble-black/40 uppercase tracking-widest font-bold"
+        class="max-w-7xl mx-auto h-full px-6 py-8 md:py-0 flex flex-col md:flex-row justify-between items-center gap-6 text-[11px] text-noble-black/40 uppercase tracking-widest font-bold"
       >
-        <span>&copy; 2026 TakeUP Marketplace</span>
-        <div class="flex items-center gap-1">
-          Made with <Icon name="ph:heart-fill" class="text-cinnabar-red w-3.5 h-3.5" /> for the UP
-          Cebu Community
+        <div class="flex items-center gap-4 group cursor-default">
+          <img
+            src="/images/takeup-logo.png"
+            alt="TakeUP"
+            class="h-6 w-auto grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
+          />
+          <div class="flex items-center gap-3">
+            <span
+              class="text-noble-black/60 group-hover:text-burning-orange transition-colors duration-300"
+              >TakeUP Marketplace</span
+            >
+            <span class="w-1 h-1 bg-noble-black/10 rounded-full"></span>
+            <span>&copy; 2026</span>
+          </div>
         </div>
-        <span>UP Cebu Campus</span>
+
+        <div class="flex items-center gap-2.5 group cursor-default">
+          <span class="opacity-50">Developed by</span>
+          <div class="flex items-center gap-2">
+            <img
+              src="/images/team-logo.png"
+              alt="White Space"
+              class="h-5 w-auto grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
+            />
+            <span
+              class="text-noble-black/60 group-hover:text-burning-orange transition-colors duration-300"
+              >White Space</span
+            >
+          </div>
+        </div>
       </div>
     </footer>
   </main>
