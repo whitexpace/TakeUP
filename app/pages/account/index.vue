@@ -118,9 +118,7 @@ const profileDetails = computed(() => {
   const isVerified =
     Boolean(authUserRecord?.email_confirmed_at) ||
     Boolean(authUserRecord?.confirmed_at) ||
-    email.endsWith("@up.edu.ph") ||
-    email.endsWith("@gmail.com")
-
+    email.endsWith("@up.edu.ph") 
   return {
     fullName,
     avatarUrl,

@@ -1935,7 +1935,6 @@ export const bookingRouter = router({
           })
         }
 
-        await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
       }
 
       // Wallet Refund on cancellation of a paid PENDING booking
@@ -2071,11 +2070,19 @@ export const bookingRouter = router({
         itemId: updatedBooking.itemId,
       })
 
-      return updatedBooking.id
+      return { bookingId: updatedBooking.id, rentalTransactionId: syncedTransaction?.id ?? null }
     }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
 
+    if (updatedBookingId.rentalTransactionId) {
+      try {
+        await processTransactionRewards(ctx.prisma, updatedBookingId.rentalTransactionId)
+      } catch (error) {
+        console.error("Failed to process transaction rewards after booking update", error)
+      }
+    }
+
     const updatedBooking = (await bookingPrisma.booking.findUnique({
-      where: { id: updatedBookingId },
+      where: { id: updatedBookingId.bookingId },
       include: bookingInclude,
     })) as BookingRecord | null
 
@@ -2414,10 +2421,6 @@ export const bookingRouter = router({
           where: { bookingId: returnedBooking.id },
           select: { id: true },
         })
-        if (syncedTransaction) {
-          await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
-        }
-
         await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
           itemId: returnedBooking.itemId,
         })
@@ -2431,11 +2434,19 @@ export const bookingRouter = router({
           errorLabel: "return notification",
         })
 
-        return returnedBooking.id
+        return { bookingId: returnedBooking.id, rentalTransactionId: syncedTransaction?.id ?? null }
       }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
 
+      if (updatedBookingId.rentalTransactionId) {
+        try {
+          await processTransactionRewards(ctx.prisma, updatedBookingId.rentalTransactionId)
+        } catch (error) {
+          console.error("Failed to process transaction rewards after return proof upload", error)
+        }
+      }
+
       const updatedBooking = (await bookingPrisma.booking.findUnique({
-        where: { id: updatedBookingId },
+        where: { id: updatedBookingId.bookingId },
         include: bookingInclude,
       })) as BookingRecord | null
 
@@ -2559,10 +2570,6 @@ export const bookingRouter = router({
           where: { bookingId: updatedBooking.id },
           select: { id: true },
         })
-        if (syncedTransaction) {
-          await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
-        }
-
         await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
           itemId: updatedBooking.itemId,
         })
@@ -2576,11 +2583,19 @@ export const bookingRouter = router({
           errorLabel: "return notification",
         })
 
-        return updatedBooking.id
+        return { bookingId: updatedBooking.id, rentalTransactionId: syncedTransaction?.id ?? null }
       }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
 
+      if (updatedBookingId.rentalTransactionId) {
+        try {
+          await processTransactionRewards(ctx.prisma, updatedBookingId.rentalTransactionId)
+        } catch (error) {
+          console.error("Failed to process transaction rewards after early return", error)
+        }
+      }
+
       const updatedBooking = (await bookingPrisma.booking.findUnique({
-        where: { id: updatedBookingId },
+        where: { id: updatedBookingId.bookingId },
         include: bookingInclude,
       })) as BookingRecord | null
 

@@ -107,10 +107,10 @@ onMounted(async () => {
       return
     }
 
-    if (!email.endsWith("@up.edu.ph") && !email.endsWith("@gmail.com")) {
+    if (!email.endsWith("@up.edu.ph")) {
       await supabase.auth.signOut()
       clearClientAuthState()
-      const msg = "Only up.edu.ph and gmail.com email addresses are allowed."
+      const msg = "Only up.edu.ph email addresses are allowed."
       await redirectHomeWithError(msg, "&status=blocked_domain")
       return
     }
