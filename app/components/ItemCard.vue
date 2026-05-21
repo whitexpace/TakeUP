@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full sm:min-w-[210px] sm:max-w-[280px] mx-auto relative group"
+    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full sm:max-w-[340px] min-w-0 mx-auto relative group/card"
     :class="canNavigate ? 'cursor-pointer' : ''"
     @pointerenter="warmLinkedDestination"
     @focusin="warmLinkedDestination"

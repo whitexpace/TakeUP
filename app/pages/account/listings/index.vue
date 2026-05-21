@@ -425,7 +425,7 @@ onBeforeUnmount(() => {
     <div class="space-y-8">
       <div
         v-if="(!hasFetched || isLoading) && listings.length === 0"
-        class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5"
+        class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6"
       >
         <ItemCardSkeleton v-for="i in 4" :key="`listing-skeleton-${i}`" is-management />
       </div>
@@ -480,7 +480,10 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-else class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
+      <div
+        v-else
+        class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6"
+      >
         <MyListingCard
           v-for="item in listings"
           :key="item.id"

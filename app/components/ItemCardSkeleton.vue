@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full w-full sm:min-w-[210px] sm:max-w-[280px] mx-auto animate-pulse"
+    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full w-full sm:max-w-[340px] min-w-0 mx-auto animate-pulse"
   >
     <!-- Image Section (Responsive: 120px/150px/180px) -->
     <div
