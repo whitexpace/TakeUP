@@ -261,6 +261,31 @@ describe("bookingRouter", () => {
     expect(ctx.prisma.item.update).not.toHaveBeenCalled()
   })
 
+  it("does not fail booking creation when the lender notification cannot be created", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    const ctx = makeContext()
+    ctx.prisma.appNotification.create.mockRejectedValueOnce(new Error("notification enum missing"))
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    try {
+      const createdBooking = await caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        paymentMethod: "GCASH",
+      })
+
+      expect(createdBooking.id).toBe(BOOKING_ID)
+      expect(ctx.prisma.appNotification.create).toHaveBeenCalledTimes(1)
+      expect(consoleError).toHaveBeenCalledWith(
+        "Failed to create booking request notification",
+        expect.any(Error),
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it("filters list by borrower role", async () => {
     const ctx = makeContext()
     const caller = bookingRouter.createCaller(ctx as never)

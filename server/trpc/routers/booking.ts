@@ -1127,6 +1127,30 @@ const buildBookingRequestNotification = (input: {
   actionPath: `/account/transactions/${input.bookingId}`,
 })
 
+const createBookingRequestNotification = async (
+  prisma: Pick<Context["prisma"], "appNotification">,
+  input: {
+    recipientUserId: string
+    actorUserId: string
+    bookingId: string
+    itemName: string
+    borrowerName: string
+  },
+) => {
+  try {
+    await prisma.appNotification.create({
+      data: {
+        recipientUserId: input.recipientUserId,
+        actorUserId: input.actorUserId,
+        bookingId: input.bookingId,
+        ...buildBookingRequestNotification(input),
+      },
+    })
+  } catch (error) {
+    console.error("Failed to create booking request notification", error)
+  }
+}
+
 export const bookingRouter = router({
   list: protectedProcedure.input(listBookingsSchema).query(async ({ ctx, input }) => {
     const bookingPrisma = getBookingPrisma(ctx)
@@ -1275,17 +1299,12 @@ export const bookingRouter = router({
       },
     })
 
-    await ctx.prisma.appNotification.create({
-      data: {
-        recipientUserId: item.lenderId,
-        actorUserId: ctx.user.id,
-        bookingId: booking.id,
-        ...buildBookingRequestNotification({
-          bookingId: booking.id,
-          itemName: item.name,
-          borrowerName: ctx.user.name || "A borrower",
-        }),
-      },
+    await createBookingRequestNotification(ctx.prisma, {
+      recipientUserId: item.lenderId,
+      actorUserId: ctx.user.id,
+      bookingId: booking.id,
+      itemName: item.name,
+      borrowerName: ctx.user.name || "A borrower",
     })
 
     return mapBookingRecord(booking as BookingRecord)
