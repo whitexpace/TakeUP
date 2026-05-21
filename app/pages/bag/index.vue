@@ -759,7 +759,7 @@ const performLenderBookings = async () => {
           :disabled="selectedItemIds.size === 0 || isSubmitting"
           @click="handleRequestBooking"
         >
-          {{ isSubmitting ? "..." : "Checkout" }}
+          {{ isSubmitting ? "Requesting..." : "Checkout" }}
         </button>
       </div>
     </div>

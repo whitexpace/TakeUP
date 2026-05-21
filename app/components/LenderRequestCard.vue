@@ -200,14 +200,14 @@ const warmOrderDetailsImmediately = () => {
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CANCELLED')"
           >
-            {{ actingStatus === "CANCELLED" ? "..." : "Decline" }}
+            {{ actingStatus === "CANCELLED" ? "Declining..." : "Decline" }}
           </button>
           <button
             class="px-3 py-1 rounded-lg bg-burning-orange text-white text-[11px] font-bold hover:brightness-110 shadow-sm transition-all active:scale-95 disabled:opacity-50"
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CONFIRMED')"
           >
-            {{ actingStatus === "CONFIRMED" ? "..." : "Accept" }}
+            {{ actingStatus === "CONFIRMED" ? "Accepting..." : "Accept" }}
           </button>
         </div>
         <div v-else-if="request.status === 'CONFIRMED'" class="flex flex-wrap gap-2 relative z-10">

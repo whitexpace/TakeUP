@@ -294,7 +294,7 @@ const handleBookingDecision = async (
                 >
                   {{
                     actingBookingId === booking.id && actingStatus === "CANCELLED"
-                      ? "..."
+                      ? "Declining..."
                       : "Decline"
                   }}
                 </button>
@@ -305,7 +305,7 @@ const handleBookingDecision = async (
                 >
                   {{
                     actingBookingId === booking.id && actingStatus === "CONFIRMED"
-                      ? "..."
+                      ? "Accepting..."
                       : "Accept"
                   }}
                 </button>
