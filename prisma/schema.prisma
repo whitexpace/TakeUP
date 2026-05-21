@@ -349,6 +349,7 @@ model Booking {
   paymentMethod      PaymentMethod
   platformCommission Int                  @default(0)
   totalFee           Int
+  requestOfferId     Int?                 @unique
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -365,9 +366,10 @@ model Booking {
   borrowerReturnProofUrl        String?
   borrowerReturnProofUploadedAt DateTime?
 
-  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
-  lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+  item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrower     Borrower      @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
+  lender       Lender        @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+  requestOffer RequestOffer? @relation(fields: [requestOfferId], references: [id], onDelete: SetNull)
 
   @@index([borrowerId])
   @@index([createdAt])
@@ -711,6 +713,7 @@ model RequestOffer {
   item    Item        @relation(fields: [itemID], references: [numericId], onDelete: Restrict)
   lender  Lender      @relation(fields: [lenderID], references: [id], onDelete: Cascade)
   request ItemRequest @relation(fields: [requestID], references: [id], onDelete: Cascade)
+  booking Booking?
 
   @@unique([lenderID, requestID])
   @@index([requestID])

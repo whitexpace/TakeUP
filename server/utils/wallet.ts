@@ -482,6 +482,7 @@ export async function payWithWallet(
   userId: string,
   amount: number,
   context: { relatedEntityType: string; relatedEntityId: string },
+  tx?: Prisma.TransactionClient,
 ) {
   if (amount <= 0) {
     throw new TRPCError({
@@ -490,8 +491,8 @@ export async function payWithWallet(
     })
   }
 
-  return await globalPrisma.$transaction(async (tx) => {
-    const walletTx = asWalletPrisma(tx)
+  const execute = async (client: Prisma.TransactionClient & WalletPrismaAdapter) => {
+    const walletTx = asWalletPrisma(client)
     const wallet = await lockWallet({ scope: WalletScope.USER, userId }, walletTx)
     if (wallet.status !== "ACTIVE")
       throw new TRPCError({ code: "FORBIDDEN", message: "Wallet is not active." })
@@ -523,7 +524,13 @@ export async function payWithWallet(
     const updatedWallet = await updateWalletBalance(wallet.id, newBalance, walletTx)
 
     return { wallet: updatedWallet, transaction }
-  })
+  }
+
+  if (tx) {
+    return await execute(asWalletPrisma(tx))
+  }
+
+  return await globalPrisma.$transaction(async (newTx) => await execute(asWalletPrisma(newTx)))
 }
 
 /**

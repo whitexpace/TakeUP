@@ -1105,36 +1105,6 @@ const handleUpdateOfferStatus = async (payload: {
       },
     })
 
-    if (payload.status === "ACCEPTED") {
-      const request = requests.value.find((entry) => entry.id === payload.requestId)
-
-      if (request) {
-        const remainingPendingOffers = request.offers.filter(
-          (offer) => offer.id !== payload.offerId && offer.status === "PENDING",
-        )
-
-        await Promise.all(
-          remainingPendingOffers.map((offer) =>
-            $fetch(`/api/request-offers/${offer.id}`, {
-              method: "PATCH",
-              headers,
-              body: {
-                status: "DECLINED",
-              },
-            }),
-          ),
-        )
-      }
-
-      await $fetch(`/api/item-requests/${payload.requestId}`, {
-        method: "PATCH",
-        headers,
-        body: {
-          status: "FULFILLED",
-        },
-      })
-    }
-
     await refreshFeed()
   } catch (error) {
     console.error("Failed to update offer status", error)
