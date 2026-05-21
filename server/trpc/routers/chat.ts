@@ -8,6 +8,7 @@ import {
   fetchMessagesSchema,
   getOrCreateConversationSchema,
   markAsReadSchema,
+  reactToMessageSchema,
   reportConversationSchema,
   sendMessageSchema,
   transactionConversationSchema,
@@ -119,6 +120,23 @@ type MessageReplyPreview = {
 type ChatMessageRecord = BaseMessageRecord & {
   imageUrl: string | null
   replyToMessage: MessageReplyPreview | null
+  reactions: ChatMessageReactionSummary[]
+}
+
+type ChatMessageReactionSummary = {
+  emoji: string
+  count: number
+  reactedByCurrentUser: boolean
+  userIds: string[]
+}
+
+type ChatReactionUpdate = {
+  conversationId: string
+  messageId: string
+  emoji: string
+  userId: string
+  action: "added" | "removed"
+  reactions: ChatMessageReactionSummary[]
 }
 
 type MessageGroupByRow = {
@@ -285,9 +303,79 @@ const upsertConversationForTransaction = async (prisma: Context["prisma"], trans
     select: { id: true, transactionId: true },
   })
 
-const hydrateMessageImageUrls = async (
+const getMessageReactionSummaries = async (
+  prisma: Context["prisma"],
+  input: { messageIds: string[]; currentUserId: string },
+): Promise<Map<string, ChatMessageReactionSummary[]>> => {
+  if (input.messageIds.length === 0) {
+    return new Map()
+  }
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      messageId: string
+      emoji: string
+      count: number | bigint
+      reactedByCurrentUser: boolean
+      userIds: string[]
+    }>
+  >(Prisma.sql`
+    SELECT
+      "message_id" AS "messageId",
+      "emoji",
+      COUNT(*) AS "count",
+      BOOL_OR("user_id" = ${input.currentUserId}) AS "reactedByCurrentUser",
+      ARRAY_AGG("user_id" ORDER BY "created_at" ASC) AS "userIds"
+    FROM "message_reactions"
+    WHERE "message_id" IN (${Prisma.join(input.messageIds)})
+    GROUP BY "message_id", "emoji"
+    ORDER BY MIN("created_at") ASC, "emoji" ASC
+  `)
+
+  const summariesByMessageId = new Map<string, ChatMessageReactionSummary[]>()
+  for (const row of rows) {
+    const current = summariesByMessageId.get(row.messageId) ?? []
+    current.push({
+      emoji: row.emoji,
+      count: Number(row.count),
+      reactedByCurrentUser: Boolean(row.reactedByCurrentUser),
+      userIds: row.userIds,
+    })
+    summariesByMessageId.set(row.messageId, current)
+  }
+
+  return summariesByMessageId
+}
+
+const getMessageReactionUpdate = async (
+  prisma: Context["prisma"],
+  input: {
+    conversationId: string
+    messageId: string
+    emoji: string
+    userId: string
+    action: "added" | "removed"
+  },
+): Promise<ChatReactionUpdate> => {
+  const summaries = await getMessageReactionSummaries(prisma, {
+    messageIds: [input.messageId],
+    currentUserId: input.userId,
+  })
+
+  return {
+    conversationId: input.conversationId,
+    messageId: input.messageId,
+    emoji: input.emoji,
+    userId: input.userId,
+    action: input.action,
+    reactions: summaries.get(input.messageId) ?? [],
+  }
+}
+
+const hydrateMessageDetails = async (
   prisma: Context["prisma"],
   messages: BaseMessageRecord[],
+  currentUserId: string,
 ): Promise<ChatMessageRecord[]> => {
   if (messages.length === 0) {
     return []
@@ -333,11 +421,17 @@ const hydrateMessageImageUrls = async (
     ]),
   )
 
+  const reactionsByMessageId = await getMessageReactionSummaries(prisma, {
+    messageIds: messages.map((message) => message.id),
+    currentUserId,
+  })
+
   return messages.map((message) => ({
     ...message,
     replyToMessageId: message.replyToMessageId ?? null,
     imageUrl: imageUrlByMessageId.get(message.id) ?? null,
     replyToMessage: replyByMessageId.get(message.id) ?? null,
+    reactions: reactionsByMessageId.get(message.id) ?? [],
   }))
 }
 
@@ -515,7 +609,7 @@ export const chatRouter = router({
 
     const hasMore = messages.length > input.limit
     const items = hasMore ? messages.slice(0, input.limit) : messages
-    const hydratedItems = await hydrateMessageImageUrls(ctx.prisma, items)
+    const hydratedItems = await hydrateMessageDetails(ctx.prisma, items, ctx.user.id)
 
     return {
       messages: hydratedItems.reverse(),
@@ -568,8 +662,71 @@ export const chatRouter = router({
       replyToMessageId: message.replyToMessageId ?? input.replyToMessageId ?? null,
       imageUrl: input.imageUrl ?? null,
       replyToMessage,
+      reactions: [],
     }
   }),
+
+  reactToMessage: protectedProcedure
+    .input(reactToMessageSchema)
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await getConversationWithTransaction(ctx.prisma, input.conversationId)
+
+      assertParticipant(conversation.transaction, ctx.user.id)
+      assertChatAvailableForTransaction(conversation.transaction)
+
+      const rows = await ctx.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "messages"
+        WHERE "id" = ${input.messageId}
+          AND "conversation_id" = ${input.conversationId}
+        LIMIT 1
+      `)
+
+      if (!rows[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Message not found in this conversation.",
+        })
+      }
+
+      const existingReaction = await ctx.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id"
+        FROM "message_reactions"
+        WHERE "message_id" = ${input.messageId}
+          AND "user_id" = ${ctx.user.id}
+          AND "emoji" = ${input.emoji}
+        LIMIT 1
+      `)
+
+      if (existingReaction[0]) {
+        await ctx.prisma.$executeRaw(Prisma.sql`
+          DELETE FROM "message_reactions"
+          WHERE "id" = ${existingReaction[0].id}
+        `)
+
+        return getMessageReactionUpdate(ctx.prisma, {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          emoji: input.emoji,
+          userId: ctx.user.id,
+          action: "removed",
+        })
+      }
+
+      await ctx.prisma.$executeRaw(Prisma.sql`
+        INSERT INTO "message_reactions" ("conversation_id", "message_id", "user_id", "emoji")
+        VALUES (${input.conversationId}, ${input.messageId}, ${ctx.user.id}, ${input.emoji})
+        ON CONFLICT ("message_id", "user_id", "emoji") DO NOTHING
+      `)
+
+      return getMessageReactionUpdate(ctx.prisma, {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        emoji: input.emoji,
+        userId: ctx.user.id,
+        action: "added",
+      })
+    }),
 
   markAsRead: protectedProcedure.input(markAsReadSchema).mutation(async ({ ctx, input }) => {
     const conversation = await getConversationWithTransaction(ctx.prisma, input.conversationId)

@@ -2,6 +2,20 @@ import { z } from "zod"
 
 export const MAX_MESSAGE_LENGTH = 2000
 export const MAX_CHAT_REPORT_DESCRIPTION_LENGTH = 1000
+export const CHAT_REACTION_EMOJIS = [
+  "👍",
+  "❤️",
+  "😂",
+  "😮",
+  "😢",
+  "🔥",
+  "👏",
+  "🙏",
+  "🎉",
+  "😍",
+  "🥹",
+  "👀",
+] as const
 
 export const sendMessageSchema = z
   .object({
@@ -57,6 +71,12 @@ export const markAsReadSchema = z.object({
   conversationId: z.string().uuid(),
 })
 
+export const reactToMessageSchema = z.object({
+  conversationId: z.string().uuid(),
+  messageId: z.string().uuid(),
+  emoji: z.enum(CHAT_REACTION_EMOJIS),
+})
+
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type ConversationIdInput = z.infer<typeof conversationIdSchema>
 export type TransactionConversationInput = z.infer<typeof transactionConversationSchema>
@@ -64,3 +84,4 @@ export type ReportConversationInput = z.infer<typeof reportConversationSchema>
 export type GetOrCreateConversationInput = z.infer<typeof getOrCreateConversationSchema>
 export type FetchMessagesInput = z.infer<typeof fetchMessagesSchema>
 export type MarkAsReadInput = z.infer<typeof markAsReadSchema>
+export type ReactToMessageInput = z.infer<typeof reactToMessageSchema>

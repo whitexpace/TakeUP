@@ -78,6 +78,7 @@ const makeMessage = (id: string, overrides: Partial<ChatMessage> = {}): ChatMess
   readAt: null,
   createdAt: "2026-04-20T10:00:00.000Z",
   replyToMessage: null,
+  reactions: [],
   ...overrides,
 })
 
@@ -692,5 +693,74 @@ describe("useChat", () => {
     expect(chat.conversations.value[0]?.unreadCount).toBe(2)
     expect(chat.conversations.value[0]?.lastMessage?.id).toBe("own-message")
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("applies message reactions optimistically before the API resolves", async () => {
+    let resolveReaction!: (value: unknown) => void
+    fetchMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveReaction = resolve
+      }),
+    )
+
+    const chat = useChat()
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+    await chat.mergeActiveConversationMessages([makeMessage("msg-1")])
+
+    const reactionPromise = chat.reactToMessage(chat.messages.value[0]!, "👍")
+
+    expect(chat.messages.value[0]?.reactions).toEqual([
+      {
+        emoji: "👍",
+        count: 1,
+        reactedByCurrentUser: true,
+      },
+    ])
+
+    resolveReaction({
+      conversationId: CONV_ID_1,
+      messageId: "msg-1",
+      emoji: "👍",
+      userId: "current-user",
+      action: "added",
+      reactions: [
+        {
+          emoji: "👍",
+          count: 2,
+          reactedByCurrentUser: true,
+          userIds: ["current-user", "other-user"],
+        },
+      ],
+    })
+    await reactionPromise
+
+    expect(chat.messages.value[0]?.reactions).toEqual([
+      {
+        emoji: "👍",
+        count: 2,
+        reactedByCurrentUser: true,
+        userIds: ["current-user", "other-user"],
+      },
+    ])
+  })
+
+  it("rolls back optimistic reactions when the API fails", async () => {
+    fetchMock.mockRejectedValue(new Error("Nope"))
+
+    const chat = useChat()
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+    await chat.mergeActiveConversationMessages([
+      makeMessage("msg-1", {
+        reactions: [{ emoji: "❤️", count: 1, reactedByCurrentUser: false }],
+      }),
+    ])
+
+    const result = await chat.reactToMessage(chat.messages.value[0]!, "❤️")
+
+    expect(result).toBeNull()
+    expect(chat.messages.value[0]?.reactions).toEqual([
+      { emoji: "❤️", count: 1, reactedByCurrentUser: false },
+    ])
+    expect(chat.error.value).toBe("Nope")
   })
 })

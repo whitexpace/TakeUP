@@ -19,7 +19,24 @@ export type ChatMessage = {
   readAt: string | null
   createdAt: string
   replyToMessage: ChatMessageReplyPreview | null
+  reactions: ChatMessageReaction[]
   isOptimistic?: boolean
+}
+
+export type ChatMessageReaction = {
+  emoji: string
+  count: number
+  reactedByCurrentUser: boolean
+  userIds?: string[]
+}
+
+export type ChatReactionUpdate = {
+  conversationId: string
+  messageId: string
+  emoji: string
+  userId: string
+  action: "added" | "removed"
+  reactions: ChatMessageReaction[]
 }
 
 export type ChatMessageReplyPreview = {
@@ -237,13 +254,17 @@ export const useChat = () => {
         : null
       const replyToMessage =
         message.replyToMessage ?? (replySource ? getReplyPreviewFromMessage(replySource) : null)
-      const hydratedMessage = { ...message, replyToMessage }
+      const hydratedMessage = { ...message, replyToMessage, reactions: message.reactions ?? [] }
 
       return cachedMessage
         ? {
             ...hydratedMessage,
             createdAt: cachedMessage.createdAt,
             replyToMessage: hydratedMessage.replyToMessage ?? cachedMessage.replyToMessage,
+            reactions:
+              hydratedMessage.reactions.length > 0 || cachedMessage.reactions.length === 0
+                ? hydratedMessage.reactions
+                : cachedMessage.reactions,
           }
         : hydratedMessage
     })
@@ -264,6 +285,7 @@ export const useChat = () => {
           ...savedMessage,
           createdAt: optimisticMessage.createdAt,
           replyToMessage: savedMessage.replyToMessage ?? optimisticMessage.replyToMessage,
+          reactions: savedMessage.reactions ?? optimisticMessage.reactions,
         }
       : savedMessage
     const withoutOptimistic = cachedMessages.filter((message) => message.id !== optimisticId)
@@ -831,6 +853,7 @@ export const useChat = () => {
       readAt: null,
       createdAt: new Date().toISOString(),
       replyToMessage: replyPreview,
+      reactions: [],
       isOptimistic: true,
     }
 
@@ -877,6 +900,93 @@ export const useChat = () => {
       return null
     } finally {
       isReporting.value = false
+    }
+  }
+
+  const applyReactionUpdate = (update: ChatReactionUpdate) => {
+    setMessageReactions(update.conversationId, update.messageId, update.reactions)
+  }
+
+  const setMessageReactions = (
+    conversationId: string,
+    messageId: string,
+    reactions: ChatMessageReaction[],
+  ) => {
+    const cachedMessages = getCachedMessages(conversationId)
+    const targetMessage = cachedMessages.find((message) => message.id === messageId)
+    if (!targetMessage) return
+
+    const nextMessages = cachedMessages.map((message) =>
+      message.id === messageId ? { ...message, reactions } : message,
+    )
+    setCachedMessages(conversationId, nextMessages)
+  }
+
+  const getOptimisticReactions = (message: ChatMessage, emoji: string): ChatMessageReaction[] => {
+    const reactions = message.reactions ?? []
+    const existingReaction = reactions.find((reaction) => reaction.emoji === emoji)
+
+    if (!existingReaction) {
+      return [
+        ...reactions,
+        {
+          emoji,
+          count: 1,
+          reactedByCurrentUser: true,
+        },
+      ]
+    }
+
+    if (existingReaction.reactedByCurrentUser) {
+      return reactions
+        .map((reaction) =>
+          reaction.emoji === emoji
+            ? {
+                ...reaction,
+                count: Math.max(0, reaction.count - 1),
+                reactedByCurrentUser: false,
+              }
+            : reaction,
+        )
+        .filter((reaction) => reaction.count > 0)
+    }
+
+    return reactions.map((reaction) =>
+      reaction.emoji === emoji
+        ? {
+            ...reaction,
+            count: reaction.count + 1,
+            reactedByCurrentUser: true,
+          }
+        : reaction,
+    )
+  }
+
+  const reactToMessage = async (message: ChatMessage, emoji: string) => {
+    if (!activeConversation.value || activeConversation.value.isExpired || message.isOptimistic) {
+      return null
+    }
+
+    const cachedMessage =
+      getCachedMessages(message.conversationId).find((entry) => entry.id === message.id) ?? message
+    const previousReactions = cachedMessage.reactions ?? []
+    const optimisticReactions = getOptimisticReactions(cachedMessage, emoji)
+    setMessageReactions(message.conversationId, message.id, optimisticReactions)
+
+    try {
+      const update = await $fetch<ChatReactionUpdate>(
+        `/api/chat/conversations/${encodeURIComponent(message.conversationId)}/messages/${encodeURIComponent(message.id)}/reactions`,
+        {
+          method: "POST",
+          body: { emoji },
+        },
+      )
+      applyReactionUpdate(update)
+      return update
+    } catch (err: unknown) {
+      setMessageReactions(message.conversationId, message.id, previousReactions)
+      error.value = getErrorMessage(err, "Failed to react to message.")
+      return null
     }
   }
 
@@ -1027,12 +1137,14 @@ export const useChat = () => {
     prefetchConversationMessagesForInbox,
     loadMoreMessages,
     sendMessage,
+    reactToMessage,
     reportConversation,
     markAsRead,
     loadUnreadCount,
     onIncomingMessage,
     onActiveRealtimeMessage,
     onInboxRealtimeMessage,
+    applyReactionUpdate,
     mergeActiveConversationMessages,
     closeConversation,
   }

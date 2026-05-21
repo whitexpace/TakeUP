@@ -543,6 +543,7 @@ model User {
   rewardEvents                      RewardEvent[]
   rewards                           UserReward?
   sentMessages                      Message[]
+  messageReactions                  MessageReaction[]
   wallet                            Wallet?
   walletTransactions                WalletTransaction[]
 }
@@ -1003,6 +1004,7 @@ model Conversation {
 
   transaction RentalTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   messages    Message[]
+  reactions   MessageReaction[]
 
   @@index([transactionId])
   @@map("conversations")
@@ -1019,14 +1021,34 @@ model Message {
   readAt           DateTime? @map("read_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
-  replyToMessage Message?     @relation("message_replies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
-  replies        Message[]    @relation("message_replies")
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User              @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+  replyToMessage Message?          @relation("message_replies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies        Message[]         @relation("message_replies")
+  reactions      MessageReaction[]
 
   @@index([conversationId, createdAt])
   @@index([conversationId, isRead])
   @@index([replyToMessageId])
   @@index([senderUserId])
   @@map("messages")
+}
+
+model MessageReaction {
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  conversationId String   @map("conversation_id")
+  messageId      String   @map("message_id")
+  userId         String   @map("user_id")
+  emoji          String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([conversationId, createdAt])
+  @@index([messageId])
+  @@index([userId])
+  @@map("message_reactions")
 }
