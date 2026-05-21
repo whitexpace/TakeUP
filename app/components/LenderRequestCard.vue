@@ -220,6 +220,18 @@ const warmOrderDetailsImmediately = () => {
             {{ actingStatus === "CONFIRMED" ? "Accepting..." : "Accept Request" }}
           </button>
         </div>
+        <div v-else-if="request.status === 'CONFIRMED'" class="flex flex-wrap gap-2 relative z-10">
+          <NuxtLink
+            :to="detailPath"
+            :prefetch-on="{ interaction: true }"
+            class="inline-flex items-center gap-1.5 rounded-[8px] bg-burning-orange px-4 py-1.5 text-[12px] font-bold text-white shadow-sm shadow-burning-orange/20 transition-all hover:brightness-110 active:scale-95"
+            @focus="warmOrderDetails"
+            @click.stop
+          >
+            <Icon name="ph:receipt" class="h-3.5 w-3.5 shrink-0" />
+            <span>Order Details</span>
+          </NuxtLink>
+        </div>
 
         <!-- Error message -->
         <div v-if="actionError" class="mt-2 text-[12px] text-cinnabar-red">

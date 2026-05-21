@@ -120,7 +120,7 @@ const mappedStatus = computed(() => {
     case "PENDING":
       return "PENDING"
     case "CONFIRMED":
-      return "ACTIVE"
+      return booking.value.lenderHandoffProofUploadedAt ? "ACTIVE" : "PENDING"
     case "RETURNED":
       return "RETURNED"
     case "CANCELLED":
