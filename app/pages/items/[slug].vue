@@ -335,9 +335,9 @@ const isItemRented = computed(() => item.value?.status === "RENTED")
 const isItemUnavailableForBooking = computed(() =>
   Boolean(
     item.value &&
-      (item.value.status === "DEACTIVATED" ||
-        item.value.status === "DELETED" ||
-        item.value.status === "UNAVAILABLE"),
+    (item.value.status === "DEACTIVATED" ||
+      item.value.status === "DELETED" ||
+      item.value.status === "UNAVAILABLE"),
   ),
 )
 const isOwnItem = computed(() =>
