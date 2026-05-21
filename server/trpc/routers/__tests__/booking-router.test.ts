@@ -641,7 +641,7 @@ describe("bookingRouter", () => {
         }),
         expect.objectContaining({
           key: "transaction-status-log-log-returned",
-          label: "Returned",
+          label: "Item Returned",
           description: "Borrower initiated item return.",
           occurredAt: loggedReturnedAt,
           source: "TRANSACTION_STATUS_LOG",
