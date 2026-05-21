@@ -46,6 +46,7 @@ const {
   onInboxRealtimeMessage,
   closeConversation,
   loadMoreMessages,
+  prefetchConversationMessagesForInbox,
 } = useChat()
 
 const route = useRoute()
@@ -70,6 +71,8 @@ const pendingImageFile = ref<File | null>(null)
 const pendingImagePreviewUrl = ref<string | null>(null)
 const pendingConversationTransactionId = ref<string | null>(null)
 const shouldStickToBottom = ref(true)
+const prefetchedConversationCount = ref(0)
+const isLoadingEarlierMessages = ref(false)
 
 const chatAreaRef = ref<HTMLElement | null>(null)
 const sidebarScrollRef = ref<HTMLElement | null>(null)
@@ -209,6 +212,64 @@ const updateStickToBottom = () => {
   const element = chatAreaRef.value
   if (!element) return
   shouldStickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 120
+}
+
+const prefetchInboxMessages = (startIndex: number, count = 8) => {
+  if (startIndex >= sortedConversations.value.length) return
+  prefetchConversationMessagesForInbox({ startIndex, initialCount: count })
+  prefetchedConversationCount.value = Math.max(
+    prefetchedConversationCount.value,
+    Math.min(sortedConversations.value.length, startIndex + count),
+  )
+}
+
+const prefetchInitialInboxMessages = () => {
+  if (prefetchedConversationCount.value > 0) return
+  prefetchInboxMessages(0)
+}
+
+const handleSidebarScroll = () => {
+  const element = sidebarScrollRef.value
+  if (!element || prefetchedConversationCount.value >= sortedConversations.value.length) return
+
+  const approximateConversationHeight = 84
+  const prefetchThreshold =
+    prefetchedConversationCount.value * approximateConversationHeight - element.clientHeight - 160
+
+  if (element.scrollTop >= Math.max(0, prefetchThreshold)) {
+    prefetchInboxMessages(prefetchedConversationCount.value)
+  }
+}
+
+const handleChatScroll = () => {
+  updateStickToBottom()
+
+  const element = chatAreaRef.value
+  if (
+    !element ||
+    isLoadingEarlierMessages.value ||
+    isLoadingMessages.value ||
+    !hasMoreMessages.value ||
+    element.scrollTop > 120
+  ) {
+    return
+  }
+
+  const previousScrollHeight = element.scrollHeight
+  const previousScrollTop = element.scrollTop
+  isLoadingEarlierMessages.value = true
+
+  void loadMoreMessages()
+    .then(() => {
+      nextTick(() => {
+        if (!chatAreaRef.value) return
+        chatAreaRef.value.scrollTop =
+          chatAreaRef.value.scrollHeight - previousScrollHeight + previousScrollTop
+      })
+    })
+    .finally(() => {
+      isLoadingEarlierMessages.value = false
+    })
 }
 
 const adjustTextareaHeight = () => {
@@ -920,6 +981,14 @@ watch(
 )
 watch([newMessage, pendingImagePreviewUrl], () => nextTick(adjustTextareaHeight))
 watch(
+  () => sortedConversations.value.length,
+  (conversationCount) => {
+    if (conversationCount > 0) {
+      prefetchInitialInboxMessages()
+    }
+  },
+)
+watch(
   () => activeConversation.value?.isExpired,
   (isExpired) => {
     if (isExpired) {
@@ -968,6 +1037,7 @@ onMounted(async () => {
   void setupInboxRealtime()
 
   await loadConversations({ background: sortedConversations.value.length > 0 })
+  prefetchInitialInboxMessages()
 
   if (routeTransactionId.value) {
     await openConversationFromRoute(routeTransactionId.value)
@@ -1034,7 +1104,11 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div ref="sidebarScrollRef" class="custom-chat-scrollbar flex-1 overflow-y-auto">
+        <div
+          ref="sidebarScrollRef"
+          class="custom-chat-scrollbar flex-1 overflow-y-auto"
+          @scroll="handleSidebarScroll"
+        >
           <div
             v-if="isLoadingConversations && !sortedConversations.length"
             class="px-2 pt-2 space-y-1"
@@ -1304,7 +1378,7 @@ onUnmounted(() => {
           <div
             ref="chatAreaRef"
             class="custom-chat-scrollbar flex flex-1 flex-col gap-6 overflow-y-auto p-6"
-            @scroll="updateStickToBottom"
+            @scroll="handleChatScroll"
           >
             <div v-if="hasMoreMessages" class="flex justify-center">
               <button

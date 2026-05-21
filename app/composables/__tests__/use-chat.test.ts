@@ -235,6 +235,81 @@ describe("useChat", () => {
     })
   })
 
+  it("prefetches later inbox conversations by start index", async () => {
+    fetchMock.mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
+
+    const chat = useChat()
+    chat.conversations.value = Array.from({ length: 12 }, (_value, index) =>
+      makeConversationSummary(`conv-${index + 1}`),
+    )
+
+    chat.prefetchConversationMessagesForInbox({ startIndex: 8, initialCount: 4 })
+    for (let index = 0; index < 30; index += 1) {
+      await Promise.resolve()
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/chat/messages", {
+      params: { conversationId: "conv-9" },
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/chat/messages", {
+      params: { conversationId: "conv-12" },
+    })
+  })
+
+  it("keeps a stale message load cached when the user switches conversations mid-load", async () => {
+    let resolveFirstMessages!: (value: {
+      messages: ChatMessage[]
+      nextCursor: string | null
+      hasMore: boolean
+    }) => void
+
+    fetchMock.mockImplementation(
+      (url: string, options?: { params?: { conversationId?: string } }) => {
+        if (url !== "/api/chat/messages") return Promise.resolve(undefined)
+
+        if (options?.params?.conversationId === CONV_ID_1) {
+          return new Promise((resolve) => {
+            resolveFirstMessages = resolve
+          })
+        }
+
+        return Promise.resolve({
+          messages: [makeMessage("msg-conv-2", { conversationId: CONV_ID_2 })],
+          nextCursor: null,
+          hasMore: false,
+        })
+      },
+    )
+
+    const chat = useChat()
+    chat.conversations.value = [
+      makeConversationSummary(CONV_ID_1),
+      makeConversationSummary(CONV_ID_2, { transactionId: TX_ID_2 }),
+    ]
+
+    const firstOpen = chat.openConversation(TX_ID_1)
+    await flushPromises()
+
+    const secondOpen = chat.openConversation(TX_ID_2)
+    await secondOpen
+
+    resolveFirstMessages({
+      messages: [makeMessage("msg-conv-1")],
+      nextCursor: null,
+      hasMore: false,
+    })
+    await firstOpen
+
+    fetchMock.mockClear()
+    await chat.openConversation(TX_ID_1)
+
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-conv-1"])
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/chat/messages", {
+      params: { conversationId: CONV_ID_1 },
+    })
+  })
+
   it("loads more messages and prepends older pages", async () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))

@@ -94,6 +94,7 @@ type LoadMessagesOptions = {
 
 type PrefetchConversationsOptions = {
   initialCount?: number
+  startIndex?: number
 }
 
 type MessagePageState = {
@@ -194,6 +195,7 @@ export const useChat = () => {
     () => ({}),
   )
   const pendingSendQueue: PendingSend[] = []
+  const messageLoadPromises = new Map<string, Promise<void>>()
   let isDrainingSendQueue = false
 
   const getCachedMessages = (conversationId: string) => messageCache.value[conversationId] ?? []
@@ -517,6 +519,7 @@ export const useChat = () => {
 
     const loadKey = `${conversationId}:${cursor ?? "latest"}`
     if (messageLoadInFlight.value[loadKey]) {
+      await messageLoadPromises.get(loadKey)
       return
     }
 
@@ -526,7 +529,7 @@ export const useChat = () => {
       isLoadingMessages.value = true
     }
 
-    try {
+    const loadPromise = (async () => {
       const params: Record<string, string> = { conversationId }
       if (cursor) params.cursor = cursor
 
@@ -535,8 +538,6 @@ export const useChat = () => {
         nextCursor: string | null
         hasMore: boolean
       }>("/api/chat/messages", { params })
-
-      if (!shouldApplyResult()) return
 
       const pageState = {
         nextCursor: data.nextCursor,
@@ -559,11 +560,18 @@ export const useChat = () => {
           pageState,
         )
       }
+    })()
+
+    messageLoadPromises.set(loadKey, loadPromise)
+
+    try {
+      await loadPromise
     } catch (err: unknown) {
       if (shouldApplyResult() && !options.background) {
         error.value = getErrorMessage(err, "Failed to load messages.")
       }
     } finally {
+      messageLoadPromises.delete(loadKey)
       clearMessageLoadInFlight(loadKey)
 
       if (shouldApplyResult() && !options.background) {
@@ -710,10 +718,11 @@ export const useChat = () => {
 
   const prefetchConversationMessagesForInbox = (options: PrefetchConversationsOptions = {}) => {
     const initialCount = options.initialCount ?? 8
+    const startIndex = options.startIndex ?? 0
     const conversationIds = sortedConversations.value.map(
       (conversation) => conversation.conversationId,
     )
-    const priorityConversationIds = conversationIds.slice(0, initialCount)
+    const priorityConversationIds = conversationIds.slice(startIndex, startIndex + initialCount)
 
     void Promise.allSettled(
       priorityConversationIds.map((conversationId) => prefetchConversationMessages(conversationId)),
