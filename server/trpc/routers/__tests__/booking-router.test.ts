@@ -1079,6 +1079,18 @@ describe("bookingRouter", () => {
     ctx.prisma.rentalTransaction.findUnique
       .mockResolvedValueOnce({ id: "txn-1", status: "CONFIRMED" })
       .mockResolvedValueOnce({ id: "txn-1", status: "CONFIRMED" })
+    ctx.prisma.appNotification.create.mockResolvedValueOnce({
+      id: "notif-handoff-1",
+      recipientUserId: USER_ID,
+      actorUserId: LENDER_ID,
+      bookingId: BOOKING_ID,
+      type: "BOOKING_HANDOFF_PROOF_UPLOADED",
+      title: "Handoff proof uploaded",
+      body: "The lender uploaded proof that the item was handed over. Open the transaction to review it.",
+      actionPath: `/account/transactions/${BOOKING_ID}`,
+      readAt: null,
+      createdAt: new Date("2026-04-01T00:00:00.000Z"),
+    })
 
     const caller = bookingRouter.createCaller({
       ...ctx,
@@ -1103,6 +1115,24 @@ describe("bookingRouter", () => {
       expect.objectContaining({
         where: { id: "txn-1" },
         data: { status: "ONGOING" },
+      }),
+    )
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: USER_ID,
+          actorUserId: LENDER_ID,
+          bookingId: BOOKING_ID,
+          type: "BOOKING_HANDOFF_PROOF_UPLOADED",
+        }),
+      }),
+    )
+    expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+      ctx.event,
+      expect.objectContaining({
+        id: "notif-handoff-1",
+        recipientUserId: USER_ID,
+        type: "BOOKING_HANDOFF_PROOF_UPLOADED",
       }),
     )
   })
@@ -1143,6 +1173,18 @@ describe("bookingRouter", () => {
       id: "txn-1",
       status: "CONFIRMED",
     })
+    ctx.prisma.appNotification.create.mockResolvedValueOnce({
+      id: "notif-return-1",
+      recipientUserId: LENDER_ID,
+      actorUserId: USER_ID,
+      bookingId: BOOKING_ID,
+      type: "BOOKING_RETURN_REQUESTED",
+      title: "Item return requested",
+      body: "A borrower marked one of your items as returned. Review the booking and confirm receipt.",
+      actionPath: `/account/transactions/${BOOKING_ID}`,
+      readAt: null,
+      createdAt: new Date("2026-04-03T00:00:00.000Z"),
+    })
 
     const caller = bookingRouter.createCaller(ctx as never)
 
@@ -1176,6 +1218,14 @@ describe("bookingRouter", () => {
           bookingId: BOOKING_ID,
           type: "BOOKING_RETURN_REQUESTED",
         }),
+      }),
+    )
+    expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+      ctx.event,
+      expect.objectContaining({
+        id: "notif-return-1",
+        recipientUserId: LENDER_ID,
+        type: "BOOKING_RETURN_REQUESTED",
       }),
     )
     expect(returnedBooking.status).toBe("RETURNED")

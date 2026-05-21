@@ -270,7 +270,7 @@ const backfillOffer = async (offerId) =>
 const main = async () => {
   const candidates = await findAcceptedOffersMissingBookings()
 
-  console.log(
+  console.warn(
     `[accepted-offer-backfill] Found ${candidates.length} accepted offer(s) without linked bookings.`,
   )
 
@@ -290,9 +290,9 @@ const main = async () => {
 
       if (reason) {
         skipped += 1
-        console.log(`[accepted-offer-backfill] SKIP offer ${candidate.id}: ${reason}`)
+        console.warn(`[accepted-offer-backfill] SKIP offer ${candidate.id}: ${reason}`)
       } else {
-        console.log(`[accepted-offer-backfill] WOULD backfill offer ${candidate.id}`)
+        console.warn(`[accepted-offer-backfill] WOULD backfill offer ${candidate.id}`)
       }
       continue
     }
@@ -301,20 +301,20 @@ const main = async () => {
       const result = await backfillOffer(candidate.id)
       if (result.status === "backfilled") {
         backfilled += 1
-        console.log(
+        console.warn(
           `[accepted-offer-backfill] Backfilled offer ${candidate.id} with booking ${result.bookingId}.`,
         )
       } else {
         skipped += 1
-        console.log(`[accepted-offer-backfill] SKIP offer ${candidate.id}: ${result.reason}`)
+        console.warn(`[accepted-offer-backfill] SKIP offer ${candidate.id}: ${result.reason}`)
       }
     } catch (error) {
       skipped += 1
-      console.log(`[accepted-offer-backfill] SKIP offer ${candidate.id}: ${error.message}`)
+      console.warn(`[accepted-offer-backfill] SKIP offer ${candidate.id}: ${error.message}`)
     }
   }
 
-  console.log(
+  console.warn(
     `[accepted-offer-backfill] Done. Backfilled ${backfilled}; skipped ${skipped}; dryRun=${dryRun}.`,
   )
 }

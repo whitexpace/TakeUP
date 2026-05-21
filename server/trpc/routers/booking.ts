@@ -1113,9 +1113,16 @@ const syncItemStatusFromBookings = async (
 }
 
 const buildReturnNotification = (bookingId: string) => ({
-  type: "BOOKING_RETURN_REQUESTED" as const,
+  type: "BOOKING_RETURN_REQUESTED" as unknown as PrismaNotificationType,
   title: "Item return requested",
   body: "A borrower marked one of your items as returned. Review the booking and confirm receipt.",
+  actionPath: `/account/transactions/${bookingId}`,
+})
+
+const buildHandoffProofNotification = (bookingId: string) => ({
+  type: "BOOKING_HANDOFF_PROOF_UPLOADED" as unknown as PrismaNotificationType,
+  title: "Handoff proof uploaded",
+  body: "The lender uploaded proof that the item was handed over. Open the transaction to review it.",
   actionPath: `/account/transactions/${bookingId}`,
 })
 
@@ -1130,19 +1137,43 @@ const buildBookingRequestNotification = (input: {
   actionPath: `/account/transactions/${input.bookingId}`,
 })
 
-const createBookingRequestNotification = async (
+const appNotificationBroadcastSelect = {
+  id: true,
+  recipientUserId: true,
+  actorUserId: true,
+  bookingId: true,
+  type: true,
+  title: true,
+  body: true,
+  actionPath: true,
+  readAt: true,
+  createdAt: true,
+} as const
+
+type BookingNotificationContent = {
+  type: PrismaNotificationType
+  title: string
+  body: string
+  actionPath: string
+}
+
+type BookingNotificationCreatePrismaClient = Pick<
+  Context["prisma"],
+  "$executeRaw" | "appNotification"
+>
+
+const createBookingNotification = async (
   event: Context["event"],
-  prisma: Pick<Context["prisma"], "$executeRaw" | "appNotification">,
+  prisma: BookingNotificationCreatePrismaClient,
   input: {
     recipientUserId: string
     actorUserId: string
     bookingId: string
-    itemName: string
-    borrowerName: string
+    notification: BookingNotificationContent
+    warningLabel: string
+    errorLabel: string
   },
 ) => {
-  const notification = buildBookingRequestNotification(input)
-
   let createdNotification: Awaited<ReturnType<typeof prisma.appNotification.create>> | null = null
 
   try {
@@ -1151,23 +1182,12 @@ const createBookingRequestNotification = async (
         recipientUserId: input.recipientUserId,
         actorUserId: input.actorUserId,
         bookingId: input.bookingId,
-        ...notification,
+        ...input.notification,
       },
-      select: {
-        id: true,
-        recipientUserId: true,
-        actorUserId: true,
-        bookingId: true,
-        type: true,
-        title: true,
-        body: true,
-        actionPath: true,
-        readAt: true,
-        createdAt: true,
-      },
+      select: appNotificationBroadcastSelect,
     })
   } catch (error) {
-    console.warn("Prisma notification create failed; retrying booking notification via SQL", error)
+    console.warn(`Prisma notification create failed; retrying ${input.warningLabel} via SQL`, error)
   }
 
   if (createdNotification) {
@@ -1195,10 +1215,10 @@ const createBookingRequestNotification = async (
         ${input.recipientUserId},
         ${input.actorUserId},
         ${input.bookingId},
-        ${notification.type}::"NotificationType",
-        ${notification.title},
-        ${notification.body},
-        ${notification.actionPath},
+        ${input.notification.type}::"NotificationType",
+        ${input.notification.title},
+        ${input.notification.body},
+        ${input.notification.actionPath},
         ${createdAt}
       )
     `
@@ -1207,14 +1227,34 @@ const createBookingRequestNotification = async (
       recipientUserId: input.recipientUserId,
       actorUserId: input.actorUserId,
       bookingId: input.bookingId,
-      ...notification,
+      ...input.notification,
       readAt: null,
       createdAt,
     }).catch(() => undefined)
   } catch (error) {
-    console.error("Failed to create booking request notification", error)
+    console.error(`Failed to create ${input.errorLabel}`, error)
   }
 }
+
+const createBookingRequestNotification = async (
+  event: Context["event"],
+  prisma: BookingNotificationCreatePrismaClient,
+  input: {
+    recipientUserId: string
+    actorUserId: string
+    bookingId: string
+    itemName: string
+    borrowerName: string
+  },
+) =>
+  createBookingNotification(event, prisma, {
+    recipientUserId: input.recipientUserId,
+    actorUserId: input.actorUserId,
+    bookingId: input.bookingId,
+    notification: buildBookingRequestNotification(input),
+    warningLabel: "booking notification",
+    errorLabel: "booking request notification",
+  })
 
 export const bookingRouter = router({
   list: protectedProcedure.input(listBookingsSchema).query(async ({ ctx, input }) => {
@@ -2125,6 +2165,15 @@ export const bookingRouter = router({
           itemId: updatedBooking.itemId,
         })
 
+        await createBookingNotification(ctx.event, tx as Context["prisma"], {
+          recipientUserId: latestBooking.borrowerId,
+          actorUserId: ctx.user.id,
+          bookingId: latestBooking.id,
+          notification: buildHandoffProofNotification(latestBooking.id),
+          warningLabel: "handoff proof notification",
+          errorLabel: "handoff proof notification",
+        })
+
         return updatedBooking.id
       }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
 
@@ -2301,13 +2350,13 @@ export const bookingRouter = router({
           itemId: returnedBooking.itemId,
         })
 
-        await (tx as Context["prisma"]).appNotification.create({
-          data: {
-            recipientUserId: latestBooking.lenderId,
-            actorUserId: ctx.user.id,
-            bookingId: latestBooking.id,
-            ...buildReturnNotification(latestBooking.id),
-          },
+        await createBookingNotification(ctx.event, tx as Context["prisma"], {
+          recipientUserId: latestBooking.lenderId,
+          actorUserId: ctx.user.id,
+          bookingId: latestBooking.id,
+          notification: buildReturnNotification(latestBooking.id),
+          warningLabel: "return notification",
+          errorLabel: "return notification",
         })
 
         return returnedBooking.id
@@ -2489,13 +2538,13 @@ export const bookingRouter = router({
           itemId: updatedBooking.itemId,
         })
 
-        await (tx as Context["prisma"]).appNotification.create({
-          data: {
-            recipientUserId: existing.lenderId,
-            actorUserId: ctx.user.id,
-            bookingId: existing.id,
-            ...buildReturnNotification(existing.id),
-          },
+        await createBookingNotification(ctx.event, tx as Context["prisma"], {
+          recipientUserId: existing.lenderId,
+          actorUserId: ctx.user.id,
+          bookingId: existing.id,
+          notification: buildReturnNotification(existing.id),
+          warningLabel: "return notification",
+          errorLabel: "return notification",
         })
 
         return updatedBooking.id

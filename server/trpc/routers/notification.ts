@@ -70,6 +70,13 @@ const normalizeNotificationContent = (notification: {
     }
   }
 
+  if (notification.type === "BOOKING_HANDOFF_PROOF_UPLOADED") {
+    return {
+      title: "Handoff proof uploaded",
+      body: "The lender uploaded handoff proof. Open the transaction to review the proof.",
+    }
+  }
+
   if (notification.type === "DISPUTE_REBUTTAL_SUBMITTED") {
     const actorName = formatActorName(notification.actorUser)
 
