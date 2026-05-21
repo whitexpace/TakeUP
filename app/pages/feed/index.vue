@@ -9,7 +9,7 @@
 
     <main
       ref="feedMainRef"
-      class="flex-1 overflow-y-auto custom-main-scrollbar bg-white h-screen pt-14"
+      class="flex-1 overflow-y-auto custom-main-scrollbar bg-white h-screen pt-14 pb-32 lg:pb-0"
     >
       <div class="container mx-auto px-4 py-8 pt-10 max-w-[1440px]">
         <div class="flex flex-col lg:flex-row gap-10">
@@ -30,13 +30,81 @@
 
           <div class="flex-1 min-w-0 flex flex-col gap-8">
             <div class="flex flex-col">
-              <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+              <h1
+                class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+              >
                 Community Feed
               </h1>
               <div class="h-[2px] w-10 bg-burning-orange rounded-full mt-2"></div>
               <p class="mt-2 text-[14px] font-light text-noble-black/50">
                 Post what you need and receive offers directly from the UPC community
               </p>
+            </div>
+
+            <!-- Mobile Trending Section (Reddit Vibes) -->
+            <div class="lg:hidden flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-[11px] font-bold tracking-[1.5px] text-noble-black/40 uppercase">
+                  Trending Now
+                </h2>
+                <Icon name="ph:fire-simple" class="text-burning-orange w-4 h-4" />
+              </div>
+              <div class="flex gap-4 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4">
+                <div
+                  v-for="(item, index) in trendingItems"
+                  :key="item.id"
+                  class="flex-none w-[180px] bg-white border border-gray-100 rounded-2xl p-4 shadow-sm active:scale-95 transition-all"
+                >
+                  <div class="flex items-start gap-2 mb-2">
+                    <span class="text-[13px] font-bold text-gray-200">#{{ index + 1 }}</span>
+                    <h3
+                      class="text-[13px] font-bold text-gray-900 leading-tight line-clamp-2 min-h-[32px]"
+                    >
+                      {{ item.title }}
+                    </h3>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <Icon name="ph:trend-up" class="w-3 h-3 text-burning-orange" />
+                    <span class="text-[11px] text-noble-black/40 font-medium"
+                      >{{ item.offersCount }} offers</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mobile User Activity Stats -->
+            <div class="lg:hidden grid grid-cols-3 gap-3">
+              <div
+                class="bg-gray-50 rounded-2xl p-3 flex flex-col items-center text-center border border-gray-100/50"
+              >
+                <span class="text-[16px] font-black text-noble-black">{{
+                  userActivity.postsMade
+                }}</span>
+                <span class="text-[9px] font-bold text-noble-black/40 uppercase tracking-tighter"
+                  >Posts</span
+                >
+              </div>
+              <div
+                class="bg-gray-50 rounded-2xl p-3 flex flex-col items-center text-center border border-gray-100/50"
+              >
+                <span class="text-[16px] font-black text-noble-black">{{
+                  userActivity.offersSent
+                }}</span>
+                <span class="text-[9px] font-bold text-noble-black/40 uppercase tracking-tighter"
+                  >Sent</span
+                >
+              </div>
+              <div
+                class="bg-gray-50 rounded-2xl p-3 flex flex-col items-center text-center border border-gray-100/50"
+              >
+                <span class="text-[16px] font-black text-noble-black">{{
+                  userActivity.offersReceived
+                }}</span>
+                <span class="text-[9px] font-bold text-noble-black/40 uppercase tracking-tighter"
+                  >Offers</span
+                >
+              </div>
             </div>
 
             <CommunityCreatePost
@@ -68,11 +136,11 @@
                 v-for="filter in availableFilters"
                 :key="filter.value"
                 type="button"
-                class="px-4 py-1.5 rounded-full text-[13px] font-medium transition-all border-[1.5px]"
+                class="px-4 py-2 sm:py-1.5 rounded-full text-[13px] font-bold transition-all border-[1.5px]"
                 :class="
                   activeFilter === filter.value
-                    ? 'bg-burning-orange/10 border-burning-orange/30 text-burning-orange'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    ? 'bg-burning-orange text-white border-burning-orange shadow-md shadow-burning-orange/10'
+                    : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
                 "
                 @click="activeFilter = filter.value"
               >
@@ -90,11 +158,21 @@
                 :key="request.id"
                 :request="request"
                 :current-user-id="currentDbUserId"
+                :current-user-name="currentUserName"
+                :current-user-avatar="currentUserAvatar"
                 @offer-item="openOfferComposer"
                 @update-request-status="handleUpdateRequestStatus"
                 @delete-request="handleDeleteRequest"
                 @update-offer-status="handleUpdateOfferStatus"
               />
+              <div ref="feedLoadMoreSentinelRef" class="flex min-h-12 items-center justify-center">
+                <span
+                  v-if="isLoadingMoreRequests"
+                  class="text-[13px] font-medium text-noble-black/35"
+                >
+                  Loading more requests...
+                </span>
+              </div>
             </div>
 
             <div
@@ -106,7 +184,7 @@
               >
                 <Icon name="ph:chat-centered-text" class="w-8 h-8" />
               </div>
-              <h3 class="font-montravia text-[24px] font-medium text-noble-black mb-2">
+              <h3 class="font-geist text-[24px] font-medium text-noble-black mb-2">
                 No live requests yet
               </h3>
               <p
@@ -203,17 +281,19 @@ import { useCommunityFeedCache } from "../../composables/use-community-feed-cach
 import { recordPerfEvent, withPerfTimer } from "../../utils/performance-telemetry"
 import {
   COMMUNITY_FEED_CACHE_TTL_MS,
+  type ApiCommunityFeedPreviewResponse,
   type ApiCommunityNotification,
   type ApiCommunityRequest,
   type ApiOfferableItem,
   buildCommunityFeedActivity,
   buildCommunityFeedTrendingItems,
+  getStaleCommunityFeedTimestamp,
   normalizeCommunityNotification,
   normalizeCommunityRequest,
   normalizeOfferableItem,
 } from "../../utils/community-feed"
 
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type {
   CommunityOfferFormInput,
   CommunityOfferStatus,
@@ -227,6 +307,8 @@ definePageMeta({ layout: false })
 
 const createPostRef = ref<InstanceType<typeof CommunityCreatePost> | null>(null)
 const feedMainRef = ref<HTMLElement | null>(null)
+const feedLoadMoreSentinelRef = ref<HTMLElement | null>(null)
+const COMMUNITY_FEED_PAGE_SIZE = 8
 
 const triggerCreatePost = () => {
   createPostRef.value?.triggerHighlight()
@@ -342,10 +424,17 @@ const {
   feedViewerKey,
   feedActivity,
   feedTrendingItems,
-  setFeedSummary,
 } = useCommunityFeedCache()
+const supabase = useSupabaseClient()
+let refreshFeedPromise: Promise<void> | null = null
+let loadMoreRequestsPromise: Promise<void> | null = null
+let feedPollIntervalId: ReturnType<typeof setInterval> | null = null
+let feedRealtimeChannel: ReturnType<typeof supabase.channel> | null = null
+let feedLoadMoreObserver: IntersectionObserver | null = null
 const initialViewerKey = user.value?.id ?? "anonymous"
 const isLoadingFeed = ref(!feedHydrated.value || feedViewerKey.value !== initialViewerKey)
+const isLoadingMoreRequests = ref(false)
+const hasMoreRequests = ref(requests.value.length >= COMMUNITY_FEED_PAGE_SIZE)
 const isCreatingRequest = ref(false)
 const isSubmittingOffer = ref(false)
 const feedError = ref<string | null>(null)
@@ -403,6 +492,61 @@ const extractApiErrorMessage = (error: unknown, fallback: string) => {
   )
 }
 
+const applyFeedSnapshot = (
+  snapshot: {
+    requests: ApiCommunityRequest[]
+    notifications: ApiCommunityNotification[]
+    offerableItems: ApiOfferableItem[]
+    currentDbUserId?: string | null
+    viewerKey?: string | null
+    userActivity?: ReturnType<typeof buildCommunityFeedActivity> | null
+    trendingItems?: Array<{ id: number; title: string; offersCount: number }> | null
+  },
+  options: { loadedAt?: number | null; requestLimit?: number } = {},
+) => {
+  const nextRequests = snapshot.requests.map(normalizeCommunityRequest)
+  requests.value = nextRequests
+  notifications.value = snapshot.notifications.map(normalizeCommunityNotification)
+  offerableItems.value = snapshot.offerableItems.map(normalizeOfferableItem)
+  currentDbUserId.value = snapshot.currentDbUserId ?? currentDbUserId.value
+  feedViewerKey.value = snapshot.viewerKey ?? user.value?.id ?? "anonymous"
+  feedActivity.value =
+    snapshot.userActivity ?? buildCommunityFeedActivity(nextRequests, currentDbUserId.value)
+  feedTrendingItems.value = snapshot.trendingItems ?? buildCommunityFeedTrendingItems(nextRequests)
+  feedHydrated.value = true
+  feedLastLoadedAt.value = options.loadedAt ?? Date.now()
+  isLoadingFeed.value = false
+  hasMoreRequests.value =
+    snapshot.requests.length >= (options.requestLimit ?? COMMUNITY_FEED_PAGE_SIZE)
+}
+
+const appendFeedRequests = (apiRequests: ApiCommunityRequest[]) => {
+  const existingIds = new Set(requests.value.map((request) => request.id))
+  const nextRequests = apiRequests
+    .map(normalizeCommunityRequest)
+    .filter((request) => !existingIds.has(request.id))
+
+  if (nextRequests.length > 0) {
+    requests.value = [...requests.value, ...nextRequests]
+    feedLastLoadedAt.value = Date.now()
+  }
+
+  hasMoreRequests.value = apiRequests.length >= COMMUNITY_FEED_PAGE_SIZE
+}
+
+const isFeedCacheFreshForViewer = (viewerKey: string) =>
+  feedHydrated.value &&
+  feedViewerKey.value === viewerKey &&
+  feedLastLoadedAt.value !== null &&
+  Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS &&
+  hasHydratedRequestReplies()
+
+const hasFeedCacheForViewer = (viewerKey: string) =>
+  feedHydrated.value && feedViewerKey.value === viewerKey
+
+const hasHydratedRequestReplies = () =>
+  requests.value.every((request) => request.repliesCount === 0 || request.replies.length > 0)
+
 const getAuthHeaders = async () => {
   const { getAuthHeaders } = useViewerSession()
   const headers = await getAuthHeaders()
@@ -413,6 +557,47 @@ const getAuthHeaders = async () => {
     authorization,
   }
 }
+
+const { data: initialFeedLoaded } = useLazyAsyncData(
+  "community-feed-initial-data",
+  async () => {
+    const viewerKey = user.value?.id ?? "anonymous"
+    if (isFeedCacheFreshForViewer(viewerKey)) {
+      return true
+    }
+
+    const headers = await getAuthHeaders()
+    const initialFeedSnapshot = await withPerfTimer(
+      "community-feed",
+      viewerKey,
+      () =>
+        $fetch<{
+          requests: ApiCommunityRequest[]
+          notifications: ApiCommunityNotification[]
+          offerableItems: ApiOfferableItem[]
+          currentDbUserId: string
+          viewerKey: string
+          userActivity: ReturnType<typeof buildCommunityFeedActivity>
+          trendingItems: Array<{ id: number; title: string; offersCount: number }>
+        }>("/api/community-feed/preview", {
+          query: { limit: 8 },
+          ...(headers ? { headers } : {}),
+        }),
+      {
+        detail: "initialFeedSnapshot",
+      },
+    )
+
+    applyFeedSnapshot(initialFeedSnapshot, {
+      // Paint instantly, then let the mounted path decide whether to refresh in background.
+      loadedAt: getStaleCommunityFeedTimestamp(),
+    })
+    return true
+  },
+  {
+    default: () => false,
+  },
+)
 
 const enumerateRequestedDates = (
   startDate: string,
@@ -447,63 +632,162 @@ const enumerateRequestedDates = (
 }
 
 const refreshFeed = async () => {
-  if (feedHydrated.value) {
-    isLoadingFeed.value = false
-  } else {
-    isLoadingFeed.value = true
+  if (refreshFeedPromise) {
+    return refreshFeedPromise
   }
 
-  feedError.value = null
-
-  try {
-    const headers = await getAuthHeaders()
-    feedViewerKey.value = user.value?.id ?? "anonymous"
-
-    if (headers) {
-      const { authUser: cachedAuthUser, fetch: fetchAuthUser } = useAuthUser()
-      const authUser = cachedAuthUser.value ?? (await fetchAuthUser())
-      currentDbUserId.value = authUser?.id ?? ""
-    } else {
-      currentDbUserId.value = ""
-    }
-
-    const [requestResponse, notificationResponse, offerableItemResponse] = await withPerfTimer(
-      "community-feed",
-      feedViewerKey.value,
-      () =>
-        Promise.all([
-          $fetch<ApiCommunityRequest[]>("/api/item-requests", {
-            query: { includeCancelledOffers: true, offersLimit: 5 },
-            ...(headers ? { headers } : {}),
-          }),
-          headers
-            ? $fetch<ApiCommunityNotification[]>("/api/request-offers/notifications", {
-                query: { limit: 20 },
-                headers,
-              })
-            : Promise.resolve([]),
-          headers
-            ? $fetch<ApiOfferableItem[]>("/api/request-offers/items", { headers })
-            : Promise.resolve([]),
-        ]),
-      {
-        detail: "refreshFeed",
-      },
+  refreshFeedPromise = (async () => {
+    const requestLimit = Math.min(
+      50,
+      Math.max(COMMUNITY_FEED_PAGE_SIZE, requests.value.length || COMMUNITY_FEED_PAGE_SIZE),
     )
 
-    const nextRequests = requestResponse.map(normalizeCommunityRequest)
-    requests.value = nextRequests
-    notifications.value = notificationResponse.map(normalizeCommunityNotification)
-    offerableItems.value = offerableItemResponse.map(normalizeOfferableItem)
-    setFeedSummary(nextRequests, currentDbUserId.value)
-    feedLastLoadedAt.value = Date.now()
-  } catch (error) {
-    console.error("Failed to load community feed", error)
-    feedError.value = "Unable to load the live community feed right now."
-  } finally {
-    isLoadingFeed.value = false
-    feedHydrated.value = true
+    if (feedHydrated.value) {
+      isLoadingFeed.value = false
+    } else {
+      isLoadingFeed.value = true
+    }
+
+    feedError.value = null
+
+    try {
+      const headers = await getAuthHeaders()
+      feedViewerKey.value = user.value?.id ?? "anonymous"
+
+      const feedSnapshot = await withPerfTimer(
+        "community-feed",
+        feedViewerKey.value,
+        () =>
+          $fetch<ApiCommunityFeedPreviewResponse>("/api/community-feed/preview", {
+            query: { limit: requestLimit },
+            ...(headers ? { headers } : {}),
+          }),
+        {
+          detail: "refreshFeed",
+        },
+      )
+
+      applyFeedSnapshot(feedSnapshot, {
+        loadedAt: Date.now(),
+        requestLimit,
+      })
+    } catch (error) {
+      console.error("Failed to load community feed", error)
+      feedError.value = "Unable to load the live community feed right now."
+    } finally {
+      isLoadingFeed.value = false
+      feedHydrated.value = true
+      refreshFeedPromise = null
+    }
+  })()
+
+  return refreshFeedPromise
+}
+
+const loadNextRequestBatch = async () => {
+  if (loadMoreRequestsPromise) {
+    return loadMoreRequestsPromise
   }
+
+  if (isLoadingFeed.value || !hasMoreRequests.value) {
+    return
+  }
+
+  loadMoreRequestsPromise = (async () => {
+    isLoadingMoreRequests.value = true
+    feedError.value = null
+
+    try {
+      const headers = await getAuthHeaders()
+      const nextRequests = await withPerfTimer(
+        "community-feed",
+        feedViewerKey.value,
+        () =>
+          $fetch<ApiCommunityRequest[]>("/api/item-requests", {
+            query: {
+              includeCancelledOffers: true,
+              includeReplies: true,
+              offersLimit: 5,
+              limit: COMMUNITY_FEED_PAGE_SIZE,
+              skip: requests.value.length,
+            },
+            ...(headers ? { headers } : {}),
+          }),
+        {
+          detail: "loadNextRequestBatch",
+        },
+      )
+
+      appendFeedRequests(nextRequests)
+    } catch (error) {
+      console.error("Failed to load more community requests", error)
+      feedError.value = "Unable to load more community requests right now."
+    } finally {
+      isLoadingMoreRequests.value = false
+      loadMoreRequestsPromise = null
+    }
+  })()
+
+  return loadMoreRequestsPromise
+}
+
+const stopFeedLoadMoreObserver = () => {
+  if (feedLoadMoreObserver) {
+    feedLoadMoreObserver.disconnect()
+    feedLoadMoreObserver = null
+  }
+}
+
+const startFeedLoadMoreObserver = () => {
+  if (!import.meta.client) return
+
+  stopFeedLoadMoreObserver()
+
+  if (!feedLoadMoreSentinelRef.value) return
+
+  feedLoadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void loadNextRequestBatch()
+      }
+    },
+    {
+      root: feedMainRef.value,
+      rootMargin: "700px 0px",
+      threshold: 0,
+    },
+  )
+  feedLoadMoreObserver.observe(feedLoadMoreSentinelRef.value)
+}
+
+const stopFeedSync = () => {
+  if (feedPollIntervalId !== null) {
+    clearInterval(feedPollIntervalId)
+    feedPollIntervalId = null
+  }
+
+  if (feedRealtimeChannel) {
+    void supabase.removeChannel(feedRealtimeChannel)
+    feedRealtimeChannel = null
+  }
+}
+
+const startFeedSync = () => {
+  stopFeedSync()
+
+  feedRealtimeChannel = supabase
+    .channel("community-feed")
+    .on("broadcast", { event: "message" }, () => {
+      void refreshFeed()
+    })
+
+  void feedRealtimeChannel.subscribe()
+
+  feedPollIntervalId = setInterval(() => {
+    if (!document.hidden) {
+      void refreshFeed()
+    }
+  }, COMMUNITY_FEED_CACHE_TTL_MS)
 }
 
 const selectedRequestForOffer = computed(() => {
@@ -571,15 +855,16 @@ const ensureAuthenticatedHeaders = async () => {
 }
 
 const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
-  const headers = await getAuthHeaders()
-  if (!headers) {
-    requestComposerError.value = "You need to sign in before posting a request."
-    return
-  }
-
   isCreatingRequest.value = true
   feedError.value = null
   requestComposerError.value = null
+
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    requestComposerError.value = "You need to sign in before posting a request."
+    isCreatingRequest.value = false
+    return
+  }
 
   try {
     await $fetch("/api/item-requests", {
@@ -679,17 +964,21 @@ const handleCreateOfferableItem = async (data: Record<string, unknown>) => {
 }
 
 const submitOffer = async (offerInput: CommunityOfferFormInput) => {
+  isSubmittingOffer.value = true
+  feedError.value = null
+  offerComposerError.value = null
+
   const request = selectedRequestForOffer.value
   const headers = await getAuthHeaders()
   if (!headers) {
     offerComposerError.value = "You need to sign in before sending an offer."
+    isSubmittingOffer.value = false
     return
   }
-  if (!request) return
-
-  isSubmittingOffer.value = true
-  feedError.value = null
-  offerComposerError.value = null
+  if (!request) {
+    isSubmittingOffer.value = false
+    return
+  }
 
   try {
     if (existingOfferForCurrentUser.value) {
@@ -721,12 +1010,15 @@ const submitOffer = async (offerInput: CommunityOfferFormInput) => {
 }
 
 const cancelOffer = async (offerId: number) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
   isSubmittingOffer.value = true
   feedError.value = null
   offerComposerError.value = null
+
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) {
+    isSubmittingOffer.value = false
+    return
+  }
 
   try {
     await $fetch(`/api/request-offers/${offerId}`, {
@@ -813,36 +1105,6 @@ const handleUpdateOfferStatus = async (payload: {
       },
     })
 
-    if (payload.status === "ACCEPTED") {
-      const request = requests.value.find((entry) => entry.id === payload.requestId)
-
-      if (request) {
-        const remainingPendingOffers = request.offers.filter(
-          (offer) => offer.id !== payload.offerId && offer.status === "PENDING",
-        )
-
-        await Promise.all(
-          remainingPendingOffers.map((offer) =>
-            $fetch(`/api/request-offers/${offer.id}`, {
-              method: "PATCH",
-              headers,
-              body: {
-                status: "DECLINED",
-              },
-            }),
-          ),
-        )
-      }
-
-      await $fetch(`/api/item-requests/${payload.requestId}`, {
-        method: "PATCH",
-        headers,
-        body: {
-          status: "FULFILLED",
-        },
-      })
-    }
-
     await refreshFeed()
   } catch (error) {
     console.error("Failed to update offer status", error)
@@ -892,13 +1154,11 @@ const markAllNotificationsRead = async () => {
 }
 
 onMounted(() => {
+  startFeedSync()
+  void nextTick(startFeedLoadMoreObserver)
+
   const currentViewerKey = user.value?.id ?? "anonymous"
-  const isViewerCacheMatch = feedViewerKey.value === currentViewerKey
-  const isCachedFeedFresh =
-    feedHydrated.value &&
-    isViewerCacheMatch &&
-    feedLastLoadedAt.value !== null &&
-    Date.now() - feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS
+  const isCachedFeedFresh = isFeedCacheFreshForViewer(currentViewerKey)
 
   if (isCachedFeedFresh) {
     recordPerfEvent("community-feed", currentViewerKey, "cache-hit")
@@ -906,7 +1166,14 @@ onMounted(() => {
     return
   }
 
-  if (feedHydrated.value && isViewerCacheMatch) {
+  if (hasFeedCacheForViewer(currentViewerKey)) {
+    recordPerfEvent("community-feed", currentViewerKey, "background-refresh")
+    isLoadingFeed.value = false
+    void refreshFeed()
+    return
+  }
+
+  if (initialFeedLoaded.value) {
     recordPerfEvent("community-feed", currentViewerKey, "background-refresh")
     isLoadingFeed.value = false
     void refreshFeed()
@@ -923,6 +1190,7 @@ watch(
   (nextUserId, previousUserId) => {
     if (!feedHydrated.value) return
     if (nextUserId === previousUserId) return
+    startFeedSync()
     void refreshFeed()
   },
 )
@@ -931,6 +1199,18 @@ watch(currentDbUserId, (userId) => {
   if (!userId && activeFilter.value === "My Requests") {
     activeFilter.value = "Newest"
   }
+})
+
+watch(
+  () => [isLoadingFeed.value, sortedRequests.value.length, activeFilter.value],
+  () => {
+    void nextTick(startFeedLoadMoreObserver)
+  },
+)
+
+onBeforeUnmount(() => {
+  stopFeedLoadMoreObserver()
+  stopFeedSync()
 })
 </script>
 

@@ -2,7 +2,10 @@
   <div class="min-h-screen bg-white font-geist pt-16">
     <ProfileSkeleton v-if="isLoading" />
 
-    <div v-else-if="profileData" class="max-w-[1200px] mx-auto py-6 flex flex-col gap-6">
+    <div
+      v-else-if="profileData"
+      class="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6"
+    >
       <!-- TOP HERO SECTION -->
       <header class="profile-hero shadow-xl group/hero">
         <!-- Layered Background System -->
@@ -156,9 +159,11 @@
       <!-- MAIN CONTENT SECTION -->
       <main>
         <!-- Simplified Tab Bar -->
-        <div class="flex items-center gap-8 border-b border-gray-100 mb-8 px-2">
+        <div
+          class="flex items-center gap-8 border-b border-gray-100 mb-8 px-2 overflow-x-auto scrollbar-hide"
+        >
           <button
-            class="relative py-4 text-[15px] font-bold transition-all"
+            class="relative py-4 text-[15px] font-bold transition-all shrink-0"
             :class="
               activeTab === 'reviews' ? 'text-burning-orange' : 'text-gray-400 hover:text-gray-600'
             "
@@ -185,7 +190,7 @@
           </button>
 
           <button
-            class="relative py-4 text-[15px] font-bold transition-all"
+            class="relative py-4 text-[15px] font-bold transition-all shrink-0"
             :class="
               activeTab === 'listings' ? 'text-burning-orange' : 'text-gray-400 hover:text-gray-600'
             "
@@ -214,9 +219,11 @@
 
         <div class="tab-content min-h-[400px]">
           <!-- REVIEWS PANEL -->
-          <div v-if="activeTab === 'reviews'" class="flex flex-col lg:flex-row gap-8">
-            <!-- Left Column: Reviews List (Scrollable) -->
-            <div class="lg:w-[65%] max-h-[800px] overflow-y-auto pr-6 custom-scrollbar">
+          <div v-if="activeTab === 'reviews'" class="flex flex-col-reverse lg:flex-row gap-8">
+            <!-- Left Column: Reviews List (Scrollable on Desktop) -->
+            <div
+              class="lg:w-[65%] lg:max-h-[800px] lg:overflow-y-auto pr-0 lg:pr-6 lg:custom-scrollbar"
+            >
               <div class="flex items-center gap-2 mb-6">
                 <h3 class="text-[15px] font-semibold text-gray-700">Feedback History</h3>
                 <span class="text-gray-400">·</span>
@@ -250,7 +257,9 @@
                   class="py-6 flex flex-col gap-4"
                   :class="{ 'border-b border-gray-50': index !== visibleReviews.length - 1 }"
                 >
-                  <div class="flex items-start justify-between">
+                  <div
+                    class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  >
                     <!-- Link for non-anonymous reviewers -->
                     <NuxtLink
                       v-if="review.reviewer.username"
@@ -316,7 +325,7 @@
                     </div>
 
                     <div
-                      class="px-3 py-1 rounded-full text-[11px] font-bold"
+                      class="px-3 py-1 rounded-full text-[11px] font-bold self-start sm:self-auto"
                       :class="
                         review.reviewType === 'LENDER_REVIEW'
                           ? 'bg-burning-orange/10 text-burning-orange'
@@ -372,7 +381,7 @@
             <!-- Right Column: Role Feedback Guide -->
             <div class="lg:w-[35%]">
               <div
-                class="sticky top-24 rounded-[14px] border border-gray-100 bg-white p-5 shadow-sm"
+                class="lg:sticky lg:top-24 rounded-[14px] border border-gray-100 bg-white p-5 shadow-sm mb-4 lg:mb-0"
               >
                 <div class="flex items-center gap-2 text-[13px] font-semibold text-gray-700 mb-4">
                   Role Guide
@@ -409,7 +418,7 @@
           <!-- LISTINGS PANEL -->
           <div
             v-if="activeTab === 'listings'"
-            class="tab-panel active max-h-[800px] overflow-y-auto pr-6 custom-scrollbar"
+            class="tab-panel active lg:max-h-[800px] lg:overflow-y-auto pr-0 lg:pr-6 lg:custom-scrollbar"
           >
             <div class="mb-8 sticky top-0 bg-white z-20 py-2">
               <div class="text-[16px] text-gray-500 font-semibold">
@@ -418,7 +427,7 @@
             </div>
             <div
               v-if="profileData.items.length > 0"
-              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
+              class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-6 lg:gap-8"
             >
               <ItemCard
                 v-for="item in profileData.items"
@@ -765,7 +774,7 @@ const formatDate = (date: string | Date) => {
   }
   .hero-stats-group {
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     justify-content: space-between;
     min-width: 0;
   }
@@ -773,33 +782,68 @@ const formatDate = (date: string | Date) => {
     flex: 1;
   }
   .hero-stats-grid {
-    flex: 2;
+    flex: 1;
   }
 }
 
 @media (max-width: 768px) {
   .profile-hero {
-    padding: 32px;
-    border-radius: 30px;
+    padding: 24px 20px;
+    border-radius: 24px;
+    min-height: auto;
   }
   .user-info-group {
     flex-direction: column;
     text-align: center;
-    gap: 20px;
+    gap: 16px;
   }
   .hero-avatar {
-    width: 120px;
-    height: 120px;
+    width: 90px;
+    height: 90px;
+    border-width: 4px;
   }
   .hero-name {
-    font-size: 32px;
+    font-size: 28px;
+    margin-bottom: 4px;
+  }
+  .hero-handle {
+    font-size: 16px;
+  }
+  .hero-bio {
+    font-size: 13px;
+    margin-top: 12px;
+    padding: 0 10px;
   }
   .hero-stats-group {
     flex-direction: column;
+    gap: 16px;
     width: 100%;
   }
+  .hero-rating-box {
+    padding: 16px;
+    border-radius: 18px;
+  }
+  .hero-rating-val {
+    font-size: 32px;
+  }
+  .rating-max {
+    font-size: 16px;
+  }
+  .hero-stars .star {
+    font-size: 14px;
+  }
   .hero-stats-grid {
-    width: 100%;
+    border-radius: 18px;
+  }
+  .hstat {
+    padding: 12px 8px;
+  }
+  .hstat-val {
+    font-size: 16px;
+  }
+  .hstat-label {
+    font-size: 8px;
+    letter-spacing: 0.2px;
   }
 }
 </style>

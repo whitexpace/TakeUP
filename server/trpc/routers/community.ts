@@ -1,25 +1,38 @@
-import { Prisma } from "@prisma/client"
+import {
+  BookingPaymentStatus as PrismaBookingPaymentStatus,
+  BookingStatus as PrismaBookingStatus,
+  PaymentMethod as PrismaPaymentMethod,
+  Prisma,
+  TransactionStatus as PrismaTransactionStatus,
+} from "@prisma/client"
 import { TRPCError } from "@trpc/server"
+import type { Context } from "../context"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
+  createItemRequestReplySchema,
   createItemRequestSchema,
   createRequestOfferSchema,
   deleteItemRequestSchema,
   deleteRequestOfferSchema,
   itemRequestIdSchema,
   itemRequestStatusSchema,
+  listItemRequestRepliesSchema,
   listItemRequestsSchema,
   listRequestOfferNotificationsSchema,
   listRequestOffersSchema,
   markRequestOfferNotificationReadSchema,
   requestOfferIdSchema,
   requestOfferStatusSchema,
+  toggleItemRequestReplyUpvoteSchema,
   type ItemRequestStatus,
   type RequestOfferStatus,
   updateItemRequestSchema,
   updateRequestOfferSchema,
 } from "#shared/schemas/item-request"
+import { broadcastCommunityFeedEvent } from "../../utils/community-feed-realtime"
+import { calculatePlatformCommissionAmount } from "../../utils/platform-commission"
+import { BOOKING_ENTITY_TYPE, payWithWallet } from "../../utils/wallet"
 
 type ProfileIdRow = {
   id: number
@@ -59,6 +72,7 @@ type RequestRow = {
   borrowerEmail: string
   borrowerAvatarUrl: string | null
   offersCount: number | bigint
+  repliesCount: number | bigint
 }
 
 type OfferRow = {
@@ -89,6 +103,113 @@ type OfferRow = {
   requestItemNeeded: string
 }
 
+type AcceptedOfferDetailsRow = {
+  id: number
+  status: string
+  requestID: number
+  rentalFee: number
+  availability: boolean
+  requestStatus: string
+  requestedDates: Date[] | string[]
+  borrowerUserId: string
+  lenderUserId: string
+  itemId: string
+  itemStatus: string
+}
+
+type ReplyAuthor = {
+  userId: string
+  username: string
+  firstName: string
+  middleName: string | null
+  lastName: string
+  email: string
+  avatarUrl: string | null
+}
+
+type ReplyRow = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  body: string
+  createdAt: Date
+  updatedAt: Date
+  author: ReplyAuthor
+  upvoteCount: number
+  isUpvoted: boolean
+}
+
+type CommunityReplyNode = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  user: {
+    userId: string
+    username: string
+    name: string
+    avatar: string
+  }
+  text: string
+  upvotes: number
+  isUpvoted: boolean
+  createdAt: Date
+  updatedAt: Date
+  replies: CommunityReplyNode[]
+}
+
+type ReplyFindManyArgs = {
+  where: { requestId: number | { in: number[] } }
+  orderBy: Array<{ createdAt: "asc" }>
+  select: {
+    id: true
+    requestId: true
+    parentReplyId: true
+    body: true
+    createdAt: true
+    updatedAt: true
+    author: {
+      select: {
+        id: true
+        username: true
+        firstName: true
+        middleName: true
+        lastName: true
+        email: true
+        avatarUrl: true
+      }
+    }
+    _count: { select: { upvotes: true } }
+    upvotes: {
+      where: { userId: string }
+      select: { id: true }
+    }
+  }
+}
+
+type ReplyFindManyRow = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  body: string
+  createdAt: Date
+  updatedAt: Date
+  author: {
+    id: string
+    username: string
+    firstName: string
+    middleName: string | null
+    lastName: string
+    email: string
+    avatarUrl: string | null
+  }
+  _count: { upvotes: number }
+  upvotes: Array<{ id: string }>
+}
+
+type ItemRequestReplyReader = {
+  findMany(args: ReplyFindManyArgs): Promise<ReplyFindManyRow[]>
+}
+
 const toDate = (value: Date | string | null | undefined) => {
   if (!value) return null
   return value instanceof Date ? value : new Date(value)
@@ -112,10 +233,67 @@ const formatUserName = (user: {
   middleName: string | null
   lastName: string
   email: string
-}) =>
-  user.username ||
-  [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ") ||
-  user.email
+}) => {
+  const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ").trim()
+
+  return fullName || user.username || user.email
+}
+
+const mapCommunityMember = (user: ReplyAuthor) => ({
+  userId: user.userId,
+  username: user.username,
+  name: formatUserName(user),
+  avatar: user.avatarUrl || "",
+})
+
+const mapReplyRow = (reply: ReplyRow): CommunityReplyNode => ({
+  id: reply.id,
+  requestId: reply.requestId,
+  parentReplyId: reply.parentReplyId,
+  user: mapCommunityMember(reply.author),
+  text: reply.body,
+  upvotes: reply.upvoteCount,
+  isUpvoted: reply.isUpvoted,
+  createdAt: reply.createdAt,
+  updatedAt: reply.updatedAt,
+  replies: [],
+})
+
+const buildReplyTree = (rows: ReplyRow[]) => {
+  const nodesById = new Map<string, CommunityReplyNode>()
+  const roots: CommunityReplyNode[] = []
+
+  for (const row of rows) {
+    nodesById.set(row.id, mapReplyRow(row))
+  }
+
+  for (const row of rows) {
+    const node = nodesById.get(row.id)
+    if (!node) continue
+
+    if (row.parentReplyId) {
+      const parent = nodesById.get(row.parentReplyId)
+      if (parent) {
+        parent.replies.push(node)
+        continue
+      }
+    }
+
+    roots.push(node)
+  }
+
+  const sortNodes = (nodes: CommunityReplyNode[]) => {
+    nodes.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+    for (const node of nodes) {
+      if (node.replies.length > 0) {
+        sortNodes(node.replies)
+      }
+    }
+  }
+
+  sortNodes(roots)
+  return roots
+}
 
 const sqlDateArray = (values: Date[]) =>
   Prisma.sql`ARRAY[${Prisma.join(values.map((value) => Prisma.sql`${value}`))}]::timestamp[]`
@@ -131,6 +309,213 @@ const sqlRequestOfferStatus = (status: RequestOfferStatus) =>
 
 const sqlItemCondition = (condition: string) =>
   Prisma.sql`${Prisma.raw(`'${condition}'::"ItemCondition"`)}`
+
+const normalizeRequestedDateWindow = (requestedDates: Date[] | string[]) => {
+  const dates = requestedDates
+    .map((value) => toDate(value))
+    .filter((value): value is Date => value !== null)
+    .sort((a, b) => a.getTime() - b.getTime())
+
+  const startDate = dates[0]
+  const endDate = dates[dates.length - 1]
+
+  if (!startDate || !endDate) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This request does not have valid requested dates.",
+    })
+  }
+
+  return { startDate, endDate }
+}
+
+const createPendingRentalTransactionForOfferBooking = async (
+  prisma: Pick<Context["prisma"], "rentalTransaction">,
+  booking: {
+    id: string
+    borrowerId: string
+    lenderId: string
+    itemId: string
+    startDate: Date
+    endDate: Date
+    totalFee: number
+    platformCommission: number
+  },
+) => {
+  const rentalFee = Math.max(0, booking.totalFee - booking.platformCommission)
+
+  return await prisma.rentalTransaction.create({
+    data: {
+      bookingId: booking.id,
+      borrowerId: booking.borrowerId,
+      lenderId: booking.lenderId,
+      itemId: booking.itemId,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      rentalFee,
+      platformFee: booking.platformCommission,
+      status: PrismaTransactionStatus.PENDING,
+    },
+  })
+}
+
+const acceptRequestOffer = async (
+  prisma: Context["prisma"],
+  input: { id: number },
+  actorUserId: string,
+) => {
+  return await prisma.$transaction(async (tx) => {
+    const txPrisma = tx as Context["prisma"]
+    const rows = await txPrisma.$queryRaw<AcceptedOfferDetailsRow[]>(Prisma.sql`
+      SELECT
+        o."id",
+        o."status"::text AS "status",
+        o."requestID",
+        o."rentalFee",
+        o."availability",
+        r."status"::text AS "requestStatus",
+        r."requestedDates",
+        rb."userId" AS "borrowerUserId",
+        l."userId" AS "lenderUserId",
+        i."id" AS "itemId",
+        i."status"::text AS "itemStatus"
+      FROM "RequestOffer" o
+      INNER JOIN "ItemRequest" r ON r."id" = o."requestID"
+      INNER JOIN "Borrower" rb ON rb."id" = r."borrowerID"
+      INNER JOIN "Lender" l ON l."id" = o."lenderID"
+      INNER JOIN "Item" i ON i."numericId" = o."itemID"
+      WHERE o."id" = ${input.id}
+      FOR UPDATE OF o, r, i
+    `)
+
+    const offer = rows[0]
+    if (!offer) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
+    }
+
+    if (offer.borrowerUserId !== actorUserId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only the request owner can accept offers.",
+      })
+    }
+
+    const existingBooking = await txPrisma.booking.findUnique({
+      where: { requestOfferId: input.id },
+      select: { id: true },
+    })
+
+    if (offer.status === requestOfferStatusSchema.enum.ACCEPTED && existingBooking) {
+      return existingBooking
+    }
+
+    if (existingBooking) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "A booking already exists for this offer.",
+      })
+    }
+
+    const isPendingAcceptance = offer.status === requestOfferStatusSchema.enum.PENDING
+    const isAcceptedBackfill = offer.status === requestOfferStatusSchema.enum.ACCEPTED
+
+    if (!isPendingAcceptance && !isAcceptedBackfill) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Only pending or accepted offers can be converted into bookings.",
+      })
+    }
+
+    const isRequestStatusAllowed = isAcceptedBackfill
+      ? offer.requestStatus === itemRequestStatusSchema.enum.OPEN ||
+        offer.requestStatus === itemRequestStatusSchema.enum.FULFILLED
+      : offer.requestStatus === itemRequestStatusSchema.enum.OPEN
+
+    if (!isRequestStatusAllowed) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: isAcceptedBackfill
+          ? "This accepted offer cannot be backfilled because the request was cancelled."
+          : "This request is no longer open.",
+      })
+    }
+
+    if (!offer.availability || offer.itemStatus !== "AVAILABLE") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "The offered item is no longer available.",
+      })
+    }
+
+    const { startDate, endDate } = normalizeRequestedDateWindow(offer.requestedDates)
+    const now = new Date()
+    const totalFee = offer.rentalFee
+    const platformCommission = calculatePlatformCommissionAmount(totalFee)
+
+    const booking = await txPrisma.booking.create({
+      data: {
+        borrowerId: offer.borrowerUserId,
+        lenderId: offer.lenderUserId,
+        itemId: offer.itemId,
+        requestOfferId: offer.id,
+        startDate,
+        endDate,
+        totalFee,
+        platformCommission,
+        paymentMethod: PrismaPaymentMethod.WALLET,
+        paymentStatus: PrismaBookingPaymentStatus.PAID,
+        paymentProcessedAt: now,
+        status: PrismaBookingStatus.PENDING,
+        updatedAt: now,
+      },
+      select: {
+        id: true,
+        borrowerId: true,
+        lenderId: true,
+        itemId: true,
+        startDate: true,
+        endDate: true,
+        totalFee: true,
+        platformCommission: true,
+      },
+    })
+
+    if (totalFee > 0) {
+      await payWithWallet(
+        offer.borrowerUserId,
+        totalFee,
+        {
+          relatedEntityType: BOOKING_ENTITY_TYPE,
+          relatedEntityId: booking.id,
+        },
+        tx as Prisma.TransactionClient,
+      )
+    }
+
+    await createPendingRentalTransactionForOfferBooking(txPrisma, booking)
+
+    await txPrisma.requestOffer.update({
+      where: { id: offer.id },
+      data: { status: requestOfferStatusSchema.enum.ACCEPTED },
+    })
+
+    await txPrisma.requestOffer.updateMany({
+      where: {
+        requestID: offer.requestID,
+        id: { not: offer.id },
+        status: requestOfferStatusSchema.enum.PENDING,
+      },
+      data: { status: requestOfferStatusSchema.enum.DECLINED },
+    })
+
+    await txPrisma.itemRequest.update({
+      where: { id: offer.requestID },
+      data: { status: itemRequestStatusSchema.enum.FULFILLED },
+    })
+
+    return { id: booking.id }
+  })
+}
 
 const mapOffer = (offer: OfferRow) => ({
   id: offer.id,
@@ -162,7 +547,11 @@ const mapOffer = (offer: OfferRow) => ({
   },
 })
 
-const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
+const mapRequest = (
+  request: RequestRow,
+  offers: OfferRow[],
+  replies: CommunityReplyNode[] = [],
+) => ({
   id: request.id,
   borrowerID: request.borrowerID,
   itemNeeded: request.itemNeeded,
@@ -174,6 +563,7 @@ const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
   createdAt: toDate(request.createdAt),
   updatedAt: toDate(request.updatedAt),
   offersCount: toNumber(request.offersCount),
+  repliesCount: toNumber(request.repliesCount),
   borrower: {
     profileId: request.borrowerProfileId,
     userId: request.borrowerUserId,
@@ -188,6 +578,7 @@ const mapRequest = (request: RequestRow, offers: OfferRow[]) => ({
     avatar: request.borrowerAvatarUrl || "",
   },
   offers: offers.map(mapOffer),
+  replies,
 })
 
 const buildRequestWhereSql = (
@@ -225,53 +616,120 @@ const buildRequestWhereSql = (
   return clauses.length > 0 ? Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}` : Prisma.empty
 }
 
+const ITEM_REQUEST_REPLY_TABLE_CACHE_TTL_MS = 60_000
+let itemRequestReplyTableAvailability: {
+  checkedAt: number
+  exists: boolean
+} | null = null
+
+const hasItemRequestReplyTable = async (prisma: {
+  $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+  itemRequestReply?: unknown
+}) => {
+  if ("mock" in prisma.$queryRaw) {
+    return true
+  }
+
+  if (
+    itemRequestReplyTableAvailability &&
+    Date.now() - itemRequestReplyTableAvailability.checkedAt < ITEM_REQUEST_REPLY_TABLE_CACHE_TTL_MS
+  ) {
+    return itemRequestReplyTableAvailability.exists
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>(Prisma.sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = 'item_request_replies'
+    ) AS "exists"
+  `)
+
+  const exists = Boolean(rows[0]?.exists)
+  itemRequestReplyTableAvailability = {
+    checkedAt: Date.now(),
+    exists,
+  }
+
+  return exists
+}
+
+const buildRequestRowsQuery = (whereSql: Prisma.Sql, includeRepliesCount: boolean) => Prisma.sql`
+  SELECT
+    r."id",
+    r."borrowerID",
+    r."itemNeeded",
+    r."referenceImageUrl",
+    r."requestedDates",
+    r."priceRange",
+    r."description",
+    r."status"::text AS "status",
+    r."createdAt",
+    r."updatedAt",
+    b."id" AS "borrowerProfileId",
+    b."userId" AS "borrowerUserId",
+    u."username" AS "borrowerUsername",
+    u."firstName" AS "borrowerFirstName",
+    u."middleName" AS "borrowerMiddleName",
+    u."lastName" AS "borrowerLastName",
+    u."email" AS "borrowerEmail",
+    u."avatarUrl" AS "borrowerAvatarUrl",
+    COALESCE(oc."offersCount", 0) AS "offersCount",
+    ${
+      includeRepliesCount ? Prisma.sql`COALESCE(rc."repliesCount", 0)` : Prisma.sql`0`
+    } AS "repliesCount"
+  FROM "ItemRequest" r
+  INNER JOIN "Borrower" b ON b."id" = r."borrowerID"
+  INNER JOIN "User" u ON u."id" = b."userId"
+  LEFT JOIN (
+    SELECT
+      "requestID",
+      COUNT(*)::int AS "offersCount"
+    FROM "RequestOffer"
+    WHERE "status" <> ${sqlRequestOfferStatus(requestOfferStatusSchema.enum.CANCELLED)}
+    GROUP BY "requestID"
+  ) oc ON oc."requestID" = r."id"
+  ${
+    includeRepliesCount
+      ? Prisma.sql`
+        LEFT JOIN (
+          SELECT
+            "request_id",
+            COUNT(*)::int AS "repliesCount"
+          FROM "item_request_replies"
+          GROUP BY "request_id"
+        ) rc ON rc."request_id" = r."id"
+      `
+      : Prisma.empty
+  }
+  ${whereSql}
+  ORDER BY r."createdAt" DESC
+`
+
 const fetchRequestRows = async (
   prisma: {
     $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+    itemRequestReply?: unknown
   },
   options: {
     requestId?: number
     status?: ItemRequestStatus
     borrowerOnly?: boolean
+    limit?: number
+    skip?: number
   },
   viewerUserId: string | null,
 ) => {
   const whereSql = buildRequestWhereSql(options, viewerUserId)
+  const includeRepliesCount = await hasItemRequestReplyTable(prisma)
+  const paginationSql = options.limit
+    ? Prisma.sql`LIMIT ${options.limit} OFFSET ${options.skip ?? 0}`
+    : Prisma.empty
 
   return prisma.$queryRaw<RequestRow[]>(Prisma.sql`
-    SELECT
-      r."id",
-      r."borrowerID",
-      r."itemNeeded",
-      r."referenceImageUrl",
-      r."requestedDates",
-      r."priceRange",
-      r."description",
-      r."status"::text AS "status",
-      r."createdAt",
-      r."updatedAt",
-      b."id" AS "borrowerProfileId",
-      b."userId" AS "borrowerUserId",
-      u."username" AS "borrowerUsername",
-      u."firstName" AS "borrowerFirstName",
-      u."middleName" AS "borrowerMiddleName",
-      u."lastName" AS "borrowerLastName",
-      u."email" AS "borrowerEmail",
-      u."avatarUrl" AS "borrowerAvatarUrl",
-      COALESCE(oc."offersCount", 0) AS "offersCount"
-    FROM "ItemRequest" r
-    INNER JOIN "Borrower" b ON b."id" = r."borrowerID"
-    INNER JOIN "User" u ON u."id" = b."userId"
-    LEFT JOIN (
-      SELECT
-        "requestID",
-        COUNT(*)::int AS "offersCount"
-      FROM "RequestOffer"
-      WHERE "status" <> ${sqlRequestOfferStatus(requestOfferStatusSchema.enum.CANCELLED)}
-      GROUP BY "requestID"
-    ) oc ON oc."requestID" = r."id"
-    ${whereSql}
-    ORDER BY r."createdAt" DESC
+    ${buildRequestRowsQuery(whereSql, includeRepliesCount)}
+    ${paginationSql}
   `)
 }
 
@@ -404,6 +862,7 @@ const fetchOfferRows = async (
 const fetchMappedRequests = async (
   prisma: {
     $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+    itemRequestReply: ItemRequestReplyReader
   },
   options: {
     requestId?: number
@@ -411,6 +870,9 @@ const fetchMappedRequests = async (
     borrowerOnly?: boolean
     includeCancelledOffers?: boolean
     offersLimit?: number
+    includeReplies?: boolean
+    limit?: number
+    skip?: number
   },
   viewerUserId: string | null,
 ) => {
@@ -425,6 +887,11 @@ const fetchMappedRequests = async (
           perRequestLimit: options.offersLimit,
         })
       : []
+  const shouldIncludeReplies =
+    options.includeReplies && requestIds.length > 0 && (await hasItemRequestReplyTable(prisma))
+  const repliesByRequestId = shouldIncludeReplies
+    ? await fetchReplyTrees(prisma, requestIds, viewerUserId)
+    : new Map<number, CommunityReplyNode[]>()
 
   const offersByRequestId = new Map<number, OfferRow[]>()
   for (const offer of offers) {
@@ -433,8 +900,101 @@ const fetchMappedRequests = async (
     offersByRequestId.set(offer.requestID, entries)
   }
 
-  return requests.map((request) => mapRequest(request, offersByRequestId.get(request.id) ?? []))
+  return requests.map((request) =>
+    mapRequest(
+      request,
+      offersByRequestId.get(request.id) ?? [],
+      repliesByRequestId.get(request.id) ?? [],
+    ),
+  )
 }
+
+const fetchReplyTrees = async (
+  prisma: {
+    itemRequestReply: ItemRequestReplyReader
+  },
+  requestIds: number[],
+  viewerUserId: string | null,
+) => {
+  if (requestIds.length === 0) {
+    return new Map<number, CommunityReplyNode[]>()
+  }
+
+  const rows = await prisma.itemRequestReply.findMany({
+    where:
+      requestIds.length === 1 ? { requestId: requestIds[0]! } : { requestId: { in: requestIds } },
+    orderBy: [{ createdAt: "asc" }],
+    select: {
+      id: true,
+      requestId: true,
+      parentReplyId: true,
+      body: true,
+      createdAt: true,
+      updatedAt: true,
+      author: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+          avatarUrl: true,
+        },
+      },
+      _count: { select: { upvotes: true } },
+      upvotes: viewerUserId
+        ? {
+            where: { userId: viewerUserId },
+            select: { id: true },
+          }
+        : {
+            where: { userId: "__no_viewer__" },
+            select: { id: true },
+          },
+    },
+  })
+
+  const normalizedRows: ReplyRow[] = rows.map((row) => ({
+    id: row.id,
+    requestId: row.requestId,
+    parentReplyId: row.parentReplyId,
+    body: row.body,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    author: {
+      userId: row.author.id,
+      username: row.author.username,
+      firstName: row.author.firstName,
+      middleName: row.author.middleName,
+      lastName: row.author.lastName,
+      email: row.author.email,
+      avatarUrl: row.author.avatarUrl,
+    },
+    upvoteCount: row._count.upvotes,
+    isUpvoted: row.upvotes.length > 0,
+  }))
+
+  const rowsByRequestId = new Map<number, ReplyRow[]>()
+  for (const row of normalizedRows) {
+    const entries = rowsByRequestId.get(row.requestId) ?? []
+    entries.push(row)
+    rowsByRequestId.set(row.requestId, entries)
+  }
+
+  const repliesByRequestId = new Map<number, CommunityReplyNode[]>()
+  for (const requestId of requestIds) {
+    repliesByRequestId.set(requestId, buildReplyTree(rowsByRequestId.get(requestId) ?? []))
+  }
+
+  return repliesByRequestId
+}
+
+const fetchReplyTree = async (
+  prisma: Parameters<typeof fetchReplyTrees>[0],
+  requestId: number,
+  viewerUserId: string | null,
+) => (await fetchReplyTrees(prisma, [requestId], viewerUserId)).get(requestId) ?? []
 
 const assertUserExists = async (
   prisma: {
@@ -567,6 +1127,38 @@ const getEditableRequest = async (
   return request
 }
 
+type ExistingReplyRow = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  authorUserId: string
+}
+
+const getExistingReply = async (
+  prisma: {
+    $queryRaw<T = unknown>(query: Prisma.Sql): Promise<T>
+  },
+  replyId: string,
+) => {
+  const rows = await prisma.$queryRaw<ExistingReplyRow[]>(Prisma.sql`
+    SELECT
+      r."id",
+      r."request_id" AS "requestId",
+      r."parent_reply_id" AS "parentReplyId",
+      r."author_user_id" AS "authorUserId"
+    FROM "item_request_replies" r
+    WHERE r."id" = ${replyId}
+    LIMIT 1
+  `)
+
+  const reply = rows[0]
+  if (!reply) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Reply not found." })
+  }
+
+  return reply
+}
+
 type ItemOwnershipRow = {
   numericId: number
   lenderId: string
@@ -657,6 +1249,124 @@ export const communityRouter = router({
     return request
   }),
 
+  listReplies: publicProcedure.input(listItemRequestRepliesSchema).query(async ({ ctx, input }) => {
+    await getEditableRequest(ctx.prisma, input.requestId)
+    return fetchReplyTree(ctx.prisma, input.requestId, ctx.user?.id ?? null)
+  }),
+
+  createReply: protectedProcedure
+    .input(createItemRequestReplySchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertUserExists(ctx.prisma, ctx.user.id)
+      await getEditableRequest(ctx.prisma, input.requestId)
+
+      if (input.parentReplyId) {
+        const parentReply = await getExistingReply(ctx.prisma, input.parentReplyId)
+        if (parentReply.requestId !== input.requestId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Reply thread does not belong to this request.",
+          })
+        }
+      }
+
+      const createdReply = await ctx.prisma.itemRequestReply.create({
+        data: {
+          requestId: input.requestId,
+          authorUserId: ctx.user.id,
+          parentReplyId: input.parentReplyId ?? null,
+          body: input.text,
+        },
+        select: { id: true },
+      })
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "reply-created",
+        requestId: input.requestId,
+        replyId: createdReply.id,
+        actorUserId: ctx.user.id,
+      })
+
+      const replyTree = await fetchReplyTree(ctx.prisma, input.requestId, ctx.user.id)
+      const createdNode = (() => {
+        const stack = [...replyTree]
+        while (stack.length > 0) {
+          const node = stack.shift()
+          if (!node) continue
+          if (node.id === createdReply.id) return node
+          stack.unshift(...node.replies)
+        }
+        return null
+      })()
+
+      if (!createdNode) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Reply not found." })
+      }
+
+      return createdNode
+    }),
+
+  toggleReplyUpvote: protectedProcedure
+    .input(toggleItemRequestReplyUpvoteSchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertUserExists(ctx.prisma, ctx.user.id)
+      const reply = await getExistingReply(ctx.prisma, input.id)
+
+      const existingUpvote = await ctx.prisma.itemRequestReplyUpvote.findUnique({
+        where: {
+          replyId_userId: {
+            replyId: input.id,
+            userId: ctx.user.id,
+          },
+        },
+        select: { id: true },
+      })
+
+      if (existingUpvote) {
+        await ctx.prisma.itemRequestReplyUpvote.delete({
+          where: {
+            replyId_userId: {
+              replyId: input.id,
+              userId: ctx.user.id,
+            },
+          },
+        })
+      } else {
+        await ctx.prisma.itemRequestReplyUpvote.create({
+          data: {
+            replyId: input.id,
+            userId: ctx.user.id,
+          },
+        })
+      }
+
+      const refreshedReply = await fetchReplyTree(ctx.prisma, reply.requestId, ctx.user.id)
+      const targetNode = (() => {
+        const stack = [...refreshedReply]
+        while (stack.length > 0) {
+          const node = stack.shift()
+          if (!node) continue
+          if (node.id === input.id) return node
+          stack.unshift(...node.replies)
+        }
+        return null
+      })()
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "reply-upvote-toggled",
+        requestId: reply.requestId,
+        replyId: input.id,
+        actorUserId: ctx.user.id,
+      })
+
+      return {
+        replyId: input.id,
+        requestId: reply.requestId,
+        isUpvoted: !existingUpvote,
+        upvotes: targetNode?.upvotes ?? 0,
+      }
+    }),
+
   createRequest: protectedProcedure
     .input(createItemRequestSchema)
     .mutation(async ({ ctx, input }) => {
@@ -697,6 +1407,12 @@ export const communityRouter = router({
         { requestId, includeCancelledOffers: true },
         ctx.user.id,
       )
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "request-created",
+        requestId,
+        actorUserId: ctx.user.id,
+      })
 
       return request
     }),
@@ -746,6 +1462,12 @@ export const communityRouter = router({
         ctx.user.id,
       )
 
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "request-updated",
+        requestId: input.id,
+        actorUserId: ctx.user.id,
+      })
+
       return request
     }),
 
@@ -766,6 +1488,12 @@ export const communityRouter = router({
         WHERE "id" = ${input.id}
         RETURNING "id"
       `)
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "request-deleted",
+        requestId: input.id,
+        actorUserId: ctx.user.id,
+      })
 
       return rows[0] ?? { id: input.id }
     }),
@@ -899,6 +1627,12 @@ export const communityRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
       }
 
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "offer-created",
+        requestId: input.requestID,
+        actorUserId: ctx.user.id,
+      })
+
       return mapOffer(offer)
     }),
 
@@ -940,6 +1674,36 @@ export const communityRouter = router({
             message: "Borrowers can only update the offer status.",
           })
         }
+      }
+
+      if (input.status === requestOfferStatusSchema.enum.ACCEPTED) {
+        if (!isBorrower) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only the request owner can accept offers.",
+          })
+        }
+
+        await acceptRequestOffer(ctx.prisma, { id: input.id }, ctx.user.id)
+
+        const updatedOffers = await fetchOfferRows(ctx.prisma, {
+          offerId: input.id,
+          viewerUserId: ctx.user.id,
+          includeCancelled: true,
+        })
+
+        const offer = updatedOffers[0]
+        if (!offer) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
+        }
+
+        await broadcastCommunityFeedEvent(ctx.event, {
+          type: "offer-updated",
+          requestId: existing.requestID,
+          actorUserId: ctx.user.id,
+        })
+
+        return mapOffer(offer)
       }
 
       if (isLender && input.itemID !== undefined) {
@@ -1004,6 +1768,12 @@ export const communityRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
       }
 
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "offer-updated",
+        requestId: existing.requestID,
+        actorUserId: ctx.user.id,
+      })
+
       return mapOffer(offer)
     }),
 
@@ -1036,6 +1806,12 @@ export const communityRouter = router({
         WHERE "id" = ${input.id}
         RETURNING "id"
       `)
+
+      await broadcastCommunityFeedEvent(ctx.event, {
+        type: "offer-deleted",
+        requestId: existing.requestID,
+        actorUserId: ctx.user.id,
+      })
 
       return rows[0] ?? { id: input.id }
     }),

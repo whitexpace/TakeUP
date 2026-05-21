@@ -1,5 +1,6 @@
 import { computed, getCurrentScope, onScopeDispose, ref, type Ref } from "vue"
 import { usePersistedSessionState } from "./use-persisted-session-state"
+import { pruneExpiredEntries, setBoundedMapEntry } from "../utils/bounded-cache"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 import { useViewerSession } from "./use-viewer-session"
 
@@ -16,6 +17,7 @@ type ResultsCountCacheEntry = {
 }
 
 const RESULTS_COUNT_CACHE_TTL_MS = 30_000
+const MAX_RESULTS_COUNT_CACHE_ENTRIES = 120
 const filteredResultsCountCache = new Map<string, ResultsCountCacheEntry>()
 const pendingResultsCountRequests = new Map<string, Promise<number>>()
 
@@ -48,6 +50,7 @@ const serializeResultsCountQuery = (query: Record<string, string | undefined>) =
     .join("&")
 
 const getCachedResultsCount = (cacheKey: string) => {
+  pruneExpiredEntries(filteredResultsCountCache)
   const cachedEntry = filteredResultsCountCache.get(cacheKey)
   if (!cachedEntry) {
     return null
@@ -62,10 +65,16 @@ const getCachedResultsCount = (cacheKey: string) => {
 }
 
 const setCachedResultsCount = (cacheKey: string, count: number) => {
-  filteredResultsCountCache.set(cacheKey, {
-    count,
-    expiresAt: Date.now() + RESULTS_COUNT_CACHE_TTL_MS,
-  })
+  pruneExpiredEntries(filteredResultsCountCache)
+  setBoundedMapEntry(
+    filteredResultsCountCache,
+    cacheKey,
+    {
+      count,
+      expiresAt: Date.now() + RESULTS_COUNT_CACHE_TTL_MS,
+    },
+    MAX_RESULTS_COUNT_CACHE_ENTRIES,
+  )
 }
 
 export const resetFilteredResultsCountCache = () => {

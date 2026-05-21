@@ -1,30 +1,33 @@
 <template>
   <div
     ref="cardRef"
-    class="relative flex flex-col gap-4 rounded-[24px] border border-gray-100 bg-white p-6 transition-all duration-300 hover:shadow-lg group/card"
+    class="relative flex flex-col gap-3 sm:gap-4 rounded-[20px] sm:rounded-[24px] border border-gray-100 bg-white p-4 sm:p-6 transition-all duration-300 hover:shadow-lg group/card"
   >
     <!-- Card Header -->
     <div class="flex items-start justify-between">
-      <div class="flex items-center gap-3 min-w-0">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
         <NuxtLink :to="`/profile/${request.borrower.username}`" class="shrink-0">
           <UserAvatar
             :avatar-url="request.borrower.avatar"
             :user-name="request.borrower.name"
-            class="h-9 w-9 rounded-full"
+            class="h-8 w-8 sm:h-9 sm:w-9 rounded-full"
           />
         </NuxtLink>
         <div class="min-w-0 flex flex-col">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 sm:gap-2">
             <NuxtLink
               :to="`/profile/${request.borrower.username}`"
-              class="text-[13px] font-medium text-gray-900 hover:text-burning-orange transition-colors truncate"
+              class="text-[13px] sm:text-[15px] font-bold text-gray-900 hover:text-burning-orange transition-colors truncate"
             >
               {{ request.borrower.name }}
             </NuxtLink>
-            <span class="text-[12px] text-gray-400">{{
+            <span class="text-[11px] sm:text-[12px] text-gray-400 font-medium tracking-tight">{{
               formatRelativeTime(request.createdAt)
             }}</span>
           </div>
+          <span class="text-[11px] sm:text-[13px] text-noble-black/40 truncate leading-none">
+            @{{ request.borrower.username }}
+          </span>
         </div>
       </div>
 
@@ -85,14 +88,14 @@
     </div>
 
     <!-- Title and Body Content -->
-    <div class="flex gap-4">
-      <div class="flex-1 flex flex-col gap-2">
-        <h3 class="text-[16px] font-medium text-gray-900 leading-tight">
+    <div class="flex gap-3 sm:gap-4">
+      <div class="flex-1 flex flex-col gap-1 sm:gap-2">
+        <h3 class="text-[15px] sm:text-[16px] font-bold text-gray-900 leading-tight">
           {{ request.itemNeeded }}
         </h3>
         <div class="relative">
           <p
-            class="text-[14px] text-gray-500 leading-relaxed transition-all duration-300"
+            class="text-[13px] sm:text-[14px] text-gray-500 leading-relaxed transition-all duration-300"
             :class="{ 'line-clamp-2': !isExpandedBody }"
           >
             {{ request.description }}
@@ -110,7 +113,7 @@
       <!-- Compact Reference Image -->
       <div
         v-if="request.referenceImageUrl"
-        class="shrink-0 w-[120px] h-[90px] rounded-[10px] overflow-hidden border border-gray-100 bg-gray-50"
+        class="shrink-0 w-20 h-20 xs:w-[120px] xs:h-[90px] rounded-[10px] overflow-hidden border border-gray-100 bg-gray-50"
       >
         <img
           :src="request.referenceImageUrl"
@@ -122,60 +125,60 @@
     </div>
 
     <!-- Metadata Row -->
-    <div class="flex flex-wrap items-center justify-between gap-4 pt-2">
-      <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <!-- Date Chip -->
         <div
-          class="flex items-center gap-1.5 bg-gray-100 rounded-[8px] px-2.5 py-1 text-[12px] text-gray-500"
+          class="flex items-center gap-1 bg-gray-100 rounded-[6px] px-2 py-0.5 text-[11px] sm:text-[12px] text-gray-500"
         >
-          <Icon name="ph:calendar-blank" class="w-[14px] h-[14px] text-gray-400 shrink-0" />
+          <Icon name="ph:calendar-blank" class="w-[12px] h-[12px] text-gray-400 shrink-0" />
           {{ formatDateRange(request.requestedDates) }}
         </div>
 
         <!-- Budget Chip -->
         <div
-          class="flex items-center gap-1.5 bg-gray-100 rounded-[8px] px-2.5 py-1 text-[12px] text-gray-500"
+          class="flex items-center gap-1 bg-gray-100 rounded-[6px] px-2 py-0.5 text-[11px] sm:text-[12px] text-gray-500"
         >
-          <Icon name="ph:wallet" class="w-[14px] h-[14px] text-gray-400 shrink-0" />
+          <Icon name="ph:wallet" class="w-[12px] h-[12px] text-gray-400 shrink-0" />
           {{ formatPriceRange(request.priceRange) }}
         </div>
 
         <span
           v-if="currentUserOffer && !isOwner"
-          class="bg-blue-estate/5 border border-blue-estate/10 rounded-full px-2.5 py-0.5 text-[11px] font-bold text-blue-estate"
+          class="bg-blue-estate/5 border border-blue-estate/10 rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-blue-estate"
         >
           Your offer: {{ formatOfferStatus(currentUserOffer.status) }}
         </span>
       </div>
 
       <!-- Action Button Group -->
-      <div class="flex items-center gap-4 ml-auto">
+      <div class="flex items-center gap-3 sm:gap-4 ml-auto">
         <button
-          class="flex items-center gap-1.5 text-[13px] font-bold text-noble-black/40 hover:text-blue-estate transition-colors group/comment-btn"
+          class="flex items-center gap-1.5 text-[12px] sm:text-[13px] font-bold text-noble-black/40 hover:text-blue-estate transition-colors group/comment-btn"
           @click="showComments = !showComments"
         >
           <Icon
             name="ph:chat-circle"
-            class="w-[18px] h-[18px] group-hover/comment-btn:scale-110 transition-transform"
+            class="w-[16px] sm:w-[18px] h-[16px] sm:h-[18px] group-hover/comment-btn:scale-110 transition-transform"
           />
           <span class="font-geist">{{ totalRepliesCount }}</span>
         </button>
 
-        <span class="w-[1px] h-4 bg-gray-100"></span>
+        <span class="w-[1px] h-3 bg-gray-100"></span>
 
-        <span class="flex items-center gap-1.5 text-[12px] text-gray-400">
+        <span class="flex items-center gap-1.5 text-[11px] sm:text-[12px] text-gray-400">
           {{ request.offersCount }} {{ request.offersCount === 1 ? "offer" : "offers" }}
         </span>
         <button
           v-if="!isOwner && request.status === 'OPEN'"
-          class="h-8 px-4 bg-burning-orange text-white rounded-[8px] text-[13px] font-bold transition-all hover:brightness-110 active:scale-95 shadow-sm"
+          class="h-8 px-3 sm:px-4 bg-burning-orange text-white rounded-[8px] text-[12px] sm:text-[13px] font-bold transition-all hover:brightness-110 active:scale-95 shadow-sm"
           @click="handleOfferAction"
         >
           {{ currentUserOffer ? "Update Offer" : "Make Offer" }}
         </button>
         <button
           v-else-if="isOwner && request.offers.length > 0"
-          class="h-8 px-4 border-[1.5px] border-blue-estate text-blue-estate rounded-[8px] text-[13px] font-semibold transition-all hover:bg-blue-estate/5 active:scale-95"
+          class="h-8 px-3 sm:px-4 border-[1.5px] border-blue-estate text-blue-estate rounded-[8px] text-[12px] sm:text-[13px] font-semibold transition-all hover:bg-blue-estate/5 active:scale-95"
           @click="toggleOffers"
         >
           {{ showOffers ? "Hide Offers" : "View Offers" }}
@@ -190,7 +193,12 @@
     >
       <!-- Quick Reply Input -->
       <div class="flex gap-3 mb-8">
-        <UserAvatar size="sm" class="shrink-0 mt-1" user-name="You" />
+        <UserAvatar
+          size="sm"
+          class="shrink-0 mt-1"
+          :avatar-url="currentUserAvatar"
+          :user-name="currentUserName"
+        />
         <div class="flex-1 relative group/input">
           <input
             ref="replyInputRef"
@@ -200,26 +208,49 @@
               replyingTo ? `Replying to ${replyingTo.name}...` : 'Add to the discussion...'
             "
             class="w-full bg-cream/30 border border-cinnamon-ice/10 rounded-[14px] px-4 py-2.5 text-[14px] font-geist focus:outline-none focus:border-burning-orange/30 focus:bg-white transition-all duration-300"
+            :disabled="isSubmittingComment"
             @keydown.esc="cancelReply"
             @keydown.enter="postComment"
           />
           <button
             class="absolute right-2 top-1.5 h-7 px-3 bg-noble-black text-white text-[11px] font-bold uppercase tracking-wider rounded-[8px] opacity-0 group-focus-within/input:opacity-100 transition-opacity"
+            :disabled="isSubmittingComment"
             @click="postComment"
           >
-            Post
+            {{ isSubmittingComment ? "Posting" : "Post" }}
           </button>
         </div>
       </div>
 
+      <div
+        v-if="replyError"
+        class="mb-4 rounded-[14px] border border-cinnabar-red/15 bg-cinnabar-red/5 px-4 py-3 text-[12px] font-medium text-cinnabar-red"
+      >
+        {{ replyError }}
+      </div>
+
+      <div
+        v-if="isLoadingReplies && threadReplies.length === 0"
+        class="rounded-[18px] border border-gray-100 bg-cream/20 px-4 py-5 text-[13px] text-noble-black/45"
+      >
+        Loading discussion...
+      </div>
+
       <!-- Nested Replies List -->
-      <div class="flex flex-col gap-6">
+      <div v-if="threadReplies.length > 0" class="flex flex-col gap-6">
         <CommunityReplyItem
-          v-for="reply in mockReplies"
+          v-for="reply in threadReplies"
           :key="reply.id"
           :reply="reply"
           @reply="handleReplyToUser"
+          @upvote-reply="handleToggleReplyUpvote"
         />
+      </div>
+      <div
+        v-else-if="!isLoadingReplies"
+        class="rounded-[18px] border border-dashed border-cinnamon-ice/20 bg-cream/20 px-4 py-6 text-[13px] text-noble-black/45"
+      >
+        No replies yet. Start the discussion.
       </div>
     </div>
 
@@ -356,6 +387,8 @@ import type {
 const props = defineProps<{
   request: CommunityRequest
   currentUserId: string
+  currentUserName: string
+  currentUserAvatar?: string
 }>()
 
 const emit = defineEmits<{
@@ -386,67 +419,158 @@ const isLoadingOffers = ref(false)
 const offerLoadError = ref("")
 const cardRef = ref<HTMLElement | null>(null)
 const replyInputRef = ref<HTMLInputElement | null>(null)
+const supabase = useSupabaseClient()
+let repliesPollIntervalId: ReturnType<typeof setInterval> | null = null
+let replyRealtimeChannel: ReturnType<typeof supabase.channel> | null = null
+const REPLIES_CACHE_TTL_MS = 20_000
 
 // Discussion State
 const commentText = ref("")
 const replyingTo = ref<{ name: string; id: string } | null>(null)
+const threadReplies = ref<Reply[]>([])
+const optimisticReplies = ref<Reply[]>([])
+const isLoadingReplies = ref(false)
+const isSubmittingComment = ref(false)
+const replyError = ref("")
+const hasLoadedReplies = ref(false)
+const repliesLastLoadedAt = ref<number | null>(null)
+const localConfirmedReplyCountDelta = ref(0)
 
-// Mock Data for Discussion Demonstration
-const mockReplies = ref([
-  {
-    id: "r1",
-    user: {
-      name: "Sophia Laurent",
-      username: "sophia_l",
-      avatar: "",
-    },
-    text: "I actually have a vintage film camera that might fit what you're looking for! Is it for a professional shoot?",
-    upvotes: 12,
-    isUpvoted: false,
-    createdAt: new Date(Date.now() - 3600000),
-    replies: [
-      {
-        id: "r2",
-        user: {
-          name: "Marcus Chen",
-          username: "mchen",
-          avatar: "",
-        },
-        text: "Sophia, is it the Leica M6? I've been looking for one too!",
-        upvotes: 5,
-        isUpvoted: true,
-        createdAt: new Date(Date.now() - 1800000),
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: "r3",
-    user: {
-      name: "Isabella Reed",
-      username: "isabella_r",
-      avatar: "",
-    },
-    text: "Make sure to check the lens compatibility if you're borrowing an older body.",
-    upvotes: 8,
-    isUpvoted: false,
-    createdAt: new Date(Date.now() - 7200000),
-    replies: [],
-  },
-])
+type ApiReply = {
+  id: string
+  requestId: number
+  parentReplyId: string | null
+  user: {
+    userId?: string
+    name: string
+    avatar: string
+    username: string
+  }
+  text: string
+  upvotes: number
+  isUpvoted: boolean
+  createdAt: string | Date
+  updatedAt?: string | Date
+  replies?: ApiReply[]
+}
 
-const totalRepliesCount = computed(() => {
-  const countReplies = (list: Reply[]): number => {
-    let total = 0
-    for (const item of list) {
-      total += 1
-      if (item.replies && item.replies.length > 0) {
-        total += countReplies(item.replies)
+const normalizeReply = (reply: ApiReply): Reply => ({
+  id: reply.id,
+  requestId: Number(reply.requestId),
+  parentReplyId: reply.parentReplyId,
+  user: {
+    name: reply.user.name,
+    avatar: reply.user.avatar,
+    username: reply.user.username,
+  },
+  text: reply.text,
+  upvotes: Number(reply.upvotes ?? 0),
+  isUpvoted: Boolean(reply.isUpvoted),
+  createdAt: reply.createdAt instanceof Date ? reply.createdAt : new Date(reply.createdAt),
+  replies: (reply.replies ?? []).map(normalizeReply),
+})
+
+const getRequestReplies = () => props.request.replies.map((reply) => normalizeReply(reply))
+
+const optimisticRepliesCount = computed(() => optimisticReplies.value.length)
+
+const appendReplyToTree = (
+  replies: Reply[],
+  parentReplyId: string | null,
+  replyToAppend: Reply,
+): { replies: Reply[]; inserted: boolean } => {
+  if (!parentReplyId) {
+    return { replies: [...replies, replyToAppend], inserted: true }
+  }
+
+  let inserted = false
+  const nextReplies = replies.map((reply) => {
+    if (reply.id === parentReplyId) {
+      inserted = true
+      return {
+        ...reply,
+        replies: [...(reply.replies ?? []), replyToAppend],
       }
     }
-    return total
+
+    const nested = appendReplyToTree(reply.replies ?? [], parentReplyId, replyToAppend)
+    if (!nested.inserted) return reply
+
+    inserted = true
+    return {
+      ...reply,
+      replies: nested.replies,
+    }
+  })
+
+  return { replies: nextReplies, inserted }
+}
+
+const removeReplyFromTree = (replies: Reply[], replyId: string): Reply[] =>
+  replies
+    .filter((reply) => reply.id !== replyId)
+    .map((reply) => ({
+      ...reply,
+      replies: removeReplyFromTree(reply.replies ?? [], replyId),
+    }))
+
+const replaceReplyInTree = (
+  replies: Reply[],
+  replyId: string,
+  replacement: Reply,
+): { replies: Reply[]; replaced: boolean } => {
+  let replaced = false
+  const nextReplies = replies.map((reply) => {
+    if (reply.id === replyId) {
+      replaced = true
+      return replacement
+    }
+
+    const nested = replaceReplyInTree(reply.replies ?? [], replyId, replacement)
+    if (!nested.replaced) return reply
+
+    replaced = true
+    return {
+      ...reply,
+      replies: nested.replies,
+    }
+  })
+
+  return { replies: nextReplies, replaced }
+}
+
+const hasReplyInTree = (replies: Reply[], replyId: string): boolean =>
+  replies.some((reply) => reply.id === replyId || hasReplyInTree(reply.replies ?? [], replyId))
+
+const applyOptimisticReplies = (replies: Reply[]) =>
+  optimisticReplies.value.reduce((nextReplies, reply) => {
+    if (hasReplyInTree(nextReplies, reply.id)) return nextReplies
+
+    const result = appendReplyToTree(nextReplies, reply.parentReplyId, reply)
+    return result.inserted ? result.replies : [...nextReplies, reply]
+  }, replies)
+
+const countReplies = (list: Reply[]): number => {
+  let total = 0
+  for (const item of list) {
+    total += 1
+    if (item.replies && item.replies.length > 0) {
+      total += countReplies(item.replies)
+    }
   }
-  return countReplies(mockReplies.value)
+  return total
+}
+
+const totalRepliesCount = computed(() => {
+  if (!hasLoadedReplies.value) {
+    return (
+      props.request.repliesCount +
+      localConfirmedReplyCountDelta.value +
+      optimisticRepliesCount.value
+    )
+  }
+
+  return countReplies(threadReplies.value)
 })
 
 const handleReplyToUser = (userName: string, replyId: string) => {
@@ -465,51 +589,206 @@ const cancelReply = () => {
   replyInputRef.value?.blur()
 }
 
-const postComment = () => {
-  if (!commentText.value.trim()) return
+const getAuthHeaders = async () => {
+  const { getAuthHeaders } = useViewerSession()
+  return (await getAuthHeaders()) ?? undefined
+}
 
-  const newReply = {
-    id: `r-new-${Date.now()}`,
+const loadReplies = async (options: { background?: boolean } = {}) => {
+  if (!options.background) {
+    isLoadingReplies.value = true
+  }
+
+  try {
+    const headers = await getAuthHeaders()
+    const response = await $fetch<ApiReply[]>(
+      `/api/community-feed/requests/${props.request.id}/replies`,
+      headers ? { headers } : {},
+    )
+    threadReplies.value = applyOptimisticReplies(response.map(normalizeReply))
+    hasLoadedReplies.value = true
+    localConfirmedReplyCountDelta.value = 0
+    repliesLastLoadedAt.value = Date.now()
+    replyError.value = ""
+  } catch (error) {
+    console.error("Failed to load request replies", error)
+    if (!options.background) {
+      replyError.value = "Unable to load the discussion right now."
+    }
+  } finally {
+    isLoadingReplies.value = false
+  }
+}
+
+const stopReplySync = () => {
+  if (repliesPollIntervalId !== null) {
+    clearInterval(repliesPollIntervalId)
+    repliesPollIntervalId = null
+  }
+
+  if (replyRealtimeChannel) {
+    void supabase.removeChannel(replyRealtimeChannel)
+    replyRealtimeChannel = null
+  }
+}
+
+const startReplySync = () => {
+  stopReplySync()
+
+  replyRealtimeChannel = supabase
+    .channel(`community-request-${props.request.id}`)
+    .on("broadcast", { event: "message" }, () => {
+      void loadReplies({ background: true })
+    })
+
+  void replyRealtimeChannel.subscribe()
+
+  repliesPollIntervalId = setInterval(() => {
+    if (!document.hidden) {
+      void loadReplies({ background: true })
+    }
+  }, 20_000)
+}
+
+const postComment = async () => {
+  const submittedText = commentText.value
+  if (!submittedText.trim()) return
+  if (!props.currentUserId) {
+    replyError.value = "You need to sign in before joining the discussion."
+    return
+  }
+
+  const submittedReplyingTo = replyingTo.value ? { ...replyingTo.value } : null
+  const wasRepliesLoaded = hasLoadedReplies.value
+  const temporaryReply: Reply = {
+    id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    requestId: props.request.id,
+    parentReplyId: submittedReplyingTo?.id ?? null,
     user: {
-      name: "You", // Mocking current user
-      username: "current_user",
-      avatar: "",
+      name: props.currentUserName,
+      avatar: props.currentUserAvatar ?? "",
+      username: props.currentUserId,
     },
-    text: commentText.value,
+    text: submittedText,
     upvotes: 0,
     isUpvoted: false,
     createdAt: new Date(),
     replies: [],
   }
 
-  if (replyingTo.value) {
-    // Helper to find and add reply to a nested thread (Mock version)
-    const findAndAddReply = (list: Reply[]) => {
-      for (const item of list) {
-        if (item.id === replyingTo.value?.id) {
-          if (!item.replies) item.replies = []
-          item.replies.push(newReply)
-          return true
-        }
-        if (item.replies && findAndAddReply(item.replies)) return true
-      }
-      return false
-    }
-    findAndAddReply(mockReplies.value)
-  } else {
-    // Add as top-level comment
-    mockReplies.value.unshift(newReply)
-  }
-
-  // Reset after "posting"
+  optimisticReplies.value = [...optimisticReplies.value, temporaryReply]
+  const optimisticResult = appendReplyToTree(
+    threadReplies.value,
+    temporaryReply.parentReplyId,
+    temporaryReply,
+  )
+  threadReplies.value = optimisticResult.inserted
+    ? optimisticResult.replies
+    : [...threadReplies.value, temporaryReply]
   commentText.value = ""
   replyingTo.value = null
   replyInputRef.value?.blur()
+  isSubmittingComment.value = true
+  replyError.value = ""
+
+  try {
+    const headers = await getAuthHeaders()
+    if (!headers) {
+      throw new Error("Missing authentication headers.")
+    }
+
+    const createdReply = await $fetch<ApiReply>(
+      `/api/community-feed/requests/${props.request.id}/replies`,
+      {
+        method: "POST",
+        headers,
+        body: {
+          text: submittedText,
+          parentReplyId: submittedReplyingTo?.id ?? null,
+        },
+      },
+    )
+
+    const confirmedReply = normalizeReply(createdReply)
+    optimisticReplies.value = optimisticReplies.value.filter(
+      (reply) => reply.id !== temporaryReply.id,
+    )
+
+    const replacementResult = replaceReplyInTree(
+      threadReplies.value,
+      temporaryReply.id,
+      confirmedReply,
+    )
+    if (replacementResult.replaced) {
+      threadReplies.value = replacementResult.replies
+    } else if (!hasReplyInTree(threadReplies.value, confirmedReply.id)) {
+      const confirmedResult = appendReplyToTree(
+        threadReplies.value,
+        confirmedReply.parentReplyId,
+        confirmedReply,
+      )
+      threadReplies.value = confirmedResult.inserted
+        ? confirmedResult.replies
+        : [...threadReplies.value, confirmedReply]
+    }
+
+    if (!wasRepliesLoaded) {
+      localConfirmedReplyCountDelta.value += 1
+    }
+
+    replyError.value = ""
+  } catch (error) {
+    console.error("Failed to create reply", error)
+    optimisticReplies.value = optimisticReplies.value.filter(
+      (reply) => reply.id !== temporaryReply.id,
+    )
+    threadReplies.value = removeReplyFromTree(threadReplies.value, temporaryReply.id)
+    commentText.value = submittedText
+    replyingTo.value = submittedReplyingTo
+    replyError.value = "Unable to post your reply right now."
+    nextTick(() => {
+      replyInputRef.value?.focus()
+    })
+  } finally {
+    isSubmittingComment.value = false
+  }
+}
+
+const handleToggleReplyUpvote = async (replyId: string) => {
+  if (!props.currentUserId) {
+    replyError.value = "You need to sign in before voting on replies."
+    return
+  }
+
+  try {
+    const headers = await getAuthHeaders()
+    if (!headers) {
+      replyError.value = "You need to sign in before voting on replies."
+      return
+    }
+
+    await $fetch(`/api/community-feed/replies/${replyId}/toggle-upvote`, {
+      method: "POST",
+      headers,
+    })
+
+    await loadReplies({ background: true })
+  } catch (error) {
+    console.error("Failed to toggle reply upvote", error)
+    replyError.value = "Unable to update this reply right now."
+  }
 }
 
 const isOwner = computed(() => {
   return props.request.borrower.userId === props.currentUserId
 })
+
+const hasFreshRepliesCache = computed(
+  () =>
+    hasLoadedReplies.value &&
+    repliesLastLoadedAt.value !== null &&
+    Date.now() - repliesLastLoadedAt.value < REPLIES_CACHE_TTL_MS,
+)
 
 const currentUserOffer = computed(() => {
   return props.request.offers.find((offer) => offer.lender.userId === props.currentUserId) ?? null
@@ -523,7 +802,18 @@ const normalizeOffer = (offer: CommunityOffer): CommunityOffer => ({
 })
 
 watch(
-  () => [props.request.id, props.request.offers] as const,
+  () => props.request.replies,
+  () => {
+    threadReplies.value = applyOptimisticReplies(getRequestReplies())
+    localConfirmedReplyCountDelta.value = 0
+    hasLoadedReplies.value = props.request.replies.length > 0 || props.request.repliesCount === 0
+    repliesLastLoadedAt.value = hasLoadedReplies.value ? Date.now() : null
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.request.offers,
   () => {
     loadedOffers.value = props.request.offers.map(normalizeOffer)
     offerPage.value = 1
@@ -531,6 +821,37 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => props.request.id,
+  () => {
+    optimisticReplies.value = []
+    localConfirmedReplyCountDelta.value = 0
+    threadReplies.value = getRequestReplies()
+    replyError.value = ""
+    hasLoadedReplies.value = props.request.replies.length > 0 || props.request.repliesCount === 0
+    repliesLastLoadedAt.value = hasLoadedReplies.value ? Date.now() : null
+    stopReplySync()
+    if (showComments.value) {
+      if (!hasLoadedReplies.value) {
+        void loadReplies()
+      }
+      startReplySync()
+    }
+  },
+)
+
+watch(showComments, (isVisible) => {
+  if (!isVisible) {
+    stopReplySync()
+    return
+  }
+
+  if (!hasFreshRepliesCache.value) {
+    void loadReplies()
+  }
+  startReplySync()
+})
 
 const sortedOffers = computed(() => {
   return [...loadedOffers.value].sort(
@@ -732,6 +1053,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", handlePointerDownOutside)
+  stopReplySync()
 })
 </script>
 

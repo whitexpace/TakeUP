@@ -107,10 +107,10 @@ onMounted(async () => {
       return
     }
 
-    if (!email.endsWith("@up.edu.ph") && !email.endsWith("@gmail.com")) {
+    if (!email.endsWith("@up.edu.ph")) {
       await supabase.auth.signOut()
       clearClientAuthState()
-      const msg = "Only up.edu.ph and gmail.com email addresses are allowed."
+      const msg = "Only up.edu.ph email addresses are allowed."
       await redirectHomeWithError(msg, "&status=blocked_domain")
       return
     }
@@ -154,10 +154,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="min-h-screen flex items-center justify-center px-6">
-    <div class="max-w-lg text-center">
-      <p v-if="!errorMessage" class="font-geist text-xl text-noble-black">Signing you in...</p>
-      <div v-else>
+  <main class="min-h-screen">
+    <AppLoadingScreen v-if="!errorMessage" />
+    <div v-else class="min-h-screen flex items-center justify-center px-6">
+      <div class="max-w-lg text-center">
         <p class="font-geist text-xl text-cinnabar-red mb-3">{{ errorMessage }}</p>
         <NuxtLink to="/" class="font-geist text-burning-orange underline">Back to home</NuxtLink>
       </div>

@@ -2,7 +2,7 @@
   <div ref="container" class="relative">
     <!-- Input Trigger -->
     <div
-      class="flex items-center w-full h-[42px] bg-white border border-cinnamon-ice/40 rounded-[10px] px-3 cursor-pointer group hover:border-burning-orange/40 transition-all duration-300"
+      class="flex items-center w-full h-[42px] bg-white border border-cinnamon-ice/40 rounded-[10px] px-2.5 cursor-pointer group hover:border-burning-orange/40 transition-all duration-300"
       :class="{ 'border-burning-orange ring-1 ring-burning-orange/20': isOpen }"
       @click="toggleCalendar"
     >
@@ -11,7 +11,7 @@
         class="w-4 h-4 text-noble-black/30 group-hover:text-noble-black/50 transition-colors"
       />
       <span
-        class="ml-2 font-geist text-[13px] transition-colors"
+        class="ml-1.5 font-geist text-[13px] transition-colors"
         :class="modelValue ? 'text-noble-black' : 'text-noble-black/40'"
       >
         {{ formattedDate || placeholder }}
@@ -29,29 +29,29 @@
     >
       <div
         v-if="isOpen"
-        class="absolute z-[100] mt-2 w-[280px] right-0 sm:left-0 bg-white border border-cinnamon-ice/30 rounded-2xl shadow-[0_12px_40px_-10px_rgba(0,0,0,0.12)] p-5 font-geist"
+        class="absolute z-[100] mt-2 w-[252px] left-0 bg-white border border-cinnamon-ice/30 rounded-2xl shadow-[0_12px_40px_-10px_rgba(0,0,0,0.12)] p-3.5 font-geist"
       >
         <!-- Calendar Header -->
         <div class="flex items-center justify-between mb-4 px-1">
-          <h4 class="font-semibold text-base text-noble-black tracking-tight">
+          <h4 class="font-semibold text-[14px] text-noble-black tracking-tight">
             {{ monthNames[currentMonth] }} {{ currentYear }}
           </h4>
 
           <div class="flex gap-1">
             <button
               type="button"
-              class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full text-noble-black/40 hover:text-burning-orange transition-all duration-300"
+              class="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full text-noble-black/40 hover:text-burning-orange transition-all duration-300"
               @click.stop="prevMonth"
             >
-              <Icon name="ph:caret-left" class="w-4 h-4" />
+              <Icon name="ph:caret-left" class="w-3.5 h-3.5" />
             </button>
 
             <button
               type="button"
-              class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full text-noble-black/40 hover:text-burning-orange transition-all duration-300"
+              class="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full text-noble-black/40 hover:text-burning-orange transition-all duration-300"
               @click.stop="nextMonth"
             >
-              <Icon name="ph:caret-right" class="w-4 h-4" />
+              <Icon name="ph:caret-right" class="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -61,14 +61,14 @@
           <div
             v-for="day in ['S', 'M', 'T', 'W', 'T', 'F', 'S']"
             :key="day"
-            class="text-center text-[11px] font-bold text-gray-400 uppercase tracking-[1px]"
+            class="text-center text-[10px] font-bold text-gray-400 uppercase tracking-[1px]"
           >
             {{ day }}
           </div>
         </div>
 
         <!-- Days Grid -->
-        <div class="grid grid-cols-7 gap-1">
+        <div class="grid grid-cols-7 gap-0.5">
           <div
             v-for="(day, index) in calendarDays"
             :key="index"
@@ -77,7 +77,7 @@
             <button
               v-if="day"
               type="button"
-              class="w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-all duration-300 relative group font-semibold"
+              class="w-8 h-8 shrink-0 aspect-square flex items-center justify-center rounded-full text-[13px] transition-all duration-300 relative group font-semibold"
               :class="[
                 isDateDisabled(day)
                   ? 'text-gray-300 cursor-not-allowed'
@@ -88,11 +88,13 @@
               :disabled="isDateDisabled(day)"
               @click.stop="selectDate(day)"
             >
-              <span :class="{ 'opacity-50': isDateDisabled(day) }">{{ day }}</span>
+              <span class="relative z-10" :class="{ 'opacity-50': isDateDisabled(day) }">{{
+                day
+              }}</span>
               <!-- Today Indicator -->
               <div
                 v-if="isToday(day) && !isSelected(day)"
-                class="absolute inset-0 border-[1.5px] border-burning-orange rounded-lg"
+                class="absolute inset-0 border-[1.5px] border-burning-orange rounded-full z-0"
               />
             </button>
           </div>

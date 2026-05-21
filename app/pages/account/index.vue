@@ -48,6 +48,12 @@ type AccountDeletionEligibilityResponse = {
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid"
 
+type AvatarSignedUploadResponse = {
+  token: string
+  path: string
+  publicUrl: string
+}
+
 const usernameRegex = /^(?=.{3,30}$)[a-z0-9](?:[a-z0-9._]*[a-z0-9])?$/
 
 const user = useSupabaseUser()
@@ -84,51 +90,6 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 const asNonEmptyString = (val: unknown) =>
   typeof val === "string" && val.trim() ? val.trim() : null
 
-const getIdentityMetadata = (authUser: unknown) => {
-  const authUserRecord = asRecord(authUser)
-  const identities = authUserRecord?.identities
-  if (!Array.isArray(identities)) return []
-
-  return identities
-    .map((identity) => {
-      const identityRecord = asRecord(identity)
-      return asRecord(identityRecord?.identity_data) ?? asRecord(identityRecord?.provider_metadata)
-    })
-    .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
-}
-
-const buildNameFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return null
-  const directName =
-    asNonEmptyString(source.full_name) ||
-    asNonEmptyString(source.name) ||
-    asNonEmptyString(source.display_name)
-  if (directName) return directName
-
-  const firstName =
-    asNonEmptyString(source.given_name) ||
-    asNonEmptyString(source.first_name) ||
-    asNonEmptyString(source.firstName)
-  const lastName =
-    asNonEmptyString(source.family_name) ||
-    asNonEmptyString(source.last_name) ||
-    asNonEmptyString(source.lastName)
-  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
-  return fullName || null
-}
-
-const getAvatarFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return null
-  return (
-    asNonEmptyString(source.picture) ||
-    asNonEmptyString(source.avatar_url) ||
-    asNonEmptyString(source.photo_url) ||
-    asNonEmptyString(source.profile_image) ||
-    asNonEmptyString(source.image) ||
-    asNonEmptyString(source.avatarUrl)
-  )
-}
-
 const buildDbFullName = (payload: AuthMeUser | undefined) => {
   if (!payload) return null
   const first = (payload.firstName || "").trim()
@@ -141,38 +102,11 @@ const buildDbFullName = (payload: AuthMeUser | undefined) => {
 const profileDetails = computed(() => {
   const authUser = user.value
   const authUserRecord = asRecord(authUser)
-  const metadataSources = [
-    asRecord(authUserRecord?.user_metadata),
-    asRecord(authUserRecord?.app_metadata),
-    ...getIdentityMetadata(authUser),
-  ]
 
-  // 1. Try DB name first (Highest priority for local edits)
-  let fullName = buildDbFullName(authData.value?.user)
-
-  // 2. Try direct metadata fields if DB name is missing
-  if (!fullName) {
-    const meta = authUserRecord?.user_metadata as Record<string, unknown> | undefined
-    fullName = asNonEmptyString(meta?.full_name) || asNonEmptyString(meta?.name)
-  }
-
-  // 3. Try identity data if still missing
-  if (!fullName) {
-    for (const source of metadataSources) {
-      const name = buildNameFromSource(source)
-      if (name) {
-        fullName = name
-        break
-      }
-    }
-  }
-
-  fullName = fullName || asNonEmptyString(authUserRecord?.email)?.split("@")[0] || "User"
-
-  let avatarUrl = asNonEmptyString(authData.value?.user.avatarUrl)
-  if (!avatarUrl) {
-    avatarUrl = metadataSources.map(getAvatarFromSource).find(Boolean) || null
-  }
+  // Use DB name and avatar (which are now directly synced from Google on login)
+  const dbFullName = buildDbFullName(authData.value?.user)
+  const fullName = dbFullName || asNonEmptyString(authUserRecord?.email)?.split("@")[0] || "User"
+  const avatarUrl = asNonEmptyString(authData.value?.user.avatarUrl) || null
 
   const email = asNonEmptyString(authUserRecord?.email) || "No email available"
   const location = asNonEmptyString(authData.value?.user.location) || "Not set"
@@ -184,9 +118,7 @@ const profileDetails = computed(() => {
   const isVerified =
     Boolean(authUserRecord?.email_confirmed_at) ||
     Boolean(authUserRecord?.confirmed_at) ||
-    email.endsWith("@up.edu.ph") ||
-    email.endsWith("@gmail.com")
-
+    email.endsWith("@up.edu.ph")
   return {
     fullName,
     avatarUrl,
@@ -331,6 +263,46 @@ const canSaveProfile = computed(() => {
   return true
 })
 
+const getSupabaseAccessToken = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  return session?.access_token ?? null
+}
+
+const uploadAvatarImage = async (file: File) => {
+  const uploadFile = await convertImageFileToWebP(file)
+  const accessToken = await getSupabaseAccessToken()
+
+  if (!accessToken) {
+    throw new Error("You must be signed in to upload a profile photo.")
+  }
+
+  const signedUpload = await $fetch<AvatarSignedUploadResponse>("/api/account/avatar-upload-url", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: {
+      fileName: uploadFile.name,
+    },
+  })
+
+  const { error: uploadError } = await supabase.storage
+    .from(avatarBucket)
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
+      contentType: uploadFile.type || "image/jpeg",
+      upsert: false,
+    })
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Unable to upload your profile photo.")
+  }
+
+  return signedUpload.publicUrl
+}
+
 const saveProfile = async () => {
   if (!canSaveProfile.value) return
   isSavingProfile.value = true
@@ -340,21 +312,7 @@ const saveProfile = async () => {
     let avatarUrl = authData.value?.user.avatarUrl || null
 
     if (currentAvatarFile.value) {
-      const avatarFile = await convertImageFileToWebP(currentAvatarFile.value)
-      const fileExt = avatarFile.name.split(".").pop()
-      const fileName = `${authData.value?.user.id}-${Math.random().toString(36).substring(7)}.${fileExt}`
-      const filePath = `avatars/${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from(avatarBucket)
-        .upload(filePath, avatarFile)
-
-      if (uploadError) throw uploadError
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(avatarBucket).getPublicUrl(filePath)
-      avatarUrl = publicUrl
+      avatarUrl = await uploadAvatarImage(currentAvatarFile.value)
     }
 
     // IMPORTANT: Send empty strings instead of null for Zod string validation
@@ -561,17 +519,22 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 <template>
   <PersonalAccountPageSkeleton v-if="!isHydrated || isAuthDataPending" />
 
-  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <div
+    v-else
+    class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist px-4 sm:px-6 lg:px-16 xl:px-24"
+  >
     <!-- Main Content Area -->
     <template v-if="authData">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+          <h1
+            class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black tracking-tight leading-tight"
+          >
             Account Information
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-light text-noble-black/50">
+        <p class="text-[14px] sm:text-[16px] font-light text-noble-black/50">
           Manage your personal details and account settings.
         </p>
       </section>
@@ -581,27 +544,31 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         class="overflow-hidden rounded-[24px] border border-cinnamon-ice/20 bg-cream shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div
-          class="relative px-5 py-5 bg-gradient-to-br from-cream/95 to-cream/80 backdrop-blur-md border-b border-cinnamon-ice/10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          class="relative px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-br from-cream/95 to-cream/80 backdrop-blur-md border-b border-cinnamon-ice/10 flex flex-row items-center justify-between"
         >
-          <div class="border-l-[3px] border-burning-orange pl-4">
-            <h2 class="text-[20px] font-semibold text-noble-black">Profile</h2>
-            <p class="mt-0.5 text-[13px] font-light text-noble-black/50">
+          <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4">
+            <h2 class="text-[16px] sm:text-[20px] font-semibold text-noble-black">Profile</h2>
+            <p
+              class="mt-0.5 hidden xs:block text-[12px] sm:text-[13px] font-light text-noble-black/50"
+            >
               Your personal information and profile picture
             </p>
           </div>
           <button
             type="button"
-            class="inline-flex h-10 items-center justify-center rounded-[12px] bg-burning-orange px-6 text-[14px] font-semibold text-white transition hover:brightness-95 shadow-sm shadow-burning-orange/20"
+            class="inline-flex h-9 sm:h-10 items-center justify-center rounded-[10px] sm:rounded-[12px] bg-burning-orange px-4 sm:px-6 text-[13px] sm:text-[14px] font-semibold text-white transition hover:brightness-95 shadow-sm shadow-burning-orange/20"
             @click="openEditProfileModal"
           >
             Edit Profile
           </button>
         </div>
 
-        <div class="px-5 py-6 sm:px-6">
-          <div class="flex min-w-0 items-center gap-5 sm:gap-8">
+        <div class="px-4 py-4 sm:px-6 sm:py-6">
+          <div class="flex flex-row items-center gap-4 sm:gap-8 text-left">
             <div class="relative group shrink-0">
-              <div class="relative w-[72px] h-[72px] flex items-center justify-center rounded-full">
+              <div
+                class="relative w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] flex items-center justify-center rounded-full"
+              >
                 <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 72 72">
                   <circle
                     cx="36"
@@ -640,7 +607,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   />
                 </svg>
                 <div
-                  class="w-[64px] h-[64px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
+                  class="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
                 >
                   <img
                     v-if="profileDetails.avatarUrl"
@@ -651,25 +618,23 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   />
                   <div
                     v-else
-                    class="w-full h-full flex items-center justify-center text-white font-bold text-2xl bg-burning-orange"
+                    class="w-full h-full flex items-center justify-center text-white font-bold text-xl sm:text-2xl bg-burning-orange"
                   >
                     {{ profileInitial }}
                   </div>
                 </div>
               </div>
             </div>
-            <div class="min-w-0 flex-1 pt-1">
-              <h3 class="truncate text-[22px] font-semibold text-noble-black">
+            <div class="min-w-0 flex-1">
+              <h3 class="truncate text-[18px] sm:text-[22px] font-semibold text-noble-black">
                 {{ profileDetails.fullName }}
               </h3>
               <div
-                class="mt-3 flex flex-wrap items-center gap-x-2 text-[14px] font-medium text-noble-black/45"
+                class="mt-1 flex flex-row flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] sm:text-[14px] font-medium text-noble-black/45"
               >
-                <span class="truncate">{{ profileDetails.email }}</span>
-                <span class="select-none text-noble-black/20">·</span>
-                <span class="truncate">{{ profileDetails.location }}</span>
-                <span class="select-none text-noble-black/20">·</span>
-                <span>Joined {{ profileDetails.memberSince ?? "N/A" }}</span>
+                <span class="truncate max-w-full">{{ profileDetails.email }}</span>
+                <span class="truncate max-w-full">{{ profileDetails.location }}</span>
+                <span class="shrink-0">Joined {{ profileDetails.memberSince ?? "N/A" }}</span>
               </div>
             </div>
           </div>
@@ -678,44 +643,48 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 
       <!-- Danger Zone Card -->
       <section
-        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-5 py-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6"
+        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-4 py-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6"
       >
-        <div class="border-l-[3px] border-burning-orange pl-4">
-          <h2 class="text-[20px] font-semibold text-noble-black">Danger Zone</h2>
-          <p class="text-[13px] font-light text-noble-black/50">
+        <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4">
+          <h2 class="text-[18px] sm:text-[20px] font-semibold text-noble-black">Danger Zone</h2>
+          <p class="text-[12px] sm:text-[13px] font-light text-noble-black/50">
             Irreversible actions related to your account security and data.
           </p>
         </div>
-        <div class="mt-8 space-y-4 border-t border-cinnamon-ice/10 pt-6">
+        <div class="mt-6 sm:mt-8 space-y-4 border-t border-cinnamon-ice/10 pt-5 sm:pt-6">
           <div
-            class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
+            class="flex flex-col gap-4 xs:flex-row xs:items-center xs:justify-between bg-white/40 rounded-[20px] p-4 sm:p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-medium text-noble-black">Deactivate Account</h3>
-              <p class="text-[13px] font-light text-noble-black/50">
+              <h3 class="text-[15px] sm:text-[16px] font-medium text-noble-black">
+                Deactivate Account
+              </h3>
+              <p class="text-[11px] sm:text-[13px] font-light text-noble-black/50">
                 Hide your profile and listings until you sign in again. Your data remains safe.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-semibold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
+              class="w-full xs:w-auto h-9 sm:h-10 px-6 rounded-[10px] sm:rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-semibold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
               @click="openDeactivateAccountModal"
             >
               Deactivate
             </button>
           </div>
           <div
-            class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
+            class="flex flex-col gap-4 xs:flex-row xs:items-center xs:justify-between bg-white/40 rounded-[20px] p-4 sm:p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-medium text-noble-black">Delete Account</h3>
-              <p class="text-[13px] font-light text-noble-black/50">
+              <h3 class="text-[15px] sm:text-[16px] font-medium text-noble-black">
+                Delete Account
+              </h3>
+              <p class="text-[11px] sm:text-[13px] font-light text-noble-black/50">
                 Permanently erase your account, active listings, and all personal data from TakeUP.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-semibold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
+              class="w-full xs:w-auto h-9 sm:h-10 px-6 rounded-[10px] sm:rounded-[12px] bg-cinnabar-red text-white text-[13px] font-semibold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
               @click="openDeleteAccountModal"
             >
               Delete

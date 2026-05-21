@@ -16,12 +16,15 @@ import {
   normalizeCommunityRequest,
   normalizeOfferableItem,
 } from "../utils/community-feed"
+import { addBoundedSetEntry, setBoundedMapEntry } from "../utils/bounded-cache"
 import { usePersistedSessionState } from "./use-persisted-session-state"
 import { useViewerSession } from "./use-viewer-session"
 
 let pendingCommunityFeedPreview: Promise<void> | null = null
 const previewWarmedAtByViewer = new Map<string, number>()
 const warmedPreviewImageUrls = new Set<string>()
+const MAX_PREVIEW_WARMED_VIEWERS = 32
+const MAX_WARMED_PREVIEW_IMAGE_URLS = 96
 
 export const useCommunityFeedCache = () => {
   const requests = usePersistedSessionState<CommunityRequest[]>(
@@ -95,7 +98,8 @@ const isFreshFeedCache = (
   cache.feedViewerKey.value === viewerKey &&
   cache.feedLastLoadedAt.value !== null &&
   now - cache.feedLastLoadedAt.value < COMMUNITY_FEED_CACHE_TTL_MS &&
-  cache.requests.value.length > 0
+  cache.requests.value.length > 0 &&
+  hasHydratedRequestReplies(cache.requests.value)
 
 const wasPreviewRecentlyWarmed = (
   cache: ReturnType<typeof useCommunityFeedCache>,
@@ -105,7 +109,8 @@ const wasPreviewRecentlyWarmed = (
   if (
     cache.feedHydrated.value &&
     cache.feedViewerKey.value === viewerKey &&
-    cache.requests.value.length > 0
+    cache.requests.value.length > 0 &&
+    hasHydratedRequestReplies(cache.requests.value)
   ) {
     const warmedAt = previewWarmedAtByViewer.get(viewerKey)
     return warmedAt !== undefined && now - warmedAt < COMMUNITY_FEED_CACHE_TTL_MS
@@ -127,7 +132,7 @@ const warmImage = (src: string | null | undefined) => {
     priorityImage.fetchPriority = "low"
   }
   browserImage.src = src
-  warmedPreviewImageUrls.add(src)
+  addBoundedSetEntry(warmedPreviewImageUrls, src, MAX_WARMED_PREVIEW_IMAGE_URLS)
 }
 
 const warmPreviewImages = (requests: CommunityRequest[]) => {
@@ -136,6 +141,9 @@ const warmPreviewImages = (requests: CommunityRequest[]) => {
     warmImage(request.borrower.avatar)
   }
 }
+
+const hasHydratedRequestReplies = (requests: CommunityRequest[]) =>
+  requests.every((request) => request.repliesCount === 0 || request.replies.length > 0)
 
 export const useCommunityFeedPrefetch = () => {
   const cache = useCommunityFeedCache()
@@ -172,7 +180,12 @@ export const useCommunityFeedPrefetch = () => {
       const responseViewerKey = response.viewerKey || "anonymous"
 
       if (isFreshFeedCache(cache, responseViewerKey)) {
-        previewWarmedAtByViewer.set(responseViewerKey, Date.now())
+        setBoundedMapEntry(
+          previewWarmedAtByViewer,
+          responseViewerKey,
+          Date.now(),
+          MAX_PREVIEW_WARMED_VIEWERS,
+        )
         return
       }
 
@@ -189,7 +202,12 @@ export const useCommunityFeedPrefetch = () => {
       // Mark preview snapshots stale so /feed paints instantly, then refreshes the full list.
       cache.feedLastLoadedAt.value = getStaleCommunityFeedTimestamp()
 
-      previewWarmedAtByViewer.set(responseViewerKey, Date.now())
+      setBoundedMapEntry(
+        previewWarmedAtByViewer,
+        responseViewerKey,
+        Date.now(),
+        MAX_PREVIEW_WARMED_VIEWERS,
+      )
       warmPreviewImages(previewRequests)
     })()
       .catch(() => {})

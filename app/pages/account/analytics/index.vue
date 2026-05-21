@@ -266,7 +266,7 @@ onMounted(() => {
     <header class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+          <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
             My Listing Analytics
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>

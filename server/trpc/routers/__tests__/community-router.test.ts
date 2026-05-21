@@ -1,9 +1,26 @@
-import { describe, expect, it, vi } from "vitest"
+import { TRPCError } from "@trpc/server"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { payWithWallet } from "../../../utils/wallet"
 import { communityRouter } from "../community"
+
+vi.mock("../../../utils/wallet", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../../utils/wallet")>("../../../utils/wallet")
+
+  return {
+    ...actual,
+    payWithWallet: vi.fn().mockResolvedValue({
+      wallet: { id: "wallet-1", balance: 500 },
+      transaction: { id: "wallet-transaction-1" },
+    }),
+  }
+})
 
 const BORROWER_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const LENDER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 const OTHER_USER_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+const ROOT_REPLY_ID = "11111111-1111-4111-8111-111111111111"
+const CHILD_REPLY_ID = "22222222-2222-4222-8222-222222222222"
 
 const borrowerUser = {
   id: BORROWER_USER_ID,
@@ -49,7 +66,9 @@ const makeRequestRow = (overrides: Record<string, unknown> = {}) => ({
   borrowerMiddleName: null,
   borrowerLastName: "Cruz",
   borrowerEmail: "borrower@up.edu.ph",
+  borrowerAvatarUrl: "",
   offersCount: 1,
+  repliesCount: 0,
   ...overrides,
 })
 
@@ -81,20 +100,80 @@ const makeOfferRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const makePrisma = (overrides: Record<string, unknown> = {}) => ({
-  $queryRaw: vi.fn(),
-  $executeRaw: vi.fn().mockResolvedValue(1),
-  user: {
-    findUnique: vi.fn().mockResolvedValue({ id: BORROWER_USER_ID }),
-  },
-  borrower: {
-    upsert: vi.fn().mockResolvedValue({}),
-  },
-  lender: {
-    upsert: vi.fn().mockResolvedValue({}),
-  },
+const makeAcceptedOfferDetailsRow = (overrides: Record<string, unknown> = {}) => ({
+  id: 20,
+  status: "PENDING",
+  requestID: 10,
+  rentalFee: 500,
+  availability: true,
+  requestStatus: "OPEN",
+  requestedDates: [new Date("2026-04-20T00:00:00.000Z"), new Date("2026-04-21T00:00:00.000Z")],
+  borrowerUserId: BORROWER_USER_ID,
+  lenderUserId: LENDER_USER_ID,
+  itemId: "item-1",
+  itemStatus: "AVAILABLE",
   ...overrides,
 })
+
+const makeAcceptedOfferBooking = (overrides: Record<string, unknown> = {}) => ({
+  id: "booking-1",
+  borrowerId: BORROWER_USER_ID,
+  lenderId: LENDER_USER_ID,
+  itemId: "item-1",
+  startDate: new Date("2026-04-20T00:00:00.000Z"),
+  endDate: new Date("2026-04-21T00:00:00.000Z"),
+  totalFee: 500,
+  platformCommission: 25,
+  ...overrides,
+})
+
+const makePrisma = (overrides: Record<string, unknown> = {}) => {
+  const prisma = {
+    $queryRaw: vi.fn(),
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    itemRequestReply: {
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn(),
+    },
+    itemRequestReplyUpvote: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue({ id: BORROWER_USER_ID }),
+    },
+    borrower: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
+    lender: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
+    booking: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue(makeAcceptedOfferBooking()),
+    },
+    rentalTransaction: {
+      create: vi.fn().mockResolvedValue({ id: "transaction-1" }),
+    },
+    requestOffer: {
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    itemRequest: {
+      update: vi.fn().mockResolvedValue({}),
+    },
+    ...overrides,
+  }
+
+  if (!("$transaction" in prisma)) {
+    Object.assign(prisma, {
+      $transaction: vi.fn(async (callback: (client: typeof prisma) => unknown) => callback(prisma)),
+    })
+  }
+
+  return prisma
+}
 
 const makeContext = (
   user: typeof borrowerUser | typeof lenderUser | typeof borrowerUser | null,
@@ -106,6 +185,14 @@ const makeContext = (
 })
 
 describe("communityRouter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(payWithWallet).mockResolvedValue({
+      wallet: { id: "wallet-1", balance: 500 },
+      transaction: { id: "wallet-transaction-1" },
+    } as never)
+  })
+
   it("returns offerable items normalized for the current lender", async () => {
     const queryRaw = vi.fn().mockResolvedValue([makeOfferableItemRow()])
     const caller = communityRouter.createCaller(makeContext(lenderUser, { $queryRaw: queryRaw }))
@@ -138,7 +225,7 @@ describe("communityRouter", () => {
       itemNeeded: "Tripod",
       borrower: {
         userId: BORROWER_USER_ID,
-        name: "borrower1",
+        name: "Juan Cruz",
       },
       offersCount: 1,
     })
@@ -146,7 +233,236 @@ describe("communityRouter", () => {
     expect(result[0]?.offers[0]).toMatchObject({
       id: 20,
       itemName: "Camera",
-      lender: { userId: LENDER_USER_ID, name: "lender1" },
+      lender: { userId: LENDER_USER_ID, name: "Issa Santos" },
+    })
+    expect(result[0]?.replies).toEqual([])
+  })
+
+  it("can include request reply trees in the request feed payload", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeRequestRow({ repliesCount: 1 })])
+      .mockResolvedValueOnce([makeOfferRow()])
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "I can help with this.",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: LENDER_USER_ID,
+          username: "lender1",
+          firstName: "Issa",
+          middleName: null,
+          lastName: "Santos",
+          email: "lender@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 1 },
+        upvotes: [],
+      },
+    ])
+    const caller = communityRouter.createCaller(
+      makeContext(null, {
+        $queryRaw: queryRaw,
+        itemRequestReply: { findMany: replyFindMany },
+      }),
+    )
+
+    const result = await caller.listRequests({ includeReplies: true })
+
+    expect(replyFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { requestId: 10 },
+      }),
+    )
+    expect(result[0]?.replies).toMatchObject([
+      {
+        id: ROOT_REPLY_ID,
+        text: "I can help with this.",
+        upvotes: 1,
+      },
+    ])
+  })
+
+  it("lists request replies as a nested tree with viewer upvote state", async () => {
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "Top-level reply",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: BORROWER_USER_ID,
+          username: "borrower1",
+          firstName: "Juan",
+          middleName: null,
+          lastName: "Cruz",
+          email: "borrower@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 2 },
+        upvotes: [{ id: "vote-1" }],
+      },
+      {
+        id: CHILD_REPLY_ID,
+        requestId: 10,
+        parentReplyId: ROOT_REPLY_ID,
+        body: "Nested reply",
+        createdAt: new Date("2026-04-18T01:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T01:00:00.000Z"),
+        author: {
+          id: LENDER_USER_ID,
+          username: "lender1",
+          firstName: "Issa",
+          middleName: null,
+          lastName: "Santos",
+          email: "lender@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 0 },
+        upvotes: [],
+      },
+    ])
+    const queryRaw = vi.fn().mockResolvedValueOnce([makeRequestRow()])
+    const caller = communityRouter.createCaller(
+      makeContext(borrowerUser, {
+        $queryRaw: queryRaw,
+        itemRequestReply: { findMany: replyFindMany },
+      }),
+    )
+
+    const result = await caller.listReplies({ requestId: 10 })
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      id: ROOT_REPLY_ID,
+      text: "Top-level reply",
+      isUpvoted: true,
+      replies: [{ id: CHILD_REPLY_ID, text: "Nested reply" }],
+    })
+  })
+
+  it("creates a reply for an existing request", async () => {
+    const queryRaw = vi.fn().mockResolvedValueOnce([makeRequestRow()])
+    const createReply = vi.fn().mockResolvedValue({ id: ROOT_REPLY_ID })
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "Fresh reply",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: BORROWER_USER_ID,
+          username: "borrower1",
+          firstName: "Juan",
+          middleName: null,
+          lastName: "Cruz",
+          email: "borrower@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 0 },
+        upvotes: [],
+      },
+    ])
+    const findUnique = vi.fn().mockResolvedValue({ id: BORROWER_USER_ID })
+    const caller = communityRouter.createCaller(
+      makeContext(borrowerUser, {
+        $queryRaw: queryRaw,
+        user: { findUnique },
+        itemRequestReply: {
+          create: createReply,
+          findMany: replyFindMany,
+        },
+      }),
+    )
+
+    const result = await caller.createReply({
+      requestId: 10,
+      text: "Fresh reply",
+    })
+
+    expect(createReply).toHaveBeenCalledWith({
+      data: {
+        requestId: 10,
+        authorUserId: BORROWER_USER_ID,
+        parentReplyId: null,
+        body: "Fresh reply",
+      },
+      select: { id: true },
+    })
+    expect(result).toMatchObject({
+      id: ROOT_REPLY_ID,
+      requestId: 10,
+      text: "Fresh reply",
+    })
+  })
+
+  it("toggles a reply upvote for the current user", async () => {
+    const queryRaw = vi.fn().mockResolvedValueOnce([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        authorUserId: BORROWER_USER_ID,
+      },
+    ])
+    const upvoteFindUnique = vi.fn().mockResolvedValue(null)
+    const upvoteCreate = vi.fn().mockResolvedValue({ id: "vote-1" })
+    const replyFindMany = vi.fn().mockResolvedValue([
+      {
+        id: ROOT_REPLY_ID,
+        requestId: 10,
+        parentReplyId: null,
+        body: "Fresh reply",
+        createdAt: new Date("2026-04-18T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-18T00:00:00.000Z"),
+        author: {
+          id: BORROWER_USER_ID,
+          username: "borrower1",
+          firstName: "Juan",
+          middleName: null,
+          lastName: "Cruz",
+          email: "borrower@up.edu.ph",
+          avatarUrl: "",
+        },
+        _count: { upvotes: 1 },
+        upvotes: [{ id: "vote-1" }],
+      },
+    ])
+    const findUnique = vi.fn().mockResolvedValue({ id: LENDER_USER_ID })
+    const caller = communityRouter.createCaller(
+      makeContext(lenderUser, {
+        $queryRaw: queryRaw,
+        user: { findUnique },
+        itemRequestReply: { findMany: replyFindMany },
+        itemRequestReplyUpvote: {
+          findUnique: upvoteFindUnique,
+          create: upvoteCreate,
+          delete: vi.fn(),
+        },
+      }),
+    )
+
+    const result = await caller.toggleReplyUpvote({ id: ROOT_REPLY_ID })
+
+    expect(upvoteCreate).toHaveBeenCalledWith({
+      data: {
+        replyId: ROOT_REPLY_ID,
+        userId: LENDER_USER_ID,
+      },
+    })
+    expect(result).toEqual({
+      replyId: ROOT_REPLY_ID,
+      requestId: 10,
+      isUpvoted: true,
+      upvotes: 1,
     })
   })
 
@@ -389,6 +705,228 @@ describe("communityRouter", () => {
     })
   })
 
+  it("accepts an offer by creating a pending booking, transaction, wallet debit, and final statuses", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID })])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow()])
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    const result = await caller.updateOffer({
+      id: 20,
+      status: "ACCEPTED",
+    })
+
+    expect(result).toMatchObject({ id: 20, status: "ACCEPTED" })
+    expect(prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          borrowerId: BORROWER_USER_ID,
+          lenderId: LENDER_USER_ID,
+          itemId: "item-1",
+          requestOfferId: 20,
+          totalFee: 500,
+          paymentMethod: "WALLET",
+          paymentStatus: "PAID",
+          status: "PENDING",
+        }),
+      }),
+    )
+    expect(payWithWallet).toHaveBeenCalledWith(
+      BORROWER_USER_ID,
+      500,
+      {
+        relatedEntityType: "BOOKING",
+        relatedEntityId: "booking-1",
+      },
+      expect.anything(),
+    )
+    expect(prisma.rentalTransaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        bookingId: "booking-1",
+        borrowerId: BORROWER_USER_ID,
+        lenderId: LENDER_USER_ID,
+        itemId: "item-1",
+        rentalFee: 475,
+        platformFee: 25,
+        status: "PENDING",
+      }),
+    })
+    expect(prisma.requestOffer.update).toHaveBeenCalledWith({
+      where: { id: 20 },
+      data: { status: "ACCEPTED" },
+    })
+    expect(prisma.requestOffer.updateMany).toHaveBeenCalledWith({
+      where: {
+        requestID: 10,
+        id: { not: 20 },
+        status: "PENDING",
+      },
+      data: { status: "DECLINED" },
+    })
+    expect(prisma.itemRequest.update).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: { status: "FULFILLED" },
+    })
+  })
+
+  it("rejects offer acceptance when the borrower wallet balance is insufficient", async () => {
+    vi.mocked(payWithWallet).mockRejectedValueOnce(
+      new TRPCError({ code: "BAD_REQUEST", message: "Insufficient wallet balance." }),
+    )
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID })])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow()])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    await expect(caller.updateOffer({ id: 20, status: "ACCEPTED" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Insufficient wallet balance.",
+    })
+
+    expect(prisma.rentalTransaction.create).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.update).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.updateMany).not.toHaveBeenCalled()
+    expect(prisma.itemRequest.update).not.toHaveBeenCalled()
+  })
+
+  it("returns accepted offers idempotently when a linked booking already exists", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow({ status: "ACCEPTED" })])
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+    const prisma = makePrisma({
+      $queryRaw: queryRaw,
+      booking: {
+        findUnique: vi.fn().mockResolvedValue({ id: "booking-1" }),
+        create: vi.fn().mockResolvedValue(makeAcceptedOfferBooking()),
+      },
+    })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    const result = await caller.updateOffer({ id: 20, status: "ACCEPTED" })
+
+    expect(result).toMatchObject({ id: 20, status: "ACCEPTED" })
+    expect(prisma.booking.create).not.toHaveBeenCalled()
+    expect(payWithWallet).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.update).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.updateMany).not.toHaveBeenCalled()
+    expect(prisma.itemRequest.update).not.toHaveBeenCalled()
+  })
+
+  it("backfills an already accepted offer when it has no linked booking", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+      .mockResolvedValueOnce([
+        makeAcceptedOfferDetailsRow({ status: "ACCEPTED", requestStatus: "FULFILLED" }),
+      ])
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    const result = await caller.updateOffer({ id: 20, status: "ACCEPTED" })
+
+    expect(result).toMatchObject({ id: 20, status: "ACCEPTED" })
+    expect(prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestOfferId: 20,
+          status: "PENDING",
+          paymentMethod: "WALLET",
+          paymentStatus: "PAID",
+        }),
+      }),
+    )
+    expect(payWithWallet).toHaveBeenCalledWith(
+      BORROWER_USER_ID,
+      500,
+      expect.objectContaining({ relatedEntityId: "booking-1" }),
+      expect.anything(),
+    )
+    expect(prisma.rentalTransaction.create).toHaveBeenCalled()
+    expect(prisma.itemRequest.update).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: { status: "FULFILLED" },
+    })
+  })
+
+  it("blocks lenders from accepting an offer", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        makeOfferRow({ lenderUserId: LENDER_USER_ID, requestBorrowerUserId: BORROWER_USER_ID }),
+      ])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: lenderUser,
+    })
+
+    await expect(caller.updateOffer({ id: 20, status: "ACCEPTED" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Only the request owner can accept offers.",
+    })
+
+    expect(prisma.booking.create).not.toHaveBeenCalled()
+    expect(payWithWallet).not.toHaveBeenCalled()
+  })
+
+  it("rejects offer acceptance when the offered item is unavailable", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID })])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow({ itemStatus: "BORROWED" })])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    await expect(caller.updateOffer({ id: 20, status: "ACCEPTED" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The offered item is no longer available.",
+    })
+
+    expect(prisma.booking.create).not.toHaveBeenCalled()
+    expect(payWithWallet).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.update).not.toHaveBeenCalled()
+    expect(prisma.itemRequest.update).not.toHaveBeenCalled()
+  })
+
   it("blocks lenders from switching an offer to another user's item", async () => {
     const queryRaw = vi
       .fn()
@@ -435,7 +973,7 @@ describe("communityRouter", () => {
     const result = await caller.notifications()
 
     expect(result).toEqual([
-      expect.objectContaining({ id: 20, read: false, actorName: "lender1" }),
+      expect.objectContaining({ id: 20, read: false, actorName: "Issa Santos" }),
       expect.objectContaining({ id: 21, read: true }),
     ])
   })

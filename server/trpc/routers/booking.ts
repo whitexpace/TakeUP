@@ -1,6 +1,7 @@
 import {
   type BookingPaymentStatus as PrismaBookingPaymentStatus,
   type BookingStatus as PrismaBookingStatus,
+  type NotificationType as PrismaNotificationType,
   Prisma,
   PaymentMethod as PrismaPaymentMethod,
   TransactionStatus as PrismaTransactionStatus,
@@ -9,6 +10,7 @@ import {
   RefundReason,
   type Booking,
 } from "@prisma/client"
+import { randomUUID } from "node:crypto"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
 import { router } from "../init"
@@ -49,6 +51,7 @@ import {
 } from "../../utils/wallet"
 import { asWalletPrisma } from "../../utils/prisma"
 import { calculatePlatformCommissionAmount } from "../../utils/platform-commission"
+import { broadcastAppNotification } from "../../utils/app-notification-realtime"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -407,6 +410,16 @@ type BookingTimeRange = {
   endDate: Date
 }
 
+type BookingAvailabilityViolation =
+  | {
+      kind: "BLOCKED"
+      message: string
+    }
+  | {
+      kind: "OUTSIDE_AVAILABILITY"
+      message: string
+    }
+
 const doTimeRangesOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
   left.startDate < right.endDate && left.endDate > right.startDate
 
@@ -459,6 +472,50 @@ const isBookingWindowFullyCoveredByAvailability = (
   return false
 }
 
+const formatBookingDate = (value: Date) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(value)
+
+const getBookingAvailabilityViolation = (
+  requestedWindow: BookingTimeRange,
+  availabilityRanges: AvailabilityRangeRecord[],
+): BookingAvailabilityViolation | null => {
+  if (!availabilityRanges.length) {
+    return null
+  }
+
+  const dayAlignedRanges = availabilityRanges.map(expandRangeToUtcDays)
+  const hasAvailableRanges = dayAlignedRanges.some((range) => range.status === "AVAILABLE")
+  const hasBlockedWindow = dayAlignedRanges.some(
+    (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
+  )
+
+  if (hasBlockedWindow) {
+    return {
+      kind: "BLOCKED",
+      message:
+        "The selected date and time overlaps an already reserved period for this item. Please choose another schedule.",
+    }
+  }
+
+  if (
+    hasAvailableRanges &&
+    !isBookingWindowFullyCoveredByAvailability(requestedWindow, dayAlignedRanges)
+  ) {
+    return {
+      kind: "OUTSIDE_AVAILABILITY",
+      message: `The lender has not marked the full selected range (${formatBookingDate(
+        requestedWindow.startDate,
+      )} to ${formatBookingDate(requestedWindow.endDate)}) as available. Choose another date or shorten your booking window.`,
+    }
+  }
+
+  return null
+}
+
 const ensureBookingWindowMatchesAvailability = async (
   prisma: AvailabilityValidationPrismaClient,
   input: {
@@ -476,29 +533,17 @@ const ensureBookingWindowMatchesAvailability = async (
     },
   })) as AvailabilityRangeRecord[]
 
-  if (!availabilityRanges.length) {
-    return
-  }
-
-  const dayAlignedRanges = availabilityRanges.map(expandRangeToUtcDays)
-  const hasAvailableRanges = dayAlignedRanges.some((range) => range.status === "AVAILABLE")
-
   const requestedWindow = {
     startDate: input.startDate,
     endDate: input.endDate,
   }
-  const hasBlockedWindow = dayAlignedRanges.some(
-    (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
-  )
 
-  if (
-    hasBlockedWindow ||
-    (hasAvailableRanges &&
-      !isBookingWindowFullyCoveredByAvailability(requestedWindow, dayAlignedRanges))
-  ) {
+  const violation = getBookingAvailabilityViolation(requestedWindow, availabilityRanges)
+
+  if (violation) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "The selected dates are not fully available for this listing.",
+      message: violation.message,
     })
   }
 }
@@ -547,7 +592,7 @@ const transactionStatusTimelineLabels: Record<
     description: "The item is in use.",
   },
   [PrismaTransactionStatus.RETURNED]: {
-    label: "Returned",
+    label: "Item Returned",
     description: "The item return was recorded in the transaction log.",
   },
   [PrismaTransactionStatus.COMPLETED]: {
@@ -622,7 +667,7 @@ const buildBookingTimeline = (
   )
   addBookingEvent(
     "booking-returned",
-    "Returned",
+    "Item Returned",
     "Borrower proof of item return upload timestamp from the booking record.",
     booking.borrowerReturnProofUploadedAt ??
       (getFirstStatusLogAt(transaction, PrismaTransactionStatus.RETURNED)
@@ -850,7 +895,9 @@ const ensureBookingWindowAvailable = async (
   if (overlappingBooking) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: input.errorMessage ?? "The requested booking window overlaps an existing booking.",
+      message:
+        input.errorMessage ??
+        "The selected date and time overlaps an already reserved period for this item. Please choose another schedule.",
     })
   }
 }
@@ -1109,12 +1156,207 @@ const syncItemStatusFromBookings = async (
   }
 }
 
+type EarlyReturnEligibilityRecord = Pick<
+  BookingEditableRecord,
+  "borrowerId" | "status" | "startDate" | "endDate" | "lenderHandoffProofUploadedAt"
+> & {
+  returnStatus: ReturnStatus
+}
+
+const assertEarlyReturnAllowed = (
+  booking: EarlyReturnEligibilityRecord,
+  userId: string,
+  now: Date,
+) => {
+  if (booking.borrowerId !== userId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only the borrower can initiate an early return.",
+    })
+  }
+
+  if (booking.status !== bookingStatusSchema.enum.CONFIRMED) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only active confirmed bookings can be returned early.",
+    })
+  }
+
+  if (!booking.lenderHandoffProofUploadedAt) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The item must be marked as in use before it can be returned.",
+    })
+  }
+
+  if (
+    booking.returnStatus === ReturnStatus.EARLY_RETURNED ||
+    booking.returnStatus === ReturnStatus.RETURNED
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This booking has already been returned.",
+    })
+  }
+
+  if (now < booking.startDate) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This booking cannot be returned before the rental period starts.",
+    })
+  }
+
+  if (now >= booking.endDate) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The scheduled booking end time has already passed. Please use standard return.",
+    })
+  }
+}
+
 const buildReturnNotification = (bookingId: string) => ({
-  type: "BOOKING_RETURN_REQUESTED" as const,
+  type: "BOOKING_RETURN_REQUESTED" as unknown as PrismaNotificationType,
   title: "Item return requested",
   body: "A borrower marked one of your items as returned. Review the booking and confirm receipt.",
   actionPath: `/account/transactions/${bookingId}`,
 })
+
+const buildHandoffProofNotification = (bookingId: string) => ({
+  type: "BOOKING_HANDOFF_PROOF_UPLOADED" as unknown as PrismaNotificationType,
+  title: "Handoff proof uploaded",
+  body: "The lender uploaded proof that the item was handed over. Open the transaction to review it.",
+  actionPath: `/account/transactions/${bookingId}`,
+})
+
+const buildBookingRequestNotification = (input: {
+  bookingId: string
+  itemName: string
+  borrowerName: string
+}) => ({
+  type: "BOOKING_REQUESTED" as unknown as PrismaNotificationType,
+  title: "New booking request",
+  body: `${input.borrowerName} requested to book ${input.itemName}. Review the request before the rental starts.`,
+  actionPath: `/account/transactions/${input.bookingId}`,
+})
+
+const appNotificationBroadcastSelect = {
+  id: true,
+  recipientUserId: true,
+  actorUserId: true,
+  bookingId: true,
+  type: true,
+  title: true,
+  body: true,
+  actionPath: true,
+  readAt: true,
+  createdAt: true,
+} as const
+
+type BookingNotificationContent = {
+  type: PrismaNotificationType
+  title: string
+  body: string
+  actionPath: string
+}
+
+type BookingNotificationCreatePrismaClient = Pick<
+  Context["prisma"],
+  "$executeRaw" | "appNotification"
+>
+
+const createBookingNotification = async (
+  event: Context["event"],
+  prisma: BookingNotificationCreatePrismaClient,
+  input: {
+    recipientUserId: string
+    actorUserId: string
+    bookingId: string
+    notification: BookingNotificationContent
+    warningLabel: string
+    errorLabel: string
+  },
+) => {
+  let createdNotification: Awaited<ReturnType<typeof prisma.appNotification.create>> | null = null
+
+  try {
+    createdNotification = await prisma.appNotification.create({
+      data: {
+        recipientUserId: input.recipientUserId,
+        actorUserId: input.actorUserId,
+        bookingId: input.bookingId,
+        ...input.notification,
+      },
+      select: appNotificationBroadcastSelect,
+    })
+  } catch (error) {
+    console.warn(`Prisma notification create failed; retrying ${input.warningLabel} via SQL`, error)
+  }
+
+  if (createdNotification) {
+    await broadcastAppNotification(event, createdNotification).catch(() => undefined)
+    return
+  }
+
+  try {
+    const notificationId = randomUUID()
+    const createdAt = new Date()
+    await prisma.$executeRaw`
+      INSERT INTO public."AppNotification" (
+        "id",
+        "recipientUserId",
+        "actorUserId",
+        "bookingId",
+        "type",
+        "title",
+        "body",
+        "actionPath",
+        "createdAt"
+      )
+      VALUES (
+        ${notificationId},
+        ${input.recipientUserId},
+        ${input.actorUserId},
+        ${input.bookingId},
+        ${input.notification.type}::"NotificationType",
+        ${input.notification.title},
+        ${input.notification.body},
+        ${input.notification.actionPath},
+        ${createdAt}
+      )
+    `
+    await broadcastAppNotification(event, {
+      id: notificationId,
+      recipientUserId: input.recipientUserId,
+      actorUserId: input.actorUserId,
+      bookingId: input.bookingId,
+      ...input.notification,
+      readAt: null,
+      createdAt,
+    }).catch(() => undefined)
+  } catch (error) {
+    console.error(`Failed to create ${input.errorLabel}`, error)
+  }
+}
+
+const createBookingRequestNotification = async (
+  event: Context["event"],
+  prisma: BookingNotificationCreatePrismaClient,
+  input: {
+    recipientUserId: string
+    actorUserId: string
+    bookingId: string
+    itemName: string
+    borrowerName: string
+  },
+) =>
+  createBookingNotification(event, prisma, {
+    recipientUserId: input.recipientUserId,
+    actorUserId: input.actorUserId,
+    bookingId: input.bookingId,
+    notification: buildBookingRequestNotification(input),
+    warningLabel: "booking notification",
+    errorLabel: "booking request notification",
+  })
 
 export const bookingRouter = router({
   list: protectedProcedure.input(listBookingsSchema).query(async ({ ctx, input }) => {
@@ -1180,6 +1422,7 @@ export const bookingRouter = router({
       where: { id: input.itemId },
       select: {
         id: true,
+        name: true,
         lenderId: true,
         rateOption: true,
         rentalFee: true,
@@ -1196,8 +1439,18 @@ export const bookingRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "You cannot book your own item." })
     }
 
-    if (item.status !== "AVAILABLE") {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not available for booking." })
+    if (item.status === "DELETED" || item.status === "DEACTIVATED") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This listing is not accepting bookings right now.",
+      })
+    }
+
+    if (item.status === "UNAVAILABLE") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This listing has no upcoming available dates right now.",
+      })
     }
 
     await ensureBookingWindowMatchesAvailability(ctx.prisma, {
@@ -1261,6 +1514,14 @@ export const bookingRouter = router({
           increment: 1,
         },
       },
+    })
+
+    await createBookingRequestNotification(ctx.event, ctx.prisma, {
+      recipientUserId: item.lenderId,
+      actorUserId: ctx.user.id,
+      bookingId: booking.id,
+      itemName: item.name,
+      borrowerName: ctx.user.name || "A borrower",
     })
 
     return mapBookingRecord(booking as BookingRecord)
@@ -1727,8 +1988,6 @@ export const bookingRouter = router({
             create: { transactionId: syncedTransaction.id },
           })
         }
-
-        await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
       }
 
       // Wallet Refund on cancellation of a paid PENDING booking
@@ -1864,11 +2123,19 @@ export const bookingRouter = router({
         itemId: updatedBooking.itemId,
       })
 
-      return updatedBooking.id
+      return { bookingId: updatedBooking.id, rentalTransactionId: syncedTransaction?.id ?? null }
     }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
 
+    if (updatedBookingId.rentalTransactionId) {
+      try {
+        await processTransactionRewards(ctx.prisma, updatedBookingId.rentalTransactionId)
+      } catch (error) {
+        console.error("Failed to process transaction rewards after booking update", error)
+      }
+    }
+
     const updatedBooking = (await bookingPrisma.booking.findUnique({
-      where: { id: updatedBookingId },
+      where: { id: updatedBookingId.bookingId },
       include: bookingInclude,
     })) as BookingRecord | null
 
@@ -1924,6 +2191,13 @@ export const bookingRouter = router({
         })
       }
 
+      if (new Date() < existing.startDate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Handoff proof cannot be uploaded before the rental period starts.",
+        })
+      }
+
       const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
         const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
         const latestBooking = (await txBookingPrisma.booking.findUnique({
@@ -1961,6 +2235,13 @@ export const bookingRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Handoff proof has already been uploaded for this booking.",
+          })
+        }
+
+        if (new Date() < latestBooking.startDate) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Handoff proof cannot be uploaded before the rental period starts.",
           })
         }
 
@@ -2014,6 +2295,15 @@ export const bookingRouter = router({
 
         await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
           itemId: updatedBooking.itemId,
+        })
+
+        await createBookingNotification(ctx.event, tx as Context["prisma"], {
+          recipientUserId: latestBooking.borrowerId,
+          actorUserId: ctx.user.id,
+          bookingId: latestBooking.id,
+          notification: buildHandoffProofNotification(latestBooking.id),
+          warningLabel: "handoff proof notification",
+          errorLabel: "handoff proof notification",
         })
 
         return updatedBooking.id
@@ -2184,28 +2474,32 @@ export const bookingRouter = router({
           where: { bookingId: returnedBooking.id },
           select: { id: true },
         })
-        if (syncedTransaction) {
-          await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
-        }
-
         await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
           itemId: returnedBooking.itemId,
         })
 
-        await (tx as Context["prisma"]).appNotification.create({
-          data: {
-            recipientUserId: latestBooking.lenderId,
-            actorUserId: ctx.user.id,
-            bookingId: latestBooking.id,
-            ...buildReturnNotification(latestBooking.id),
-          },
+        await createBookingNotification(ctx.event, tx as Context["prisma"], {
+          recipientUserId: latestBooking.lenderId,
+          actorUserId: ctx.user.id,
+          bookingId: latestBooking.id,
+          notification: buildReturnNotification(latestBooking.id),
+          warningLabel: "return notification",
+          errorLabel: "return notification",
         })
 
-        return returnedBooking.id
+        return { bookingId: returnedBooking.id, rentalTransactionId: syncedTransaction?.id ?? null }
       }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
 
+      if (updatedBookingId.rentalTransactionId) {
+        try {
+          await processTransactionRewards(ctx.prisma, updatedBookingId.rentalTransactionId)
+        } catch (error) {
+          console.error("Failed to process transaction rewards after return proof upload", error)
+        }
+      }
+
       const updatedBooking = (await bookingPrisma.booking.findUnique({
-        where: { id: updatedBookingId },
+        where: { id: updatedBookingId.bookingId },
         include: bookingInclude,
       })) as BookingRecord | null
 
@@ -2246,51 +2540,8 @@ export const bookingRouter = router({
         ),
       )
 
-      if (existing.borrowerId !== ctx.user.id) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Only the borrower can initiate an early return.",
-        })
-      }
-
-      if (existing.status !== bookingStatusSchema.enum.CONFIRMED) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Only active confirmed bookings can be returned early.",
-        })
-      }
-
-      if (!existing.lenderHandoffProofUploadedAt) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "The item must be marked as in use before it can be returned.",
-        })
-      }
-
-      if (
-        existing.returnStatus === ReturnStatus.EARLY_RETURNED ||
-        existing.returnStatus === ReturnStatus.RETURNED
-      ) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This booking has already been returned.",
-        })
-      }
-
       const now = new Date()
-      if (now < existing.startDate) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This booking cannot be returned before the rental period starts.",
-        })
-      }
-
-      if (now >= existing.endDate) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "The scheduled booking end time has already passed. Please use standard return.",
-        })
-      }
+      assertEarlyReturnAllowed(existing, ctx.user.id, now)
 
       const refundCalc = calculateEarlyReturnRefund(existing as unknown as Booking, now)
 
@@ -2372,28 +2623,32 @@ export const bookingRouter = router({
           where: { bookingId: updatedBooking.id },
           select: { id: true },
         })
-        if (syncedTransaction) {
-          await processTransactionRewards(tx as Context["prisma"], syncedTransaction.id)
-        }
-
         await syncItemStatusFromBookings(tx as unknown as ItemStatusSyncPrismaClient, {
           itemId: updatedBooking.itemId,
         })
 
-        await (tx as Context["prisma"]).appNotification.create({
-          data: {
-            recipientUserId: existing.lenderId,
-            actorUserId: ctx.user.id,
-            bookingId: existing.id,
-            ...buildReturnNotification(existing.id),
-          },
+        await createBookingNotification(ctx.event, tx as Context["prisma"], {
+          recipientUserId: existing.lenderId,
+          actorUserId: ctx.user.id,
+          bookingId: existing.id,
+          notification: buildReturnNotification(existing.id),
+          warningLabel: "return notification",
+          errorLabel: "return notification",
         })
 
-        return updatedBooking.id
+        return { bookingId: updatedBooking.id, rentalTransactionId: syncedTransaction?.id ?? null }
       }, BOOKING_MUTATION_TRANSACTION_OPTIONS)
 
+      if (updatedBookingId.rentalTransactionId) {
+        try {
+          await processTransactionRewards(ctx.prisma, updatedBookingId.rentalTransactionId)
+        } catch (error) {
+          console.error("Failed to process transaction rewards after early return", error)
+        }
+      }
+
       const updatedBooking = (await bookingPrisma.booking.findUnique({
-        where: { id: updatedBookingId },
+        where: { id: updatedBookingId.bookingId },
         include: bookingInclude,
       })) as BookingRecord | null
 
@@ -2420,23 +2675,43 @@ export const bookingRouter = router({
     }),
 
   earlyReturnPreview: protectedProcedure.input(bookingIdSchema).query(async ({ ctx, input }) => {
-    const existing = await ctx.prisma.booking.findUnique({
+    const existing = (await ctx.prisma.booking.findUnique({
       where: { id: input.id },
-    })
+      select: {
+        ...bookingEditableSelect,
+        returnStatus: true,
+        refundStatus: true,
+      },
+    })) as
+      | (BookingEditableRecord & { returnStatus: ReturnStatus; refundStatus: RefundStatus })
+      | null
 
     if (!existing) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
     }
-
-    if (existing.borrowerId !== ctx.user.id) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Only the borrower can preview an early return.",
-      })
-    }
+    Object.assign(
+      existing,
+      await getBookingProofFields(ctx.prisma, existing.id, existing as Partial<BookingProofFields>),
+    )
 
     const now = new Date()
-    const refundCalc = calculateEarlyReturnRefund(existing, now)
+    try {
+      assertEarlyReturnAllowed(existing, ctx.user.id, now)
+    } catch (error) {
+      if (
+        error instanceof TRPCError &&
+        error.code === "FORBIDDEN" &&
+        error.message === "Only the borrower can initiate an early return."
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the borrower can preview an early return.",
+        })
+      }
+      throw error
+    }
+
+    const refundCalc = calculateEarlyReturnRefund(existing as unknown as Booking, now)
 
     return {
       refund: {

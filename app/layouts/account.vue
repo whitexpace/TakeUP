@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue"
-import { useNotifications } from "../composables/use-notifications"
 import { useAuthUser } from "../composables/use-auth-user"
 import { useAccountReviewsPrefetch } from "../composables/use-account-reviews"
 import { useListingAnalyticsPrefetch } from "../composables/use-listing-analytics"
@@ -30,8 +29,6 @@ const { warmRewards } = useRewardsPrefetch()
 
 const authData = computed(() => (cachedAuthUser.value ? { user: cachedAuthUser.value } : null))
 
-const { notifications, loadNotifications } = useNotifications()
-
 const handleResize = () => {
   isMobile.value = window.innerWidth < 1024
   if (!isMobile.value && !isSidebarOpen.value) {
@@ -40,7 +37,6 @@ const handleResize = () => {
 }
 
 onMounted(() => {
-  void loadNotifications()
   if (user.value && !hasFreshAuthUserCache.value && !cachedAuthUser.value) {
     void fetchAuthUser()
   }
@@ -105,81 +101,20 @@ const warmNavLink = (path: string, event?: Event) => {
   }
 }
 
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== "object" || value === null) return null
-  return value as Record<string, unknown>
-}
-
-const asNonEmptyString = (val: unknown) =>
-  typeof val === "string" && val.trim() ? val.trim() : null
-
-const getIdentityMetadata = (authUser: unknown) => {
-  const authUserRecord = asRecord(authUser)
-  const identities = authUserRecord?.identities
-  if (!Array.isArray(identities)) return []
-
-  return identities
-    .map((identity) => {
-      const identityRecord = asRecord(identity)
-      return asRecord(identityRecord?.identity_data) ?? asRecord(identityRecord?.provider_metadata)
-    })
-    .filter((identityData): identityData is Record<string, unknown> => Boolean(identityData))
-}
-
-const getAvatarFromSource = (source: Record<string, unknown> | null) => {
-  if (!source) return null
-  return (
-    asNonEmptyString(source.picture) ||
-    asNonEmptyString(source.avatar_url) ||
-    asNonEmptyString(source.photo_url) ||
-    asNonEmptyString(source.profile_image) ||
-    asNonEmptyString(source.image) ||
-    asNonEmptyString(source.avatarUrl)
-  )
-}
-
 const fullName = computed(() => {
-  const authUser = user.value
-  if (!authUser) return "Loading..."
-
-  // 1. Try DB name first (Highest priority for local edits)
   const u = authData.value?.user
-  if (u) {
-    const dbParts = [(u.firstName || "").trim(), u.middleName, (u.lastName || "").trim()].filter(
-      Boolean,
-    )
-    if (dbParts.length > 0) return dbParts.join(" ")
-    if (u.name && u.name !== u.username) return u.name
-  }
+  if (!u) return "Loading..."
 
-  const authUserRecord = asRecord(authUser)
-  const metadata = asRecord(authUserRecord?.user_metadata)
-  const metaName = asNonEmptyString(metadata?.full_name) || asNonEmptyString(metadata?.name)
-  if (metaName) return metaName
+  const dbParts = [(u.firstName || "").trim(), u.middleName, (u.lastName || "").trim()].filter(
+    Boolean,
+  )
+  if (dbParts.length > 0) return dbParts.join(" ")
 
-  const email = (authUserRecord?.email as string | undefined) || null
-  return email?.split("@")[0] || "User"
+  return u.username || "User"
 })
 
 const profileAvatar = computed(() => {
-  // 1. Try DB avatar first
-  if (authData.value?.user.avatarUrl) return authData.value.user.avatarUrl
-
-  // 2. Try Identity/Google metadata fallback
-  const authUser = user.value
-  const authUserRecord = asRecord(authUser)
-  const sources = [
-    asRecord(authUserRecord?.user_metadata),
-    asRecord(authUserRecord?.app_metadata),
-    ...getIdentityMetadata(authUser),
-  ]
-
-  for (const source of sources) {
-    const avatar = getAvatarFromSource(source)
-    if (avatar) return avatar
-  }
-
-  return null
+  return authData.value?.user.avatarUrl || null
 })
 
 const firstInitial = computed(() => {
@@ -242,8 +177,8 @@ onUnmounted(() => {
 <template>
   <div class="min-h-screen bg-white">
     <Header
-      :notifications="notifications"
       scroll-container-selector=".custom-account-main-scrollbar"
+      :show-nav="!(isMobile && isSidebarOpen)"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
       <template #left>
@@ -478,7 +413,7 @@ onUnmounted(() => {
         class="flex-1 overflow-y-auto bg-white custom-account-main-scrollbar"
         :class="[isHeaderVisible ? 'pt-14' : 'pt-0']"
       >
-        <div class="py-8">
+        <div class="py-8 px-4 sm:px-6">
           <slot />
         </div>
       </main>

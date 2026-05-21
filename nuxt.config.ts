@@ -17,6 +17,9 @@ export default defineNuxtConfig({
   typescript: { strict: true },
   runtimeConfig: {
     googleClientId: process.env.GOOGLE_CLIENT_ID,
+    geminiApiKey:
+      process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
+    geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     jwtSecret: process.env.JWT_SECRET,
     supabaseJwtSecret: process.env.SUPABASE_JWT_SECRET,
     platformCommissionRatePercent: process.env.PLATFORM_COMMISSION_RATE_PERCENT ?? "5",
@@ -45,6 +48,28 @@ export default defineNuxtConfig({
       callback: "/auth/callback",
       include: ["/dashboard*", "/account*", "/bag*"],
       exclude: ["/"],
+    },
+  },
+  nitro: {
+    rollupConfig: {
+      onwarn(warning, rollupWarn) {
+        const message = warning.message || ""
+        const isSupabaseUnusedExternalImport =
+          warning.code === "UNUSED_EXTERNAL_IMPORT" &&
+          message.includes("@supabase/supabase-js") &&
+          message.includes("but never used")
+
+        if (
+          isSupabaseUnusedExternalImport ||
+          warning.code === "CIRCULAR_DEPENDENCY" ||
+          warning.code === "EVAL" ||
+          message.includes("Unsupported source map comment")
+        ) {
+          return
+        }
+
+        rollupWarn(warning)
+      },
     },
   },
   css: ["~/assets/css/main.css"],

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server"
+import { pruneExpiredEntries, setBoundedMapEntry } from "../../utils/bounded-cache"
 import type { ItemCategory, ItemCondition, ItemStatus } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import { router } from "../init"
@@ -813,6 +814,7 @@ const orderItemsByIds = <T extends { id: string }>(items: T[], orderedIds: strin
 }
 
 const VIEWER_FEED_PROFILE_TTL_MS = 60_000
+const MAX_VIEWER_FEED_PROFILE_CACHE_ENTRIES = 256
 
 const viewerFeedProfileCache = new Map<
   string,
@@ -824,6 +826,7 @@ const viewerFeedProfileCache = new Map<
 const pendingViewerFeedProfileRequests = new Map<string, Promise<ViewerInterestProfile>>()
 
 const getCachedViewerFeedProfile = (userId: string) => {
+  pruneExpiredEntries(viewerFeedProfileCache)
   const cachedEntry = viewerFeedProfileCache.get(userId)
   if (!cachedEntry) {
     return null
@@ -877,10 +880,16 @@ const getViewerInterestProfileForFeed = async (prisma: PrismaClientLike, userId:
       })
 
       const profile = buildViewerInterestProfile(likedItems)
-      viewerFeedProfileCache.set(userId, {
-        expiresAt: Date.now() + VIEWER_FEED_PROFILE_TTL_MS,
-        profile,
-      })
+      pruneExpiredEntries(viewerFeedProfileCache)
+      setBoundedMapEntry(
+        viewerFeedProfileCache,
+        userId,
+        {
+          expiresAt: Date.now() + VIEWER_FEED_PROFILE_TTL_MS,
+          profile,
+        },
+        MAX_VIEWER_FEED_PROFILE_CACHE_ENTRIES,
+      )
       return profile
     } catch (error) {
       if ((error as { code?: string } | null)?.code === "P2024") {

@@ -1,6 +1,7 @@
 import { computed, getCurrentScope, onScopeDispose, ref, watch } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
+import { addBoundedSetEntry, setBoundedMapEntry } from "../utils/bounded-cache"
 import { resetPaginatedItemsCache } from "./use-paginated-items"
 import { resetFilteredResultsCountCache } from "./use-filtered-results-count"
 import { clearPersistedSessionState, usePersistedSessionState } from "./use-persisted-session-state"
@@ -44,6 +45,7 @@ const MY_LISTINGS_PREFETCH_INITIAL_LIMIT = 8
 const MY_LISTINGS_PREFETCH_REMAINDER_LIMIT = 48
 const MY_LISTINGS_PREFETCH_REMAINDER_DELAY_MS = 180
 const MAX_WARMED_MY_LISTING_IMAGE_URLS = 80
+const MAX_MY_LISTING_DETAIL_CACHE_ENTRIES = 64
 
 const warmedMyListingImageUrls = new Set<string>()
 const myListingDetailCache = new Map<string, MyListingItem>()
@@ -71,7 +73,7 @@ const warmMyListingImage = (src: string | null | undefined) => {
     priorityImage.fetchPriority = "low"
   }
   browserImage.src = src
-  warmedMyListingImageUrls.add(src)
+  addBoundedSetEntry(warmedMyListingImageUrls, src, MAX_WARMED_MY_LISTING_IMAGE_URLS)
 }
 
 const warmMyListingImages = (items: MyListingItem[]) => {
@@ -140,7 +142,7 @@ const invalidateItemSearchCaches = () => {
 export const seedPrefetchedMyListingDetail = (item: MyListingItem) => {
   if (!import.meta.client) return
 
-  myListingDetailCache.set(item.id, item)
+  setBoundedMapEntry(myListingDetailCache, item.id, item, MAX_MY_LISTING_DETAIL_CACHE_ENTRIES)
   warmMyListingDetailImages(item)
 }
 

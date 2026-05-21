@@ -2,6 +2,7 @@ import { computed, ref, watch, type Ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import type { BookingStatus } from "#shared/schemas/booking"
+import { pruneExpiredEntries, setBoundedMapEntry } from "../utils/bounded-cache"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type BorrowerItemRequestSource = RouterOutputs["booking"]["list"]["bookings"][number]
@@ -30,6 +31,7 @@ type FetchRequestsOptions = {
 }
 
 const BORROWER_REQUEST_CACHE_TTL_MS = 5 * 60_000
+const MAX_BORROWER_REQUEST_CACHE_ENTRIES = 32
 const REQUEST_BOOKING_STATUSES = [
   "PENDING",
   "CONFIRMED",
@@ -60,6 +62,7 @@ const buildBorrowerRequestCacheKey = (statuses: BookingStatus[]) =>
   `${getBorrowerRequestViewerKey()}:borrower-requests:${[...statuses].sort().join("|")}`
 
 const getCachedBorrowerRequests = (cacheKey: string) => {
+  pruneExpiredEntries(borrowerRequestCache)
   const cachedEntry = borrowerRequestCache.get(cacheKey)
   if (!cachedEntry) return null
 
@@ -72,10 +75,16 @@ const getCachedBorrowerRequests = (cacheKey: string) => {
 }
 
 const setCachedBorrowerRequests = (cacheKey: string, requests: BorrowerItemRequest[]) => {
-  borrowerRequestCache.set(cacheKey, {
-    expiresAt: Date.now() + BORROWER_REQUEST_CACHE_TTL_MS,
-    requests: cloneBorrowerRequests(requests),
-  })
+  pruneExpiredEntries(borrowerRequestCache)
+  setBoundedMapEntry(
+    borrowerRequestCache,
+    cacheKey,
+    {
+      expiresAt: Date.now() + BORROWER_REQUEST_CACHE_TTL_MS,
+      requests: cloneBorrowerRequests(requests),
+    },
+    MAX_BORROWER_REQUEST_CACHE_ENTRIES,
+  )
 }
 
 const requestStatusByBookingStatus: Partial<

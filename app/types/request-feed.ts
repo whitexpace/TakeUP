@@ -1,6 +1,8 @@
 export interface RequestFeedRequester {
   id: string | null
   username: string | null
+  name: string
+  avatar: string
 }
 
 export interface RequestFeedPost {

@@ -12,6 +12,7 @@ const TX_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
 const CONV_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
 const MSG_ID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
 const OUTSIDER_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+const REPLY_MSG_ID = "11111111-1111-1111-1111-111111111111"
 
 const mockUser: SessionUser = { id: USER_ID, email: "user@up.edu.ph", name: "Test User" }
 const outsiderUser: SessionUser = { id: OUTSIDER_ID, email: "outsider@up.edu.ph", name: "Outsider" }
@@ -60,6 +61,7 @@ const makeMessage = (overrides: Record<string, unknown> = {}) => ({
   id: MSG_ID,
   conversationId: CONV_ID,
   senderUserId: USER_ID,
+  replyToMessageId: null,
   body: "Hello!",
   imageUrl: null,
   isRead: false,
@@ -216,6 +218,63 @@ describe("chatRouter", () => {
           data: expect.objectContaining({ body: "Hello!" }),
         }),
       )
+    })
+
+    it("stores reply metadata for a message in the same conversation", async () => {
+      const replyCreatedAt = new Date("2026-04-01T11:59:00Z")
+      const ctx = makeContext(mockUser, {
+        $queryRaw: vi.fn().mockResolvedValue([
+          {
+            id: REPLY_MSG_ID,
+            senderUserId: OTHER_USER_ID,
+            body: "Original message",
+            imageUrl: null,
+            createdAt: replyCreatedAt,
+          },
+        ]),
+        message: {
+          create: vi.fn().mockResolvedValue(
+            makeMessage({
+              id: "replying-msg",
+              body: "Replying now",
+              replyToMessageId: REPLY_MSG_ID,
+            }),
+          ),
+        },
+      })
+
+      const result = await caller(ctx).sendMessage({
+        conversationId: CONV_ID,
+        body: "Replying now",
+        replyToMessageId: REPLY_MSG_ID,
+      })
+
+      expect(ctx.prisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ replyToMessageId: REPLY_MSG_ID }),
+        }),
+      )
+      expect(result.replyToMessage).toEqual({
+        id: REPLY_MSG_ID,
+        senderUserId: OTHER_USER_ID,
+        body: "Original message",
+        imageUrl: null,
+        createdAt: replyCreatedAt,
+      })
+    })
+
+    it("rejects replies to messages outside the conversation", async () => {
+      const ctx = makeContext(mockUser, {
+        $queryRaw: vi.fn().mockResolvedValue([]),
+      })
+
+      await expect(
+        caller(ctx).sendMessage({
+          conversationId: CONV_ID,
+          body: "Replying now",
+          replyToMessageId: "ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb",
+        }),
+      ).rejects.toThrow("You can only reply to a message in this conversation.")
     })
 
     it("rejects empty message", async () => {

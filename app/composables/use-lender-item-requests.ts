@@ -2,6 +2,7 @@ import { computed, ref, watch, type Ref } from "vue"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "../../server/trpc/routers"
 import type { BookingStatus } from "#shared/schemas/booking"
+import { pruneExpiredEntries, setBoundedMapEntry } from "../utils/bounded-cache"
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 export type LenderItemRequestSource = RouterOutputs["booking"]["list"]["bookings"][number]
@@ -30,6 +31,7 @@ type FetchRequestsOptions = {
 }
 
 const LENDER_REQUEST_CACHE_TTL_MS = 5 * 60_000
+const MAX_LENDER_REQUEST_CACHE_ENTRIES = 32
 const LENDER_BOOKING_STATUSES = [
   "PENDING",
   "CONFIRMED",
@@ -60,6 +62,7 @@ const buildLenderRequestCacheKey = (statuses: BookingStatus[]) =>
   `${getLenderRequestViewerKey()}:lender-requests:${[...statuses].sort().join("|")}`
 
 const getCachedLenderRequests = (cacheKey: string) => {
+  pruneExpiredEntries(lenderRequestCache)
   const cachedEntry = lenderRequestCache.get(cacheKey)
   if (!cachedEntry) return null
 
@@ -72,10 +75,16 @@ const getCachedLenderRequests = (cacheKey: string) => {
 }
 
 const setCachedLenderRequests = (cacheKey: string, requests: LenderItemRequest[]) => {
-  lenderRequestCache.set(cacheKey, {
-    expiresAt: Date.now() + LENDER_REQUEST_CACHE_TTL_MS,
-    requests: cloneLenderRequests(requests),
-  })
+  pruneExpiredEntries(lenderRequestCache)
+  setBoundedMapEntry(
+    lenderRequestCache,
+    cacheKey,
+    {
+      expiresAt: Date.now() + LENDER_REQUEST_CACHE_TTL_MS,
+      requests: cloneLenderRequests(requests),
+    },
+    MAX_LENDER_REQUEST_CACHE_ENTRIES,
+  )
 }
 
 const requestStatusByBookingStatus: Partial<

@@ -97,4 +97,40 @@ describe("home-auth-redirect", () => {
     expect(clearViewerSession).toHaveBeenCalledTimes(1)
     expect(navigateTo).toHaveBeenCalledWith("/admin/disputes", { replace: true })
   })
+
+  it("clears caches and stays on home when app-session bridging fails", async () => {
+    const clearAuthUser = vi.fn()
+    const clearBridge = vi.fn()
+    const clearViewerSession = vi.fn()
+    const getSession = vi.fn().mockResolvedValue({
+      access_token: "token-a",
+    })
+    const ensureBridgedSession = vi.fn().mockResolvedValue(false)
+    const refreshAuthUser = vi.fn()
+
+    vi.stubGlobal("useAuthUser", () => ({
+      authUser: { value: { id: "stale-user", accountType: "ADMIN" } },
+      refresh: refreshAuthUser,
+      clear: clearAuthUser,
+    }))
+    useViewerSessionMock.mockReturnValue({
+      getSession,
+      ensureBridgedSession,
+      clear: clearViewerSession,
+    })
+    vi.stubGlobal("useSessionBridge", () => ({
+      clear: clearBridge,
+    }))
+
+    const middleware = (await import("../home-auth-redirect")).default
+    await middleware({ path: "/" } as never, undefined as never)
+
+    expect(getSession).toHaveBeenCalledWith({ force: true })
+    expect(ensureBridgedSession).toHaveBeenCalledTimes(1)
+    expect(refreshAuthUser).not.toHaveBeenCalled()
+    expect(clearAuthUser).toHaveBeenCalledTimes(1)
+    expect(clearBridge).toHaveBeenCalledTimes(1)
+    expect(clearViewerSession).toHaveBeenCalledTimes(1)
+    expect(navigateTo).not.toHaveBeenCalled()
+  })
 })

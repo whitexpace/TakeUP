@@ -247,7 +247,9 @@ const getStatusBadgeClass = (status: string) => {
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+          <h1
+            class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+          >
             My Rewards
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
@@ -267,25 +269,34 @@ const getStatusBadgeClass = (status: string) => {
         class="absolute -top-24 -right-24 w-64 h-64 bg-burning-orange/5 blur-[80px] rounded-full"
       ></div>
 
-      <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-10">
-        <div class="text-center sm:text-left">
-          <div class="flex items-baseline justify-center sm:justify-start gap-4">
+      <div class="relative z-10 flex flex-row items-center justify-between gap-4 sm:gap-10">
+        <div class="text-left">
+          <div class="flex items-baseline justify-start gap-2 sm:gap-4">
             <h2
-              class="text-[64px] sm:text-[72px] font-black text-burning-orange leading-none tracking-tighter"
+              class="text-[48px] sm:text-[72px] font-black text-burning-orange leading-none tracking-tighter"
             >
               {{ (summary?.availablePoints ?? 0).toLocaleString() }}
             </h2>
           </div>
           <p
-            class="text-[14px] font-light text-noble-black/50 mt-2 uppercase tracking-[0.1em] font-bold"
+            class="text-[12px] sm:text-[14px] font-light text-noble-black/50 mt-1 sm:mt-2 uppercase tracking-[0.1em] font-bold"
           >
             Points Available
           </p>
         </div>
 
         <!-- Progress Ring -->
-        <div class="relative flex items-center justify-center">
-          <svg class="w-32 h-32 transform -rotate-90">
+        <div class="relative flex items-center justify-center shrink-0">
+          <svg class="w-24 h-24 sm:w-32 sm:h-32 transform -rotate-90">
+            <circle
+              cx="48"
+              cy="48"
+              r="42"
+              stroke="currentColor"
+              stroke-width="6"
+              fill="transparent"
+              class="text-noble-black/5 sm:hidden"
+            />
             <circle
               cx="64"
               cy="64"
@@ -293,7 +304,19 @@ const getStatusBadgeClass = (status: string) => {
               stroke="currentColor"
               stroke-width="8"
               fill="transparent"
-              class="text-noble-black/5"
+              class="text-noble-black/5 hidden sm:block"
+            />
+            <circle
+              cx="48"
+              cy="48"
+              r="42"
+              stroke="currentColor"
+              stroke-width="6"
+              fill="transparent"
+              stroke-dasharray="263.89"
+              :stroke-dashoffset="263.89 - (263.89 * milestoneProgress) / 100"
+              stroke-linecap="round"
+              class="text-burning-orange transition-all duration-1000 ease-out sm:hidden"
             />
             <circle
               cx="64"
@@ -305,14 +328,18 @@ const getStatusBadgeClass = (status: string) => {
               stroke-dasharray="364.4"
               :stroke-dashoffset="364.4 - (364.4 * milestoneProgress) / 100"
               stroke-linecap="round"
-              class="text-burning-orange transition-all duration-1000 ease-out"
+              class="text-burning-orange transition-all duration-1000 ease-out hidden sm:block"
             />
           </svg>
           <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <p class="text-[10px] font-black uppercase tracking-widest text-noble-black/30 mb-0.5">
+            <p
+              class="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-noble-black/30 mb-0.5"
+            >
               Next Goal
             </p>
-            <p class="text-[15px] font-bold text-noble-black">{{ NEXT_MILESTONE }}</p>
+            <p class="text-[12px] sm:text-[15px] font-bold text-noble-black">
+              {{ NEXT_MILESTONE }}
+            </p>
           </div>
         </div>
       </div>

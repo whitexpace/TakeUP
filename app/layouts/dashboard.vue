@@ -2,14 +2,12 @@
   <div class="flex flex-col h-screen font-geist bg-white relative overflow-hidden">
     <!-- Top Header -->
     <Header
-      :notifications="notifications"
       scroll-container-selector=".custom-main-scrollbar"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
-      <template #left>
+      <template v-if="!hideSidebar" #left>
         <div class="relative flex items-stretch group/tooltip h-full">
           <button
-            v-if="!hideSidebar"
             class="flex items-center justify-center px-2 text-noble-black transition-colors hover:text-burning-orange group"
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
@@ -78,7 +76,7 @@
 
       <!-- Main Content Area -->
       <main
-        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative px-6 sm:px-10 lg:px-16 xl:px-24"
+        class="flex-1 bg-white overflow-y-auto custom-main-scrollbar transition-all duration-500 ease-in-out relative px-6 sm:px-10 lg:px-16 xl:px-24 pb-20 lg:pb-0"
         :class="isHeaderVisible ? 'pt-14' : 'pt-0'"
       >
         <slot />
@@ -91,7 +89,6 @@
 import { computed, ref, onMounted, onUnmounted, provide } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import { useDashboardFilters } from "../composables/use-dashboard-filters"
-import { useNotifications } from "../composables/use-notifications"
 import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
 const route = useRoute()
@@ -99,7 +96,6 @@ const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const hideSidebar = computed(() => Boolean(route.meta.hideDashboardSidebar))
-const { notifications, loadNotifications } = useNotifications()
 
 const toggleSidebar = () => {
   if (hideSidebar.value) return
@@ -141,7 +137,7 @@ onMounted(() => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
 
-  const startupTasks: Array<Promise<unknown>> = [loadNotifications()]
+  const startupTasks: Array<Promise<unknown>> = []
   if (!hideSidebar.value) {
     startupTasks.push(fetchFilterMetadata())
   }

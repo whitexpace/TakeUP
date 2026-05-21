@@ -9,6 +9,7 @@ import {
   type ReviewTransactionListItem,
   type SubmittedReviewListPage,
 } from "../../../composables/use-account-reviews"
+import { useAuthUser } from "../../../composables/use-auth-user"
 
 definePageMeta({
   layout: "account",
@@ -19,7 +20,7 @@ type ReviewsTab = "PENDING" | "DRAFTS" | "HISTORY"
 
 const activeTab = ref<ReviewsTab>("PENDING")
 const searchQuery = ref("")
-const user = useSupabaseUser()
+const { authUser: user } = useAuthUser()
 const REVIEW_LIST_PAGE_SIZE = 10
 const reviewListPage = ref(1)
 const transactionsNextCursor = ref<ReviewTransactionListPage["nextCursor"]>(null)
@@ -519,7 +520,9 @@ onBeforeUnmount(() => {
     <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black leading-tight">
+          <h1
+            class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+          >
             My Reviews
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
@@ -827,13 +830,21 @@ onBeforeUnmount(() => {
             </div>
 
             <div
-              v-if="activeReviewListLength > REVIEW_LIST_PAGE_SIZE || currentTabNextCursor"
+              v-if="
+                (activeReviewListLength > 0 &&
+                  (activeReviewListLength > REVIEW_LIST_PAGE_SIZE || currentTabNextCursor)) ||
+                (activeTab === 'PENDING' && currentTabNextCursor)
+              "
               class="flex flex-col gap-3 border-t border-cinnamon-ice/20 pt-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <p class="text-[12px] font-medium text-noble-black/40">
-                Showing {{ reviewListRangeLabel }}
+                {{
+                  activeReviewListLength > 0
+                    ? `Showing ${reviewListRangeLabel}`
+                    : "No reviews found in this batch"
+                }}
               </p>
-              <div class="flex items-center gap-2">
+              <div v-if="activeReviewListLength > 0" class="flex items-center gap-2">
                 <button
                   type="button"
                   class="h-8 w-8 rounded-lg border border-cinnamon-ice/20 text-noble-black/50 transition-colors hover:border-burning-orange hover:text-burning-orange disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cinnamon-ice/20 disabled:hover:text-noble-black/50"
@@ -857,7 +868,13 @@ onBeforeUnmount(() => {
                 </button>
               </div>
               <button
-                v-if="currentTabNextCursor"
+                v-if="
+                  currentTabNextCursor &&
+                  !hasNextReviewListPage &&
+                  (activeTab !== 'PENDING' ||
+                    activeReviewListLength % REVIEW_LIST_PAGE_SIZE === 0 ||
+                    activeReviewListLength === 0)
+                "
                 type="button"
                 class="h-8 rounded-lg border border-burning-orange/20 px-4 text-[12px] font-bold text-burning-orange transition-colors hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="isLoadingMoreCurrentTab"

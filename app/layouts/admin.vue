@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue"
-import { useNotifications } from "../composables/use-notifications"
 import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
 type AdminLink = {
@@ -16,7 +15,6 @@ const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const showLogoutModal = ref(false)
 
-const { notifications, loadNotifications } = useNotifications()
 const { clear: clearAuthUser } = useAuthUser()
 const { clear: clearBridge } = useSessionBridge()
 const { clear: clearViewerSession } = useViewerSession()
@@ -111,7 +109,6 @@ onMounted(() => {
 
   window.addEventListener("resize", handleResize)
 
-  void loadNotifications()
   scheduleIdleWarmup(() => {
     const { fetch: fetchAuthUser } = useAuthUser()
     const { fetchOverview } = useAdminOverview()
@@ -128,8 +125,8 @@ onUnmounted(() => {
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-white font-geist relative">
     <Header
-      :notifications="notifications"
       scroll-container-selector=".custom-admin-main-scrollbar"
+      :show-nav="!(isMobile && isSidebarOpen)"
       @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
       <template #left>
@@ -171,9 +168,7 @@ onUnmounted(() => {
         ]"
       >
         <div class="px-6 pt-10 pb-8 border-b border-white/5 shrink-0">
-          <h2 class="font-montravia text-[26px] font-bold text-white tracking-tight">
-            Admin Panel
-          </h2>
+          <h2 class="font-geist text-[26px] font-bold text-white tracking-tight">Admin Panel</h2>
         </div>
 
         <nav class="flex-1 overflow-y-auto custom-sidebar-scrollbar px-4 py-8 space-y-1">

@@ -6,10 +6,12 @@ const {
   creditToWalletMock,
   creditCommissionToSystemWalletMock,
   findSystemCommissionTransactionMock,
+  broadcastAppNotificationMock,
 } = vi.hoisted(() => ({
   creditToWalletMock: vi.fn(),
   creditCommissionToSystemWalletMock: vi.fn(),
   findSystemCommissionTransactionMock: vi.fn(),
+  broadcastAppNotificationMock: vi.fn(),
 }))
 
 vi.mock("../../../utils/wallet", async () => {
@@ -23,6 +25,10 @@ vi.mock("../../../utils/wallet", async () => {
     findSystemCommissionTransaction: findSystemCommissionTransactionMock,
   }
 })
+
+vi.mock("../../../utils/app-notification-realtime", () => ({
+  broadcastAppNotification: broadcastAppNotificationMock,
+}))
 
 const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const ITEM_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -110,7 +116,7 @@ const makeContext = () => {
     delete: vi.fn(),
   }
 
-  const prisma = {
+  const prismaBase = {
     $transaction: vi.fn(),
     borrower: {
       upsert: vi.fn().mockResolvedValue({ userId: USER_ID }),
@@ -121,6 +127,7 @@ const makeContext = () => {
     item: {
       findUnique: vi.fn().mockResolvedValue({
         id: ITEM_ID,
+        name: "Camera",
         lenderId: LENDER_ID,
         rateOption: "PER_DAY",
         rentalFee: 200,
@@ -146,9 +153,23 @@ const makeContext = () => {
       findFirst: vi.fn().mockResolvedValue(null),
     },
     appNotification: {
-      create: vi.fn().mockResolvedValue({ id: "notif-1" }),
+      create: vi.fn().mockResolvedValue({
+        id: "notif-1",
+        recipientUserId: LENDER_ID,
+        actorUserId: USER_ID,
+        bookingId: BOOKING_ID,
+        type: "BOOKING_REQUESTED",
+        title: "New booking request",
+        body: "Test User requested to book Camera. Review the request before the rental starts.",
+        actionPath: `/account/transactions/${BOOKING_ID}`,
+        readAt: null,
+        createdAt: new Date("2026-03-20T00:00:00.000Z"),
+      }),
     },
     booking,
+  }
+  const prisma = prismaBase as typeof prismaBase & {
+    $executeRaw?: ReturnType<typeof vi.fn>
   }
 
   prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) =>
@@ -167,9 +188,11 @@ describe("bookingRouter", () => {
     creditToWalletMock.mockReset()
     creditCommissionToSystemWalletMock.mockReset()
     findSystemCommissionTransactionMock.mockReset()
+    broadcastAppNotificationMock.mockReset()
     creditToWalletMock.mockResolvedValue(null)
     creditCommissionToSystemWalletMock.mockResolvedValue(null)
     findSystemCommissionTransactionMock.mockResolvedValue(null)
+    broadcastAppNotificationMock.mockResolvedValue(undefined)
   })
 
   it("creates a booking using the authenticated user as borrower and item owner as lender", async () => {
@@ -216,7 +239,120 @@ describe("bookingRouter", () => {
         }),
       }),
     )
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: LENDER_ID,
+          actorUserId: USER_ID,
+          bookingId: BOOKING_ID,
+          type: "BOOKING_REQUESTED",
+          title: "New booking request",
+          actionPath: `/account/transactions/${BOOKING_ID}`,
+        }),
+      }),
+    )
+    expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+      ctx.event,
+      expect.objectContaining({
+        id: "notif-1",
+        recipientUserId: LENDER_ID,
+        type: "BOOKING_REQUESTED",
+      }),
+    )
     expect(createdBooking.item.thumbnailImage).toBe("/images/camera-primary.jpg")
+  })
+
+  it("rejects create when the borrower owns the item", async () => {
+    const ctx = makeContext()
+    ctx.prisma.item.findUnique.mockResolvedValueOnce({
+      id: ITEM_ID,
+      lenderId: USER_ID,
+      rateOption: "PER_DAY",
+      rentalFee: 200,
+      freeToBorrow: false,
+      status: "AVAILABLE",
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(
+      caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        paymentMethod: "GCASH",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "You cannot book your own item.",
+    })
+
+    expect(ctx.prisma.lender.upsert).not.toHaveBeenCalled()
+    expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
+    expect(ctx.prisma.item.update).not.toHaveBeenCalled()
+  })
+
+  it("falls back to raw SQL when Prisma cannot create a booking request notification", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const ctx = makeContext()
+    ctx.prisma.$executeRaw = vi.fn().mockResolvedValue(1)
+    ctx.prisma.appNotification.create.mockRejectedValueOnce(new Error("notification enum missing"))
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    try {
+      const createdBooking = await caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        paymentMethod: "GCASH",
+      })
+
+      expect(createdBooking.id).toBe(BOOKING_ID)
+      expect(ctx.prisma.appNotification.create).toHaveBeenCalledTimes(1)
+      expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+        ctx.event,
+        expect.objectContaining({
+          recipientUserId: LENDER_ID,
+          type: "BOOKING_REQUESTED",
+          title: "New booking request",
+        }),
+      )
+      expect(consoleWarn).toHaveBeenCalledWith(
+        "Prisma notification create failed; retrying booking notification via SQL",
+        expect.any(Error),
+      )
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it("does not fail booking creation when both notification write paths fail", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    const ctx = makeContext()
+    ctx.prisma.$executeRaw = vi.fn().mockRejectedValueOnce(new Error("database enum missing"))
+    ctx.prisma.appNotification.create.mockRejectedValueOnce(new Error("notification enum missing"))
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    try {
+      const createdBooking = await caller.create({
+        itemId: ITEM_ID,
+        startDate: new Date("2026-04-01T00:00:00.000Z"),
+        endDate: new Date("2026-04-03T00:00:00.000Z"),
+        paymentMethod: "GCASH",
+      })
+
+      expect(createdBooking.id).toBe(BOOKING_ID)
+      expect(ctx.prisma.appNotification.create).toHaveBeenCalledTimes(1)
+      expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(consoleError).toHaveBeenCalledWith(
+        "Failed to create booking request notification",
+        expect.any(Error),
+      )
+    } finally {
+      consoleWarn.mockRestore()
+      consoleError.mockRestore()
+    }
   })
 
   it("filters list by borrower role", async () => {
@@ -505,7 +641,7 @@ describe("bookingRouter", () => {
         }),
         expect.objectContaining({
           key: "transaction-status-log-log-returned",
-          label: "Returned",
+          label: "Item Returned",
           description: "Borrower initiated item return.",
           occurredAt: loggedReturnedAt,
           source: "TRANSACTION_STATUS_LOG",
@@ -537,7 +673,8 @@ describe("bookingRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: "The selected dates are not fully available for this listing.",
+      message:
+        "The lender has not marked the full selected range (Apr 1, 2026 to Apr 3, 2026) as available. Choose another date or shorten your booking window.",
     })
 
     expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
@@ -613,7 +750,8 @@ describe("bookingRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: "The requested booking window overlaps an existing booking.",
+      message:
+        "The selected date and time overlaps an already reserved period for this item. Please choose another schedule.",
     })
 
     expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
@@ -696,10 +834,34 @@ describe("bookingRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: "The selected dates are not fully available for this listing.",
+      message:
+        "The lender has not marked the full selected range (Apr 1, 2026 to Apr 3, 2026) as available. Choose another date or shorten your booking window.",
     })
 
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
+  it("allows create for rented items when the requested future window is otherwise available", async () => {
+    const ctx = makeContext()
+    ctx.prisma.item.findUnique.mockResolvedValueOnce({
+      id: ITEM_ID,
+      name: "Camera",
+      lenderId: LENDER_ID,
+      rateOption: "PER_DAY",
+      rentalFee: 200,
+      freeToBorrow: false,
+      status: "RENTED",
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await caller.create({
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-10T00:00:00.000Z"),
+      endDate: new Date("2026-04-11T00:00:00.000Z"),
+      paymentMethod: "GCASH",
+    })
+
+    expect(ctx.prisma.booking.create).toHaveBeenCalled()
   })
 
   it("forbids access to a booking when the user is not a participant", async () => {
@@ -943,6 +1105,18 @@ describe("bookingRouter", () => {
     ctx.prisma.rentalTransaction.findUnique
       .mockResolvedValueOnce({ id: "txn-1", status: "CONFIRMED" })
       .mockResolvedValueOnce({ id: "txn-1", status: "CONFIRMED" })
+    ctx.prisma.appNotification.create.mockResolvedValueOnce({
+      id: "notif-handoff-1",
+      recipientUserId: USER_ID,
+      actorUserId: LENDER_ID,
+      bookingId: BOOKING_ID,
+      type: "BOOKING_HANDOFF_PROOF_UPLOADED",
+      title: "Handoff proof uploaded",
+      body: "The lender uploaded proof that the item was handed over. Open the transaction to review it.",
+      actionPath: `/account/transactions/${BOOKING_ID}`,
+      readAt: null,
+      createdAt: new Date("2026-04-01T00:00:00.000Z"),
+    })
 
     const caller = bookingRouter.createCaller({
       ...ctx,
@@ -969,6 +1143,54 @@ describe("bookingRouter", () => {
         data: { status: "ONGOING" },
       }),
     )
+    expect(ctx.prisma.appNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientUserId: USER_ID,
+          actorUserId: LENDER_ID,
+          bookingId: BOOKING_ID,
+          type: "BOOKING_HANDOFF_PROOF_UPLOADED",
+        }),
+      }),
+    )
+    expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+      ctx.event,
+      expect.objectContaining({
+        id: "notif-handoff-1",
+        recipientUserId: USER_ID,
+        type: "BOOKING_HANDOFF_PROOF_UPLOADED",
+      }),
+    )
+  })
+
+  it("rejects handoff proof upload before the rental period starts", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        startDate: new Date("2099-04-30T01:00:00.000Z"),
+        endDate: new Date("2099-04-30T10:00:00.000Z"),
+      }),
+    )
+
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
+
+    await expect(
+      caller.markHandoffProof({
+        id: BOOKING_ID,
+        proofImageUrl: "https://example.com/handoff.jpg",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Handoff proof cannot be uploaded before the rental period starts.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+    expect(ctx.prisma.appNotification.create).not.toHaveBeenCalled()
   })
 
   it("allows the borrower to mark a confirmed booking as returned", async () => {
@@ -1007,6 +1229,18 @@ describe("bookingRouter", () => {
       id: "txn-1",
       status: "CONFIRMED",
     })
+    ctx.prisma.appNotification.create.mockResolvedValueOnce({
+      id: "notif-return-1",
+      recipientUserId: LENDER_ID,
+      actorUserId: USER_ID,
+      bookingId: BOOKING_ID,
+      type: "BOOKING_RETURN_REQUESTED",
+      title: "Item return requested",
+      body: "A borrower marked one of your items as returned. Review the booking and confirm receipt.",
+      actionPath: `/account/transactions/${BOOKING_ID}`,
+      readAt: null,
+      createdAt: new Date("2026-04-03T00:00:00.000Z"),
+    })
 
     const caller = bookingRouter.createCaller(ctx as never)
 
@@ -1040,6 +1274,14 @@ describe("bookingRouter", () => {
           bookingId: BOOKING_ID,
           type: "BOOKING_RETURN_REQUESTED",
         }),
+      }),
+    )
+    expect(broadcastAppNotificationMock).toHaveBeenCalledWith(
+      ctx.event,
+      expect.objectContaining({
+        id: "notif-return-1",
+        recipientUserId: LENDER_ID,
+        type: "BOOKING_RETURN_REQUESTED",
       }),
     )
     expect(returnedBooking.status).toBe("RETURNED")
@@ -1087,6 +1329,42 @@ describe("bookingRouter", () => {
     })
 
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
+  it("rejects early return preview before the rental period starts", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
+        startDate: new Date("2099-04-30T01:00:00.000Z"),
+        endDate: new Date("2099-04-30T10:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(caller.earlyReturnPreview({ id: BOOKING_ID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "This booking cannot be returned before the rental period starts.",
+    })
+  })
+
+  it("rejects early return preview before handoff proof is uploaded", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(caller.earlyReturnPreview({ id: BOOKING_ID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The item must be marked as in use before it can be returned.",
+    })
   })
 
   it("rejects return initiation when another overlapping booking exists for the same item", async () => {

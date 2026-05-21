@@ -194,116 +194,113 @@ const handleOpenChat = async () => {
       @mousedown="warmOrderDetailsImmediately"
       @touchstart.passive="warmOrderDetails"
     >
-      <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
+      <div class="border-b border-[#F3F0EB] bg-white/50 px-3 sm:px-5 py-2 sm:py-3">
         <div
           v-if="isAdminVariant"
-          class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+          class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div class="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
-                Borrower
-              </span>
-              <span class="truncate text-[14px] font-semibold text-noble-black">
-                {{ borrowerName }}
-              </span>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-[9px] font-bold uppercase tracking-widest text-noble-black/30"
+                >B</span
+              >
+              <span class="truncate text-[13px] font-semibold text-noble-black">{{
+                borrowerName
+              }}</span>
               <span
                 v-if="formatRating(borrowerRating)"
-                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+                class="text-[10px] font-bold text-burning-orange bg-burning-orange/5 px-1 rounded"
+                >★{{ formatRating(borrowerRating) }}</span
               >
-                {{ formatRating(borrowerRating) }}
-              </span>
             </div>
-
-            <div class="hidden h-4 w-px bg-cinnamon-ice/40 lg:block"></div>
-
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
-                Lender
-              </span>
-              <span class="truncate text-[14px] font-semibold text-noble-black">
-                {{ lenderName }}
-              </span>
+            <div class="hidden sm:block h-3 w-px bg-gray-200"></div>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-[9px] font-bold uppercase tracking-widest text-noble-black/30"
+                >L</span
+              >
+              <span class="truncate text-[13px] font-semibold text-noble-black">{{
+                lenderName
+              }}</span>
               <span
                 v-if="formatRating(lenderRating)"
-                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+                class="text-[10px] font-bold text-burning-orange bg-burning-orange/5 px-1 rounded"
+                >★{{ formatRating(lenderRating) }}</span
               >
-                {{ formatRating(lenderRating) }}
-              </span>
             </div>
           </div>
-
-          <TransactionStatusBadge :status="transaction.status" :role="activeRole" context="admin" />
+          <TransactionStatusBadge
+            :status="transaction.status"
+            :role="activeRole"
+            context="admin"
+            class="scale-90 origin-right sm:scale-100"
+          />
         </div>
 
-        <div v-else class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="text-noble-black text-[14px] font-semibold">
-              {{ counterpartName }}
-            </span>
+        <div v-else class="flex items-center justify-between gap-3">
+          <span class="text-noble-black text-[13px] sm:text-[14px] font-semibold truncate">
+            {{ counterpartName }}
+          </span>
 
+          <div class="flex items-center gap-2">
             <button
               v-if="canOpenChat"
-              class="w-7 h-7 flex items-center justify-center rounded-full bg-burning-orange/[0.12] border border-burning-orange/30 text-burning-orange hover:bg-burning-orange/[0.2] transition-all group/chat"
+              class="w-6 h-6 flex items-center justify-center rounded-full bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.15] transition-all"
               title="Open Chat"
-              aria-label="Open chat"
               @click.stop.prevent="handleOpenChat"
             >
-              <Icon
-                name="ph:chat-centered-text"
-                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110 shrink-0"
-              />
+              <Icon name="ph:chat-centered-text" class="w-3.5 h-3.5" />
             </button>
+            <TransactionStatusBadge
+              :status="transaction.status"
+              :role="activeRole"
+              class="scale-90 origin-right sm:scale-100"
+            />
           </div>
-
-          <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
         </div>
       </div>
 
-      <div class="p-5 flex items-center gap-4 relative">
-        <div class="relative shrink-0">
+      <div class="p-3 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="shrink-0">
           <img
             v-if="transaction.item.thumbnailImage"
             :src="transaction.item.thumbnailImage"
             :alt="transaction.item.name"
-            loading="lazy"
-            decoding="async"
-            class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+            class="w-11 h-11 sm:w-16 sm:h-16 object-cover rounded-lg border border-gray-100"
           />
           <div
             v-else
-            class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
+            class="w-11 h-11 sm:w-16 sm:h-16 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-100"
           >
-            <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40 shrink-0" />
+            <Icon name="ph:image" class="w-5 h-5 text-gray-300" />
           </div>
         </div>
 
         <div class="flex-1 min-w-0">
-          <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+          <h4 class="text-noble-black text-[14px] sm:text-[15px] font-bold truncate leading-tight">
             {{ transaction.item.name }}
           </h4>
           <div
-            class="flex flex-wrap items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none"
+            class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-noble-black/40 font-medium"
           >
-            <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
-            <span class="opacity-50 select-none">·</span>
+            <span class="font-mono text-noble-black/25">{{ shortTransactionId }}</span>
+            <span class="hidden xs:inline text-noble-black/10">|</span>
             <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
             <span v-else>{{ dateRange }}</span>
-            <span class="opacity-50 select-none">·</span>
+            <span class="hidden xs:inline text-noble-black/10">|</span>
             <span v-if="!isAdminVariant">{{ timeRange }}</span>
-            <span v-if="!isAdminVariant" class="opacity-50 select-none">·</span>
-            <span>{{ duration }}</span>
+            <span v-if="!isAdminVariant" class="hidden sm:inline text-noble-black/10">|</span>
+            <span class="hidden sm:inline">{{ duration }}</span>
             <template v-if="isAdminVariant">
-              <span class="opacity-50 select-none">·</span>
+              <span class="hidden xs:inline text-noble-black/10">|</span>
               <span>Commission {{ commissionLabel }}</span>
             </template>
           </div>
 
-          <div v-if="reviewActions.length" class="mt-2.5 flex flex-wrap gap-3 relative z-10">
+          <div v-if="reviewActions.length" class="mt-1.5 flex gap-3">
             <button
               v-for="action in reviewActions"
               :key="action.reviewType"
-              class="text-[12px] font-bold text-burning-orange hover:underline underline-offset-4 transition-all"
+              class="text-[11px] font-bold text-burning-orange hover:underline"
               @click.stop.prevent="handleWriteReview(action.reviewType)"
             >
               {{ action.label }}
@@ -311,17 +308,17 @@ const handleOpenChat = async () => {
           </div>
         </div>
 
-        <div class="shrink-0 z-10 text-right">
-          <div class="flex flex-col items-end">
-            <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
-                Total:
-              </span>
-              <span class="text-[16px] font-bold text-burning-orange leading-none">
-                {{ totalLabel }}
-              </span>
-            </div>
+        <div class="shrink-0 text-right">
+          <p class="text-[10px] sm:text-[12px] text-noble-black/30 font-medium leading-none mb-1">
+            {{ rateLabel }}
+          </p>
+          <div class="flex items-center justify-end gap-1">
+            <span class="text-[9px] text-noble-black/20 font-bold uppercase tracking-tight"
+              >Total</span
+            >
+            <p class="text-[14px] sm:text-[16px] font-extrabold text-burning-orange leading-none">
+              {{ totalLabel }}
+            </p>
           </div>
         </div>
       </div>
@@ -329,116 +326,113 @@ const handleOpenChat = async () => {
   </template>
   <template v-else>
     <div :class="rootClass">
-      <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
+      <div class="border-b border-[#F3F0EB] bg-white/50 px-3 sm:px-5 py-2 sm:py-3">
         <div
           v-if="isAdminVariant"
-          class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+          class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div class="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
-                Borrower
-              </span>
-              <span class="truncate text-[14px] font-semibold text-noble-black">
-                {{ borrowerName }}
-              </span>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-[9px] font-bold uppercase tracking-widest text-noble-black/30"
+                >B</span
+              >
+              <span class="truncate text-[13px] font-semibold text-noble-black">{{
+                borrowerName
+              }}</span>
               <span
                 v-if="formatRating(borrowerRating)"
-                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+                class="text-[10px] font-bold text-burning-orange bg-burning-orange/5 px-1 rounded"
+                >★{{ formatRating(borrowerRating) }}</span
               >
-                {{ formatRating(borrowerRating) }}
-              </span>
             </div>
-
-            <div class="hidden h-4 w-px bg-cinnamon-ice/40 lg:block"></div>
-
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="text-[10px] font-bold uppercase tracking-widest text-noble-black/30">
-                Lender
-              </span>
-              <span class="truncate text-[14px] font-semibold text-noble-black">
-                {{ lenderName }}
-              </span>
+            <div class="hidden sm:block h-3 w-px bg-gray-200"></div>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-[9px] font-bold uppercase tracking-widest text-noble-black/30"
+                >L</span
+              >
+              <span class="truncate text-[13px] font-semibold text-noble-black">{{
+                lenderName
+              }}</span>
               <span
                 v-if="formatRating(lenderRating)"
-                class="rounded-full bg-burning-orange/[0.08] px-2 py-0.5 text-[10px] font-bold text-burning-orange"
+                class="text-[10px] font-bold text-burning-orange bg-burning-orange/5 px-1 rounded"
+                >★{{ formatRating(lenderRating) }}</span
               >
-                {{ formatRating(lenderRating) }}
-              </span>
             </div>
           </div>
-
-          <TransactionStatusBadge :status="transaction.status" :role="activeRole" context="admin" />
+          <TransactionStatusBadge
+            :status="transaction.status"
+            :role="activeRole"
+            context="admin"
+            class="scale-90 origin-right sm:scale-100"
+          />
         </div>
 
-        <div v-else class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="text-noble-black text-[14px] font-semibold">
-              {{ counterpartName }}
-            </span>
+        <div v-else class="flex items-center justify-between gap-3">
+          <span class="text-noble-black text-[13px] sm:text-[14px] font-semibold truncate">
+            {{ counterpartName }}
+          </span>
 
+          <div class="flex items-center gap-2">
             <button
               v-if="canOpenChat"
-              class="w-7 h-7 flex items-center justify-center rounded-full bg-burning-orange/[0.12] border border-burning-orange/30 text-burning-orange hover:bg-burning-orange/[0.2] transition-all group/chat"
+              class="w-6 h-6 flex items-center justify-center rounded-full bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.15] transition-all"
               title="Open Chat"
-              aria-label="Open chat"
               @click.stop.prevent="handleOpenChat"
             >
-              <Icon
-                name="ph:chat-centered-text"
-                class="w-3.5 h-3.5 transition-transform group-hover/chat:scale-110 shrink-0"
-              />
+              <Icon name="ph:chat-centered-text" class="w-3.5 h-3.5" />
             </button>
+            <TransactionStatusBadge
+              :status="transaction.status"
+              :role="activeRole"
+              class="scale-90 origin-right sm:scale-100"
+            />
           </div>
-
-          <TransactionStatusBadge :status="transaction.status" :role="activeRole" />
         </div>
       </div>
 
-      <div class="p-5 flex items-center gap-4 relative">
-        <div class="relative shrink-0">
+      <div class="p-3 sm:p-5 flex items-center gap-3 sm:gap-4">
+        <div class="shrink-0">
           <img
             v-if="transaction.item.thumbnailImage"
             :src="transaction.item.thumbnailImage"
             :alt="transaction.item.name"
-            loading="lazy"
-            decoding="async"
-            class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+            class="w-11 h-11 sm:w-16 sm:h-16 object-cover rounded-lg border border-gray-100"
           />
           <div
             v-else
-            class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
+            class="w-11 h-11 sm:w-16 sm:h-16 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-100"
           >
-            <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40 shrink-0" />
+            <Icon name="ph:image" class="w-5 h-5 text-gray-300" />
           </div>
         </div>
 
         <div class="flex-1 min-w-0">
-          <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+          <h4 class="text-noble-black text-[14px] sm:text-[15px] font-bold truncate leading-tight">
             {{ transaction.item.name }}
           </h4>
           <div
-            class="flex flex-wrap items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none"
+            class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-noble-black/40 font-medium"
           >
-            <span class="font-mono tracking-wider">{{ shortTransactionId }}</span>
-            <span class="opacity-50 select-none">·</span>
+            <span class="font-mono text-noble-black/25">{{ shortTransactionId }}</span>
+            <span class="hidden xs:inline text-noble-black/10">|</span>
             <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
             <span v-else>{{ dateRange }}</span>
-            <span class="opacity-50 select-none">·</span>
+            <span class="hidden xs:inline text-noble-black/10">|</span>
             <span v-if="!isAdminVariant">{{ timeRange }}</span>
-            <span v-if="!isAdminVariant" class="opacity-50 select-none">·</span>
-            <span>{{ duration }}</span>
+            <span v-if="!isAdminVariant" class="hidden sm:inline text-noble-black/10">|</span>
+            <span class="hidden sm:inline">{{ duration }}</span>
             <template v-if="isAdminVariant">
-              <span class="opacity-50 select-none">·</span>
+              <span class="hidden xs:inline text-noble-black/10">|</span>
               <span>Commission {{ commissionLabel }}</span>
             </template>
           </div>
 
-          <div v-if="reviewActions.length" class="mt-2.5 flex flex-wrap gap-3 relative z-10">
+          <div v-if="reviewActions.length" class="mt-1.5 flex gap-3">
             <button
               v-for="action in reviewActions"
               :key="action.reviewType"
-              class="text-[12px] font-bold text-burning-orange hover:underline underline-offset-4 transition-all"
+              class="text-[11px] font-bold text-burning-orange hover:underline"
               @click.stop.prevent="handleWriteReview(action.reviewType)"
             >
               {{ action.label }}
@@ -446,17 +440,17 @@ const handleOpenChat = async () => {
           </div>
         </div>
 
-        <div class="shrink-0 z-10 text-right">
-          <div class="flex flex-col items-end">
-            <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
-                Total:
-              </span>
-              <span class="text-[16px] font-bold text-burning-orange leading-none">
-                {{ totalLabel }}
-              </span>
-            </div>
+        <div class="shrink-0 text-right">
+          <p class="text-[10px] sm:text-[12px] text-noble-black/30 font-medium leading-none mb-1">
+            {{ rateLabel }}
+          </p>
+          <div class="flex items-center justify-end gap-1">
+            <span class="text-[9px] text-noble-black/20 font-bold uppercase tracking-tight"
+              >Total</span
+            >
+            <p class="text-[14px] sm:text-[16px] font-extrabold text-burning-orange leading-none">
+              {{ totalLabel }}
+            </p>
           </div>
         </div>
       </div>

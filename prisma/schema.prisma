@@ -164,6 +164,8 @@ enum DisputeActionType {
 }
 
 enum NotificationType {
+  BOOKING_REQUESTED
+  BOOKING_HANDOFF_PROOF_UPLOADED
   BOOKING_RETURN_REQUESTED
   DISPUTE_SUBMITTED
   DISPUTE_OPENED
@@ -348,6 +350,7 @@ model Booking {
   paymentMethod      PaymentMethod
   platformCommission Int                  @default(0)
   totalFee           Int
+  requestOfferId     Int?                 @unique
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
@@ -364,9 +367,10 @@ model Booking {
   borrowerReturnProofUrl        String?
   borrowerReturnProofUploadedAt DateTime?
 
-  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  borrower Borrower @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
-  lender   Lender   @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+  item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  borrower     Borrower      @relation(fields: [borrowerId], references: [userId], onDelete: Cascade)
+  lender       Lender        @relation(fields: [lenderId], references: [userId], onDelete: Cascade)
+  requestOffer RequestOffer? @relation(fields: [requestOfferId], references: [id], onDelete: SetNull)
 
   @@index([borrowerId])
   @@index([createdAt])
@@ -534,6 +538,8 @@ model User {
   borrowedTransactions              RentalTransaction[]        @relation("transactions_borrower_user_idToUser")
   lentTransactions                  RentalTransaction[]        @relation("transactions_lender_user_idToUser")
   requestPosts                      RequestPost[]
+  itemRequestReplies                ItemRequestReply[]
+  itemRequestReplyUpvotes           ItemRequestReplyUpvote[]
   rewardEvents                      RewardEvent[]
   rewards                           UserReward?
   sentMessages                      Message[]
@@ -682,8 +688,9 @@ model ItemRequest {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  borrower Borrower       @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
+  borrower Borrower           @relation(fields: [borrowerID], references: [id], onDelete: Cascade)
   offers   RequestOffer[]
+  replies  ItemRequestReply[]
 
   @@index([borrowerID])
   @@index([status])
@@ -707,6 +714,7 @@ model RequestOffer {
   item    Item        @relation(fields: [itemID], references: [numericId], onDelete: Restrict)
   lender  Lender      @relation(fields: [lenderID], references: [id], onDelete: Cascade)
   request ItemRequest @relation(fields: [requestID], references: [id], onDelete: Cascade)
+  booking Booking?
 
   @@unique([lenderID, requestID])
   @@index([requestID])
@@ -714,6 +722,42 @@ model RequestOffer {
   @@index([itemID])
   @@index([status])
   @@index([borrowerReadAt])
+}
+
+model ItemRequestReply {
+  id            String   @id @default(uuid())
+  requestId     Int      @map("request_id")
+  authorUserId  String   @map("author_user_id")
+  parentReplyId String?  @map("parent_reply_id")
+  body          String
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  author  User                     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  parent  ItemRequestReply?        @relation("item_request_reply_replies", fields: [parentReplyId], references: [id], onDelete: Cascade)
+  replies ItemRequestReply[]       @relation("item_request_reply_replies")
+  request ItemRequest              @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  upvotes ItemRequestReplyUpvote[]
+
+  @@index([requestId, createdAt(sort: Desc)])
+  @@index([parentReplyId, createdAt(sort: Desc)])
+  @@index([authorUserId, createdAt(sort: Desc)])
+  @@map("item_request_replies")
+}
+
+model ItemRequestReplyUpvote {
+  id        String   @id @default(uuid())
+  replyId   String   @map("reply_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  reply ItemRequestReply @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([replyId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([replyId, createdAt(sort: Desc)])
+  @@map("item_request_reply_upvotes")
 }
 
 model TransactionDispute {
@@ -965,20 +1009,24 @@ model Conversation {
 }
 
 model Message {
-  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  conversationId String    @map("conversation_id")
-  senderUserId   String    @map("sender_user_id")
-  body           String
-  imageUrl       String?   @map("image_url")
-  isRead         Boolean   @default(false) @map("is_read")
-  readAt         DateTime? @map("read_at") @db.Timestamptz(6)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  conversationId   String    @map("conversation_id")
+  senderUserId     String    @map("sender_user_id")
+  replyToMessageId String?   @map("reply_to_message_id")
+  body             String
+  imageUrl         String?   @map("image_url")
+  isRead           Boolean   @default(false) @map("is_read")
+  readAt           DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+  replyToMessage Message?     @relation("message_replies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies        Message[]    @relation("message_replies")
 
   @@index([conversationId, createdAt])
   @@index([conversationId, isRead])
+  @@index([replyToMessageId])
   @@index([senderUserId])
   @@map("messages")
 }

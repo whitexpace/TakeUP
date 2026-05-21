@@ -19,7 +19,7 @@ type RequestForSummary = {
 }
 
 const previewQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(8).default(5),
+  limit: z.coerce.number().int().min(1).max(50).default(5),
 })
 
 const getCreatedAtMs = (value: Date | string | null | undefined) => {
@@ -81,24 +81,20 @@ export default defineEventHandler(async (event) => {
     const caller = appRouter.createCaller(ctx)
     const viewerUserId = ctx.user?.id ?? ""
 
-    const requestsPromise = caller.community.listRequests({
+    const requests = await caller.community.listRequests({
       includeCancelledOffers: true,
     })
-    const notificationsPromise = ctx.user
-      ? caller.community.notifications().catch(() => [])
-      : Promise.resolve([])
-    const offerableItemsPromise = ctx.user
-      ? caller.community.offerableItems().catch(() => [])
-      : Promise.resolve([])
-
-    const [requests, notifications, offerableItems] = await Promise.all([
-      requestsPromise,
-      notificationsPromise,
-      offerableItemsPromise,
-    ])
+    const previewRequests = await caller.community.listRequests({
+      includeCancelledOffers: true,
+      includeReplies: true,
+      limit: parsedQuery.data.limit,
+      skip: 0,
+    })
+    const notifications = ctx.user ? await caller.community.notifications().catch(() => []) : []
+    const offerableItems = ctx.user ? await caller.community.offerableItems().catch(() => []) : []
 
     return {
-      requests: requests.slice(0, parsedQuery.data.limit),
+      requests: previewRequests,
       notifications,
       offerableItems,
       userActivity: buildUserActivity(requests, viewerUserId),
