@@ -2,13 +2,8 @@ import { getOrCreateWallet, runWalletSelfHealing } from "../../utils/wallet"
 
 export default defineEventHandler(async (event) => {
   const user = event.context.authUser
-  console.warn(
-    "[wallet:GET] incoming request, authUser:",
-    user ? { id: user.id, email: (user as { email?: string }).email } : null,
-  )
 
   if (!user) {
-    console.warn("[wallet:GET] no authUser on event.context — rejecting 401")
     throw createError({ statusCode: 401, message: "Unauthorized" })
   }
 
@@ -20,12 +15,6 @@ export default defineEventHandler(async (event) => {
 
   try {
     const wallet = await getOrCreateWallet(user.id)
-    console.warn("[wallet:GET] success — returning wallet", {
-      id: wallet.id,
-      userId: wallet.userId,
-      balance: wallet.balance?.toString?.() ?? wallet.balance,
-      status: wallet.status,
-    })
     return wallet
   } catch (err: unknown) {
     const error = err as {

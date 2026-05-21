@@ -50,6 +50,28 @@ export default defineNuxtConfig({
       exclude: ["/"],
     },
   },
+  nitro: {
+    rollupConfig: {
+      onwarn(warning, rollupWarn) {
+        const message = warning.message || ""
+        const isSupabaseUnusedExternalImport =
+          warning.code === "UNUSED_EXTERNAL_IMPORT" &&
+          message.includes("@supabase/supabase-js") &&
+          message.includes("but never used")
+
+        if (
+          isSupabaseUnusedExternalImport ||
+          warning.code === "CIRCULAR_DEPENDENCY" ||
+          warning.code === "EVAL" ||
+          message.includes("Unsupported source map comment")
+        ) {
+          return
+        }
+
+        rollupWarn(warning)
+      },
+    },
+  },
   css: ["~/assets/css/main.css"],
   app: {
     head: {
