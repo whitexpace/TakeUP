@@ -113,6 +113,8 @@ const {
 )
 
 const item = computed(() => data.value)
+const user = useSupabaseUser()
+const isHeaderVisible = ref(true)
 const { authUser, fetch: fetchAuthUser } = useAuthUser()
 const isLoadingFullItem = ref(false)
 let fullItemRequestVersion = 0
@@ -1345,7 +1347,7 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-screen bg-white font-geist">
-    <Header />
+    <Header @visibility-change="(v) => (isHeaderVisible = v)" />
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pt-20" @mouseleave="handleCalendarMouseLeave">
       <!-- Back Link -->
@@ -1405,26 +1407,28 @@ onUnmounted(() => {
 
       <div v-else-if="item" class="pb-28 lg:pb-0">
         <!-- Title & Actions -->
-        <div class="flex justify-between items-start mb-2">
-          <div>
+        <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-2">
+          <div class="flex-1 min-w-0">
             <div class="mb-3 flex flex-wrap gap-2">
               <span
                 v-for="category in formattedCategories"
                 :key="category"
-                class="rounded-full border-[0.5px] border-cinnamon-ice/30 bg-noble-black/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-noble-black/70"
+                class="rounded-full border-[0.5px] border-cinnamon-ice/30 bg-noble-black/5 px-2.5 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.12em] text-noble-black/70"
               >
                 {{ category }}
               </span>
               <span
                 v-if="item.isTrending"
-                class="rounded-full bg-burning-orange px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white"
+                class="rounded-full bg-burning-orange px-2.5 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.12em] text-white"
               >
                 Trending
               </span>
             </div>
-            <h1 class="text-3xl font-bold text-noble-black">{{ item.name }}</h1>
+            <h1 class="text-2xl sm:text-3xl font-bold text-noble-black break-words leading-tight">
+              {{ item.name }}
+            </h1>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 sm:gap-4 shrink-0">
             <div class="relative flex items-stretch group/tooltip">
               <button
                 class="p-2 text-noble-black/70 hover:text-noble-black transition-all duration-300 ease-in-out group"
@@ -1556,14 +1560,14 @@ onUnmounted(() => {
                 </div>
                 <div
                   ref="scrollContainer"
-                  class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide scroll-smooth px-4"
+                  class="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide scroll-smooth px-4"
                   :style="maskStyle"
                   @scroll="handleScroll"
                 >
                   <div
                     v-for="(img, idx) in imageGallery"
                     :key="idx"
-                    class="w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all duration-300 shrink-0 group/thumb"
+                    class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all duration-300 shrink-0 group/thumb"
                     :class="
                       currentImageIndex === idx
                         ? 'border-burning-orange opacity-100'
@@ -2251,74 +2255,85 @@ onUnmounted(() => {
             </div>
 
             <!-- Redesigned Metadata Container -->
-            <div class="mb-10 rounded-[14px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm">
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-y-8 md:gap-y-0 items-start">
+            <div
+              class="mb-10 rounded-[14px] border border-cinnamon-ice/30 bg-white p-4 sm:p-5 shadow-sm"
+            >
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-y-6 md:gap-y-0 items-start">
                 <!-- Status -->
-                <div class="flex flex-col gap-1 pr-4 md:border-r-[0.5px] border-cinnamon-ice/20">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div class="flex flex-col gap-1 pr-4 border-r-[0.5px] border-cinnamon-ice/20">
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Status</span
                   >
                   <div class="flex items-center gap-2">
                     <div
-                      class="h-1.5 w-1.5 rounded-full"
+                      class="h-1.5 w-1.5 rounded-full shrink-0"
                       :class="
                         isItemUnavailableForBooking ? 'bg-noble-black/30' : 'bg-success-green'
                       "
                     />
-                    <span class="text-[14px] font-semibold text-noble-black">{{
-                      statusLabel
-                    }}</span>
+                    <span
+                      class="text-[13px] sm:text-[14px] font-semibold text-noble-black truncate"
+                      >{{ statusLabel }}</span
+                    >
                   </div>
                 </div>
                 <!-- Condition -->
                 <div
-                  class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
+                  class="flex flex-col gap-1 pl-4 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
                 >
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Condition</span
                   >
                   <span
-                    class="text-[14px] font-semibold"
+                    class="text-[13px] sm:text-[14px] font-semibold truncate"
                     :class="item.condition === 'POOR' ? 'text-burning-orange' : 'text-noble-black'"
                     >{{ formattedCondition }}</span
                   >
                 </div>
                 <!-- Replacement Cost -->
                 <div
-                  class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
+                  class="flex flex-col gap-1 pr-4 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20 border-t-[0.5px] md:border-t-0 pt-4 md:pt-0 border-cinnamon-ice/10 md:border-transparent"
                 >
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Replacement</span
                   >
-                  <span class="text-[14px] font-semibold text-noble-black">{{
-                    replacementCostLabel
-                  }}</span>
+                  <span
+                    class="text-[13px] sm:text-[14px] font-semibold text-noble-black truncate"
+                    >{{ replacementCostLabel }}</span
+                  >
                 </div>
                 <!-- Tags -->
-                <div class="flex flex-col gap-1 pl-0 md:pl-6">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div
+                  class="flex flex-col gap-1 pl-4 md:pl-6 border-t-[0.5px] md:border-t-0 pt-4 md:pt-0 border-cinnamon-ice/10 md:border-transparent border-l-[0.5px] md:border-l-0"
+                >
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Tags</span
                   >
-                  <div v-if="item.tags.length" class="flex flex-wrap gap-2">
+                  <div v-if="item.tags.length" class="flex flex-wrap gap-1.5">
                     <span
                       v-for="tag in item.tags"
                       :key="tag"
-                      class="rounded-[12px] rounded-tl-[999px] rounded-br-[999px] bg-noble-black/5 px-2.5 py-1 text-[11px] font-medium text-noble-black/60 hover:bg-noble-black/10 transition-colors cursor-default"
+                      class="rounded-[10px] rounded-tl-[999px] rounded-br-[999px] bg-noble-black/5 px-2 py-0.5 text-[10px] font-medium text-noble-black/60"
                     >
                       {{ tag }}
                     </span>
                   </div>
-                  <span v-else class="text-[14px] font-semibold text-noble-black/30">None</span>
+                  <span v-else class="text-[13px] font-semibold text-noble-black/30">None</span>
                 </div>
               </div>
 
               <!-- Horizontal Divider -->
-              <div class="my-8 h-[0.5px] bg-gray-100" />
+              <div class="my-6 sm:my-8 h-[0.5px] bg-gray-100" />
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
                 <!-- Known Issues -->
-                <div class="flex flex-col gap-3">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div class="flex flex-col gap-2.5">
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Known Issues</span
                   >
                   <div v-if="knownIssuesList.length" class="space-y-1">
@@ -2327,23 +2342,24 @@ onUnmounted(() => {
                       :key="issue"
                       class="text-[13px] text-noble-black/70 flex items-start gap-2"
                     >
-                      <span class="flex items-center justify-center h-6 shrink-0"
+                      <span class="flex items-center justify-center h-5 shrink-0"
                         ><span class="w-1 h-1 rounded-full bg-burning-orange"
                       /></span>
-                      <span class="leading-6">{{ issue }}</span>
+                      <span class="leading-relaxed">{{ issue }}</span>
                     </p>
                   </div>
                   <p
                     v-else
                     class="text-[13px] font-medium text-success-green flex items-center gap-1.5"
                   >
-                    No known issues reported
+                    No known issues
                     <Icon name="ph:check-circle-fill" size="14" class="shrink-0" />
                   </p>
                 </div>
                 <!-- Usage Limitations -->
-                <div class="flex flex-col gap-3">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div class="flex flex-col gap-2.5">
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Usage Limitations</span
                   >
                   <div v-if="usageLimitationsList.length" class="space-y-1">
@@ -2352,15 +2368,13 @@ onUnmounted(() => {
                       :key="limitation"
                       class="text-[13px] text-noble-black/70 flex items-start gap-2"
                     >
-                      <span class="flex items-center justify-center h-6 shrink-0"
+                      <span class="flex items-center justify-center h-5 shrink-0"
                         ><span class="w-1 h-1 rounded-full bg-burning-orange"
                       /></span>
-                      <span class="leading-6">{{ limitation }}</span>
+                      <span class="leading-relaxed">{{ limitation }}</span>
                     </p>
                   </div>
-                  <p v-else class="text-[13px] italic text-noble-black/40">
-                    No usage limitations listed
-                  </p>
+                  <p v-else class="text-[13px] italic text-noble-black/40">No limitations listed</p>
                 </div>
               </div>
             </div>
@@ -2863,16 +2877,23 @@ onUnmounted(() => {
     <!-- Sticky Bottom Bar (Mobile < sm) -->
     <div
       v-if="item"
-      class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice/15 p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+      class="sm:hidden fixed left-0 right-0 bg-white border-t border-cinnamon-ice/15 p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] transition-all duration-300 ease-in-out"
+      :style="
+        user && isHeaderVisible
+          ? { bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))', paddingBottom: '1rem' }
+          : { bottom: '0px', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }
+      "
     >
       <div class="flex items-center justify-between gap-4">
-        <div class="flex flex-col">
+        <div class="flex flex-col min-w-0">
           <div class="flex items-baseline gap-1">
             <span class="text-xl font-bold text-noble-black">{{ priceAmount }}</span>
-            <span class="text-xs text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+            <span class="text-xs text-noble-black/60 font-medium truncate">{{
+              priceUnitLabel
+            }}</span>
           </div>
           <button
-            class="text-[11px] font-bold disabled:cursor-not-allowed disabled:text-noble-black/40"
+            class="text-[11px] font-bold text-left truncate disabled:cursor-not-allowed disabled:text-noble-black/40"
             :class="isBookingBlocked ? 'text-noble-black/40' : 'text-burning-orange'"
             :disabled="isBookingBlocked"
             @click="openBookingModal"
@@ -2885,38 +2906,21 @@ onUnmounted(() => {
           </button>
         </div>
         <button
-          class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2 disabled:cursor-not-allowed"
+          class="flex-1 max-w-[180px] h-12 flex items-center justify-center gap-2 px-4 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           :class="
             isBookingBlocked
-              ? 'bg-noble-black/60'
+              ? 'bg-noble-black/20 text-noble-black/40'
               : isInBag
-                ? 'bg-noble-black'
-                : 'bg-burning-orange'
+                ? 'bg-noble-black text-white'
+                : 'bg-burning-orange text-white shadow-burning-orange/20'
           "
           :disabled="isBookingBlocked"
           @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
         >
-          <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
-          {{
-            isBookingBlocked
-              ? mobileBookingButtonLabel
-              : startDate && displayEndDate
-                ? `${formatDate(startDate)} — ${formatDate(displayEndDate)}`
-                : "Select dates"
-          }}
+          <Icon v-if="isInBag" name="ph:check" size="18" class="stroke-[3]" />
+          {{ mobileBookingButtonLabel }}
         </button>
       </div>
-      <button
-        class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
-        :class="
-          isBookingBlocked ? 'bg-noble-black/60' : isInBag ? 'bg-noble-black' : 'bg-burning-orange'
-        "
-        :disabled="isBookingBlocked"
-        @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
-      >
-        <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
-        {{ mobileBookingButtonLabel }}
-      </button>
     </div>
 
     <!-- Mobile Full-Screen Booking Modal -->
@@ -3200,10 +3204,10 @@ onUnmounted(() => {
           <!-- Modal Footer (Confirm) -->
           <div
             v-if="hasBookingSelection"
-            class="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-cinnamon-ice/15 flex justify-center"
+            class="fixed bottom-0 left-0 right-0 p-4 sm:p-6 bg-white border-t border-cinnamon-ice/15 flex justify-center z-20 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
           >
             <button
-              class="w-full py-4 bg-burning-orange text-white rounded-2xl font-bold text-lg"
+              class="w-full h-14 bg-burning-orange text-white rounded-2xl font-bold text-base sm:text-lg shadow-lg shadow-burning-orange/20 active:scale-95 transition-all"
               @click="closeBookingModal"
             >
               Confirm Selection

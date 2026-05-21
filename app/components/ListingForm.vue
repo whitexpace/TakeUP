@@ -1063,7 +1063,7 @@ const availabilityRowErrors = computed(() =>
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-[1100px] font-geist pb-20 lg:px-16 xl:px-24">
+  <div class="mx-auto w-full max-w-[1100px] font-geist pb-20 px-4 sm:px-6 lg:px-16 xl:px-24">
     <div v-if="!embedded" class="mb-10">
       <div class="relative group/tooltip w-fit mb-8">
         <NuxtLink
@@ -1082,12 +1082,14 @@ const availabilityRowErrors = computed(() =>
       </div>
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+          <h1
+            class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black tracking-tight leading-tight"
+          >
             {{ props.mode === "new" ? "Add New Item" : "Edit Listing" }}
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-light text-noble-black/50">
+        <p class="text-[14px] sm:text-[16px] font-light text-noble-black/50">
           {{
             props.mode === "new"
               ? "Share your items with the community and earn rewards."
@@ -1098,18 +1100,18 @@ const availabilityRowErrors = computed(() =>
     </div>
 
     <div
-      class="sticky top-0 z-50 -mx-6 sm:-mx-12 lg:-mx-16 xl:-mx-24 bg-white border-b border-cinnamon-ice/15 shadow-sm pb-6 pt-4 mb-10"
+      class="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-16 xl:-mx-24 bg-white/95 backdrop-blur-sm border-b border-cinnamon-ice/15 shadow-sm pb-4 sm:pb-6 pt-3 sm:pt-4 mb-10"
     >
       <div class="mx-auto max-w-[1100px] lg:px-16 xl:px-24 w-full relative">
         <div class="flex items-center justify-between relative z-10">
           <div
             v-for="(step, index) in STEPS"
             :key="step.id"
-            class="flex flex-col items-center gap-2.5 relative group cursor-pointer"
+            class="flex flex-col items-center gap-2 sm:gap-2.5 relative group cursor-pointer"
             @click="scrollToSection(step.id)"
           >
             <div
-              class="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 border-2"
+              class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all duration-300 border-2"
               :class="[
                 isStepCompleted(step.id)
                   ? 'bg-burning-orange border-burning-orange text-white shadow-lg shadow-burning-orange/20'
@@ -1121,12 +1123,12 @@ const availabilityRowErrors = computed(() =>
               <Icon
                 v-if="isStepCompleted(step.id)"
                 name="ph:check"
-                class="w-[18px] h-[18px] shrink-0"
+                class="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0"
               />
-              <span v-else class="text-[13px] font-bold">{{ index + 1 }}</span>
+              <span v-else class="text-[12px] sm:text-[13px] font-bold">{{ index + 1 }}</span>
             </div>
             <span
-              class="text-[10px] font-bold uppercase tracking-wider transition-colors duration-300"
+              class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-colors duration-300"
               :class="[
                 currentActiveStep === step.id
                   ? 'text-burning-orange'
@@ -1136,7 +1138,9 @@ const availabilityRowErrors = computed(() =>
             >
           </div>
         </div>
-        <div class="absolute top-[18px] left-8 right-8 h-[2px] bg-noble-black/10 -z-0">
+        <div
+          class="absolute top-[16px] sm:top-[18px] left-8 right-8 h-[1.5px] sm:h-[2px] bg-noble-black/10 -z-0"
+        >
           <div
             class="h-full bg-burning-orange transition-all duration-500"
             :style="{
@@ -1634,15 +1638,15 @@ const availabilityRowErrors = computed(() =>
                   <label class="form-label opacity-50 uppercase tracking-widest !text-[10px]"
                     >Available From <span class="text-cinnabar-red">*</span></label
                   >
-                  <div class="flex gap-3">
+                  <div class="flex flex-col xs:flex-row gap-3">
                     <CustomCalendar
                       :model-value="availability.startDate"
-                      class="flex-1"
+                      class="w-full xs:flex-1"
                       :min-date="todayStr"
                       @update:model-value="updateAvailabilityField(index, 'startDate', $event)"
                     /><CustomTimePicker
                       :model-value="availability.startTime"
-                      class="w-32"
+                      class="w-full xs:w-32"
                       :min-time="availability.startDate === todayStr ? currentTimeStr : ''"
                       @update:model-value="updateAvailabilityField(index, 'startTime', $event)"
                     />
@@ -1652,15 +1656,15 @@ const availabilityRowErrors = computed(() =>
                   <label class="form-label opacity-50 uppercase tracking-widest !text-[10px]"
                     >Available Until <span class="text-cinnabar-red">*</span></label
                   >
-                  <div class="flex gap-3">
+                  <div class="flex flex-col xs:flex-row gap-3">
                     <CustomCalendar
                       :model-value="availability.endDate"
-                      class="flex-1"
+                      class="w-full xs:flex-1"
                       :min-date="availability.startDate || todayStr"
                       @update:model-value="updateAvailabilityField(index, 'endDate', $event)"
                     /><CustomTimePicker
                       :model-value="availability.endTime"
-                      class="w-32"
+                      class="w-full xs:w-32"
                       :min-time="
                         availability.startDate === availability.endDate
                           ? availability.startTime
@@ -1758,11 +1762,11 @@ const availabilityRowErrors = computed(() =>
       <slot name="danger-zone"></slot>
 
       <div
-        class="mt-8 pt-8 border-t border-cinnamon-ice/10 flex items-center justify-end gap-4 pb-20"
+        class="mt-8 pt-8 border-t border-cinnamon-ice/10 flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 pb-20"
       >
         <button
           type="button"
-          class="h-12 inline-flex items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange text-burning-orange bg-white px-8 text-[15px] font-bold transition-all hover:bg-burning-orange/5 active:scale-95"
+          class="w-full sm:w-auto h-12 inline-flex items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange text-burning-orange bg-white px-8 text-[15px] font-bold transition-all hover:bg-burning-orange/5 active:scale-95"
           @click="showPreview = true"
         >
           Preview
@@ -1770,7 +1774,7 @@ const availabilityRowErrors = computed(() =>
         <button
           type="submit"
           :disabled="isSubmitting || isUploadingImages"
-          class="h-12 inline-flex items-center justify-center rounded-[10px] bg-burning-orange px-10 text-[15px] font-bold text-white shadow-[0_4px_14px_rgba(232,101,10,0.3)] transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-95 disabled:opacity-50"
+          class="w-full sm:w-auto h-12 inline-flex items-center justify-center rounded-[10px] bg-burning-orange px-10 text-[15px] font-bold text-white shadow-[0_4px_14px_rgba(232,101,10,0.3)] transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-95 disabled:opacity-50"
         >
           {{
             isUploadingImages
@@ -1878,10 +1882,17 @@ const availabilityRowErrors = computed(() =>
   border-radius: 24px;
   border: 1px solid theme("colors.cinnamon-ice / 20%");
   background-color: theme("colors.cream");
-  padding: 32px;
+  padding: 24px 16px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   transition: all 0.3s ease;
 }
+
+@media (min-width: 640px) {
+  .form-section {
+    padding: 32px;
+  }
+}
+
 .form-section:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
@@ -1948,9 +1959,14 @@ const availabilityRowErrors = computed(() =>
 }
 .section-title {
   font-family: theme("fontFamily.geist");
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   color: theme("colors.noble-black");
+}
+@media (min-width: 640px) {
+  .section-title {
+    font-size: 17px;
+  }
 }
 .section-subtitle {
   font-family: theme("fontFamily.geist");
@@ -2015,12 +2031,17 @@ textarea::placeholder {
 }
 .upload-dropzone {
   width: 100%;
-  padding: 40px;
+  padding: 24px 16px;
   border: 2px dashed theme("colors.cinnamon-ice / 20%");
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
   background-color: theme("colors.white");
+}
+@media (min-width: 640px) {
+  .upload-dropzone {
+    padding: 40px;
+  }
 }
 .upload-dropzone:hover,
 .upload-dropzone.is-dragging {
