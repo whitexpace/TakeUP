@@ -48,6 +48,12 @@ type AccountDeletionEligibilityResponse = {
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid"
 
+type AvatarSignedUploadResponse = {
+  token: string
+  path: string
+  publicUrl: string
+}
+
 const usernameRegex = /^(?=.{3,30}$)[a-z0-9](?:[a-z0-9._]*[a-z0-9])?$/
 
 const user = useSupabaseUser()
@@ -259,6 +265,46 @@ const canSaveProfile = computed(() => {
   return true
 })
 
+const getSupabaseAccessToken = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  return session?.access_token ?? null
+}
+
+const uploadAvatarImage = async (file: File) => {
+  const uploadFile = await convertImageFileToWebP(file)
+  const accessToken = await getSupabaseAccessToken()
+
+  if (!accessToken) {
+    throw new Error("You must be signed in to upload a profile photo.")
+  }
+
+  const signedUpload = await $fetch<AvatarSignedUploadResponse>("/api/account/avatar-upload-url", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: {
+      fileName: uploadFile.name,
+    },
+  })
+
+  const { error: uploadError } = await supabase.storage
+    .from(avatarBucket)
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
+      contentType: uploadFile.type || "image/jpeg",
+      upsert: false,
+    })
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Unable to upload your profile photo.")
+  }
+
+  return signedUpload.publicUrl
+}
+
 const saveProfile = async () => {
   if (!canSaveProfile.value) return
   isSavingProfile.value = true
@@ -268,21 +314,7 @@ const saveProfile = async () => {
     let avatarUrl = authData.value?.user.avatarUrl || null
 
     if (currentAvatarFile.value) {
-      const avatarFile = await convertImageFileToWebP(currentAvatarFile.value)
-      const fileExt = avatarFile.name.split(".").pop()
-      const fileName = `${authData.value?.user.id}-${Math.random().toString(36).substring(7)}.${fileExt}`
-      const filePath = `avatars/${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from(avatarBucket)
-        .upload(filePath, avatarFile)
-
-      if (uploadError) throw uploadError
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(avatarBucket).getPublicUrl(filePath)
-      avatarUrl = publicUrl
+      avatarUrl = await uploadAvatarImage(currentAvatarFile.value)
     }
 
     // IMPORTANT: Send empty strings instead of null for Zod string validation
