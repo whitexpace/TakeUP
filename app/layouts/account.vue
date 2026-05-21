@@ -178,6 +178,7 @@ onUnmounted(() => {
   <div class="min-h-screen bg-white">
     <Header
       scroll-container-selector=".custom-account-main-scrollbar"
+      :show-nav="!(isMobile && isSidebarOpen)"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
       <template #left>
@@ -412,7 +413,7 @@ onUnmounted(() => {
         class="flex-1 overflow-y-auto bg-white custom-account-main-scrollbar"
         :class="[isHeaderVisible ? 'pt-14' : 'pt-0']"
       >
-        <div class="py-8">
+        <div class="py-8 px-4 sm:px-6">
           <slot />
         </div>
       </main>
