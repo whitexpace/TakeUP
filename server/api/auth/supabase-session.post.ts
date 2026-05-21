@@ -105,10 +105,10 @@ export default defineEventHandler(async (event) => {
     supabaseSub = getGoogleProviderSub(supabaseUser, supabaseSub)
   }
 
-  if (!email.endsWith("@up.edu.ph") && !email.endsWith("@gmail.com")) {
+  if (!email.endsWith("@up.edu.ph")) {
     throw createError({
       statusCode: 403,
-      statusMessage: "Only @up.edu.ph and @gmail.com accounts are allowed.",
+      statusMessage: "Only @up.edu.ph accounts are allowed.",
     })
   }
 
