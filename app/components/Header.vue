@@ -47,6 +47,7 @@ const {
   notifications: globalNotifications,
   isLoading: isGlobalNotificationsLoading,
   loadNotifications: loadGlobalNotifications,
+  startNotificationRealtime,
   markNotificationRead: globalMarkRead,
   markAllNotificationsRead: globalMarkAllRead,
 } = useNotifications()
@@ -249,6 +250,8 @@ const getNotificationAccent = (
         return "View rebuttal"
       case "DISPUTE_RESOLVED":
         return "View outcome"
+      case "BOOKING_REQUESTED":
+        return "Review request"
       case "BOOKING_RETURN_REQUESTED":
         return "View return"
       default:
@@ -313,6 +316,7 @@ onMounted(() => {
   void loadLikesCount()
   void loadChatUnreadCount()
   void loadGlobalNotifications()
+  void startNotificationRealtime()
 })
 
 onBeforeUnmount(() => {

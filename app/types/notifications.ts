@@ -1,4 +1,5 @@
 export type AppHeaderNotificationType =
+  | "BOOKING_REQUESTED"
   | "BOOKING_RETURN_REQUESTED"
   | "DISPUTE_SUBMITTED"
   | "DISPUTE_OPENED"

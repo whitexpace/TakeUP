@@ -1,6 +1,7 @@
 import {
   type BookingPaymentStatus as PrismaBookingPaymentStatus,
   type BookingStatus as PrismaBookingStatus,
+  type NotificationType as PrismaNotificationType,
   Prisma,
   PaymentMethod as PrismaPaymentMethod,
   TransactionStatus as PrismaTransactionStatus,
@@ -9,6 +10,7 @@ import {
   RefundReason,
   type Booking,
 } from "@prisma/client"
+import { randomUUID } from "node:crypto"
 import { TRPCError } from "@trpc/server"
 import type { Context } from "../context"
 import { router } from "../init"
@@ -49,6 +51,7 @@ import {
 } from "../../utils/wallet"
 import { asWalletPrisma } from "../../utils/prisma"
 import { calculatePlatformCommissionAmount } from "../../utils/platform-commission"
+import { broadcastAppNotification } from "../../utils/app-notification-realtime"
 
 const bookingItemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -1116,6 +1119,103 @@ const buildReturnNotification = (bookingId: string) => ({
   actionPath: `/account/transactions/${bookingId}`,
 })
 
+const buildBookingRequestNotification = (input: {
+  bookingId: string
+  itemName: string
+  borrowerName: string
+}) => ({
+  type: "BOOKING_REQUESTED" as unknown as PrismaNotificationType,
+  title: "New booking request",
+  body: `${input.borrowerName} requested to book ${input.itemName}. Review the request before the rental starts.`,
+  actionPath: `/account/transactions/${input.bookingId}`,
+})
+
+const createBookingRequestNotification = async (
+  event: Context["event"],
+  prisma: Pick<Context["prisma"], "$executeRaw" | "appNotification">,
+  input: {
+    recipientUserId: string
+    actorUserId: string
+    bookingId: string
+    itemName: string
+    borrowerName: string
+  },
+) => {
+  const notification = buildBookingRequestNotification(input)
+
+  let createdNotification: Awaited<ReturnType<typeof prisma.appNotification.create>> | null = null
+
+  try {
+    createdNotification = await prisma.appNotification.create({
+      data: {
+        recipientUserId: input.recipientUserId,
+        actorUserId: input.actorUserId,
+        bookingId: input.bookingId,
+        ...notification,
+      },
+      select: {
+        id: true,
+        recipientUserId: true,
+        actorUserId: true,
+        bookingId: true,
+        type: true,
+        title: true,
+        body: true,
+        actionPath: true,
+        readAt: true,
+        createdAt: true,
+      },
+    })
+  } catch (error) {
+    console.warn("Prisma notification create failed; retrying booking notification via SQL", error)
+  }
+
+  if (createdNotification) {
+    await broadcastAppNotification(event, createdNotification).catch(() => undefined)
+    return
+  }
+
+  try {
+    const notificationId = randomUUID()
+    const createdAt = new Date()
+    await prisma.$executeRaw`
+      INSERT INTO public."AppNotification" (
+        "id",
+        "recipientUserId",
+        "actorUserId",
+        "bookingId",
+        "type",
+        "title",
+        "body",
+        "actionPath",
+        "createdAt"
+      )
+      VALUES (
+        ${notificationId},
+        ${input.recipientUserId},
+        ${input.actorUserId},
+        ${input.bookingId},
+        ${notification.type}::"NotificationType",
+        ${notification.title},
+        ${notification.body},
+        ${notification.actionPath},
+        ${createdAt}
+      )
+    `
+    await broadcastAppNotification(event, {
+      id: notificationId,
+      recipientUserId: input.recipientUserId,
+      actorUserId: input.actorUserId,
+      bookingId: input.bookingId,
+      ...notification,
+      readAt: null,
+      createdAt,
+    }).catch(() => undefined)
+  } catch (error) {
+    console.error("Failed to create booking request notification", error)
+  }
+}
+
 export const bookingRouter = router({
   list: protectedProcedure.input(listBookingsSchema).query(async ({ ctx, input }) => {
     const bookingPrisma = getBookingPrisma(ctx)
@@ -1180,6 +1280,7 @@ export const bookingRouter = router({
       where: { id: input.itemId },
       select: {
         id: true,
+        name: true,
         lenderId: true,
         rateOption: true,
         rentalFee: true,
@@ -1261,6 +1362,14 @@ export const bookingRouter = router({
           increment: 1,
         },
       },
+    })
+
+    await createBookingRequestNotification(ctx.event, ctx.prisma, {
+      recipientUserId: item.lenderId,
+      actorUserId: ctx.user.id,
+      bookingId: booking.id,
+      itemName: item.name,
+      borrowerName: ctx.user.name || "A borrower",
     })
 
     return mapBookingRecord(booking as BookingRecord)

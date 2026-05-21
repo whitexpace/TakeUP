@@ -4,7 +4,7 @@ import { useNotifications } from "../use-notifications"
 
 const makeNotification = (overrides: Record<string, unknown> = {}) => ({
   id: "notif-1",
-  type: "DISPUTE_OPENED",
+  type: "BOOKING_REQUESTED",
   title: "New booking request",
   body: "Someone requested your listing.",
   actionPath: "/account/transactions",
@@ -17,6 +17,10 @@ let stateStore: Record<string, unknown> = {}
 
 beforeEach(() => {
   stateStore = {}
+  vi.stubGlobal("window", {
+    setTimeout,
+    clearTimeout,
+  })
   vi.stubGlobal("$fetch", vi.fn())
   vi.stubGlobal("useState", (key: string, init?: () => unknown) => {
     if (!stateStore[key]) {
@@ -51,6 +55,24 @@ describe("useNotifications", () => {
     expect(notifications.notifications.value).toHaveLength(2)
     expect(notifications.notifications.value[0]?.createdAt).toBeInstanceOf(Date)
     expect(notifications.notifications.value[1]?.read).toBe(true)
+  })
+
+  it("loads notifications only once unless forced", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce([makeNotification()])
+      .mockResolvedValueOnce([makeNotification({ id: "notif-forced" })])
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const notifications = useNotifications()
+    await notifications.loadNotifications()
+    await notifications.loadNotifications()
+    await notifications.loadNotifications({ force: true })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
+      "notif-forced",
+    ])
   })
 
   it("falls back to an empty list when loading fails", async () => {
@@ -99,5 +121,152 @@ describe("useNotifications", () => {
       method: "POST",
     })
     expect(notifications.notifications.value.every((notification) => notification.read)).toBe(true)
+  })
+
+  it("merges realtime booking request inserts for the current recipient", async () => {
+    const callbacks: Array<(payload: { new: Record<string, unknown> }) => void> = []
+    const channel = {
+      on: vi.fn((_type, _config, callback) => {
+        callbacks.push(callback)
+        return channel
+      }),
+      subscribe: vi.fn(),
+    }
+    const supabase = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "access-token" } },
+        }),
+        onAuthStateChange: vi.fn().mockReturnValue({
+          data: { subscription: { unsubscribe: vi.fn() } },
+        }),
+      },
+      realtime: { setAuth: vi.fn() },
+      channel: vi.fn().mockReturnValue(channel),
+      removeChannel: vi.fn(),
+    }
+
+    vi.stubGlobal("useSupabaseClient", () => supabase)
+    vi.stubGlobal("useAuthUser", () => ({
+      authUser: ref({ id: "recipient-1" }),
+      fetch: vi.fn(),
+    }))
+    const fetchMock = vi.fn().mockResolvedValue([makeNotification()])
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const notifications = useNotifications()
+    await notifications.startNotificationRealtime()
+
+    expect(channel.on).toHaveBeenCalledWith(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "AppNotification",
+      },
+      expect.any(Function),
+    )
+
+    callbacks[0]?.({
+      new: {
+        ...makeNotification({
+          id: "notif-realtime",
+          body: "A borrower requested your item.",
+          createdAt: "2026-04-22T10:00:00.000Z",
+        }),
+        recipientUserId: "recipient-1",
+        readAt: null,
+      },
+    })
+
+    callbacks[0]?.({
+      new: {
+        ...makeNotification({
+          id: "notif-other",
+          createdAt: "2026-04-23T10:00:00.000Z",
+        }),
+        recipientUserId: "recipient-2",
+        readAt: null,
+      },
+    })
+
+    expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
+      "notif-realtime",
+    ])
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    notifications.stopNotificationRealtime()
+  })
+
+  it("merges realtime broadcast notifications for the current user", async () => {
+    const handlers: Record<string, (payload: { payload: unknown }) => void> = {}
+    const channels: Record<
+      string,
+      { on: ReturnType<typeof vi.fn>; subscribe: ReturnType<typeof vi.fn> }
+    > = {}
+    const createChannel = (topic: string) => {
+      const channel = {
+        on: vi.fn((_type, config: { event?: string }, callback) => {
+          if (config.event) {
+            handlers[`${topic}:${config.event}`] = callback
+          }
+          return channel
+        }),
+        subscribe: vi.fn(),
+      }
+      channels[topic] = channel
+      return channel
+    }
+    const supabase = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "access-token" } },
+        }),
+        onAuthStateChange: vi.fn().mockReturnValue({
+          data: { subscription: { unsubscribe: vi.fn() } },
+        }),
+      },
+      realtime: { setAuth: vi.fn() },
+      channel: vi.fn((topic: string) => createChannel(topic)),
+      removeChannel: vi.fn(),
+    }
+
+    vi.stubGlobal("useSupabaseClient", () => supabase)
+    vi.stubGlobal("useAuthUser", () => ({
+      authUser: ref({ id: "recipient-1" }),
+      fetch: vi.fn(),
+    }))
+    const fetchMock = vi.fn().mockResolvedValue([makeNotification()])
+    vi.stubGlobal("$fetch", fetchMock)
+
+    const notifications = useNotifications()
+    await notifications.startNotificationRealtime()
+
+    expect(channels["app-notifications-user-recipient-1"]?.on).toHaveBeenCalledWith(
+      "broadcast",
+      { event: "notification" },
+      expect.any(Function),
+    )
+
+    handlers["app-notifications-user-recipient-1:notification"]?.({
+      payload: {
+        notification: {
+          ...makeNotification({
+            id: "notif-broadcast",
+            body: "A borrower requested your item.",
+            createdAt: "2026-04-24T10:00:00.000Z",
+          }),
+          recipientUserId: "recipient-1",
+          readAt: null,
+        },
+      },
+    })
+
+    expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
+      "notif-broadcast",
+    ])
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    notifications.stopNotificationRealtime()
   })
 })

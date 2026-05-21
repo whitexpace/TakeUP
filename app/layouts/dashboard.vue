@@ -2,7 +2,6 @@
   <div class="flex flex-col h-screen font-geist bg-white relative overflow-hidden">
     <!-- Top Header -->
     <Header
-      :notifications="notifications"
       scroll-container-selector=".custom-main-scrollbar"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
@@ -91,7 +90,6 @@
 import { computed, ref, onMounted, onUnmounted, provide } from "vue"
 import type { FilterMetadata } from "../types/item-listing"
 import { useDashboardFilters } from "../composables/use-dashboard-filters"
-import { useNotifications } from "../composables/use-notifications"
 import { scheduleIdleWarmup } from "../utils/idle-warmup"
 
 const route = useRoute()
@@ -99,7 +97,6 @@ const isSidebarOpen = ref(true)
 const isMobile = ref(false)
 const isHeaderVisible = ref(true)
 const hideSidebar = computed(() => Boolean(route.meta.hideDashboardSidebar))
-const { notifications, loadNotifications } = useNotifications()
 
 const toggleSidebar = () => {
   if (hideSidebar.value) return
@@ -141,7 +138,7 @@ onMounted(() => {
   checkMobile()
   window.addEventListener("resize", checkMobile)
 
-  const startupTasks: Array<Promise<unknown>> = [loadNotifications()]
+  const startupTasks: Array<Promise<unknown>> = []
   if (!hideSidebar.value) {
     startupTasks.push(fetchFilterMetadata())
   }

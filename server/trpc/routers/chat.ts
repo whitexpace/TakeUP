@@ -44,6 +44,7 @@ type ParticipantInfo = {
 
 const transactionSummarySelect = {
   id: true,
+  bookingId: true,
   borrowerId: true,
   lenderId: true,
   status: true,
@@ -173,6 +174,32 @@ const assertParticipant = (
     message: "You are not a participant of this conversation.",
   })
 }
+
+const formatConversationReportReference = (transactionId: string, bookingId: string | null) =>
+  bookingId ? bookingId.slice(0, 16).toUpperCase() : transactionId.slice(0, 16).toUpperCase()
+
+const buildConversationReportNotification = (input: {
+  transactionId: string
+  bookingId: string | null
+  description: string | null
+}) => ({
+  type: "DISPUTE_SUBMITTED" as const,
+  title: "A dispute concern was submitted",
+  body: [
+    `A chat report was opened for transaction ${formatConversationReportReference(
+      input.transactionId,
+      input.bookingId,
+    )}.`,
+    "Reason: Inappropriate chat",
+    input.description ? `Details: ${input.description}` : null,
+    "You may review the report and respond from the transaction page.",
+  ]
+    .filter(Boolean)
+    .join(" "),
+  actionPath: input.bookingId
+    ? `/account/transactions/${input.bookingId}?action=rebuttal`
+    : "/account/disputes?tab=disputes",
+})
 
 const getConversationWithTransaction = async (
   prisma: Context["prisma"],
@@ -488,7 +515,7 @@ export const chatRouter = router({
     .mutation(async ({ ctx, input }) => {
       const conversation = await getConversationWithTransaction(ctx.prisma, input.conversationId)
 
-      assertParticipant(conversation.transaction, ctx.user.id)
+      const { otherUserId } = assertParticipant(conversation.transaction, ctx.user.id)
       assertChatAvailableForTransaction(conversation.transaction)
 
       const existingDispute = await ctx.prisma.transactionDispute.findFirst({
@@ -509,22 +536,39 @@ export const chatRouter = router({
       const description =
         input.description && input.description.length > 0 ? input.description : null
 
-      return await ctx.prisma.transactionDispute.create({
-        data: {
-          transactionId: conversation.transaction.id,
-          raisedById: ctx.user.id,
-          status: SUBMITTED_DISPUTE_STATUS,
-          reason: "INAPPROPRIATE_CHAT",
-          description,
-        },
-        select: {
-          id: true,
-          transactionId: true,
-          reason: true,
-          status: true,
-          description: true,
-          createdAt: true,
-        },
+      return await ctx.prisma.$transaction(async (tx) => {
+        const report = await tx.transactionDispute.create({
+          data: {
+            transactionId: conversation.transaction.id,
+            raisedById: ctx.user.id,
+            status: SUBMITTED_DISPUTE_STATUS,
+            reason: "INAPPROPRIATE_CHAT",
+            description,
+          },
+          select: {
+            id: true,
+            transactionId: true,
+            reason: true,
+            status: true,
+            description: true,
+            createdAt: true,
+          },
+        })
+
+        await tx.appNotification.create({
+          data: {
+            recipientUserId: otherUserId,
+            actorUserId: ctx.user.id,
+            bookingId: conversation.transaction.bookingId,
+            ...buildConversationReportNotification({
+              transactionId: conversation.transaction.id,
+              bookingId: conversation.transaction.bookingId,
+              description,
+            }),
+          },
+        })
+
+        return report
       })
     }),
 
