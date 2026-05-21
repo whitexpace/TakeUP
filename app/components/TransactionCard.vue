@@ -72,11 +72,20 @@ const formatRating = (rating: number | null) => (rating === null ? null : rating
 const formatDate = (date: Date | string) =>
   new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
+const formatTime = (date: Date | string) =>
+  new Date(date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+
 const dateRange = computed(() => {
   const start = formatDate(props.transaction.startDate)
   const end = formatDate(props.transaction.endDate)
   const sameDay = start === end
   return sameDay ? start : `${start} - ${end}`
+})
+
+const timeRange = computed(() => {
+  const start = formatTime(props.transaction.startDate)
+  const end = formatTime(props.transaction.endDate)
+  return `${start} – ${end}`
 })
 
 const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
@@ -110,6 +119,18 @@ const rateLabel = computed(() => {
 
 const totalLabel = computed(() =>
   props.transaction.item.freeToBorrow ? "₱0" : formatPeso(props.transaction.totalAmount),
+)
+
+const commissionLabel = computed(() => formatPeso(props.transaction.commissionAmount))
+
+const createdAtLabel = computed(() =>
+  new Date(props.transaction.createdAt).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }),
 )
 
 const shortTransactionId = computed(() => props.transaction.id.slice(0, 12).toUpperCase())
@@ -263,9 +284,16 @@ const handleOpenChat = async () => {
           >
             <span class="font-mono text-noble-black/25">{{ shortTransactionId }}</span>
             <span class="hidden xs:inline text-noble-black/10">|</span>
-            <span>{{ dateRange }}</span>
-            <span class="hidden sm:inline text-noble-black/10">|</span>
+            <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
+            <span v-else>{{ dateRange }}</span>
+            <span class="hidden xs:inline text-noble-black/10">|</span>
+            <span v-if="!isAdminVariant">{{ timeRange }}</span>
+            <span v-if="!isAdminVariant" class="hidden sm:inline text-noble-black/10">|</span>
             <span class="hidden sm:inline">{{ duration }}</span>
+            <template v-if="isAdminVariant">
+              <span class="hidden xs:inline text-noble-black/10">|</span>
+              <span>Commission {{ commissionLabel }}</span>
+            </template>
           </div>
 
           <div v-if="reviewActions.length" class="mt-1.5 flex gap-3">
@@ -388,9 +416,16 @@ const handleOpenChat = async () => {
           >
             <span class="font-mono text-noble-black/25">{{ shortTransactionId }}</span>
             <span class="hidden xs:inline text-noble-black/10">|</span>
-            <span>{{ dateRange }}</span>
-            <span class="hidden sm:inline text-noble-black/10">|</span>
+            <span v-if="isAdminVariant">Logged {{ createdAtLabel }}</span>
+            <span v-else>{{ dateRange }}</span>
+            <span class="hidden xs:inline text-noble-black/10">|</span>
+            <span v-if="!isAdminVariant">{{ timeRange }}</span>
+            <span v-if="!isAdminVariant" class="hidden sm:inline text-noble-black/10">|</span>
             <span class="hidden sm:inline">{{ duration }}</span>
+            <template v-if="isAdminVariant">
+              <span class="hidden xs:inline text-noble-black/10">|</span>
+              <span>Commission {{ commissionLabel }}</span>
+            </template>
           </div>
 
           <div v-if="reviewActions.length" class="mt-1.5 flex gap-3">
