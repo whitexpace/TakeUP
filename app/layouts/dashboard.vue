@@ -5,10 +5,9 @@
       scroll-container-selector=".custom-main-scrollbar"
       @visibility-change="(v) => (isHeaderVisible = v)"
     >
-      <template #left>
+      <template v-if="!hideSidebar" #left>
         <div class="relative flex items-stretch group/tooltip h-full">
           <button
-            v-if="!hideSidebar"
             class="flex items-center justify-center px-2 text-noble-black transition-colors hover:text-burning-orange group"
             aria-label="Toggle Sidebar"
             @click="toggleSidebar"
