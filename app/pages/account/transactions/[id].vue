@@ -12,6 +12,7 @@ import {
   prefetchBookingDetail,
   seedPrefetchedBookingDetail,
 } from "../../../composables/use-booking-detail-prefetch"
+import { useViewerSession } from "../../../composables/use-viewer-session"
 
 definePageMeta({
   layout: "account",
@@ -25,6 +26,7 @@ type BookingDetail = NonNullable<RouterOutputs["booking"]["byId"]>
 const route = useRoute()
 const router = useRouter()
 const supabase = useSupabaseClient()
+const { getAuthHeaders } = useViewerSession()
 const bookingId = computed(() => {
   const id = route.params.id
   return Array.isArray(id) ? (id[0] ?? "") : (id ?? "")
@@ -367,8 +369,10 @@ const clearEarlyReturnProof = () => {
 const uploadProofImage = async (file: File, proofType: ProofUploadType) => {
   if (!booking.value) throw new Error("Booking data missing.")
   const uploadFile = await convertImageFileToWebP(file)
+  const headers = await getAuthHeaders()
   const signedUpload = await $fetch<ProofUploadUrlResponse>("/api/bookings/proof-upload-url", {
     method: "POST",
+    ...(headers ? { headers } : {}),
     body: {
       bookingId: booking.value.id,
       proofType,
