@@ -770,6 +770,9 @@ watch(startDate, (newDate) => {
     targetStartMins = Math.max(targetStartMins, earliestMinutes)
   }
 
+  // Skip past any confirmed booking blocks on this date
+  targetStartMins = findFirstAvailableStartMins(newDate, targetStartMins)
+
   startTime.value = minutesToTime(Math.min(targetStartMins, 23 * 60 + 30))
 
   // Adjust End Time
@@ -784,6 +787,11 @@ watch(startDate, (newDate) => {
 
     // But if 6:00 PM is before start+1h, just use start+1h
     if (targetEndMins < startMins + 60) targetEndMins = startMins + 60
+
+    // Skip past any confirmed booking blocks for end time too
+    if (isTimeOnDayBooked(minutesToTime(targetEndMins), effectiveEndDate)) {
+      targetEndMins = findFirstAvailableStartMins(effectiveEndDate, targetEndMins)
+    }
 
     endTime.value = minutesToTime(Math.min(targetEndMins, 23 * 60 + 30))
   } else {
@@ -846,11 +854,33 @@ const selectedBookingWindow = computed(() => {
   }
 })
 
+const findFirstAvailableStartMins = (date: Date, fromMins: number): number => {
+  for (let mins = fromMins; mins <= 23 * 60 + 30; mins += 30) {
+    if (!isTimeOnDayBooked(minutesToTime(mins), date)) {
+      return mins
+    }
+  }
+  return fromMins
+}
+
+const doesWindowOverlapConfirmedBooking = computed(() => {
+  if (!selectedBookingWindow.value) return false
+  const { startDate: winStart, endDate: winEnd } = selectedBookingWindow.value
+
+  return availabilityRanges.value.some(
+    (range) =>
+      range.status !== "AVAILABLE" &&
+      range.startDate.getTime() < winEnd.getTime() &&
+      range.endDate.getTime() > winStart.getTime(),
+  )
+})
+
 const canSubmitBooking = computed(
   () =>
     !isBookingBlocked.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
+    !doesWindowOverlapConfirmedBooking.value &&
     !hasRequestedBooking.value &&
     !isSubmittingBooking.value,
 )
@@ -858,6 +888,10 @@ const canSubmitBooking = computed(
 const bookingFeedbackMessage = computed(() => {
   if (isBookingBlocked.value) {
     return bookingAvailabilityMessage.value
+  }
+
+  if (doesWindowOverlapConfirmedBooking.value) {
+    return "This time slot is already reserved. Please choose a different time."
   }
 
   if (bookingErrorMessage.value) return bookingErrorMessage.value
@@ -868,6 +902,10 @@ const bookingFeedbackMessage = computed(() => {
 const bookingFeedbackClass = computed(() => {
   if (isBookingBlocked.value) {
     return "text-noble-black/60"
+  }
+
+  if (doesWindowOverlapConfirmedBooking.value) {
+    return "text-cinnabar-red"
   }
 
   if (bookingErrorMessage.value) {
