@@ -71,11 +71,13 @@ const makeMessage = (id: string, overrides: Partial<ChatMessage> = {}): ChatMess
   id,
   conversationId: CONV_ID_1,
   senderUserId: "sender-1",
+  replyToMessageId: null,
   body: `Message ${id}`,
   imageUrl: null,
   isRead: false,
   readAt: null,
   createdAt: "2026-04-20T10:00:00.000Z",
+  replyToMessage: null,
   ...overrides,
 })
 
@@ -290,6 +292,55 @@ describe("useChat", () => {
       body: {
         body: "Hello there",
         imageUrl: "https://example.com/chat.jpg",
+        replyToMessageId: null,
+      },
+    })
+  })
+
+  it("sends a reply with optimistic quoted-message metadata", async () => {
+    const originalMessage = makeMessage("msg-original", {
+      senderUserId: "user-conv-1",
+      body: "Original message",
+      createdAt: "2026-04-20T11:59:00.000Z",
+    })
+    const sentMessage = makeMessage("msg-reply", {
+      body: "Replying now",
+      replyToMessageId: "msg-original",
+      replyToMessage: {
+        id: "msg-original",
+        senderUserId: "user-conv-1",
+        body: "Original message",
+        imageUrl: null,
+        createdAt: "2026-04-20T11:59:00.000Z",
+      },
+      createdAt: "2026-04-20T12:00:00.000Z",
+    })
+    fetchMock.mockResolvedValue(sentMessage)
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+    await chat.mergeActiveConversationMessages([originalMessage])
+
+    const pendingSend = chat.sendMessage("Replying now", null, originalMessage)
+
+    expect(chat.messages.value[1]).toMatchObject({
+      body: "Replying now",
+      replyToMessageId: "msg-original",
+      replyToMessage: {
+        id: "msg-original",
+        body: "Original message",
+      },
+      isOptimistic: true,
+    })
+
+    await expect(pendingSend).resolves.toMatchObject({ id: "msg-reply" })
+    expect(fetchMock).toHaveBeenCalledWith(`/api/chat/conversations/${CONV_ID_1}/messages`, {
+      method: "POST",
+      body: {
+        body: "Replying now",
+        imageUrl: null,
+        replyToMessageId: "msg-original",
       },
     })
   })
@@ -316,6 +367,7 @@ describe("useChat", () => {
       body: {
         body: "",
         imageUrl: "https://example.com/chat.jpg",
+        replyToMessageId: null,
       },
     })
   })
@@ -355,6 +407,7 @@ describe("useChat", () => {
       body: {
         body: "First",
         imageUrl: null,
+        replyToMessageId: null,
       },
     })
 
@@ -368,6 +421,7 @@ describe("useChat", () => {
       body: {
         body: "Second",
         imageUrl: null,
+        replyToMessageId: null,
       },
     })
 

@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
     conversationId: rawId,
     body: body?.body ?? body?.text,
     imageUrl: body?.imageUrl ?? null,
+    replyToMessageId: body?.replyToMessageId ?? null,
   })
 
   if (!parsed.success) {

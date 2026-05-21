@@ -57,6 +57,7 @@ const realtimeChannelId = createRealtimeChannelId()
 const isMobile = ref(false)
 const searchQuery = ref("")
 const newMessage = ref("")
+const replyToMessage = ref<ChatMessage | null>(null)
 const showWarning = ref(false)
 const showEmojiPicker = ref(false)
 const showReportModal = ref(false)
@@ -227,6 +228,7 @@ const clearComposerImage = () => {
 
 const resetComposer = () => {
   newMessage.value = ""
+  replyToMessage.value = null
   composerError.value = null
   showEmojiPicker.value = false
   clearComposerImage()
@@ -276,6 +278,27 @@ const getChatTime = (conversation: (typeof sortedConversations.value)[0]) => {
 
 const getClosedConversationLabel = (conversation: NonNullable<typeof activeConversation.value>) =>
   getChatClosedPreviewLabel(conversation.closureState) ?? "Chat unavailable"
+
+const getMessageAuthorLabel = (senderUserId: string) =>
+  senderUserId === activeConversation.value?.otherParticipant?.id
+    ? getParticipantName(activeConversation.value.otherParticipant)
+    : "You"
+
+const getMessageReplyPreview = (message: Pick<ChatMessage, "body" | "imageUrl"> | null) => {
+  if (!message) return "Original message unavailable"
+  const body = sanitizeChatMessage(message.body).trim()
+  return body || (message.imageUrl ? "Photo" : "Message")
+}
+
+const startReplyToMessage = (message: ChatMessage) => {
+  if (activeConversation.value?.isExpired) return
+  replyToMessage.value = message
+  nextTick(() => textareaRef.value?.focus())
+}
+
+const clearReplyToMessage = () => {
+  replyToMessage.value = null
+}
 
 let openConversationPromise: Promise<void> | null = null
 let openConversationTransactionId: string | null = null
@@ -443,7 +466,7 @@ const handleSendMessage = async () => {
       imageUrl = await uploadChatImage(pendingImageFile.value)
     }
 
-    const sendPromise = sendChatMessage(body, imageUrl)
+    const sendPromise = sendChatMessage(body, imageUrl, replyToMessage.value)
     resetComposer()
     scrollToBottom()
 
@@ -654,6 +677,8 @@ const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null =>
 
   const body = typeof row.body === "string" ? row.body : ""
   const imageUrl = typeof row.image_url === "string" ? row.image_url : null
+  const replyToMessageId =
+    typeof row.reply_to_message_id === "string" ? row.reply_to_message_id : null
   const isRead = typeof row.is_read === "boolean" ? row.is_read : false
   const readAt = typeof row.read_at === "string" ? row.read_at : null
 
@@ -661,11 +686,13 @@ const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null =>
     id: row.id,
     conversationId: row.conversation_id,
     senderUserId: row.sender_user_id,
+    replyToMessageId,
     body,
     imageUrl,
     isRead,
     readAt,
     createdAt: row.created_at,
+    replyToMessage: null,
   }
 }
 
@@ -687,15 +714,37 @@ const mapBroadcastMessage = (value: unknown): ChatMessage | null => {
     return null
   }
 
+  const rawReplyToMessage =
+    typeof message.replyToMessage === "object" && message.replyToMessage !== null
+      ? (message.replyToMessage as Record<string, unknown>)
+      : null
+  const replyToMessage =
+    rawReplyToMessage &&
+    typeof rawReplyToMessage.id === "string" &&
+    typeof rawReplyToMessage.senderUserId === "string" &&
+    typeof rawReplyToMessage.createdAt === "string"
+      ? {
+          id: rawReplyToMessage.id,
+          senderUserId: rawReplyToMessage.senderUserId,
+          body: typeof rawReplyToMessage.body === "string" ? rawReplyToMessage.body : "",
+          imageUrl:
+            typeof rawReplyToMessage.imageUrl === "string" ? rawReplyToMessage.imageUrl : null,
+          createdAt: rawReplyToMessage.createdAt,
+        }
+      : null
+
   return {
     id: message.id,
     conversationId: message.conversationId,
     senderUserId: message.senderUserId,
+    replyToMessageId:
+      typeof message.replyToMessageId === "string" ? message.replyToMessageId : null,
     body: typeof message.body === "string" ? message.body : "",
     imageUrl: typeof message.imageUrl === "string" ? message.imageUrl : null,
     isRead: typeof message.isRead === "boolean" ? message.isRead : false,
     readAt: typeof message.readAt === "string" ? message.readAt : null,
     createdAt: message.createdAt,
+    replyToMessage,
   }
 }
 
@@ -1289,7 +1338,7 @@ onUnmounted(() => {
               <div
                 v-for="message in messages"
                 :key="message.id"
-                class="flex max-w-[85%] flex-col lg:max-w-[75%] min-w-0"
+                class="group/message flex max-w-[85%] flex-col lg:max-w-[75%] min-w-0"
                 :class="[
                   message.senderUserId !== activeConversation.otherParticipant?.id
                     ? 'self-end items-end'
@@ -1297,26 +1346,60 @@ onUnmounted(() => {
                 ]"
               >
                 <div
-                  class="relative rounded-[18px] px-3.5 py-2 text-[15px] leading-relaxed shadow-sm min-w-0"
+                  class="flex items-end gap-2"
                   :class="[
                     message.senderUserId !== activeConversation.otherParticipant?.id
-                      ? 'rounded-tr-none bg-burning-orange text-white'
-                      : 'rounded-tl-none border border-gray-100 bg-gray-100/70 text-noble-black',
+                      ? 'flex-row-reverse'
+                      : 'flex-row',
                   ]"
                 >
-                  <img
-                    v-if="message.imageUrl"
-                    :src="message.imageUrl"
-                    alt="Chat attachment"
-                    class="mb-3 max-h-64 w-full rounded-2xl object-cover"
-                    @load="handleMessageImageLoad"
-                  />
-                  <p
-                    v-if="message.body.trim()"
-                    class="whitespace-pre-wrap break-all md:break-words overflow-hidden"
+                  <div
+                    class="relative rounded-[18px] px-3.5 py-2 text-[15px] leading-relaxed shadow-sm min-w-0"
+                    :class="[
+                      message.senderUserId !== activeConversation.otherParticipant?.id
+                        ? 'rounded-tr-none bg-burning-orange text-white'
+                        : 'rounded-tl-none border border-gray-100 bg-gray-100/70 text-noble-black',
+                    ]"
                   >
-                    {{ sanitizeChatMessage(message.body) }}
-                  </p>
+                    <div
+                      v-if="message.replyToMessage"
+                      class="mb-2 max-w-full rounded-xl border-l-2 px-3 py-2 text-xs"
+                      :class="[
+                        message.senderUserId !== activeConversation.otherParticipant?.id
+                          ? 'border-white/70 bg-white/15 text-white/85'
+                          : 'border-burning-orange/60 bg-white/80 text-noble-black/65',
+                      ]"
+                    >
+                      <p class="truncate font-bold">
+                        {{ getMessageAuthorLabel(message.replyToMessage.senderUserId) }}
+                      </p>
+                      <p class="truncate">
+                        {{ getMessageReplyPreview(message.replyToMessage) }}
+                      </p>
+                    </div>
+                    <img
+                      v-if="message.imageUrl"
+                      :src="message.imageUrl"
+                      alt="Chat attachment"
+                      class="mb-3 max-h-64 w-full rounded-2xl object-cover"
+                      @load="handleMessageImageLoad"
+                    />
+                    <p
+                      v-if="message.body.trim()"
+                      class="whitespace-pre-wrap break-all md:break-words overflow-hidden"
+                    >
+                      {{ sanitizeChatMessage(message.body) }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    title="Reply"
+                    aria-label="Reply"
+                    class="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-noble-black/45 opacity-70 shadow-sm transition hover:text-burning-orange hover:opacity-100 md:opacity-0 md:group-hover/message:opacity-100"
+                    @click="startReplyToMessage(message)"
+                  >
+                    <Icon name="ph:arrow-bend-up-left" class="shrink-0" size="16" />
+                  </button>
                 </div>
 
                 <span
@@ -1372,6 +1455,34 @@ onUnmounted(() => {
           </div>
 
           <div v-else class="relative shrink-0 border-t border-gray-100 bg-white p-3 lg:p-4">
+            <div
+              v-if="replyToMessage"
+              class="mb-3 flex items-center gap-3 rounded-2xl border border-cinnamon-ice/20 bg-gray-50 px-3 py-2"
+            >
+              <div
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-burning-orange/10 text-burning-orange"
+              >
+                <Icon name="ph:arrow-bend-up-left" class="shrink-0" size="18" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-bold text-noble-black">
+                  Replying to {{ getMessageAuthorLabel(replyToMessage.senderUserId) }}
+                </p>
+                <p class="truncate text-xs text-noble-black/50">
+                  {{ getMessageReplyPreview(replyToMessage) }}
+                </p>
+              </div>
+              <button
+                type="button"
+                title="Cancel reply"
+                aria-label="Cancel reply"
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-noble-black/45 transition hover:bg-white hover:text-cinnabar-red"
+                @click="clearReplyToMessage"
+              >
+                <Icon name="ph:x" class="shrink-0" size="16" />
+              </button>
+            </div>
+
             <div
               v-if="pendingImagePreviewUrl"
               class="mb-3 flex items-start gap-3 rounded-2xl border border-cinnamon-ice/20 bg-cream/70 p-3"
