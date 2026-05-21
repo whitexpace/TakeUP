@@ -16,6 +16,7 @@ definePageMeta({
 const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
 const REALTIME_SESSION_WAIT_MS = 5_000
+const REALTIME_RETRY_MS = 1_500
 
 type RealtimeMessagePayload = {
   new: Record<string, unknown>
@@ -625,6 +626,10 @@ let activeRealtimeGeneration = 0
 let activeBroadcastGeneration = 0
 let realtimeAuthSubscription: { unsubscribe: () => void } | null = null
 let hasWarnedMissingRealtimeSession = false
+let inboxRealtimeRetryId: number | null = null
+let activeRealtimeRetryId: number | null = null
+let inboxBroadcastRetryId: number | null = null
+let activeBroadcastRetryId: number | null = null
 
 const getConversationBroadcastTopic = (conversationId: string) =>
   `chat-conversation-${conversationId}`
@@ -695,10 +700,98 @@ const ensureRealtimeAuth = async () => {
   return true
 }
 
+const shouldRetryRealtimeStatus = (status: string) =>
+  status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"
+
 const logRealtimeStatus = (channelName: string, status: string, error?: Error) => {
-  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+  if (shouldRetryRealtimeStatus(status)) {
     console.warn(`[chat realtime] ${channelName} ${status}`, error)
   }
+}
+
+const clearRealtimeRetryTimers = () => {
+  if (inboxRealtimeRetryId !== null) {
+    window.clearTimeout(inboxRealtimeRetryId)
+    inboxRealtimeRetryId = null
+  }
+  if (activeRealtimeRetryId !== null) {
+    window.clearTimeout(activeRealtimeRetryId)
+    activeRealtimeRetryId = null
+  }
+  if (inboxBroadcastRetryId !== null) {
+    window.clearTimeout(inboxBroadcastRetryId)
+    inboxBroadcastRetryId = null
+  }
+  if (activeBroadcastRetryId !== null) {
+    window.clearTimeout(activeBroadcastRetryId)
+    activeBroadcastRetryId = null
+  }
+}
+
+const scheduleInboxRealtimeRetry = () => {
+  if (typeof window === "undefined" || inboxRealtimeRetryId !== null) return
+
+  const channel = inboxRealtimeChannel
+  inboxRealtimeChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  inboxRealtimeRetryId = window.setTimeout(() => {
+    inboxRealtimeRetryId = null
+    void setupInboxRealtime()
+  }, REALTIME_RETRY_MS)
+}
+
+const scheduleActiveRealtimeRetry = (conversationId: string, generation: number) => {
+  if (typeof window === "undefined" || activeRealtimeRetryId !== null) return
+  if (generation !== activeRealtimeGeneration) return
+
+  const channel = activeRealtimeChannel
+  activeRealtimeChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  activeRealtimeRetryId = window.setTimeout(() => {
+    activeRealtimeRetryId = null
+    if (generation === activeRealtimeGeneration && activeConversationId.value === conversationId) {
+      void setupActiveRealtime(conversationId)
+    }
+  }, REALTIME_RETRY_MS)
+}
+
+const scheduleInboxBroadcastRetry = () => {
+  if (typeof window === "undefined" || inboxBroadcastRetryId !== null) return
+
+  const channel = inboxBroadcastChannel
+  inboxBroadcastChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  inboxBroadcastRetryId = window.setTimeout(() => {
+    inboxBroadcastRetryId = null
+    void setupInboxBroadcast()
+  }, REALTIME_RETRY_MS)
+}
+
+const scheduleActiveBroadcastRetry = (conversationId: string, generation: number) => {
+  if (typeof window === "undefined" || activeBroadcastRetryId !== null) return
+  if (generation !== activeBroadcastGeneration) return
+
+  const channel = activeBroadcastChannel
+  activeBroadcastChannel = null
+  if (channel) {
+    void supabase.removeChannel(channel)
+  }
+
+  activeBroadcastRetryId = window.setTimeout(() => {
+    activeBroadcastRetryId = null
+    if (generation === activeBroadcastGeneration && activeConversationId.value === conversationId) {
+      void setupActiveBroadcast(conversationId)
+    }
+  }, REALTIME_RETRY_MS)
 }
 
 const setupRealtimeAuthListener = () => {
@@ -847,6 +940,11 @@ const handleActiveRealtimeMessage = (
 }
 
 const stopActiveRealtime = async () => {
+  if (activeRealtimeRetryId !== null) {
+    window.clearTimeout(activeRealtimeRetryId)
+    activeRealtimeRetryId = null
+  }
+
   const channel = activeRealtimeChannel
   activeRealtimeChannel = null
 
@@ -856,6 +954,11 @@ const stopActiveRealtime = async () => {
 }
 
 const stopActiveBroadcast = async () => {
+  if (activeBroadcastRetryId !== null) {
+    window.clearTimeout(activeBroadcastRetryId)
+    activeBroadcastRetryId = null
+  }
+
   const channel = activeBroadcastChannel
   activeBroadcastChannel = null
 
@@ -875,7 +978,12 @@ const setupInboxBroadcast = async () => {
   inboxBroadcastChannel = supabase
     .channel(getUserBroadcastTopic(currentUser.id))
     .on("broadcast", { event: "message" }, handleBroadcastMessage)
-    .subscribe((status, error) => logRealtimeStatus("inbox broadcast", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("inbox broadcast", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleInboxBroadcastRetry()
+      }
+    })
 }
 
 const setupActiveBroadcast = async (conversationId: string | null) => {
@@ -889,7 +997,12 @@ const setupActiveBroadcast = async (conversationId: string | null) => {
   activeBroadcastChannel = supabase
     .channel(getConversationBroadcastTopic(conversationId))
     .on("broadcast", { event: "message" }, handleBroadcastMessage)
-    .subscribe((status, error) => logRealtimeStatus("active broadcast", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("active broadcast", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleActiveBroadcastRetry(conversationId, generation)
+      }
+    })
 }
 
 const setupInboxRealtime = async () => {
@@ -906,7 +1019,12 @@ const setupInboxRealtime = async () => {
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) =>
       handleInboxRealtimeMessage(payload, "UPDATE"),
     )
-    .subscribe((status, error) => logRealtimeStatus("inbox", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("inbox", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleInboxRealtimeRetry()
+      }
+    })
 }
 
 const setupActiveRealtime = async (conversationId: string | null) => {
@@ -944,12 +1062,18 @@ const setupActiveRealtime = async (conversationId: string | null) => {
       },
       (payload) => handleActiveRealtimeMessage(payload, "UPDATE"),
     )
-    .subscribe((status, error) => logRealtimeStatus("active", status, error))
+    .subscribe((status, error) => {
+      logRealtimeStatus("active", status, error)
+      if (shouldRetryRealtimeStatus(status)) {
+        scheduleActiveRealtimeRetry(conversationId, generation)
+      }
+    })
 }
 
 const stopRealtime = () => {
   activeRealtimeGeneration += 1
   activeBroadcastGeneration += 1
+  clearRealtimeRetryTimers()
   void stopActiveRealtime()
   void stopActiveBroadcast()
 
