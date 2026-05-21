@@ -1137,6 +1137,36 @@ describe("bookingRouter", () => {
     )
   })
 
+  it("rejects handoff proof upload before the rental period starts", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        startDate: new Date("2099-04-30T01:00:00.000Z"),
+        endDate: new Date("2099-04-30T10:00:00.000Z"),
+      }),
+    )
+
+    const caller = bookingRouter.createCaller({
+      ...ctx,
+      user: { ...mockUser, id: LENDER_ID, email: "lender@up.edu.ph" },
+    } as never)
+
+    await expect(
+      caller.markHandoffProof({
+        id: BOOKING_ID,
+        proofImageUrl: "https://example.com/handoff.jpg",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Handoff proof cannot be uploaded before the rental period starts.",
+    })
+
+    expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+    expect(ctx.prisma.appNotification.create).not.toHaveBeenCalled()
+  })
+
   it("allows the borrower to mark a confirmed booking as returned", async () => {
     const ctx = makeContext()
     ctx.prisma.booking.findUnique.mockResolvedValueOnce(
@@ -1273,6 +1303,42 @@ describe("bookingRouter", () => {
     })
 
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
+  it("rejects early return preview before the rental period starts", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+        lenderHandoffProofUrl: "https://example.com/handoff.jpg",
+        lenderHandoffProofUploadedAt: new Date("2026-04-01T00:00:00.000Z"),
+        startDate: new Date("2099-04-30T01:00:00.000Z"),
+        endDate: new Date("2099-04-30T10:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(caller.earlyReturnPreview({ id: BOOKING_ID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "This booking cannot be returned before the rental period starts.",
+    })
+  })
+
+  it("rejects early return preview before handoff proof is uploaded", async () => {
+    const ctx = makeContext()
+    ctx.prisma.booking.findUnique.mockResolvedValueOnce(
+      makeBooking({
+        status: "CONFIRMED",
+        confirmedAt: new Date("2026-03-21T00:00:00.000Z"),
+      }),
+    )
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await expect(caller.earlyReturnPreview({ id: BOOKING_ID })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The item must be marked as in use before it can be returned.",
+    })
   })
 
   it("rejects return initiation when another overlapping booking exists for the same item", async () => {

@@ -1112,6 +1112,64 @@ const syncItemStatusFromBookings = async (
   }
 }
 
+type EarlyReturnEligibilityRecord = Pick<
+  BookingEditableRecord,
+  "borrowerId" | "status" | "startDate" | "endDate" | "lenderHandoffProofUploadedAt"
+> & {
+  returnStatus: ReturnStatus
+}
+
+const assertEarlyReturnAllowed = (
+  booking: EarlyReturnEligibilityRecord,
+  userId: string,
+  now: Date,
+) => {
+  if (booking.borrowerId !== userId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only the borrower can initiate an early return.",
+    })
+  }
+
+  if (booking.status !== bookingStatusSchema.enum.CONFIRMED) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only active confirmed bookings can be returned early.",
+    })
+  }
+
+  if (!booking.lenderHandoffProofUploadedAt) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The item must be marked as in use before it can be returned.",
+    })
+  }
+
+  if (
+    booking.returnStatus === ReturnStatus.EARLY_RETURNED ||
+    booking.returnStatus === ReturnStatus.RETURNED
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This booking has already been returned.",
+    })
+  }
+
+  if (now < booking.startDate) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This booking cannot be returned before the rental period starts.",
+    })
+  }
+
+  if (now >= booking.endDate) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The scheduled booking end time has already passed. Please use standard return.",
+    })
+  }
+}
+
 const buildReturnNotification = (bookingId: string) => ({
   type: "BOOKING_RETURN_REQUESTED" as unknown as PrismaNotificationType,
   title: "Item return requested",
@@ -2073,6 +2131,13 @@ export const bookingRouter = router({
         })
       }
 
+      if (new Date() < existing.startDate) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Handoff proof cannot be uploaded before the rental period starts.",
+        })
+      }
+
       const updatedBookingId = await ctx.prisma.$transaction(async (tx) => {
         const txBookingPrisma = getBookingPrisma({ prisma: tx as Context["prisma"] })
         const latestBooking = (await txBookingPrisma.booking.findUnique({
@@ -2110,6 +2175,13 @@ export const bookingRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Handoff proof has already been uploaded for this booking.",
+          })
+        }
+
+        if (new Date() < latestBooking.startDate) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Handoff proof cannot be uploaded before the rental period starts.",
           })
         }
 
@@ -2404,51 +2476,8 @@ export const bookingRouter = router({
         ),
       )
 
-      if (existing.borrowerId !== ctx.user.id) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Only the borrower can initiate an early return.",
-        })
-      }
-
-      if (existing.status !== bookingStatusSchema.enum.CONFIRMED) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Only active confirmed bookings can be returned early.",
-        })
-      }
-
-      if (!existing.lenderHandoffProofUploadedAt) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "The item must be marked as in use before it can be returned.",
-        })
-      }
-
-      if (
-        existing.returnStatus === ReturnStatus.EARLY_RETURNED ||
-        existing.returnStatus === ReturnStatus.RETURNED
-      ) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This booking has already been returned.",
-        })
-      }
-
       const now = new Date()
-      if (now < existing.startDate) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This booking cannot be returned before the rental period starts.",
-        })
-      }
-
-      if (now >= existing.endDate) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "The scheduled booking end time has already passed. Please use standard return.",
-        })
-      }
+      assertEarlyReturnAllowed(existing, ctx.user.id, now)
 
       const refundCalc = calculateEarlyReturnRefund(existing as unknown as Booking, now)
 
@@ -2578,23 +2607,43 @@ export const bookingRouter = router({
     }),
 
   earlyReturnPreview: protectedProcedure.input(bookingIdSchema).query(async ({ ctx, input }) => {
-    const existing = await ctx.prisma.booking.findUnique({
+    const existing = (await ctx.prisma.booking.findUnique({
       where: { id: input.id },
-    })
+      select: {
+        ...bookingEditableSelect,
+        returnStatus: true,
+        refundStatus: true,
+      },
+    })) as
+      | (BookingEditableRecord & { returnStatus: ReturnStatus; refundStatus: RefundStatus })
+      | null
 
     if (!existing) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found." })
     }
-
-    if (existing.borrowerId !== ctx.user.id) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Only the borrower can preview an early return.",
-      })
-    }
+    Object.assign(
+      existing,
+      await getBookingProofFields(ctx.prisma, existing.id, existing as Partial<BookingProofFields>),
+    )
 
     const now = new Date()
-    const refundCalc = calculateEarlyReturnRefund(existing, now)
+    try {
+      assertEarlyReturnAllowed(existing, ctx.user.id, now)
+    } catch (error) {
+      if (
+        error instanceof TRPCError &&
+        error.code === "FORBIDDEN" &&
+        error.message === "Only the borrower can initiate an early return."
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the borrower can preview an early return.",
+        })
+      }
+      throw error
+    }
+
+    const refundCalc = calculateEarlyReturnRefund(existing as unknown as Booking, now)
 
     return {
       refund: {

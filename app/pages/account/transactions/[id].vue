@@ -101,6 +101,12 @@ const canUploadHandoffProof = computed(
     booking.value?.status === "CONFIRMED" &&
     !booking.value?.lenderHandoffProofUploadedAt,
 )
+const isRentalPeriodStarted = computed(() => {
+  if (!booking.value) return false
+  const now = new Date()
+  const start = new Date(booking.value.transactionStartDate ?? booking.value.startDate)
+  return now >= start
+})
 const canOpenChat = computed(
   () =>
     Boolean(booking.value?.transactionId) &&
@@ -113,7 +119,8 @@ const canBorrowerReturnItem = computed(
   () =>
     !isLender.value &&
     booking.value?.status === "CONFIRMED" &&
-    Boolean(booking.value?.lenderHandoffProofUploadedAt),
+    Boolean(booking.value?.lenderHandoffProofUploadedAt) &&
+    isRentalPeriodStarted.value,
 )
 
 const mappedStatus = computed(() => {
@@ -412,20 +419,21 @@ const handleHandoffProof = () => {
   isHandoffProofModalOpen.value = true
 }
 
-const isRentalPeriodStarted = computed(() => {
-  if (!booking.value) return false
-  const now = new Date()
-  const start = new Date(booking.value.transactionStartDate ?? booking.value.startDate)
-  return now >= start
-})
-
 const isTooEarlyForHandoffOpen = ref(false)
 
 const isEarlyReturnEligible = computed(() => {
-  if (!booking.value || isLender.value || booking.value.status !== "CONFIRMED") return false
+  if (
+    !booking.value ||
+    isLender.value ||
+    booking.value.status !== "CONFIRMED" ||
+    !booking.value.lenderHandoffProofUploadedAt
+  ) {
+    return false
+  }
   const now = new Date()
-  const end = new Date(booking.value.endDate)
-  return now < end
+  const start = new Date(booking.value.transactionStartDate ?? booking.value.startDate)
+  const end = new Date(booking.value.transactionEndDate ?? booking.value.endDate)
+  return now >= start && now < end
 })
 
 interface EarlyReturnPreviewData {
