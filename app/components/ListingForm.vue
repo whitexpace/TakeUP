@@ -1030,13 +1030,14 @@ const isStepCompleted = (stepId: string) => {
 
 const formErrors = computed(() => {
   const errors: Record<string, string> = {}
+  const requireDetailChips = props.mode !== "edit"
   if (!coverImage.value) errors.coverImage = "Please upload a cover image"
   if (!form.name.trim()) errors.name = "Item name is required"
   if (form.categories.length === 0) errors.categories = "Please select at least one category"
   if (!form.description.trim()) errors.description = "Description is required"
-  if (whatThisItemOffers.value.length === 0)
+  if (requireDetailChips && whatThisItemOffers.value.length === 0)
     errors.whatThisItemOffers = "Please add at least one feature"
-  if (whatsIncluded.value.length === 0)
+  if (requireDetailChips && whatsIncluded.value.length === 0)
     errors.whatsIncluded = "Please add at least one included item"
   if (form.freeToBorrow === null) errors.listingType = "Please select a listing type"
   if (form.freeToBorrow === false && parseRateValue(form.rentalFee) <= 0)
