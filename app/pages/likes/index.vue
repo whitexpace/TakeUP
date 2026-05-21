@@ -480,7 +480,7 @@ watch(
       <div class="">
         <div
           v-if="cardItems.length > 0 || isLoading"
-          class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 xs:gap-4 sm:gap-8"
+          class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 xs:gap-4 sm:gap-6 lg:gap-8"
         >
           <ItemCard
             v-for="item in cardItems"
