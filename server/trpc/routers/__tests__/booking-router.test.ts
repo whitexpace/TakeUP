@@ -673,7 +673,8 @@ describe("bookingRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: "The selected dates are not fully available for this listing.",
+      message:
+        "The lender has not marked the full selected range (Apr 1, 2026 to Apr 3, 2026) as available. Choose another date or shorten your booking window.",
     })
 
     expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
@@ -749,7 +750,8 @@ describe("bookingRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: "The requested booking window overlaps an existing booking.",
+      message:
+        "The selected date and time overlaps an already reserved period for this item. Please choose another schedule.",
     })
 
     expect(ctx.prisma.booking.create).not.toHaveBeenCalled()
@@ -832,10 +834,34 @@ describe("bookingRouter", () => {
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
-      message: "The selected dates are not fully available for this listing.",
+      message:
+        "The lender has not marked the full selected range (Apr 1, 2026 to Apr 3, 2026) as available. Choose another date or shorten your booking window.",
     })
 
     expect(ctx.prisma.booking.update).not.toHaveBeenCalled()
+  })
+
+  it("allows create for rented items when the requested future window is otherwise available", async () => {
+    const ctx = makeContext()
+    ctx.prisma.item.findUnique.mockResolvedValueOnce({
+      id: ITEM_ID,
+      name: "Camera",
+      lenderId: LENDER_ID,
+      rateOption: "PER_DAY",
+      rentalFee: 200,
+      freeToBorrow: false,
+      status: "RENTED",
+    })
+    const caller = bookingRouter.createCaller(ctx as never)
+
+    await caller.create({
+      itemId: ITEM_ID,
+      startDate: new Date("2026-04-10T00:00:00.000Z"),
+      endDate: new Date("2026-04-11T00:00:00.000Z"),
+      paymentMethod: "GCASH",
+    })
+
+    expect(ctx.prisma.booking.create).toHaveBeenCalled()
   })
 
   it("forbids access to a booking when the user is not a participant", async () => {

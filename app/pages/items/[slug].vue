@@ -333,7 +333,12 @@ const formattedCondition = computed(() => (item.value ? humanizeEnum(item.value.
 const formattedCategories = computed(() => item.value?.categories.map(humanizeEnum) ?? [])
 const isItemRented = computed(() => item.value?.status === "RENTED")
 const isItemUnavailableForBooking = computed(() =>
-  Boolean(item.value && (item.value.status === "DEACTIVATED" || item.value.status === "DELETED")),
+  Boolean(
+    item.value &&
+      (item.value.status === "DEACTIVATED" ||
+        item.value.status === "DELETED" ||
+        item.value.status === "UNAVAILABLE"),
+  ),
 )
 const isOwnItem = computed(() =>
   Boolean(item.value?.lenderId && authUser.value?.id && item.value.lenderId === authUser.value.id),
@@ -360,6 +365,10 @@ const bookingAvailabilityMessage = computed(() => {
   }
 
   if (isItemUnavailableForBooking.value) {
+    if (item.value?.status === "UNAVAILABLE") {
+      return "This listing has no upcoming available dates right now."
+    }
+
     return "This listing is not accepting bookings right now."
   }
 
@@ -416,6 +425,65 @@ const availabilityRanges = computed(() =>
 )
 
 const MIN_BOOKABLE_MS = 30 * 60 * 1000
+type BookingAvailabilityIssue = {
+  kind: "blocked" | "outside-availability"
+  message: string
+}
+
+const expandRangeToUtcDays = <T extends { startDate: Date; endDate: Date }>(range: T): T => {
+  const start = new Date(range.startDate)
+  start.setUTCHours(0, 0, 0, 0)
+  const end = new Date(range.endDate)
+  if (
+    end.getUTCHours() !== 0 ||
+    end.getUTCMinutes() !== 0 ||
+    end.getUTCSeconds() !== 0 ||
+    end.getUTCMilliseconds() !== 0
+  ) {
+    end.setUTCHours(24, 0, 0, 0)
+  }
+
+  return { ...range, startDate: start, endDate: end }
+}
+
+const doTimeRangesOverlap = (
+  left: { startDate: Date; endDate: Date },
+  right: { startDate: Date; endDate: Date },
+) => left.startDate < right.endDate && left.endDate > right.startDate
+
+const isBookingWindowFullyCoveredByAvailability = (
+  bookingWindow: { startDate: Date; endDate: Date },
+  ranges: Array<{ startDate: Date; endDate: Date; status: string }>,
+) => {
+  const availableRanges = ranges
+    .filter(
+      (range) =>
+        range.status === "AVAILABLE" &&
+        range.endDate > range.startDate &&
+        doTimeRangesOverlap(bookingWindow, range),
+    )
+    .sort((left, right) => left.startDate.getTime() - right.startDate.getTime())
+
+  let coveredUntil = bookingWindow.startDate.getTime()
+  const bookingEnd = bookingWindow.endDate.getTime()
+
+  for (const range of availableRanges) {
+    const rangeStart = range.startDate.getTime()
+    const rangeEnd = range.endDate.getTime()
+
+    if (rangeStart > coveredUntil) {
+      return false
+    }
+
+    coveredUntil = Math.max(coveredUntil, rangeEnd)
+
+    if (coveredUntil >= bookingEnd) {
+      return true
+    }
+  }
+
+  return false
+}
 
 const isDateUnavailable = (date: Date | null) => {
   if (!date) return true
@@ -816,6 +884,10 @@ watch(startTime, (newStartTime) => {
   }
 })
 
+watch([startDate, endDate, startTime, endTime], () => {
+  bookingErrorMessage.value = ""
+})
+
 const toggleStartTime = () => {
   if (isBookingBlocked.value) return
 
@@ -854,6 +926,38 @@ const selectedBookingWindow = computed(() => {
   }
 })
 
+const bookingAvailabilityIssue = computed<BookingAvailabilityIssue | null>(() => {
+  const bookingWindow = selectedBookingWindow.value
+  if (!bookingWindow) return null
+
+  const dayAlignedRanges = availabilityRanges.value.map(expandRangeToUtcDays)
+  const hasAvailableRanges = dayAlignedRanges.some((range) => range.status === "AVAILABLE")
+  const hasBlockedWindow = dayAlignedRanges.some(
+    (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(bookingWindow, range),
+  )
+
+  if (hasBlockedWindow) {
+    return {
+      kind: "blocked",
+      message:
+        "The selected date and time overlaps an already reserved period for this item. Please choose another schedule.",
+    }
+  }
+
+  if (
+    hasAvailableRanges &&
+    !isBookingWindowFullyCoveredByAvailability(bookingWindow, dayAlignedRanges)
+  ) {
+    return {
+      kind: "outside-availability",
+      message:
+        "The lender has not marked the full selected range as available. Choose another date or shorten your booking window.",
+    }
+  }
+
+  return null
+})
+
 const findFirstAvailableStartMins = (date: Date, fromMins: number): number => {
   for (let mins = fromMins; mins <= 23 * 60 + 30; mins += 30) {
     if (!isTimeOnDayBooked(minutesToTime(mins), date)) {
@@ -863,24 +967,12 @@ const findFirstAvailableStartMins = (date: Date, fromMins: number): number => {
   return fromMins
 }
 
-const doesWindowOverlapConfirmedBooking = computed(() => {
-  if (!selectedBookingWindow.value) return false
-  const { startDate: winStart, endDate: winEnd } = selectedBookingWindow.value
-
-  return availabilityRanges.value.some(
-    (range) =>
-      range.status !== "AVAILABLE" &&
-      range.startDate.getTime() < winEnd.getTime() &&
-      range.endDate.getTime() > winStart.getTime(),
-  )
-})
-
 const canSubmitBooking = computed(
   () =>
     !isBookingBlocked.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
-    !doesWindowOverlapConfirmedBooking.value &&
+    !bookingAvailabilityIssue.value &&
     !hasRequestedBooking.value &&
     !isSubmittingBooking.value,
 )
@@ -890,13 +982,17 @@ const bookingFeedbackMessage = computed(() => {
     return bookingAvailabilityMessage.value
   }
 
-  if (doesWindowOverlapConfirmedBooking.value) {
-    return "This time slot is already reserved. Please choose a different time."
+  if (bookingAvailabilityIssue.value) {
+    return bookingAvailabilityIssue.value.message
   }
 
   if (bookingErrorMessage.value) return bookingErrorMessage.value
   if (bookingSuccessMessage.value) return bookingSuccessMessage.value
-  return "You won't be charged yet."
+  if (!hasBookingSelection.value) {
+    return "Select your preferred dates and time to check whether this slot can still be requested."
+  }
+
+  return "This slot is available to request. You won't be charged yet."
 })
 
 const bookingFeedbackClass = computed(() => {
@@ -904,19 +1000,31 @@ const bookingFeedbackClass = computed(() => {
     return "text-noble-black/60"
   }
 
-  if (doesWindowOverlapConfirmedBooking.value) {
-    return "text-cinnabar-red"
+  if (bookingAvailabilityIssue.value) {
+    return "border border-cinnabar-red/20 bg-cinnabar-red/8 text-cinnabar-red"
   }
 
   if (bookingErrorMessage.value) {
-    return "text-cinnabar-red"
+    return "border border-cinnabar-red/20 bg-cinnabar-red/8 text-cinnabar-red"
   }
 
   if (bookingSuccessMessage.value) {
-    return "text-burning-orange"
+    return "border border-emerald-600/20 bg-emerald-50 text-emerald-700"
   }
 
-  return "text-noble-black/40"
+  return "border border-burning-orange/15 bg-burning-orange/5 text-noble-black/65"
+})
+
+const bookingFeedbackIcon = computed(() => {
+  if (bookingAvailabilityIssue.value || bookingErrorMessage.value) {
+    return "ph:warning-circle-fill"
+  }
+
+  if (bookingSuccessMessage.value) {
+    return "ph:check-circle-fill"
+  }
+
+  return "ph:info-fill"
 })
 
 const requestBookingButtonLabel = computed(() =>
@@ -1310,6 +1418,12 @@ const submitBookingRequest = async () => {
   )
     return
 
+  if (bookingAvailabilityIssue.value) {
+    bookingErrorMessage.value = bookingAvailabilityIssue.value.message
+    bookingSuccessMessage.value = ""
+    return
+  }
+
   // If item is not free, we show payment modal first
   if (!item.value.freeToBorrow) {
     showPaymentModal.value = true
@@ -1321,7 +1435,17 @@ const submitBookingRequest = async () => {
 }
 
 const performBookingCreation = async () => {
-  if (!item.value || isBookingBlocked.value || !selectedBookingWindow.value) return
+  if (
+    !item.value ||
+    isBookingBlocked.value ||
+    !selectedBookingWindow.value ||
+    bookingAvailabilityIssue.value
+  ) {
+    if (bookingAvailabilityIssue.value) {
+      bookingErrorMessage.value = bookingAvailabilityIssue.value.message
+    }
+    return
+  }
 
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
@@ -1895,12 +2019,13 @@ onUnmounted(() => {
                     >
                       {{ requestBookingButtonLabel }}
                     </button>
-                    <p
-                      class="text-center text-[11px] font-normal mb-3"
+                    <div
+                      class="mb-3 flex items-start gap-2 rounded-2xl px-3 py-2 text-[11px] font-medium"
                       :class="bookingFeedbackClass"
                     >
-                      {{ bookingFeedbackMessage }}
-                    </p>
+                      <Icon :name="bookingFeedbackIcon" size="14" class="mt-0.5 shrink-0" />
+                      <p class="text-left leading-5">{{ bookingFeedbackMessage }}</p>
+                    </div>
 
                     <button
                       class="w-full py-3 rounded-2xl border border-burning-orange text-burning-orange font-bold text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-3"
@@ -2247,9 +2372,13 @@ onUnmounted(() => {
                   >
                     {{ requestBookingButtonLabel }}
                   </button>
-                  <p class="text-center text-[11px] mb-4 font-normal" :class="bookingFeedbackClass">
-                    {{ bookingFeedbackMessage }}
-                  </p>
+                  <div
+                    class="mb-4 flex items-start gap-2 rounded-2xl px-3 py-2 text-[11px] font-medium"
+                    :class="bookingFeedbackClass"
+                  >
+                    <Icon :name="bookingFeedbackIcon" size="14" class="mt-0.5 shrink-0" />
+                    <p class="text-left leading-5">{{ bookingFeedbackMessage }}</p>
+                  </div>
 
                   <button
                     class="w-full py-2 rounded-2xl border border-burning-orange text-burning-orange font-medium text-base transition-all duration-300 ease-in-out active:scale-[0.98] hover:bg-burning-orange/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-2.5"

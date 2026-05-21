@@ -410,6 +410,16 @@ type BookingTimeRange = {
   endDate: Date
 }
 
+type BookingAvailabilityViolation =
+  | {
+      kind: "BLOCKED"
+      message: string
+    }
+  | {
+      kind: "OUTSIDE_AVAILABILITY"
+      message: string
+    }
+
 const doTimeRangesOverlap = (left: BookingTimeRange, right: BookingTimeRange) =>
   left.startDate < right.endDate && left.endDate > right.startDate
 
@@ -462,6 +472,50 @@ const isBookingWindowFullyCoveredByAvailability = (
   return false
 }
 
+const formatBookingDate = (value: Date) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(value)
+
+const getBookingAvailabilityViolation = (
+  requestedWindow: BookingTimeRange,
+  availabilityRanges: AvailabilityRangeRecord[],
+): BookingAvailabilityViolation | null => {
+  if (!availabilityRanges.length) {
+    return null
+  }
+
+  const dayAlignedRanges = availabilityRanges.map(expandRangeToUtcDays)
+  const hasAvailableRanges = dayAlignedRanges.some((range) => range.status === "AVAILABLE")
+  const hasBlockedWindow = dayAlignedRanges.some(
+    (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
+  )
+
+  if (hasBlockedWindow) {
+    return {
+      kind: "BLOCKED",
+      message:
+        "The selected date and time overlaps an already reserved period for this item. Please choose another schedule.",
+    }
+  }
+
+  if (
+    hasAvailableRanges &&
+    !isBookingWindowFullyCoveredByAvailability(requestedWindow, dayAlignedRanges)
+  ) {
+    return {
+      kind: "OUTSIDE_AVAILABILITY",
+      message: `The lender has not marked the full selected range (${formatBookingDate(
+        requestedWindow.startDate,
+      )} to ${formatBookingDate(requestedWindow.endDate)}) as available. Choose another date or shorten your booking window.`,
+    }
+  }
+
+  return null
+}
+
 const ensureBookingWindowMatchesAvailability = async (
   prisma: AvailabilityValidationPrismaClient,
   input: {
@@ -479,29 +533,17 @@ const ensureBookingWindowMatchesAvailability = async (
     },
   })) as AvailabilityRangeRecord[]
 
-  if (!availabilityRanges.length) {
-    return
-  }
-
-  const dayAlignedRanges = availabilityRanges.map(expandRangeToUtcDays)
-  const hasAvailableRanges = dayAlignedRanges.some((range) => range.status === "AVAILABLE")
-
   const requestedWindow = {
     startDate: input.startDate,
     endDate: input.endDate,
   }
-  const hasBlockedWindow = dayAlignedRanges.some(
-    (range) => range.status !== "AVAILABLE" && doTimeRangesOverlap(requestedWindow, range),
-  )
 
-  if (
-    hasBlockedWindow ||
-    (hasAvailableRanges &&
-      !isBookingWindowFullyCoveredByAvailability(requestedWindow, dayAlignedRanges))
-  ) {
+  const violation = getBookingAvailabilityViolation(requestedWindow, availabilityRanges)
+
+  if (violation) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "The selected dates are not fully available for this listing.",
+      message: violation.message,
     })
   }
 }
@@ -853,7 +895,9 @@ const ensureBookingWindowAvailable = async (
   if (overlappingBooking) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: input.errorMessage ?? "The requested booking window overlaps an existing booking.",
+      message:
+        input.errorMessage ??
+        "The selected date and time overlaps an already reserved period for this item. Please choose another schedule.",
     })
   }
 }
@@ -1395,8 +1439,18 @@ export const bookingRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "You cannot book your own item." })
     }
 
-    if (item.status !== "AVAILABLE") {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Item is not available for booking." })
+    if (item.status === "DELETED" || item.status === "DEACTIVATED") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This listing is not accepting bookings right now.",
+      })
+    }
+
+    if (item.status === "UNAVAILABLE") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This listing has no upcoming available dates right now.",
+      })
     }
 
     await ensureBookingWindowMatchesAvailability(ctx.prisma, {
