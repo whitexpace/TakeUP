@@ -67,7 +67,7 @@ const borrowerRequestStatuses = computed<BookingStatus[]>(() => {
     case "PENDING":
       return ["PENDING"]
     case "ACTIVE":
-      return ["CONFIRMED"]
+      return []
     case "CANCELLED":
       return ["CANCELLED"]
     case "RETURNED":
@@ -104,7 +104,7 @@ const lenderRequestStatuses = computed<BookingStatus[]>(() => {
     case "PENDING":
       return ["PENDING"]
     case "ACTIVE":
-      return ["CONFIRMED"]
+      return []
     case "CANCELLED":
       return ["CANCELLED"]
     case "RETURNED":
@@ -299,7 +299,7 @@ const statusChips = computed<StatusChip[]>(() => [
     ? [{ label: "Requested Items", value: "REQUESTED_ITEMS" as TransactionFilter }]
     : [{ label: "For Approval", value: "LENDER_FOR_APPROVAL" as TransactionFilter }]),
   {
-    label: activeRole.value === "BORROWER" ? "To Receive" : "In Use",
+    label: "In Use",
     value: "ACTIVE",
   },
   { label: "Returned", value: "RETURNED" },
