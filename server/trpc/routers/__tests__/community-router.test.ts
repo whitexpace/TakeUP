@@ -1,5 +1,20 @@
-import { describe, expect, it, vi } from "vitest"
+import { TRPCError } from "@trpc/server"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { payWithWallet } from "../../../utils/wallet"
 import { communityRouter } from "../community"
+
+vi.mock("../../../utils/wallet", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../../utils/wallet")>("../../../utils/wallet")
+
+  return {
+    ...actual,
+    payWithWallet: vi.fn().mockResolvedValue({
+      wallet: { id: "wallet-1", balance: 500 },
+      transaction: { id: "wallet-transaction-1" },
+    }),
+  }
+})
 
 const BORROWER_USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 const LENDER_USER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -85,29 +100,80 @@ const makeOfferRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const makePrisma = (overrides: Record<string, unknown> = {}) => ({
-  $queryRaw: vi.fn(),
-  $executeRaw: vi.fn().mockResolvedValue(1),
-  itemRequestReply: {
-    findMany: vi.fn().mockResolvedValue([]),
-    create: vi.fn(),
-  },
-  itemRequestReplyUpvote: {
-    findUnique: vi.fn().mockResolvedValue(null),
-    create: vi.fn(),
-    delete: vi.fn(),
-  },
-  user: {
-    findUnique: vi.fn().mockResolvedValue({ id: BORROWER_USER_ID }),
-  },
-  borrower: {
-    upsert: vi.fn().mockResolvedValue({}),
-  },
-  lender: {
-    upsert: vi.fn().mockResolvedValue({}),
-  },
+const makeAcceptedOfferDetailsRow = (overrides: Record<string, unknown> = {}) => ({
+  id: 20,
+  status: "PENDING",
+  requestID: 10,
+  rentalFee: 500,
+  availability: true,
+  requestStatus: "OPEN",
+  requestedDates: [new Date("2026-04-20T00:00:00.000Z"), new Date("2026-04-21T00:00:00.000Z")],
+  borrowerUserId: BORROWER_USER_ID,
+  lenderUserId: LENDER_USER_ID,
+  itemId: "item-1",
+  itemStatus: "AVAILABLE",
   ...overrides,
 })
+
+const makeAcceptedOfferBooking = (overrides: Record<string, unknown> = {}) => ({
+  id: "booking-1",
+  borrowerId: BORROWER_USER_ID,
+  lenderId: LENDER_USER_ID,
+  itemId: "item-1",
+  startDate: new Date("2026-04-20T00:00:00.000Z"),
+  endDate: new Date("2026-04-21T00:00:00.000Z"),
+  totalFee: 500,
+  platformCommission: 25,
+  ...overrides,
+})
+
+const makePrisma = (overrides: Record<string, unknown> = {}) => {
+  const prisma = {
+    $queryRaw: vi.fn(),
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    itemRequestReply: {
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn(),
+    },
+    itemRequestReplyUpvote: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue({ id: BORROWER_USER_ID }),
+    },
+    borrower: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
+    lender: {
+      upsert: vi.fn().mockResolvedValue({}),
+    },
+    booking: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue(makeAcceptedOfferBooking()),
+    },
+    rentalTransaction: {
+      create: vi.fn().mockResolvedValue({ id: "transaction-1" }),
+    },
+    requestOffer: {
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    itemRequest: {
+      update: vi.fn().mockResolvedValue({}),
+    },
+    ...overrides,
+  }
+
+  if (!("$transaction" in prisma)) {
+    Object.assign(prisma, {
+      $transaction: vi.fn(async (callback: (client: typeof prisma) => unknown) => callback(prisma)),
+    })
+  }
+
+  return prisma
+}
 
 const makeContext = (
   user: typeof borrowerUser | typeof lenderUser | typeof borrowerUser | null,
@@ -119,6 +185,14 @@ const makeContext = (
 })
 
 describe("communityRouter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(payWithWallet).mockResolvedValue({
+      wallet: { id: "wallet-1", balance: 500 },
+      transaction: { id: "wallet-transaction-1" },
+    } as never)
+  })
+
   it("returns offerable items normalized for the current lender", async () => {
     const queryRaw = vi.fn().mockResolvedValue([makeOfferableItemRow()])
     const caller = communityRouter.createCaller(makeContext(lenderUser, { $queryRaw: queryRaw }))
@@ -629,6 +703,228 @@ describe("communityRouter", () => {
       code: "FORBIDDEN",
       message: "Borrowers can only update the offer status.",
     })
+  })
+
+  it("accepts an offer by creating a pending booking, transaction, wallet debit, and final statuses", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID })])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow()])
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    const result = await caller.updateOffer({
+      id: 20,
+      status: "ACCEPTED",
+    })
+
+    expect(result).toMatchObject({ id: 20, status: "ACCEPTED" })
+    expect(prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          borrowerId: BORROWER_USER_ID,
+          lenderId: LENDER_USER_ID,
+          itemId: "item-1",
+          requestOfferId: 20,
+          totalFee: 500,
+          paymentMethod: "WALLET",
+          paymentStatus: "PAID",
+          status: "PENDING",
+        }),
+      }),
+    )
+    expect(payWithWallet).toHaveBeenCalledWith(
+      BORROWER_USER_ID,
+      500,
+      {
+        relatedEntityType: "BOOKING",
+        relatedEntityId: "booking-1",
+      },
+      expect.anything(),
+    )
+    expect(prisma.rentalTransaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        bookingId: "booking-1",
+        borrowerId: BORROWER_USER_ID,
+        lenderId: LENDER_USER_ID,
+        itemId: "item-1",
+        rentalFee: 475,
+        platformFee: 25,
+        status: "PENDING",
+      }),
+    })
+    expect(prisma.requestOffer.update).toHaveBeenCalledWith({
+      where: { id: 20 },
+      data: { status: "ACCEPTED" },
+    })
+    expect(prisma.requestOffer.updateMany).toHaveBeenCalledWith({
+      where: {
+        requestID: 10,
+        id: { not: 20 },
+        status: "PENDING",
+      },
+      data: { status: "DECLINED" },
+    })
+    expect(prisma.itemRequest.update).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: { status: "FULFILLED" },
+    })
+  })
+
+  it("rejects offer acceptance when the borrower wallet balance is insufficient", async () => {
+    vi.mocked(payWithWallet).mockRejectedValueOnce(
+      new TRPCError({ code: "BAD_REQUEST", message: "Insufficient wallet balance." }),
+    )
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID })])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow()])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    await expect(caller.updateOffer({ id: 20, status: "ACCEPTED" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Insufficient wallet balance.",
+    })
+
+    expect(prisma.rentalTransaction.create).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.update).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.updateMany).not.toHaveBeenCalled()
+    expect(prisma.itemRequest.update).not.toHaveBeenCalled()
+  })
+
+  it("returns accepted offers idempotently when a linked booking already exists", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow({ status: "ACCEPTED" })])
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+    const prisma = makePrisma({
+      $queryRaw: queryRaw,
+      booking: {
+        findUnique: vi.fn().mockResolvedValue({ id: "booking-1" }),
+        create: vi.fn().mockResolvedValue(makeAcceptedOfferBooking()),
+      },
+    })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    const result = await caller.updateOffer({ id: 20, status: "ACCEPTED" })
+
+    expect(result).toMatchObject({ id: 20, status: "ACCEPTED" })
+    expect(prisma.booking.create).not.toHaveBeenCalled()
+    expect(payWithWallet).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.update).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.updateMany).not.toHaveBeenCalled()
+    expect(prisma.itemRequest.update).not.toHaveBeenCalled()
+  })
+
+  it("backfills an already accepted offer when it has no linked booking", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+      .mockResolvedValueOnce([
+        makeAcceptedOfferDetailsRow({ status: "ACCEPTED", requestStatus: "FULFILLED" }),
+      ])
+      .mockResolvedValueOnce([
+        makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID, status: "ACCEPTED" }),
+      ])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    const result = await caller.updateOffer({ id: 20, status: "ACCEPTED" })
+
+    expect(result).toMatchObject({ id: 20, status: "ACCEPTED" })
+    expect(prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestOfferId: 20,
+          status: "PENDING",
+          paymentMethod: "WALLET",
+          paymentStatus: "PAID",
+        }),
+      }),
+    )
+    expect(payWithWallet).toHaveBeenCalledWith(
+      BORROWER_USER_ID,
+      500,
+      expect.objectContaining({ relatedEntityId: "booking-1" }),
+      expect.anything(),
+    )
+    expect(prisma.rentalTransaction.create).toHaveBeenCalled()
+    expect(prisma.itemRequest.update).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: { status: "FULFILLED" },
+    })
+  })
+
+  it("blocks lenders from accepting an offer", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        makeOfferRow({ lenderUserId: LENDER_USER_ID, requestBorrowerUserId: BORROWER_USER_ID }),
+      ])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: lenderUser,
+    })
+
+    await expect(caller.updateOffer({ id: 20, status: "ACCEPTED" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Only the request owner can accept offers.",
+    })
+
+    expect(prisma.booking.create).not.toHaveBeenCalled()
+    expect(payWithWallet).not.toHaveBeenCalled()
+  })
+
+  it("rejects offer acceptance when the offered item is unavailable", async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([makeOfferRow({ requestBorrowerUserId: BORROWER_USER_ID })])
+      .mockResolvedValueOnce([makeAcceptedOfferDetailsRow({ itemStatus: "BORROWED" })])
+    const prisma = makePrisma({ $queryRaw: queryRaw })
+    const caller = communityRouter.createCaller({
+      event: { context: {} } as never,
+      prisma: prisma as never,
+      user: borrowerUser,
+    })
+
+    await expect(caller.updateOffer({ id: 20, status: "ACCEPTED" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The offered item is no longer available.",
+    })
+
+    expect(prisma.booking.create).not.toHaveBeenCalled()
+    expect(payWithWallet).not.toHaveBeenCalled()
+    expect(prisma.requestOffer.update).not.toHaveBeenCalled()
+    expect(prisma.itemRequest.update).not.toHaveBeenCalled()
   })
 
   it("blocks lenders from switching an offer to another user's item", async () => {

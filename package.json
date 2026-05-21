@@ -12,6 +12,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "backfill:accepted-offers": "node scripts/backfill-accepted-request-offers.mjs",
     "users:refetch-names": "node scripts/refetch-user-names-from-supabase.mjs",
     "lint": "eslint .",
     "format": "prettier . --write && prisma format",

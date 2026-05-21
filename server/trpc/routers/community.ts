@@ -1,5 +1,12 @@
-import { Prisma } from "@prisma/client"
+import {
+  BookingPaymentStatus as PrismaBookingPaymentStatus,
+  BookingStatus as PrismaBookingStatus,
+  PaymentMethod as PrismaPaymentMethod,
+  Prisma,
+  TransactionStatus as PrismaTransactionStatus,
+} from "@prisma/client"
 import { TRPCError } from "@trpc/server"
+import type { Context } from "../context"
 import { router } from "../init"
 import { protectedProcedure, publicProcedure } from "../procedures"
 import {
@@ -24,6 +31,8 @@ import {
   updateRequestOfferSchema,
 } from "#shared/schemas/item-request"
 import { broadcastCommunityFeedEvent } from "../../utils/community-feed-realtime"
+import { calculatePlatformCommissionAmount } from "../../utils/platform-commission"
+import { BOOKING_ENTITY_TYPE, payWithWallet } from "../../utils/wallet"
 
 type ProfileIdRow = {
   id: number
@@ -92,6 +101,20 @@ type OfferRow = {
   requestBorrowerID: number
   requestBorrowerUserId: string
   requestItemNeeded: string
+}
+
+type AcceptedOfferDetailsRow = {
+  id: number
+  status: string
+  requestID: number
+  rentalFee: number
+  availability: boolean
+  requestStatus: string
+  requestedDates: Date[] | string[]
+  borrowerUserId: string
+  lenderUserId: string
+  itemId: string
+  itemStatus: string
 }
 
 type ReplyAuthor = {
@@ -286,6 +309,213 @@ const sqlRequestOfferStatus = (status: RequestOfferStatus) =>
 
 const sqlItemCondition = (condition: string) =>
   Prisma.sql`${Prisma.raw(`'${condition}'::"ItemCondition"`)}`
+
+const normalizeRequestedDateWindow = (requestedDates: Date[] | string[]) => {
+  const dates = requestedDates
+    .map((value) => toDate(value))
+    .filter((value): value is Date => value !== null)
+    .sort((a, b) => a.getTime() - b.getTime())
+
+  const startDate = dates[0]
+  const endDate = dates[dates.length - 1]
+
+  if (!startDate || !endDate) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This request does not have valid requested dates.",
+    })
+  }
+
+  return { startDate, endDate }
+}
+
+const createPendingRentalTransactionForOfferBooking = async (
+  prisma: Pick<Context["prisma"], "rentalTransaction">,
+  booking: {
+    id: string
+    borrowerId: string
+    lenderId: string
+    itemId: string
+    startDate: Date
+    endDate: Date
+    totalFee: number
+    platformCommission: number
+  },
+) => {
+  const rentalFee = Math.max(0, booking.totalFee - booking.platformCommission)
+
+  return await prisma.rentalTransaction.create({
+    data: {
+      bookingId: booking.id,
+      borrowerId: booking.borrowerId,
+      lenderId: booking.lenderId,
+      itemId: booking.itemId,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      rentalFee,
+      platformFee: booking.platformCommission,
+      status: PrismaTransactionStatus.PENDING,
+    },
+  })
+}
+
+const acceptRequestOffer = async (
+  prisma: Context["prisma"],
+  input: { id: number },
+  actorUserId: string,
+) => {
+  return await prisma.$transaction(async (tx) => {
+    const txPrisma = tx as Context["prisma"]
+    const rows = await txPrisma.$queryRaw<AcceptedOfferDetailsRow[]>(Prisma.sql`
+      SELECT
+        o."id",
+        o."status"::text AS "status",
+        o."requestID",
+        o."rentalFee",
+        o."availability",
+        r."status"::text AS "requestStatus",
+        r."requestedDates",
+        rb."userId" AS "borrowerUserId",
+        l."userId" AS "lenderUserId",
+        i."id" AS "itemId",
+        i."status"::text AS "itemStatus"
+      FROM "RequestOffer" o
+      INNER JOIN "ItemRequest" r ON r."id" = o."requestID"
+      INNER JOIN "Borrower" rb ON rb."id" = r."borrowerID"
+      INNER JOIN "Lender" l ON l."id" = o."lenderID"
+      INNER JOIN "Item" i ON i."numericId" = o."itemID"
+      WHERE o."id" = ${input.id}
+      FOR UPDATE OF o, r, i
+    `)
+
+    const offer = rows[0]
+    if (!offer) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
+    }
+
+    if (offer.borrowerUserId !== actorUserId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only the request owner can accept offers.",
+      })
+    }
+
+    const existingBooking = await txPrisma.booking.findUnique({
+      where: { requestOfferId: input.id },
+      select: { id: true },
+    })
+
+    if (offer.status === requestOfferStatusSchema.enum.ACCEPTED && existingBooking) {
+      return existingBooking
+    }
+
+    if (existingBooking) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "A booking already exists for this offer.",
+      })
+    }
+
+    const isPendingAcceptance = offer.status === requestOfferStatusSchema.enum.PENDING
+    const isAcceptedBackfill = offer.status === requestOfferStatusSchema.enum.ACCEPTED
+
+    if (!isPendingAcceptance && !isAcceptedBackfill) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Only pending or accepted offers can be converted into bookings.",
+      })
+    }
+
+    const isRequestStatusAllowed = isAcceptedBackfill
+      ? offer.requestStatus === itemRequestStatusSchema.enum.OPEN ||
+        offer.requestStatus === itemRequestStatusSchema.enum.FULFILLED
+      : offer.requestStatus === itemRequestStatusSchema.enum.OPEN
+
+    if (!isRequestStatusAllowed) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: isAcceptedBackfill
+          ? "This accepted offer cannot be backfilled because the request was cancelled."
+          : "This request is no longer open.",
+      })
+    }
+
+    if (!offer.availability || offer.itemStatus !== "AVAILABLE") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "The offered item is no longer available.",
+      })
+    }
+
+    const { startDate, endDate } = normalizeRequestedDateWindow(offer.requestedDates)
+    const now = new Date()
+    const totalFee = offer.rentalFee
+    const platformCommission = calculatePlatformCommissionAmount(totalFee)
+
+    const booking = await txPrisma.booking.create({
+      data: {
+        borrowerId: offer.borrowerUserId,
+        lenderId: offer.lenderUserId,
+        itemId: offer.itemId,
+        requestOfferId: offer.id,
+        startDate,
+        endDate,
+        totalFee,
+        platformCommission,
+        paymentMethod: PrismaPaymentMethod.WALLET,
+        paymentStatus: PrismaBookingPaymentStatus.PAID,
+        paymentProcessedAt: now,
+        status: PrismaBookingStatus.PENDING,
+        updatedAt: now,
+      },
+      select: {
+        id: true,
+        borrowerId: true,
+        lenderId: true,
+        itemId: true,
+        startDate: true,
+        endDate: true,
+        totalFee: true,
+        platformCommission: true,
+      },
+    })
+
+    if (totalFee > 0) {
+      await payWithWallet(
+        offer.borrowerUserId,
+        totalFee,
+        {
+          relatedEntityType: BOOKING_ENTITY_TYPE,
+          relatedEntityId: booking.id,
+        },
+        tx as Prisma.TransactionClient,
+      )
+    }
+
+    await createPendingRentalTransactionForOfferBooking(txPrisma, booking)
+
+    await txPrisma.requestOffer.update({
+      where: { id: offer.id },
+      data: { status: requestOfferStatusSchema.enum.ACCEPTED },
+    })
+
+    await txPrisma.requestOffer.updateMany({
+      where: {
+        requestID: offer.requestID,
+        id: { not: offer.id },
+        status: requestOfferStatusSchema.enum.PENDING,
+      },
+      data: { status: requestOfferStatusSchema.enum.DECLINED },
+    })
+
+    await txPrisma.itemRequest.update({
+      where: { id: offer.requestID },
+      data: { status: itemRequestStatusSchema.enum.FULFILLED },
+    })
+
+    return { id: booking.id }
+  })
+}
 
 const mapOffer = (offer: OfferRow) => ({
   id: offer.id,
@@ -1444,6 +1674,36 @@ export const communityRouter = router({
             message: "Borrowers can only update the offer status.",
           })
         }
+      }
+
+      if (input.status === requestOfferStatusSchema.enum.ACCEPTED) {
+        if (!isBorrower) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only the request owner can accept offers.",
+          })
+        }
+
+        await acceptRequestOffer(ctx.prisma, { id: input.id }, ctx.user.id)
+
+        const updatedOffers = await fetchOfferRows(ctx.prisma, {
+          offerId: input.id,
+          viewerUserId: ctx.user.id,
+          includeCancelled: true,
+        })
+
+        const offer = updatedOffers[0]
+        if (!offer) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Request offer not found." })
+        }
+
+        await broadcastCommunityFeedEvent(ctx.event, {
+          type: "offer-updated",
+          requestId: existing.requestID,
+          actorUserId: ctx.user.id,
+        })
+
+        return mapOffer(offer)
       }
 
       if (isLender && input.itemID !== undefined) {
