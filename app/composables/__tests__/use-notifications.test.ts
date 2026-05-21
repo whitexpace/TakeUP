@@ -253,7 +253,9 @@ describe("useNotifications", () => {
         notification: {
           ...makeNotification({
             id: "notif-broadcast",
-            body: "A borrower requested your item.",
+            type: "BOOKING_HANDOFF_PROOF_UPLOADED",
+            title: "Handoff proof uploaded",
+            body: "The lender uploaded proof.",
             createdAt: "2026-04-24T10:00:00.000Z",
           }),
           recipientUserId: "recipient-1",
@@ -265,6 +267,7 @@ describe("useNotifications", () => {
     expect(notifications.notifications.value.map((notification) => notification.id)).toEqual([
       "notif-broadcast",
     ])
+    expect(notifications.notifications.value[0]?.type).toBe("BOOKING_HANDOFF_PROOF_UPLOADED")
     expect(fetchMock).not.toHaveBeenCalled()
 
     notifications.stopNotificationRealtime()
