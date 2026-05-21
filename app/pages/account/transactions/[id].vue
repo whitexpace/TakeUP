@@ -1011,16 +1011,16 @@ const handleReviewSubmitted = async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
+  <div class="mx-auto max-w-[1180px] font-geist pb-20 px-4 sm:px-6 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
-    <div class="relative group/tooltip w-fit mb-8">
+    <div class="relative group/tooltip w-fit mb-6 sm:mb-8">
       <NuxtLink
         :to="backToTransactionsPath"
-        class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
+        class="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
       >
         <Icon
           name="ph:caret-left"
-          class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+          class="w-4 h-4 sm:w-5 sm:h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
         />
       </NuxtLink>
       <div class="custom-tooltip">
@@ -1030,25 +1030,25 @@ const handleReviewSubmitted = async () => {
     </div>
 
     <template v-if="pending && !booking">
-      <div class="flex flex-col gap-8 animate-pulse">
+      <div class="flex flex-col gap-6 sm:gap-8 animate-pulse">
         <!-- Header Skeleton -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="space-y-4">
-            <div class="h-10 w-64 bg-noble-black/20 rounded-xl"></div>
-            <div class="h-4 w-40 bg-noble-black/10 rounded-lg"></div>
+            <div class="h-8 sm:h-10 w-48 sm:w-64 bg-noble-black/20 rounded-xl"></div>
+            <div class="h-4 w-32 sm:w-40 bg-noble-black/10 rounded-lg"></div>
           </div>
-          <div class="h-8 w-24 bg-noble-black/10 rounded-full"></div>
+          <div class="h-7 w-20 sm:h-8 sm:w-24 bg-noble-black/10 rounded-full"></div>
         </div>
 
         <!-- Content Grid Skeleton -->
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8">
           <!-- Left Column Skeletons -->
-          <div class="lg:col-span-3 space-y-8">
+          <div class="lg:col-span-3 space-y-6 sm:space-y-8">
             <!-- Item Detail Card Skeleton -->
-            <div class="bg-white border border-cinnamon-ice/10 rounded-[24px] p-6 shadow-sm">
-              <div class="h-6 w-32 bg-noble-black/20 rounded mb-6"></div>
-              <div class="flex gap-6">
-                <div class="w-24 h-24 rounded-xl bg-noble-black/10 shrink-0"></div>
+            <div class="bg-white border border-cinnamon-ice/10 rounded-[24px] p-5 sm:p-6 shadow-sm">
+              <div class="h-5 sm:h-6 w-28 sm:w-32 bg-noble-black/20 rounded mb-6"></div>
+              <div class="flex flex-col sm:flex-row gap-4 sm:gap-6">
+                <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-noble-black/10 shrink-0"></div>
                 <div class="space-y-3 flex-1">
                   <div class="h-5 w-3/4 bg-noble-black/20 rounded"></div>
                   <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
@@ -1058,14 +1058,16 @@ const handleReviewSubmitted = async () => {
             </div>
 
             <!-- Timeline Section Skeleton -->
-            <div class="bg-cream/50 border border-cinnamon-ice/15 rounded-[24px] p-8 h-[400px]">
-              <div class="h-6 w-40 bg-noble-black/20 rounded mb-10"></div>
-              <div class="space-y-8">
-                <div v-for="i in 3" :key="i" class="flex gap-6">
-                  <div class="w-8 h-8 rounded-full bg-noble-black/10 shrink-0"></div>
+            <div
+              class="bg-cream/50 border border-cinnamon-ice/15 rounded-[24px] p-6 sm:p-8 h-[350px] sm:h-[400px]"
+            >
+              <div class="h-5 sm:h-6 w-32 sm:w-40 bg-noble-black/20 rounded mb-8 sm:mb-10"></div>
+              <div class="space-y-6 sm:space-y-8">
+                <div v-for="i in 3" :key="i" class="flex gap-4 sm:gap-6">
+                  <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-noble-black/10 shrink-0"></div>
                   <div class="space-y-2 flex-1 pt-1">
-                    <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
-                    <div class="h-3 w-48 bg-noble-black/10 rounded"></div>
+                    <div class="h-3.5 w-28 sm:h-4 sm:w-32 bg-noble-black/20 rounded"></div>
+                    <div class="h-3 w-40 sm:w-48 bg-noble-black/10 rounded"></div>
                   </div>
                 </div>
               </div>
@@ -1073,37 +1075,41 @@ const handleReviewSubmitted = async () => {
           </div>
 
           <!-- Right Column Skeletons -->
-          <div class="lg:col-span-2 space-y-8">
+          <div class="lg:col-span-2 space-y-6 sm:space-y-8">
             <!-- Payment Summary Skeleton -->
             <div
-              class="bg-white border border-cinnamon-ice/10 rounded-[16px] p-6 shadow-sm space-y-6"
+              class="bg-white border border-cinnamon-ice/10 rounded-[16px] p-5 sm:p-6 shadow-sm space-y-5 sm:space-y-6"
             >
-              <div class="h-5 w-32 bg-noble-black/20 rounded"></div>
-              <div class="space-y-4">
+              <div class="h-4 sm:h-5 w-28 sm:w-32 bg-noble-black/20 rounded"></div>
+              <div class="space-y-3 sm:space-y-4">
                 <div v-for="i in 2" :key="i" class="flex justify-between">
-                  <div class="h-4 w-24 bg-noble-black/10 rounded"></div>
-                  <div class="h-4 w-16 bg-noble-black/10 rounded"></div>
+                  <div class="h-3.5 w-20 sm:h-4 sm:w-24 bg-noble-black/10 rounded"></div>
+                  <div class="h-3.5 w-12 sm:h-4 sm:w-16 bg-noble-black/10 rounded"></div>
                 </div>
-                <div class="pt-5 border-t border-dashed border-gray-100 flex justify-between">
-                  <div class="h-6 w-20 bg-noble-black/20 rounded"></div>
-                  <div class="h-6 w-24 bg-noble-black/20 rounded"></div>
+                <div
+                  class="pt-4 sm:pt-5 border-t border-dashed border-gray-100 flex justify-between"
+                >
+                  <div class="h-5 sm:h-6 w-16 sm:w-20 bg-noble-black/20 rounded"></div>
+                  <div class="h-5 sm:h-6 w-20 sm:w-24 bg-noble-black/20 rounded"></div>
                 </div>
               </div>
             </div>
 
             <!-- Counterpart Info Skeleton -->
             <div
-              class="bg-white border border-cinnamon-ice/10 rounded-[12px] p-5 shadow-sm space-y-4"
+              class="bg-white border border-cinnamon-ice/10 rounded-[12px] p-4 sm:p-5 shadow-sm space-y-4"
             >
-              <div class="h-3 w-16 bg-noble-black/10 rounded mb-4"></div>
-              <div class="flex items-center gap-4">
-                <div class="h-12 w-12 rounded-full bg-noble-black/10 shrink-0"></div>
+              <div class="h-3 w-14 sm:w-16 bg-noble-black/10 rounded mb-4"></div>
+              <div class="flex items-center gap-3 sm:gap-4">
+                <div
+                  class="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-noble-black/10 shrink-0"
+                ></div>
                 <div class="space-y-2 flex-1">
-                  <div class="h-4 w-32 bg-noble-black/20 rounded"></div>
-                  <div class="h-3 w-24 bg-noble-black/10 rounded"></div>
+                  <div class="h-3.5 sm:h-4 w-28 sm:w-32 bg-noble-black/20 rounded"></div>
+                  <div class="h-2.5 sm:h-3 w-20 sm:w-24 bg-noble-black/10 rounded"></div>
                 </div>
               </div>
-              <div class="h-10 w-full bg-noble-black/5 rounded-[10px] mt-2"></div>
+              <div class="h-9 sm:h-10 w-full bg-noble-black/5 rounded-[10px] mt-2"></div>
             </div>
           </div>
         </div>
@@ -1116,15 +1122,17 @@ const handleReviewSubmitted = async () => {
         <div class="space-y-1.5">
           <div class="space-y-2 mb-2">
             <h1
-              class="font-geist text-[36px] font-medium text-noble-black leading-tight tracking-tight"
+              class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black leading-tight tracking-tight"
             >
               Order Details
             </h1>
             <div class="w-10 h-0.5 bg-burning-orange"></div>
           </div>
-          <div class="flex flex-wrap items-center gap-2 text-[13px] text-gray-500 font-medium">
+          <div
+            class="flex flex-wrap items-center gap-2 text-[12px] sm:text-[13px] text-gray-500 font-medium"
+          >
             <div
-              class="flex items-center gap-2 font-mono text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
+              class="flex items-center gap-2 font-mono text-[10px] sm:text-[11px] text-noble-black/40 bg-gray-50 px-2 py-0.5 rounded border border-gray-100"
             >
               <span class="leading-none">ORDER ID. {{ orderIdForDisplay }}</span>
               <button
@@ -1141,7 +1149,7 @@ const handleReviewSubmitted = async () => {
         <div class="shrink-0">
           <span
             v-if="isPendingRequest"
-            class="inline-flex items-center gap-2 rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider"
+            class="inline-flex items-center gap-2 rounded-full bg-burning-orange/[0.08] text-burning-orange border border-burning-orange/20 px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider"
           >
             Requested
           </span>
@@ -1149,49 +1157,54 @@ const handleReviewSubmitted = async () => {
             v-else
             :status="mappedStatus"
             :role="userRole"
-            class="!rounded-full !px-3 !py-1 !text-[11px] !font-bold !uppercase !tracking-wider"
+            class="!rounded-full !px-2.5 !py-1 !text-[10px] sm:!text-[11px] !font-bold !uppercase !tracking-wider"
           />
         </div>
       </div>
 
       <!-- Two-Column Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8 items-start">
         <!-- Left Column (60%) -->
-        <div class="lg:col-span-3 space-y-8">
+        <div class="lg:col-span-3 space-y-6 sm:space-y-8">
           <!-- Section 1: Item Details -->
           <div
-            class="bg-white border border-[#F0EDE8] rounded-[24px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] relative group"
+            class="bg-white border border-[#F0EDE8] rounded-[24px] p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] relative group"
           >
-            <div class="flex items-center justify-between mb-6">
-              <h2 class="text-[18px] font-bold text-noble-black">Item Details</h2>
+            <div class="flex items-center justify-between mb-5 sm:mb-6">
+              <h2 class="text-[16px] sm:text-[18px] font-bold text-noble-black">Item Details</h2>
               <NuxtLink
                 :to="itemDetailPath"
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-burning-orange font-bold text-[13px] hover:bg-burning-orange/5 transition-all"
+                class="inline-flex items-center gap-2 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-burning-orange font-bold text-[12px] sm:text-[13px] hover:bg-burning-orange/5 transition-all"
               >
-                <span class="leading-none">View Full Listing</span>
-                <Icon name="ph:arrow-square-out" class="w-3.5 h-3.5 -translate-y-[0.5px]" />
+                <span class="leading-none">View Listing</span>
+                <Icon
+                  name="ph:arrow-square-out"
+                  class="w-3 h-3 sm:w-3.5 sm:h-3.5 -translate-y-[0.5px]"
+                />
               </NuxtLink>
             </div>
-            <div class="flex flex-col sm:flex-row gap-6">
+            <div class="flex flex-row gap-4 sm:gap-6">
               <div class="shrink-0 relative">
                 <img
                   v-if="booking.item?.thumbnailImage"
                   :src="booking.item.thumbnailImage"
                   :alt="booking.item.name"
-                  class="w-24 h-24 object-cover rounded-[12px] border border-gray-100 shadow-sm"
+                  class="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-[10px] sm:rounded-[12px] border border-gray-100 shadow-sm"
                 />
                 <div
                   v-else
-                  class="w-24 h-24 bg-cinnamon-ice/10 rounded-[12px] border border-gray-100 flex items-center justify-center"
+                  class="w-20 h-20 sm:w-24 sm:h-24 bg-cinnamon-ice/10 rounded-[10px] sm:rounded-[12px] border border-gray-100 flex items-center justify-center"
                 >
-                  <Icon name="ph:image" class="w-8 h-8 text-cinnamon-ice/40" />
+                  <Icon name="ph:image" class="w-7 h-7 sm:w-8 sm:h-8 text-cinnamon-ice/40" />
                 </div>
               </div>
-              <div class="flex flex-col justify-center min-w-0">
-                <h3 class="text-[18px] font-semibold text-noble-black leading-tight mb-1 truncate">
+              <div class="flex flex-col justify-center min-w-0 flex-1">
+                <h3
+                  class="text-[16px] sm:text-[18px] font-semibold text-noble-black leading-tight mb-1 truncate"
+                >
                   {{ booking.item?.name }}
                 </h3>
-                <p class="text-[13px] text-gray-500 font-medium mb-4">
+                <p class="text-[12px] sm:text-[13px] text-gray-500 font-medium mb-3 sm:mb-4">
                   Condition:
                   {{
                     booking.item?.condition
@@ -1201,15 +1214,14 @@ const handleReviewSubmitted = async () => {
                   }}
                 </p>
                 <div
-                  class="flex items-center gap-2.5 text-[12px] font-bold text-gray-600 bg-gray-100 w-fit px-4 py-2 rounded-full border border-gray-200/50 shadow-sm"
+                  class="flex items-center gap-2 text-[11px] sm:text-[12px] font-bold text-gray-600 bg-gray-100 w-fit px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200/50 shadow-sm"
                 >
                   <Icon
                     name="ph:calendar-blank"
-                    class="w-3.5 h-3.5 text-gray-400 -translate-y-[0.5px] shrink-0"
+                    class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400 -translate-y-[0.5px] shrink-0"
                   />
-                  <span class="leading-none"
-                    >{{ formatDateTime(booking.startDate) }} –
-                    {{ formatDateTime(booking.endDate) }}</span
+                  <span class="leading-none truncate max-w-[200px] sm:max-w-none"
+                    >{{ formatDate(booking.startDate) }} – {{ formatDate(booking.endDate) }}</span
                   >
                 </div>
               </div>
@@ -1218,15 +1230,15 @@ const handleReviewSubmitted = async () => {
 
           <!-- Section 2: Order Timeline -->
           <section
-            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-5 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
           >
-            <div class="border-l-[3px] border-burning-orange pl-4 mb-8">
-              <h2 class="text-[20px] font-bold text-noble-black">Order Timeline</h2>
+            <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4 mb-6 sm:mb-8">
+              <h2 class="text-[18px] sm:text-[20px] font-bold text-noble-black">Order Timeline</h2>
             </div>
 
             <div
               v-if="actionSuccessMessage"
-              class="mb-6 flex items-center gap-3 text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-4 rounded-[14px]"
+              class="mb-6 flex items-center gap-3 text-[12px] sm:text-[13px] font-bold text-success-green bg-success-green/5 border border-success-green/10 p-3 sm:p-4 rounded-[14px]"
             >
               <Icon name="ph:check" class="w-[18px] h-[18px] shrink-0 -translate-y-[0.5px]" />
               <span class="leading-none">{{ actionSuccessMessage }}</span>
@@ -1234,7 +1246,7 @@ const handleReviewSubmitted = async () => {
 
             <div
               v-if="actionErrorMessage"
-              class="mb-6 flex items-center gap-3 text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-4 rounded-[14px]"
+              class="mb-6 flex items-center gap-3 text-[12px] sm:text-[13px] font-bold text-cinnabar-red bg-cinnabar-red/5 border border-cinnabar-red/10 p-3 sm:p-4 rounded-[14px]"
             >
               <Icon
                 name="ph:warning-circle"
@@ -1243,16 +1255,16 @@ const handleReviewSubmitted = async () => {
               <span class="leading-none">{{ actionErrorMessage }}</span>
             </div>
 
-            <div class="space-y-0 relative pl-1">
+            <div class="space-y-0 relative pl-0.5 sm:pl-1">
               <div
                 v-for="(step, index) in timeline"
                 :key="index"
-                class="relative flex gap-6 pb-12 last:pb-0"
+                class="relative flex gap-4 sm:gap-6 pb-8 sm:pb-12 last:pb-0"
               >
                 <!-- Timeline Line -->
                 <div
                   v-if="index !== timeline.length - 1"
-                  class="absolute left-[15px] top-8 bottom-0 w-[2px]"
+                  class="absolute left-[11px] sm:left-[15px] top-6 sm:top-8 bottom-0 w-[1.5px] sm:w-[2px]"
                   :class="step.status === 'completed' ? 'bg-success-green/30' : 'bg-gray-100'"
                 ></div>
 
@@ -1260,54 +1272,54 @@ const handleReviewSubmitted = async () => {
                 <div class="relative z-10">
                   <div
                     v-if="step.status === 'completed'"
-                    class="w-8 h-8 rounded-full bg-white border-2 border-success-green flex items-center justify-center shadow-sm"
+                    class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white border-2 border-success-green flex items-center justify-center shadow-sm"
                   >
-                    <Icon name="ph:check" class="w-4 h-4 text-[#22C55E]" />
+                    <Icon name="ph:check" class="w-3 h-3 sm:w-4 sm:h-4 text-[#22C55E]" />
                   </div>
                   <div
                     v-else-if="step.status === 'current'"
-                    class="w-8 h-8 rounded-full bg-white border-2 border-burning-orange flex items-center justify-center shadow-sm"
+                    class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white border-2 border-burning-orange flex items-center justify-center shadow-sm"
                   >
                     <div
-                      class="w-2.5 h-2.5 rounded-full bg-burning-orange shadow-[0_0_8px_rgba(232,101,10,0.4)]"
+                      class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-burning-orange shadow-[0_0_8px_rgba(232,101,10,0.4)]"
                     ></div>
                   </div>
                   <div
                     v-else
-                    class="w-8 h-8 rounded-full bg-white border-2 border-gray-100 flex items-center justify-center"
+                    class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white border-2 border-gray-100 flex items-center justify-center"
                   >
-                    <div class="w-1.5 h-1.5 rounded-full bg-gray-200"></div>
+                    <div class="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-gray-200"></div>
                   </div>
                 </div>
 
                 <!-- Step Content -->
                 <div
-                  class="flex-1 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4"
+                  class="flex-1 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-4 min-w-0"
                 >
                   <div class="min-w-0">
-                    <h4 class="text-[14px] font-bold text-noble-black leading-tight">
+                    <h4 class="text-[13px] sm:text-[14px] font-bold text-noble-black leading-tight">
                       {{ step.label }}
                     </h4>
                     <p
-                      class="mt-1 text-[13px] text-noble-black/45 leading-relaxed max-w-lg font-medium"
+                      class="mt-1 text-[12px] sm:text-[13px] text-noble-black/45 leading-relaxed max-w-lg font-medium"
                     >
                       {{ step.description }}
                     </p>
                     <button
                       v-if="step.proofUrl"
                       type="button"
-                      class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
+                      class="mt-2 inline-flex items-center gap-1.5 text-[11px] sm:text-[12px] font-bold text-blue-estate hover:text-burning-orange transition-colors underline underline-offset-2"
                       @click.stop="proofImageUrl = step.proofUrl"
                     >
                       <Icon
                         name="ph:image"
-                        class="w-[13px] h-[13px] shrink-0 -translate-y-[0.5px]"
+                        class="w-[12px] h-[12px] shrink-0 -translate-y-[0.5px]"
                       />
                       <span class="leading-none">{{ step.proofLabel }}</span>
                     </button>
                   </div>
                   <span
-                    class="text-[11px] font-mono text-noble-black/30 whitespace-nowrap pt-1 uppercase tracking-tighter"
+                    class="text-[9px] sm:text-[11px] font-mono text-noble-black/30 whitespace-nowrap pt-0.5 sm:pt-1 uppercase tracking-tighter"
                   >
                     {{ step.date }}
                   </span>
@@ -1318,12 +1330,14 @@ const handleReviewSubmitted = async () => {
 
           <!-- Section 5: Feedback & Reviews -->
           <section
-            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-5 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
           >
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-              <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[20px] font-bold text-noble-black">Your Reviews</h2>
-                <p class="text-[13px] font-medium text-noble-black/40 mt-0.5">
+            <div
+              class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8"
+            >
+              <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4">
+                <h2 class="text-[18px] sm:text-[20px] font-bold text-noble-black">Your Reviews</h2>
+                <p class="text-[12px] sm:text-[13px] font-medium text-noble-black/40 mt-0.5">
                   Reviews help maintain trust in the TakeUP community.
                 </p>
               </div>
@@ -1332,7 +1346,7 @@ const handleReviewSubmitted = async () => {
                 <button
                   v-for="action in booking.reviewState.actions.filter((entry) => entry.canSubmit)"
                   :key="action.reviewType"
-                  class="bg-burning-orange text-white px-5 py-2 rounded-[12px] text-[13px] font-bold hover:brightness-110 shadow-sm shadow-burning-orange/20 transition-all"
+                  class="bg-burning-orange text-white px-4 py-2 sm:px-5 rounded-[10px] sm:rounded-[12px] text-[12px] sm:text-[13px] font-bold hover:brightness-110 shadow-sm shadow-burning-orange/20 transition-all"
                   @click="openReviewModal(action.reviewType)"
                 >
                   {{ action.label }}
@@ -1349,18 +1363,20 @@ const handleReviewSubmitted = async () => {
             <!-- Review Bonus Section -->
             <div
               v-if="showReviewBonusSection"
-              class="mt-8 rounded-[18px] border border-burning-orange/10 bg-burning-orange/[0.03] p-5 flex items-center justify-between"
+              class="mt-6 sm:mt-8 rounded-[18px] border border-burning-orange/10 bg-burning-orange/[0.03] p-4 sm:p-5 flex items-center justify-between"
             >
-              <div>
-                <p class="text-[14px] font-bold text-noble-black">Reviews Completed</p>
-                <p class="text-[12px] text-noble-black/50 font-medium mt-0.5">
+              <div class="min-w-0">
+                <p class="text-[13px] sm:text-[14px] font-bold text-noble-black">
+                  Reviews Completed
+                </p>
+                <p class="text-[11px] sm:text-[12px] text-noble-black/50 font-medium mt-0.5">
                   Your +5 reward points have been processed.
                 </p>
               </div>
               <div
-                class="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-burning-orange/20 shadow-sm"
+                class="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center border border-burning-orange/20 shadow-sm shrink-0 ml-4"
               >
-                <Icon name="ph:seal-check" class="w-6 h-6 text-burning-orange" />
+                <Icon name="ph:seal-check" class="w-5 h-5 sm:w-6 sm:h-6 text-burning-orange" />
               </div>
             </div>
           </section>
@@ -1368,13 +1384,17 @@ const handleReviewSubmitted = async () => {
           <!-- Section 6: Concerns & Disputes -->
           <section
             v-if="booking.transactionId || latestDispute"
-            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+            class="bg-cream border border-cinnamon-ice/20 rounded-[24px] p-5 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
           >
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
-              <div class="border-l-[3px] border-burning-orange pl-4">
-                <h2 class="text-[20px] font-bold text-noble-black">Concerns & Disputes</h2>
+            <div
+              class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6 sm:mb-8"
+            >
+              <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4">
+                <h2 class="text-[18px] sm:text-[20px] font-bold text-noble-black">
+                  Concerns & Disputes
+                </h2>
                 <p
-                  class="mt-1 text-[13px] font-medium text-noble-black/50 leading-relaxed max-w-sm"
+                  class="mt-1 text-[12px] sm:text-[13px] font-medium text-noble-black/50 leading-relaxed max-w-sm"
                 >
                   {{
                     latestDispute
@@ -1388,7 +1408,7 @@ const handleReviewSubmitted = async () => {
 
               <span
                 v-if="latestDispute"
-                class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider border shadow-sm"
+                class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border shadow-sm w-fit"
                 :class="disputeStatusToneClasses"
               >
                 {{ disputeStatusLabel }}
@@ -1397,41 +1417,41 @@ const handleReviewSubmitted = async () => {
 
             <!-- Empty State Message -->
             <div v-if="!latestDispute" class="mb-4">
-              <p class="text-[14px] text-noble-black/40 italic">
+              <p class="text-[13px] sm:text-[14px] text-noble-black/40 italic">
                 No concerns or disputes have been raised for this transaction yet.
               </p>
             </div>
 
             <!-- Redesigned Dispute Metadata Grid -->
             <div v-if="latestDispute" class="space-y-6">
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-8">
-                <div>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                <div class="min-w-0">
                   <p
-                    class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
+                    class="text-[9px] sm:text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
                   >
                     Reason
                   </p>
-                  <p class="text-[14px] font-semibold text-noble-black">
+                  <p class="text-[13px] sm:text-[14px] font-semibold text-noble-black truncate">
                     {{ latestDispute.reason }}
                   </p>
                 </div>
-                <div>
+                <div class="min-w-0">
                   <p
-                    class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
+                    class="text-[9px] sm:text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
                   >
                     Submitted
                   </p>
-                  <p class="text-[14px] font-semibold text-noble-black">
+                  <p class="text-[13px] sm:text-[14px] font-semibold text-noble-black truncate">
                     {{ formatDate(latestDispute.createdAt) }}
                   </p>
                 </div>
-                <div>
+                <div class="min-w-0">
                   <p
-                    class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
+                    class="text-[9px] sm:text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-1.5"
                   >
                     Raised By
                   </p>
-                  <p class="text-[14px] font-semibold text-noble-black">
+                  <p class="text-[13px] sm:text-[14px] font-semibold text-noble-black truncate">
                     {{ disputeRaisedByName ?? "Participant" }}
                   </p>
                 </div>
@@ -1440,19 +1460,19 @@ const handleReviewSubmitted = async () => {
               <!-- Truncated Description -->
               <div v-if="latestDispute.description" class="relative">
                 <p
-                  class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-2"
+                  class="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/30 mb-2"
                 >
                   Description
                 </p>
                 <div
-                  class="text-[14px] leading-relaxed text-noble-black/70 overflow-hidden transition-all duration-300"
+                  class="text-[13px] sm:text-[14px] leading-relaxed text-noble-black/70 overflow-hidden transition-all duration-300"
                   :class="!isDisputeDescriptionExpanded ? 'max-h-24' : 'max-h-none'"
                 >
                   {{ latestDispute.description }}
                 </div>
                 <button
                   v-if="latestDispute.description.length > 200"
-                  class="mt-2 text-burning-orange text-[13px] font-bold hover:underline"
+                  class="mt-2 text-burning-orange text-[12px] sm:text-[13px] font-bold hover:underline"
                   @click="isDisputeDescriptionExpanded = !isDisputeDescriptionExpanded"
                 >
                   {{ isDisputeDescriptionExpanded ? "Show less" : "Show more" }}
@@ -1462,15 +1482,15 @@ const handleReviewSubmitted = async () => {
               <!-- Decisions -->
               <div
                 v-if="latestDispute.finalDecision"
-                class="rounded-[16px] border border-success-green/20 bg-success-green/[0.04] p-5"
+                class="rounded-[16px] border border-success-green/20 bg-success-green/[0.04] p-4 sm:p-5"
               >
                 <div class="flex items-center gap-2 text-success-green mb-2">
                   <Icon name="ph:check" class="w-[18px] h-[18px]" />
-                  <p class="text-[14px] font-bold">
+                  <p class="text-[13px] sm:text-[14px] font-bold">
                     {{ finalDecisionLabel(latestDispute.finalDecision) }}
                   </p>
                 </div>
-                <p class="text-[12px] font-medium text-noble-black/40">
+                <p class="text-[11px] sm:text-[12px] font-medium text-noble-black/40">
                   Final judgment on {{ formatDate(latestDispute.finalDecisionAt!) }}
                 </p>
                 <p
@@ -1484,27 +1504,27 @@ const handleReviewSubmitted = async () => {
               <!-- Rebuttal Box -->
               <div
                 v-if="latestDispute.hasRebuttal"
-                class="rounded-[12px] border border-gray-100 bg-white p-5 shadow-sm"
+                class="rounded-[12px] border border-gray-100 bg-white p-4 sm:p-5 shadow-sm"
               >
                 <div class="flex items-center justify-between gap-4 mb-3">
-                  <p class="text-[13px] font-bold text-noble-black">
+                  <p class="text-[12px] sm:text-[13px] font-bold text-noble-black">
                     Rebuttal by {{ rebuttalSubmittedByName }}
                   </p>
-                  <span class="text-[11px] font-mono text-noble-black/30">{{
+                  <span class="text-[10px] font-mono text-noble-black/30">{{
                     formatDate(latestDispute.rebuttalSubmittedAt!)
                   }}</span>
                 </div>
-                <p class="text-[13px] text-noble-black/70 leading-relaxed">
+                <p class="text-[12px] sm:text-[13px] text-noble-black/70 leading-relaxed">
                   {{ latestDispute.rebuttalText }}
                 </p>
               </div>
             </div>
 
             <!-- Dispute Actions -->
-            <div class="mt-8 flex flex-wrap gap-3">
+            <div class="mt-6 sm:mt-8 flex flex-wrap gap-3">
               <button
                 v-if="canSubmitRebuttal"
-                class="flex-1 min-w-[160px] h-11 inline-flex items-center justify-center gap-2 rounded-[12px] bg-blue-estate text-white text-[14px] font-bold hover:brightness-110 shadow-sm transition-all"
+                class="flex-1 min-w-[140px] h-10 sm:h-11 inline-flex items-center justify-center gap-2 rounded-[10px] sm:rounded-[12px] bg-blue-estate text-white text-[13px] sm:text-[14px] font-bold hover:brightness-110 shadow-sm transition-all"
                 @click="openRebuttalModal"
               >
                 Submit Rebuttal
@@ -1512,10 +1532,10 @@ const handleReviewSubmitted = async () => {
 
               <button
                 v-if="canRaiseDispute"
-                class="flex-1 min-w-[160px] h-11 inline-flex items-center justify-center gap-2 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[14px] font-bold hover:bg-cinnabar-red hover:text-white transition-all"
+                class="flex-1 min-w-[140px] h-10 sm:h-11 inline-flex items-center justify-center gap-2 rounded-[10px] sm:rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] sm:text-[14px] font-bold hover:bg-cinnabar-red hover:text-white transition-all"
                 @click="handleDispute"
               >
-                <Icon name="ph:warning" class="w-[18px] h-[18px]" />
+                <Icon name="ph:warning" class="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
                 Report Issue
               </button>
             </div>
@@ -1523,12 +1543,14 @@ const handleReviewSubmitted = async () => {
             <!-- Minimal Status Footer Text -->
             <div
               v-if="latestDispute?.status === 'OPEN' || latestDispute?.status === 'SUBMITTED'"
-              class="mt-6 flex items-center justify-center px-4"
+              class="mt-5 sm:mt-6 flex items-center justify-center px-2"
             >
-              <span class="text-[13px] font-bold text-noble-black/40 italic">
+              <span
+                class="text-[12px] sm:text-[13px] font-bold text-noble-black/40 italic text-center"
+              >
                 {{
                   latestDispute.hasRebuttal
-                    ? "Rebuttal submitted. This dispute is still under review."
+                    ? "Rebuttal submitted. Dispute still under review."
                     : disputeStatusDescription
                 }}
               </span>
@@ -1552,14 +1574,14 @@ const handleReviewSubmitted = async () => {
             <div v-if="canRespond" class="grid grid-cols-2 gap-3">
               <button
                 :disabled="isActing"
-                class="h-12 bg-gradient-to-br from-burning-orange to-orange-500 text-white rounded-[12px] font-bold text-[14px] hover:brightness-105 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
+                class="h-11 sm:h-12 bg-gradient-to-br from-burning-orange to-orange-500 text-white rounded-[10px] sm:rounded-[12px] font-bold text-[13px] sm:text-[14px] hover:brightness-105 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
                 @click="respondToBooking('CONFIRMED')"
               >
                 {{ actingStatus === "CONFIRMED" ? "Approving..." : "Approve" }}
               </button>
               <button
                 :disabled="isActing"
-                class="h-12 bg-white border-2 border-burning-orange text-burning-orange rounded-[12px] font-bold text-[14px] hover:bg-burning-orange/5 transition-all disabled:opacity-50"
+                class="h-11 sm:h-12 bg-white border-2 border-burning-orange text-burning-orange rounded-[10px] sm:rounded-[12px] font-bold text-[13px] sm:text-[14px] hover:bg-burning-orange/5 transition-all disabled:opacity-50"
                 @click="respondToBooking('CANCELLED')"
               >
                 {{ actingStatus === "CANCELLED" ? "Declining..." : "Decline" }}
@@ -1569,7 +1591,7 @@ const handleReviewSubmitted = async () => {
             <button
               v-if="canUploadHandoffProof"
               :disabled="isSubmittingHandoffProof"
-              class="w-full h-12 flex items-center justify-center gap-2 bg-blue-estate text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
+              class="w-full h-11 sm:h-12 flex items-center justify-center gap-2 bg-blue-estate text-white rounded-[10px] sm:rounded-[12px] font-bold text-[13px] sm:text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
               @click="handleHandoffProof"
             >
               <Icon
@@ -1583,7 +1605,7 @@ const handleReviewSubmitted = async () => {
             <button
               v-if="canBorrowerReturnItem"
               :disabled="isFetchingPreview"
-              class="w-full h-12 flex items-center justify-center gap-2 bg-burning-orange text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
+              class="w-full h-11 sm:h-12 flex items-center justify-center gap-2 bg-burning-orange text-white rounded-[10px] sm:rounded-[12px] font-bold text-[13px] sm:text-[14px] hover:brightness-110 shadow-lg shadow-burning-orange/20 transition-all disabled:opacity-50"
               @click="isEarlyReturnEligible ? handleEarlyReturn() : handleReturn()"
             >
               <Icon v-if="isFetchingPreview" name="ph:circle-notch" class="animate-spin w-4 h-4" />
@@ -1593,7 +1615,7 @@ const handleReviewSubmitted = async () => {
             <button
               v-if="canConfirmReceipt"
               :disabled="isActing"
-              class="w-full h-12 bg-blue-estate text-white rounded-[12px] font-bold text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
+              class="w-full h-11 sm:h-12 bg-blue-estate text-white rounded-[10px] sm:rounded-[12px] font-bold text-[13px] sm:text-[14px] hover:brightness-110 shadow-lg shadow-blue-estate/20 transition-all disabled:opacity-50"
               @click="confirmReceipt"
             >
               Confirm Item Receipt
@@ -1602,7 +1624,7 @@ const handleReviewSubmitted = async () => {
             <button
               v-if="canCancelRequest"
               :disabled="isActing"
-              class="w-full h-12 bg-white border-2 border-cinnabar-red text-cinnabar-red rounded-[12px] font-bold text-[14px] hover:bg-cinnabar-red/5 transition-all disabled:opacity-50"
+              class="w-full h-11 sm:h-12 bg-white border-2 border-cinnabar-red text-cinnabar-red rounded-[10px] sm:rounded-[12px] font-bold text-[13px] sm:text-[14px] hover:bg-cinnabar-red/5 transition-all disabled:opacity-50"
               @click="cancelRequest"
             >
               Cancel My Request
@@ -1611,17 +1633,19 @@ const handleReviewSubmitted = async () => {
 
           <!-- Section 3: Payment Summary (Receipt Card) -->
           <section
-            class="bg-white border border-[#F0EDE8] rounded-[16px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
+            class="bg-white border border-[#F0EDE8] rounded-[16px] p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
           >
-            <h2 class="text-[16px] font-bold text-noble-black mb-6">Payment Summary</h2>
-            <div class="space-y-4">
-              <div class="flex justify-between items-center text-[14px]">
+            <h2 class="text-[15px] sm:text-[16px] font-bold text-noble-black mb-5 sm:mb-6">
+              Payment Summary
+            </h2>
+            <div class="space-y-3 sm:space-y-4">
+              <div class="flex justify-between items-center text-[13px] sm:text-[14px]">
                 <span class="text-gray-500 font-medium">Rental ({{ duration }})</span>
                 <span class="text-[#111] font-semibold">{{
                   formatPeso(booking.totalFee - booking.platformCommission)
                 }}</span>
               </div>
-              <div class="flex justify-between items-center text-[14px]">
+              <div class="flex justify-between items-center text-[13px] sm:text-[14px]">
                 <span class="text-gray-500 font-medium">Service Fee</span>
                 <span class="text-[#111] font-semibold">{{
                   formatPeso(booking.platformCommission)
@@ -1630,12 +1654,12 @@ const handleReviewSubmitted = async () => {
 
               <div
                 v-if="booking.refundAmount > 0"
-                class="flex justify-between items-center text-[14px]"
+                class="flex justify-between items-center text-[13px] sm:text-[14px]"
               >
-                <div class="flex items-center gap-2">
-                  <span class="text-[#059669] font-bold">Early Return Refund</span>
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                  <span class="text-[#059669] font-bold">Refund</span>
                   <span
-                    class="text-[10px] bg-[#D1FAE5] px-1.5 py-0.5 rounded-full text-[#065F46] font-black uppercase"
+                    class="text-[9px] bg-[#D1FAE5] px-1.5 py-0.5 rounded-full text-[#065F46] font-black uppercase"
                     >PROCESSED</span
                   >
                 </div>
@@ -1646,60 +1670,62 @@ const handleReviewSubmitted = async () => {
 
               <!-- Dashed Separator -->
               <div
-                class="border-t border-dashed border-gray-200 pt-5 mt-2 flex justify-between items-baseline"
+                class="border-t border-dashed border-gray-200 pt-4 sm:pt-5 mt-1 sm:mt-2 flex justify-between items-baseline"
               >
-                <span class="text-[18px] font-bold text-[#111]">Total Paid</span>
-                <span class="text-[20px] font-bold text-burning-orange">
+                <span class="text-[16px] sm:text-[18px] font-bold text-[#111]">Total Paid</span>
+                <span class="text-[18px] sm:text-[20px] font-bold text-burning-orange">
                   {{ formatPeso(booking.totalFee - (booking.refundAmount || 0)) }}
                 </span>
               </div>
 
               <div
                 v-if="booking.status === 'CANCELLED' && booking.paymentStatus === 'REFUNDED'"
-                class="flex justify-between items-center text-[14px] mt-1"
+                class="flex justify-between items-center text-[13px] sm:text-[14px] mt-1"
               >
-                <div class="flex items-center gap-2">
-                  <span class="text-[#059669] font-semibold">Refunded to Wallet</span>
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                  <span class="text-[#059669] font-semibold">Refunded</span>
                   <span
-                    class="text-[10px] bg-[#D1FAE5] px-1.5 py-0.5 rounded-full text-[#065F46] font-black uppercase"
+                    class="text-[9px] bg-[#D1FAE5] px-1.5 py-0.5 rounded-full text-[#065F46] font-black uppercase"
                     >PROCESSED</span
                   >
                 </div>
-                <span class="text-[16px] font-bold text-[#059669]"
+                <span class="text-[14px] sm:text-[16px] font-bold text-[#059669]"
                   >+{{ formatPeso(booking.totalFee) }}</span
                 >
               </div>
             </div>
 
             <!-- TakeUP Secure Guarantee (Slim Style) -->
-            <div class="mt-8 pt-6 border-t border-gray-50">
+            <div class="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-gray-50">
               <div
-                class="bg-blue-estate/[0.03] border border-blue-estate/10 rounded-[12px] p-4 flex gap-3 items-start"
+                class="bg-blue-estate/[0.03] border border-blue-estate/10 rounded-[12px] p-3 sm:p-4 flex gap-3 items-start"
               >
                 <div
                   class="shrink-0 text-blue-estate flex items-center justify-center -translate-y-[0.5px]"
                 >
-                  <Icon name="ph:shield-check" class="w-[18px] h-[18px] shrink-0" />
+                  <Icon name="ph:shield-check" class="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
                 </div>
-                <p class="text-[12px] text-blue-estate font-medium leading-snug">
-                  <span class="font-bold">TakeUP Secure.</span> Funds are held safely until the
-                  transaction is fully complete.
+                <p class="text-[11px] sm:text-[12px] text-blue-estate font-medium leading-snug">
+                  <span class="font-bold">TakeUP Secure.</span> Funds are held safely until
+                  completion.
                 </p>
               </div>
             </div>
           </section>
 
           <!-- Section 4: Counterpart Information -->
-          <section class="bg-white border border-[#F0EDE8] rounded-[12px] p-5 shadow-sm">
-            <p class="text-[11px] font-bold text-noble-black/30 uppercase tracking-[0.1em] mb-4">
+          <section class="bg-white border border-[#F0EDE8] rounded-[12px] p-4 sm:p-5 shadow-sm">
+            <p
+              class="text-[10px] sm:text-[11px] font-bold text-noble-black/30 uppercase tracking-[0.1em] mb-4"
+            >
               {{ isLender ? "Borrower" : "Lender" }}
             </p>
-            <div class="flex flex-col gap-5">
+            <div class="flex flex-col gap-4 sm:gap-5">
               <NuxtLink
                 :to="`/profile/${
                   isLender ? booking.borrower.user.username : booking.lender.user.username
                 }`"
-                class="flex items-center gap-4 min-w-0 group/counterpart"
+                class="flex items-center gap-3 sm:gap-4 min-w-0 group/counterpart"
               >
                 <UserAvatar
                   :user-name="
@@ -1712,12 +1738,12 @@ const handleReviewSubmitted = async () => {
                       ? (booking.borrower.user as any).avatarUrl
                       : (booking.lender.user as any).avatarUrl
                   "
-                  size="lg"
-                  class="shrink-0 ring-4 ring-gray-50 transition-transform group-hover/counterpart:scale-105"
+                  size="md"
+                  class="shrink-0 ring-4 ring-gray-50 transition-transform group-hover/counterpart:scale-105 sm:size-lg"
                 />
                 <div class="min-w-0 flex-1">
                   <h3
-                    class="font-semibold text-noble-black text-[15px] truncate group-hover/counterpart:text-burning-orange transition-colors"
+                    class="font-semibold text-noble-black text-[14px] sm:text-[15px] truncate group-hover/counterpart:text-burning-orange transition-colors"
                   >
                     {{
                       isLender
@@ -1725,18 +1751,21 @@ const handleReviewSubmitted = async () => {
                         : `${booking.lender.user.firstName} ${booking.lender.user.lastName}`
                     }}
                   </h3>
-                  <div class="flex items-center gap-2 mt-1">
+                  <div class="flex items-center gap-2 mt-0.5 sm:mt-1">
                     <div
-                      class="flex items-center gap-0.5 text-burning-orange font-bold text-[13px]"
+                      class="flex items-center gap-0.5 text-burning-orange font-bold text-[12px] sm:text-[13px]"
                     >
                       <span class="leading-none">{{
                         isLender
                           ? booking.borrower.borrowerRating?.toFixed(1) || "5.0"
                           : booking.lender.lenderRating?.toFixed(1) || "5.0"
                       }}</span>
-                      <Icon name="ph:star-fill" class="w-3 h-3 -translate-y-[0.5px]" />
+                      <Icon
+                        name="ph:star-fill"
+                        class="w-2.5 h-2.5 sm:w-3 sm:h-3 -translate-y-[0.5px]"
+                      />
                     </div>
-                    <span class="text-noble-black/30 text-[12px] font-medium"
+                    <span class="text-noble-black/30 text-[11px] sm:text-[12px] font-medium"
                       >•
                       {{ isLender ? booking.borrower._count?.bookings || 0 : 124 }} bookings</span
                     >
@@ -1746,10 +1775,13 @@ const handleReviewSubmitted = async () => {
 
               <button
                 v-if="canOpenChat"
-                class="w-full h-10 flex items-center justify-center gap-2 rounded-[10px] bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.12] font-bold text-[13px] transition-all"
+                class="w-full h-9 sm:h-10 flex items-center justify-center gap-2 rounded-[10px] bg-burning-orange/[0.08] text-burning-orange hover:bg-burning-orange/[0.12] font-bold text-[12px] sm:text-[13px] transition-all"
                 @click="openChat"
               >
-                <Icon name="ph:chat-teardrop-text" class="w-4 h-4 shrink-0 -translate-y-[0.5px]" />
+                <Icon
+                  name="ph:chat-teardrop-text"
+                  class="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 -translate-y-[0.5px]"
+                />
                 <span class="leading-none">Message {{ isLender ? "Borrower" : "Lender" }}</span>
               </button>
             </div>

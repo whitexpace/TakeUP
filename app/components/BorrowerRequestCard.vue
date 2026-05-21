@@ -23,22 +23,13 @@ const detailPath = computed(() => `/account/transactions/${props.request.id}`)
 
 const shortId = computed(() => props.request.id.slice(0, 12).toUpperCase())
 
-const formatDate = (value: Date | string) =>
-  new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-
-const formatTime = (value: Date | string) =>
-  new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+const formatDate = (date: Date | string) =>
+  new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
 const dateRange = computed(() => {
   const start = formatDate(props.request.startDate)
   const end = formatDate(props.request.endDate)
   return start === end ? start : `${start} - ${end}`
-})
-
-const timeRange = computed(() => {
-  const start = formatTime(props.request.startDate)
-  const end = formatTime(props.request.endDate)
-  return `${start} – ${end}`
 })
 
 const computeDuration = (startDate: Date | string, endDate: Date | string): string => {
@@ -102,11 +93,13 @@ const warmOrderDetailsImmediately = () => {
     @mousedown="warmOrderDetailsImmediately"
     @touchstart.passive="warmOrderDetails"
   >
-    <div class="border-b border-[#F3F0EB] bg-white/50 px-5 py-3">
-      <div class="flex items-center justify-between">
-        <span class="text-noble-black text-[14px] font-semibold">{{ lenderName }}</span>
+    <div class="border-b border-[#F3F0EB] bg-white/50 px-3 sm:px-5 py-2 sm:py-3">
+      <div class="flex items-center justify-between gap-3">
+        <span class="text-noble-black text-[13px] sm:text-[14px] font-semibold truncate">{{
+          lenderName
+        }}</span>
         <span
-          class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold font-geist uppercase tracking-[0.1em] shrink-0 border"
+          class="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 border shadow-sm scale-90 origin-right sm:scale-100"
           :class="badgeClass"
         >
           {{ request.requestStatusLabel }}
@@ -114,52 +107,50 @@ const warmOrderDetailsImmediately = () => {
       </div>
     </div>
 
-    <div class="p-5 flex items-center gap-4 relative">
-      <div class="relative shrink-0">
+    <div class="p-3 sm:p-5 flex items-center gap-3 sm:gap-4 relative">
+      <div class="shrink-0">
         <img
           v-if="request.item.thumbnailImage"
           :src="request.item.thumbnailImage"
           :alt="request.item.name"
           loading="lazy"
           decoding="async"
-          class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+          class="w-11 h-11 sm:w-16 sm:h-16 object-cover rounded-lg border border-gray-100"
         />
         <div
           v-else
-          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center shrink-0"
+          class="w-11 h-11 sm:w-16 sm:h-16 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-100 shrink-0"
         >
-          <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40" />
+          <Icon name="ph:image" class="w-5 h-5 text-gray-300" />
         </div>
       </div>
 
       <div class="flex-1 min-w-0">
-        <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+        <h4 class="text-noble-black text-[14px] sm:text-[15px] font-bold truncate leading-tight">
           {{ request.item.name }}
         </h4>
         <div
-          class="flex flex-wrap items-center gap-1.5 text-[10px] text-[#B0B0B0] font-medium leading-none"
+          class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-noble-black/40 font-medium"
         >
-          <span class="font-mono tracking-wider">{{ shortId }}</span>
-          <span class="opacity-50 select-none">·</span>
+          <span class="font-mono text-noble-black/25">{{ shortId }}</span>
+          <span class="hidden xs:inline text-noble-black/10">|</span>
           <span>{{ dateRange }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>{{ timeRange }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>{{ duration }}</span>
+          <span class="hidden sm:inline text-noble-black/10">|</span>
+          <span class="hidden sm:inline">{{ duration }}</span>
         </div>
       </div>
 
-      <div class="shrink-0 z-10 text-right">
-        <div class="flex flex-col items-end">
-          <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
-          <div class="flex items-baseline gap-1.5">
-            <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
-              Total:
-            </span>
-            <span class="text-[16px] font-bold text-burning-orange leading-none">
-              {{ totalLabel }}
-            </span>
-          </div>
+      <div class="shrink-0 text-right">
+        <p class="text-[10px] sm:text-[12px] text-noble-black/30 font-medium leading-none mb-1">
+          {{ rateLabel }}
+        </p>
+        <div class="flex items-center justify-end gap-1">
+          <span class="text-[9px] text-noble-black/20 font-bold uppercase tracking-tight"
+            >Total</span
+          >
+          <p class="text-[14px] sm:text-[16px] font-extrabold text-burning-orange leading-none">
+            {{ totalLabel }}
+          </p>
         </div>
       </div>
     </div>

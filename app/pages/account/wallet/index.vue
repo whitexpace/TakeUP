@@ -21,7 +21,7 @@ const {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px] lg:px-16 xl:px-24 pb-10">
+  <div class="mx-auto max-w-[1100px] px-4 sm:px-6 lg:px-16 xl:px-24 pb-10">
     <WalletOverviewSkeleton v-if="isInitialLoading" />
 
     <WalletOverview

@@ -11,18 +11,21 @@
       </section>
     </header>
 
-    <!-- Points Hero Banner Skeleton -->
+    <!-- Points Hero Banner Skeleton (Cream Style) -->
     <section
-      class="w-full rounded-[32px] border border-cinnamon-ice/15 bg-cream/50 p-8 sm:p-12 mb-12 flex flex-col sm:flex-row items-center justify-between gap-10"
+      class="w-full rounded-[32px] border border-cinnamon-ice/15 bg-cream/50 p-8 sm:p-12 mb-12 flex flex-row items-center justify-between gap-4 sm:gap-10"
     >
-      <div class="text-center sm:text-left space-y-4">
-        <div class="h-16 w-32 bg-noble-black/20 rounded-xl mx-auto sm:mx-0"></div>
-        <div class="h-4 w-40 bg-noble-black/10 rounded mx-auto sm:mx-0"></div>
+      <div class="text-left space-y-3">
+        <div class="h-12 sm:h-16 w-24 sm:w-32 bg-noble-black/20 rounded-xl"></div>
+        <div class="h-3 sm:h-4 w-28 sm:w-40 bg-noble-black/10 rounded"></div>
       </div>
       <div
-        class="w-32 h-32 rounded-full border-8 border-noble-black/5 flex items-center justify-center"
+        class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-[6px] sm:border-8 border-noble-black/5 flex items-center justify-center shrink-0"
       >
-        <div class="h-4 w-12 bg-noble-black/10 rounded"></div>
+        <div class="flex flex-col items-center gap-1">
+          <div class="h-2 w-8 bg-noble-black/5 rounded"></div>
+          <div class="h-4 w-12 bg-noble-black/10 rounded"></div>
+        </div>
       </div>
     </section>
 

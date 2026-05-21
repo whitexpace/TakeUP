@@ -446,16 +446,21 @@ onBeforeUnmount(() => {
 <template>
   <TransactionHistorySkeleton v-if="isInitialLoading" />
 
-  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <div
+    v-else
+    class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist px-4 sm:px-6 lg:px-16 xl:px-24"
+  >
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+          <h1
+            class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black tracking-tight leading-tight"
+          >
             My Transactions
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-light text-noble-black/50">
+        <p class="text-[14px] sm:text-[16px] font-light text-noble-black/50">
           Review your borrowing and lending history
         </p>
       </section>
@@ -463,34 +468,36 @@ onBeforeUnmount(() => {
 
     <!-- Search bar -->
     <div
-      class="flex items-center gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-12 px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
+      class="flex items-center gap-2 sm:gap-3 bg-white rounded-[12px] border-[1.5px] border-gray-200 h-11 sm:h-12 px-4 sm:px-5 mb-2 transition-all focus-within:border-burning-orange focus-within:shadow-[0_0_0_3px_rgba(232,101,10,0.05)]"
     >
       <button
         v-if="searchQuery"
         type="button"
-        class="flex h-10 w-10 items-center justify-center -ml-2.5 text-noble-black/30 hover:text-burning-orange transition-colors"
+        class="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center -ml-2 sm:-ml-2.5 text-noble-black/30 hover:text-burning-orange transition-colors"
         title="Clear search"
         @click="searchQuery = ''"
       >
-        <Icon name="ph:x" class="w-5 h-5" />
+        <Icon name="ph:x" class="w-4 h-4 sm:w-5 sm:h-5" />
       </button>
       <Icon
         v-else
         name="ph:magnifying-glass"
-        class="w-5 h-5 text-gray-400 shrink-0 transition-colors"
+        class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 shrink-0 transition-colors"
       />
       <input
         v-model="searchQuery"
         type="text"
         placeholder="Search transactions..."
-        class="flex-1 bg-transparent outline-none text-noble-black text-[15px] font-medium placeholder:text-gray-400 min-w-0"
+        class="flex-1 bg-transparent outline-none text-noble-black text-[14px] sm:text-[15px] font-medium placeholder:text-gray-400 min-w-0"
       />
     </div>
 
     <!-- Tab bar -->
-    <div class="flex items-center border-b border-cinnamon-ice/20 gap-8 px-2 mb-4">
+    <div
+      class="flex items-center border-b border-cinnamon-ice/20 gap-6 sm:gap-8 px-2 mb-4 overflow-x-auto no-scrollbar"
+    >
       <button
-        class="pb-4 text-[18px] font-semibold transition-all relative"
+        class="pb-3 sm:pb-4 text-[16px] sm:text-[18px] font-semibold transition-all relative whitespace-nowrap"
         :class="
           activeRole === 'BORROWER'
             ? 'text-burning-orange'
@@ -509,7 +516,7 @@ onBeforeUnmount(() => {
       </button>
 
       <button
-        class="pb-4 text-[18px] font-semibold transition-all relative"
+        class="pb-3 sm:pb-4 text-[16px] sm:text-[18px] font-semibold transition-all relative whitespace-nowrap"
         :class="
           activeRole === 'LENDER'
             ? 'text-burning-orange'
@@ -530,16 +537,16 @@ onBeforeUnmount(() => {
 
     <!-- Content panel -->
     <div
-      class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+      class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-5 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
     >
       <!-- Action & Filter Row -->
-      <div class="flex items-center mb-8">
+      <div class="flex items-center mb-6 sm:mb-8">
         <!-- Status filter chips -->
         <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           <button
             v-for="chip in statusChips"
             :key="chip.label"
-            class="px-[14px] py-1.5 rounded-full text-[13px] font-bold transition-all duration-200 shrink-0 border-[1.5px]"
+            class="px-3 sm:px-[14px] py-1.5 rounded-full text-[12px] sm:text-[13px] font-bold transition-all duration-200 shrink-0 border-[1.5px]"
             :class="
               activeStatus === chip.value
                 ? 'bg-burning-orange/[0.12] border-burning-orange/30 text-burning-orange'
@@ -555,12 +562,14 @@ onBeforeUnmount(() => {
       <!-- Error state -->
       <div
         v-if="hasInitialError"
-        class="flex flex-col items-center justify-center py-12 sm:py-16 text-center"
+        class="flex flex-col items-center justify-center py-10 sm:py-16 text-center"
       >
         <Icon name="ph:warning-circle" class="w-10 h-10 sm:w-12 sm:h-12 text-cinnamon-ice mb-4" />
-        <p class="text-noble-black/50 text-base mb-6 font-medium">{{ combinedError }}</p>
+        <p class="text-noble-black/50 text-sm sm:text-base mb-6 font-medium px-4">
+          {{ combinedError }}
+        </p>
         <button
-          class="bg-burning-orange text-white rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:brightness-110 transition-all shadow-lg shadow-burning-orange/20"
+          class="bg-burning-orange text-white rounded-[12px] px-8 py-2.5 text-[14px] sm:text-[15px] font-bold hover:brightness-110 transition-all shadow-lg shadow-burning-orange/20"
           @click="refreshAll"
         >
           Retry
@@ -570,34 +579,42 @@ onBeforeUnmount(() => {
       <!-- Empty state -->
       <div
         v-else-if="hasEmptyState"
-        class="flex flex-col items-center justify-center py-16 sm:py-20 text-center"
+        class="flex flex-col items-center justify-center py-12 sm:py-20 text-center"
       >
         <div
-          class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
+          class="w-16 h-16 sm:w-20 sm:h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-5 sm:mb-6 text-cinnamon-ice/40"
         >
-          <Icon name="ph:files" class="w-10 h-10" />
+          <Icon name="ph:files" class="w-8 h-8 sm:w-10 sm:h-10" />
         </div>
-        <p class="text-noble-black text-[18px] font-bold mb-1">{{ emptyTitle }}</p>
-        <p class="text-noble-black/40 text-[14px] font-medium max-w-xs">{{ emptySubtitle }}</p>
+        <p class="text-noble-black text-[16px] sm:text-[18px] font-bold mb-1">{{ emptyTitle }}</p>
+        <p class="text-noble-black/40 text-[13px] sm:text-[14px] font-medium max-w-xs px-4">
+          {{ emptySubtitle }}
+        </p>
       </div>
 
       <!-- Transaction list (Grouped & Internal Scroll) -->
       <div
         v-else
-        class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-10"
+        class="max-h-[600px] overflow-y-auto pr-3 sm:pr-4 -mr-3 sm:-mr-4 custom-scrollbar space-y-8 sm:space-y-10"
         @scroll.passive="loadMoreIfNearBottom"
       >
-        <div v-for="group in groupedHistoryEntries" :key="group.title" class="space-y-5">
-          <div class="flex items-center gap-4 px-2 sticky top-0 bg-cream z-20 py-2">
+        <div
+          v-for="group in groupedHistoryEntries"
+          :key="group.title"
+          class="space-y-4 sm:space-y-5"
+        >
+          <div
+            class="flex items-center gap-3 sm:gap-4 px-1 sm:px-2 sticky top-0 bg-cream z-20 py-2"
+          >
             <span
-              class="text-[12px] font-bold text-noble-black/30 uppercase tracking-[0.2em] shrink-0"
+              class="text-[10px] sm:text-[12px] font-bold text-noble-black/30 uppercase tracking-[0.15em] sm:tracking-[0.2em] shrink-0"
             >
               {{ group.title }}
             </span>
             <div class="h-[1px] w-full bg-cinnamon-ice/10"></div>
           </div>
 
-          <div class="flex flex-col gap-4">
+          <div class="flex flex-col gap-3 sm:gap-4">
             <template v-for="entry in group.entries" :key="`${entry.kind}-${entry.id}`">
               <BorrowerRequestCard v-if="entry.kind === 'request'" :request="entry.request" />
               <LenderRequestCard
@@ -619,11 +636,11 @@ onBeforeUnmount(() => {
       <!-- Load More -->
       <div
         v-if="hasMore || (isLoading && visibleTransactions.length > 0)"
-        class="flex justify-center mt-8 sm:mt-10"
+        class="flex justify-center mt-6 sm:mt-10"
       >
         <button
           :disabled="isLoading"
-          class="bg-white border-[1.5px] border-burning-orange text-burning-orange rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:bg-burning-orange/5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          class="bg-white border-[1.5px] border-burning-orange text-burning-orange rounded-[12px] px-6 sm:px-8 py-2 sm:py-2.5 text-[14px] sm:text-[15px] font-bold hover:bg-burning-orange/5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           @click="loadMore"
         >
           <span v-if="isLoading" class="flex items-center gap-2">

@@ -126,6 +126,7 @@ onUnmounted(() => {
   <div class="flex h-screen flex-col overflow-hidden bg-white font-geist relative">
     <Header
       scroll-container-selector=".custom-admin-main-scrollbar"
+      :show-nav="!(isMobile && isSidebarOpen)"
       @visibility-change="(visible) => (isHeaderVisible = visible)"
     >
       <template #left>

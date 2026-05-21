@@ -489,17 +489,22 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 <template>
   <PersonalAccountPageSkeleton v-if="!isHydrated || isAuthDataPending" />
 
-  <div v-else class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist lg:px-16 xl:px-24">
+  <div
+    v-else
+    class="mx-auto max-w-[1100px] space-y-6 pb-10 font-geist px-4 sm:px-6 lg:px-16 xl:px-24"
+  >
     <!-- Main Content Area -->
     <template v-if="authData">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+          <h1
+            class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black tracking-tight leading-tight"
+          >
             Account Information
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-light text-noble-black/50">
+        <p class="text-[14px] sm:text-[16px] font-light text-noble-black/50">
           Manage your personal details and account settings.
         </p>
       </section>
@@ -509,27 +514,31 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
         class="overflow-hidden rounded-[24px] border border-cinnamon-ice/20 bg-cream shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
       >
         <div
-          class="relative px-5 py-5 bg-gradient-to-br from-cream/95 to-cream/80 backdrop-blur-md border-b border-cinnamon-ice/10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          class="relative px-4 py-3 sm:px-6 sm:py-4 bg-gradient-to-br from-cream/95 to-cream/80 backdrop-blur-md border-b border-cinnamon-ice/10 flex flex-row items-center justify-between"
         >
-          <div class="border-l-[3px] border-burning-orange pl-4">
-            <h2 class="text-[20px] font-semibold text-noble-black">Profile</h2>
-            <p class="mt-0.5 text-[13px] font-light text-noble-black/50">
+          <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4">
+            <h2 class="text-[16px] sm:text-[20px] font-semibold text-noble-black">Profile</h2>
+            <p
+              class="mt-0.5 hidden xs:block text-[12px] sm:text-[13px] font-light text-noble-black/50"
+            >
               Your personal information and profile picture
             </p>
           </div>
           <button
             type="button"
-            class="inline-flex h-10 items-center justify-center rounded-[12px] bg-burning-orange px-6 text-[14px] font-semibold text-white transition hover:brightness-95 shadow-sm shadow-burning-orange/20"
+            class="inline-flex h-9 sm:h-10 items-center justify-center rounded-[10px] sm:rounded-[12px] bg-burning-orange px-4 sm:px-6 text-[13px] sm:text-[14px] font-semibold text-white transition hover:brightness-95 shadow-sm shadow-burning-orange/20"
             @click="openEditProfileModal"
           >
             Edit Profile
           </button>
         </div>
 
-        <div class="px-5 py-6 sm:px-6">
-          <div class="flex min-w-0 items-center gap-5 sm:gap-8">
+        <div class="px-4 py-4 sm:px-6 sm:py-6">
+          <div class="flex flex-row items-center gap-4 sm:gap-8 text-left">
             <div class="relative group shrink-0">
-              <div class="relative w-[72px] h-[72px] flex items-center justify-center rounded-full">
+              <div
+                class="relative w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] flex items-center justify-center rounded-full"
+              >
                 <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 72 72">
                   <circle
                     cx="36"
@@ -568,7 +577,7 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   />
                 </svg>
                 <div
-                  class="w-[64px] h-[64px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
+                  class="w-[56px] h-[56px] sm:w-[64px] sm:h-[64px] rounded-full overflow-hidden shadow-sm transition-transform duration-300 group-hover:scale-105 z-10"
                 >
                   <img
                     v-if="profileDetails.avatarUrl"
@@ -579,25 +588,23 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
                   />
                   <div
                     v-else
-                    class="w-full h-full flex items-center justify-center text-white font-bold text-2xl bg-burning-orange"
+                    class="w-full h-full flex items-center justify-center text-white font-bold text-xl sm:text-2xl bg-burning-orange"
                   >
                     {{ profileInitial }}
                   </div>
                 </div>
               </div>
             </div>
-            <div class="min-w-0 flex-1 pt-1">
-              <h3 class="truncate text-[22px] font-semibold text-noble-black">
+            <div class="min-w-0 flex-1">
+              <h3 class="truncate text-[18px] sm:text-[22px] font-semibold text-noble-black">
                 {{ profileDetails.fullName }}
               </h3>
               <div
-                class="mt-3 flex flex-wrap items-center gap-x-2 text-[14px] font-medium text-noble-black/45"
+                class="mt-1 flex flex-row flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] sm:text-[14px] font-medium text-noble-black/45"
               >
-                <span class="truncate">{{ profileDetails.email }}</span>
-                <span class="select-none text-noble-black/20">·</span>
-                <span class="truncate">{{ profileDetails.location }}</span>
-                <span class="select-none text-noble-black/20">·</span>
-                <span>Joined {{ profileDetails.memberSince ?? "N/A" }}</span>
+                <span class="truncate max-w-full">{{ profileDetails.email }}</span>
+                <span class="truncate max-w-full">{{ profileDetails.location }}</span>
+                <span class="shrink-0">Joined {{ profileDetails.memberSince ?? "N/A" }}</span>
               </div>
             </div>
           </div>
@@ -606,44 +613,48 @@ function getDeletionEligibilityPayload(error: unknown): AccountDeletionEligibili
 
       <!-- Danger Zone Card -->
       <section
-        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-5 py-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6"
+        class="rounded-[24px] border border-cinnamon-ice/20 bg-cream px-4 py-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 sm:px-6 sm:py-6"
       >
-        <div class="border-l-[3px] border-burning-orange pl-4">
-          <h2 class="text-[20px] font-semibold text-noble-black">Danger Zone</h2>
-          <p class="text-[13px] font-light text-noble-black/50">
+        <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4">
+          <h2 class="text-[18px] sm:text-[20px] font-semibold text-noble-black">Danger Zone</h2>
+          <p class="text-[12px] sm:text-[13px] font-light text-noble-black/50">
             Irreversible actions related to your account security and data.
           </p>
         </div>
-        <div class="mt-8 space-y-4 border-t border-cinnamon-ice/10 pt-6">
+        <div class="mt-6 sm:mt-8 space-y-4 border-t border-cinnamon-ice/10 pt-5 sm:pt-6">
           <div
-            class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
+            class="flex flex-col gap-4 xs:flex-row xs:items-center xs:justify-between bg-white/40 rounded-[20px] p-4 sm:p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-medium text-noble-black">Deactivate Account</h3>
-              <p class="text-[13px] font-light text-noble-black/50">
+              <h3 class="text-[15px] sm:text-[16px] font-medium text-noble-black">
+                Deactivate Account
+              </h3>
+              <p class="text-[11px] sm:text-[13px] font-light text-noble-black/50">
                 Hide your profile and listings until you sign in again. Your data remains safe.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-semibold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
+              class="w-full xs:w-auto h-9 sm:h-10 px-6 rounded-[10px] sm:rounded-[12px] border-2 border-cinnabar-red text-cinnabar-red text-[13px] font-semibold hover:bg-cinnabar-red hover:text-white transition-all duration-300"
               @click="openDeactivateAccountModal"
             >
               Deactivate
             </button>
           </div>
           <div
-            class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white/40 rounded-[20px] p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
+            class="flex flex-col gap-4 xs:flex-row xs:items-center xs:justify-between bg-white/40 rounded-[20px] p-4 sm:p-5 border border-cinnamon-ice/5 transition-all duration-300 hover:bg-white/60"
           >
             <div class="max-w-md space-y-1">
-              <h3 class="text-[16px] font-medium text-noble-black">Delete Account</h3>
-              <p class="text-[13px] font-light text-noble-black/50">
+              <h3 class="text-[15px] sm:text-[16px] font-medium text-noble-black">
+                Delete Account
+              </h3>
+              <p class="text-[11px] sm:text-[13px] font-light text-noble-black/50">
                 Permanently erase your account, active listings, and all personal data from TakeUP.
               </p>
             </div>
             <button
               type="button"
-              class="h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-semibold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
+              class="w-full xs:w-auto h-9 sm:h-10 px-6 rounded-[10px] sm:rounded-[12px] bg-cinnabar-red text-white text-[13px] font-semibold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
               @click="openDeleteAccountModal"
             >
               Delete

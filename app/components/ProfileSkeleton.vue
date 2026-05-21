@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-white font-geist pt-16 animate-pulse">
-    <div class="max-w-[1200px] mx-auto py-6 flex flex-col gap-6 px-4 sm:px-0">
+    <div class="max-w-[1200px] mx-auto py-6 flex flex-col gap-6 px-4 sm:px-6 lg:px-0">
       <!-- TOP HERO SECTION SKELETON -->
       <header class="profile-hero shadow-xl">
         <div class="absolute inset-0 z-0 bg-noble-black/10"></div>
@@ -64,7 +64,7 @@
           </div>
         </div>
 
-        <div class="flex flex-col lg:flex-row gap-8">
+        <div class="flex flex-col-reverse lg:flex-row gap-8">
           <!-- Left Column Skeleton -->
           <div class="lg:w-[65%] space-y-8">
             <!-- Filter Pills Skeleton -->
