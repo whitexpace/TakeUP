@@ -1229,7 +1229,8 @@ const handleReviewSubmitted = async () => {
                     class="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400 -translate-y-[0.5px] shrink-0"
                   />
                   <span class="leading-none truncate max-w-[200px] sm:max-w-none"
-                    >{{ formatDateTime(booking.startDate) }} – {{ formatDateTime(booking.endDate) }}</span
+                    >{{ formatDateTime(booking.startDate) }} –
+                    {{ formatDateTime(booking.endDate) }}</span
                   >
                 </div>
               </div>
