@@ -30,8 +30,22 @@ const statusChips = [
   { label: "Completed", value: "COMPLETED" },
 ] satisfies Array<{ label: string; value: BookingStatus }>
 
-const formatUserName = (user: { firstName: string; middleName: string | null; lastName: string }) =>
-  `${user.firstName} ${user.lastName}`
+const formatUserName = (user: {
+  firstName: string
+  middleName: string | null
+  lastName: string
+  username?: string
+}) => {
+  const first = (user.firstName || "").trim()
+  const last = (user.lastName || "").trim()
+  const username = (user.username || "").trim()
+  const isPlaceholder =
+    (username && first.toLowerCase() === username.toLowerCase() && last.toLowerCase() === "user") ||
+    (!username && last.toLowerCase() === "user")
+
+  if (isPlaceholder) return first || username || "User"
+  return [first, user.middleName, last].filter(Boolean).join(" ").trim()
+}
 
 const formatDateTime = (value: string | Date) =>
   new Date(value).toLocaleString("en-US", {
@@ -120,16 +134,16 @@ const handleBookingDecision = async (
 <template>
   <BookingRequestsSkeleton v-if="isLoading && filteredBookings.length === 0" />
 
-  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 lg:px-16 xl:px-24">
+  <div v-else class="mx-auto max-w-[1180px] font-geist pb-20 px-4 sm:px-6 lg:px-16 xl:px-24">
     <!-- Header with Back Button -->
-    <div class="relative group/tooltip w-fit mb-8">
+    <div class="relative group/tooltip w-fit mb-6 sm:mb-8">
       <NuxtLink
         to="/account/listings"
-        class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
+        class="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
       >
         <Icon
           name="ph:caret-left"
-          class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+          class="w-4 h-4 sm:w-5 sm:h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
         />
       </NuxtLink>
       <div class="custom-tooltip">
@@ -138,13 +152,17 @@ const handleBookingDecision = async (
       </div>
     </div>
 
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8 sm:mb-10">
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black">{{ pageTitle }}</h1>
+          <h1
+            class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black tracking-tight leading-tight"
+          >
+            {{ pageTitle }}
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-light text-noble-black/50">
+        <p class="text-[14px] sm:text-[16px] font-light text-noble-black/50">
           {{ pageSubtitle }}
         </p>
       </section>
@@ -152,23 +170,23 @@ const handleBookingDecision = async (
 
     <!-- Content Panel -->
     <div
-      class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
+      class="bg-cream rounded-[24px] border border-cinnamon-ice/20 p-5 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300"
     >
-      <div class="border-l-[3px] border-burning-orange pl-4 mb-6">
-        <h2 class="text-[20px] font-semibold text-noble-black">Requests</h2>
-        <p class="text-[13px] font-light text-noble-black/50">
+      <div class="border-l-[3px] border-burning-orange pl-3 sm:pl-4 mb-6 sm:mb-8">
+        <h2 class="text-[18px] sm:text-[20px] font-semibold text-noble-black">Requests</h2>
+        <p class="text-[12px] sm:text-[13px] font-light text-noble-black/50 mt-0.5">
           Manage your incoming booking requests
         </p>
       </div>
 
       <!-- Action & Filter Row -->
-      <div class="flex items-center mb-8">
+      <div class="flex items-center mb-6 sm:mb-8">
         <!-- Status filter chips -->
         <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           <button
             v-for="status in statusChips"
             :key="status.value"
-            class="px-[14px] py-1.5 rounded-full text-[13px] font-bold transition-all duration-200 shrink-0 border-[1.5px]"
+            class="px-3 sm:px-[14px] py-1.5 rounded-full text-[12px] sm:text-[13px] font-bold transition-all duration-200 shrink-0 border-[1.5px]"
             :class="
               activeStatus === status.value
                 ? 'bg-burning-orange/[0.12] border-burning-orange/30 text-burning-orange'
@@ -184,21 +202,26 @@ const handleBookingDecision = async (
       <!-- Empty state -->
       <div
         v-if="filteredBookings.length === 0"
-        class="flex flex-col items-center justify-center py-16 sm:py-20 text-center"
+        class="flex flex-col items-center justify-center py-12 sm:py-20 text-center"
       >
         <div
-          class="w-20 h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-6 text-cinnamon-ice/40"
+          class="w-16 h-16 sm:w-20 sm:h-20 bg-cinnamon-ice/10 rounded-full flex items-center justify-center mb-5 sm:mb-6 text-cinnamon-ice/40"
         >
-          <Icon name="ph:layout" class="w-10 h-10" />
+          <Icon name="ph:layout" class="w-8 h-8 sm:w-10 sm:h-10" />
         </div>
-        <p class="text-noble-black text-[18px] font-semibold mb-1">No booking requests found</p>
-        <p class="text-noble-black/40 text-[14px] font-light max-w-xs">
+        <p class="text-noble-black text-[16px] sm:text-[18px] font-semibold mb-1">
+          No booking requests found
+        </p>
+        <p class="text-noble-black/40 text-[13px] sm:text-[14px] font-light max-w-[280px] px-4">
           Requests for your listings will appear here when borrowers submit them.
         </p>
       </div>
 
       <!-- Transaction list (Grouped & Internal Scroll) -->
-      <div v-else class="max-h-[600px] overflow-y-auto pr-4 -mr-4 custom-scrollbar space-y-4">
+      <div
+        v-else
+        class="max-h-[600px] overflow-y-auto pr-3 sm:pr-4 -mr-3 sm:-mr-4 custom-scrollbar space-y-4"
+      >
         <article
           v-for="booking in filteredBookings"
           :key="booking.id"
@@ -206,17 +229,19 @@ const handleBookingDecision = async (
         >
           <!-- Top Zone: Slim Header -->
           <div
-            class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
+            class="flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 border-b border-cinnamon-ice/15 bg-white/50"
           >
             <div class="flex items-center gap-3">
-              <span class="text-noble-black text-[14px] font-semibold">
+              <span
+                class="text-noble-black text-[13px] sm:text-[14px] font-semibold truncate max-w-[150px] sm:max-w-none"
+              >
                 {{ formatUserName(booking.borrower.user) }}
               </span>
             </div>
 
             <!-- Status Badge -->
             <span
-              class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border"
+              class="inline-flex items-center rounded-full px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 border shadow-sm scale-90 origin-right sm:scale-100"
               :class="statusBadgeClass(booking.status)"
             >
               {{ booking.status }}
@@ -224,80 +249,80 @@ const handleBookingDecision = async (
           </div>
 
           <!-- Bottom Zone: Item Row -->
-          <div class="p-5 flex items-center gap-4 relative">
+          <div class="p-4 sm:p-5 flex items-center gap-3 sm:gap-4 relative">
             <!-- Thumbnail -->
             <div class="relative shrink-0">
               <img
                 v-if="booking.item.thumbnailImage"
                 :src="booking.item.thumbnailImage"
-                class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+                class="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded-[8px] sm:rounded-[10px] border border-gray-100"
               />
               <div
                 v-else
-                class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
+                class="w-12 h-12 sm:w-16 sm:h-16 bg-cinnamon-ice/10 rounded-[8px] sm:rounded-[10px] border border-gray-100 flex items-center justify-center"
               >
-                <Icon name="ph:image" class="w-6 h-6 text-cinnamon-ice/40" />
+                <Icon name="ph:image" class="w-5 h-5 sm:w-6 sm:h-6 text-cinnamon-ice/40" />
               </div>
             </div>
 
             <!-- Item Details -->
             <div class="flex-1 min-w-0">
-              <h4 class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1">
+              <h4
+                class="text-noble-black text-[14px] sm:text-[15px] font-bold truncate leading-tight mb-1"
+              >
                 {{ booking.item.name }}
               </h4>
               <div
-                class="flex items-center gap-1.5 text-[10px] text-gray-400 font-medium leading-none"
+                class="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px] text-gray-400 font-medium leading-none"
               >
-                <span class="font-mono tracking-wider">{{
+                <span class="font-mono tracking-wider hidden xs:inline">{{
                   booking.id.slice(0, 12).toUpperCase()
                 }}</span>
-                <span class="opacity-50 select-none">·</span>
-                <span
-                  >{{ formatDateTime(booking.startDate) }} to
-                  {{ formatDateTime(booking.endDate) }}</span
+                <span class="opacity-50 select-none hidden xs:inline">·</span>
+                <span class="truncate max-w-[180px] sm:max-w-none"
+                  >{{ formatDateTime(booking.startDate).split(",")[0] }} to
+                  {{ formatDateTime(booking.endDate).split(",")[0] }}</span
                 >
               </div>
 
               <!-- Inline Review Actions / Accept/Decline -->
-              <div
-                v-if="booking.status === 'PENDING'"
-                class="mt-3 flex flex-wrap gap-2 relative z-10"
-              >
+              <div v-if="booking.status === 'PENDING'" class="mt-2.5 flex gap-2 relative z-10">
                 <button
-                  class="px-4 py-1.5 rounded-[8px] bg-white border border-burning-orange text-[12px] font-bold text-burning-orange hover:bg-burning-orange/5 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="px-3 py-1 rounded-lg bg-white border border-burning-orange text-[11px] font-bold text-burning-orange hover:bg-burning-orange/5 transition-all active:scale-95 disabled:opacity-50"
                   :disabled="actingBookingId === booking.id"
                   @click.stop="handleBookingDecision(booking.id, 'CANCELLED')"
                 >
                   {{
                     actingBookingId === booking.id && actingStatus === "CANCELLED"
-                      ? "Declining..."
+                      ? "..."
                       : "Decline"
                   }}
                 </button>
                 <button
-                  class="px-4 py-1.5 rounded-[8px] bg-burning-orange text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-burning-orange/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="px-3 py-1 rounded-lg bg-burning-orange text-white text-[11px] font-bold hover:brightness-110 shadow-sm transition-all active:scale-95 disabled:opacity-50"
                   :disabled="actingBookingId === booking.id"
                   @click.stop="handleBookingDecision(booking.id, 'CONFIRMED')"
                 >
                   {{
                     actingBookingId === booking.id && actingStatus === "CONFIRMED"
-                      ? "Accepting..."
-                      : "Accept Request"
+                      ? "..."
+                      : "Accept"
                   }}
                 </button>
               </div>
             </div>
 
             <!-- Pricing Info -->
-            <div class="shrink-0 z-10 text-right self-start">
+            <div class="shrink-0 z-10 text-right self-center pt-0.5 sm:pt-0">
               <div class="flex flex-col items-end">
-                <div class="flex items-baseline gap-1.5">
-                  <span class="text-[11px] text-gray-400 font-bold uppercase tracking-wider"
-                    >Total:</span
+                <div class="flex items-center gap-1">
+                  <span class="text-[9px] text-gray-400 font-bold uppercase tracking-tight"
+                    >Total</span
                   >
-                  <span class="text-[16px] font-bold text-burning-orange leading-none">{{
-                    formatPesoAmount(booking.totalFee)
-                  }}</span>
+                  <span
+                    class="text-[14px] sm:text-[16px] font-extrabold text-burning-orange leading-none"
+                    >{{ formatPesoAmount(booking.totalFee).replace("PHP ", "₱") }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -308,11 +333,11 @@ const handleBookingDecision = async (
       <!-- Load More -->
       <div
         v-if="hasMore || (isLoading && filteredBookings.length > 0)"
-        class="flex justify-center mt-8 sm:mt-10"
+        class="flex justify-center mt-6 sm:mt-10"
       >
         <button
           :disabled="isLoading"
-          class="bg-white border-[1.5px] border-burning-orange text-burning-orange rounded-[12px] px-8 py-2.5 text-[15px] font-bold hover:bg-burning-orange/5 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+          class="bg-white border-[1.5px] border-burning-orange text-burning-orange rounded-[12px] px-6 sm:px-8 py-2 sm:py-2.5 text-[14px] sm:text-[15px] font-bold hover:bg-burning-orange/5 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           @click="loadMore"
         >
           <span v-if="isLoading" class="flex items-center gap-2">

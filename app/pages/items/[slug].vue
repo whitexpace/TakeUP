@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { inferRouterOutputs } from "@trpc/server"
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
+import { useAuthUser } from "../../composables/use-auth-user"
 import { useBag } from "../../composables/use-bag"
 import { useLikes } from "../../composables/use-likes"
 import {
@@ -112,6 +113,9 @@ const {
 )
 
 const item = computed(() => data.value)
+const user = useSupabaseUser()
+const isHeaderVisible = ref(true)
+const { authUser, fetch: fetchAuthUser } = useAuthUser()
 const isLoadingFullItem = ref(false)
 let fullItemRequestVersion = 0
 const itemLoadErrorMessage = computed(
@@ -142,7 +146,6 @@ const loadFullItemDetails = async () => {
 
 const currentDate = new Date()
 const today = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
-const currentTimeMinutes = currentDate.getHours() * 60 + currentDate.getMinutes()
 
 const currentImageIndex = ref(0)
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -164,6 +167,7 @@ watch(
   },
   { immediate: true },
 )
+
 const isSubmittingBooking = ref(false)
 const showPaymentModal = ref(false)
 const bookingErrorMessage = ref("")
@@ -331,6 +335,10 @@ const isItemRented = computed(() => item.value?.status === "RENTED")
 const isItemUnavailableForBooking = computed(() =>
   Boolean(item.value && (item.value.status === "DEACTIVATED" || item.value.status === "DELETED")),
 )
+const isOwnItem = computed(() =>
+  Boolean(item.value?.lenderId && authUser.value?.id && item.value.lenderId === authUser.value.id),
+)
+const isBookingBlocked = computed(() => isItemUnavailableForBooking.value || isOwnItem.value)
 const unavailableItemLabel = computed(() => {
   if (!item.value) return "Unavailable"
   if (item.value.status === "RENTED") {
@@ -338,10 +346,15 @@ const unavailableItemLabel = computed(() => {
   }
   return "Unavailable"
 })
-const bookingAvailabilityTitle = computed(() =>
-  isItemUnavailableForBooking.value ? "Currently unavailable" : "Select Dates & Time",
-)
+const bookingAvailabilityTitle = computed(() => {
+  if (isOwnItem.value) return "Your listing"
+  return isItemUnavailableForBooking.value ? "Currently unavailable" : "Select Dates & Time"
+})
 const bookingAvailabilityMessage = computed(() => {
+  if (isOwnItem.value) {
+    return "You can view your item details, but you can't request or add your own listing to the bag."
+  }
+
   if (isItemRented.value) {
     return "Some dates are already reserved. Choose another available date and time."
   }
@@ -352,9 +365,7 @@ const bookingAvailabilityMessage = computed(() => {
 
   return "Choose your dates and time to request this item."
 })
-const isItemAvailableForBooking = computed(() =>
-  Boolean(item.value && !isItemUnavailableForBooking.value),
-)
+const isItemAvailableForBooking = computed(() => Boolean(item.value && !isBookingBlocked.value))
 const ownerName = computed(() => item.value?.ownerName ?? "TakeUP member")
 const ownerInitials = computed(() => {
   const parts = ownerName.value.split(/\s+/).filter(Boolean)
@@ -570,6 +581,7 @@ const rangeHasUnavailable = (start: Date, end: Date) => {
 }
 
 const onDateClick = (date: Date | null, isUnavailable: boolean, isPast: boolean) => {
+  if (isBookingBlocked.value) return
   if (!date || isUnavailable || isPast) return
 
   if (!startDate.value || (startDate.value && endDate.value)) {
@@ -599,6 +611,7 @@ const onDateClick = (date: Date | null, isUnavailable: boolean, isPast: boolean)
 }
 
 const onMouseDown = (date: Date | null, isUnavailable: boolean, isPast: boolean) => {
+  if (isBookingBlocked.value) return
   if (!date || isUnavailable || isPast) return
 
   mouseIsDown.value = true
@@ -606,6 +619,11 @@ const onMouseDown = (date: Date | null, isUnavailable: boolean, isPast: boolean)
 }
 
 const onMouseEnter = (date: Date | null, isUnavailable: boolean, isPast: boolean) => {
+  if (isBookingBlocked.value) {
+    hoverDate.value = null
+    return
+  }
+
   if (!date || isUnavailable || isPast) {
     hoverDate.value = null
     return
@@ -694,7 +712,7 @@ const isTimeDisabled = (timeValue: string, isEnd: boolean) => {
   if (!isEnd) {
     // For Start Time
     if (isStartDateToday.value) {
-      return timeToMinutes(timeValue) <= currentTimeMinutes
+      return timeToMinutes(timeValue) <= getNowMinutes()
     }
     return false
   }
@@ -726,15 +744,79 @@ const selectEndTime = (timeValue: string) => {
   isEndTimeOpen.value = false
 }
 
+const minutesToTime = (minutes: number) => {
+  let h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  const period = h >= 12 ? "PM" : "AM"
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")} ${period}`
+}
+
+const getNowMinutes = () => {
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes()
+}
+
+watch(startDate, (newDate) => {
+  if (!newDate) return
+
+  const isTodaySelected = normalizeDate(newDate).getTime() === today.getTime()
+
+  // Default to 9:00 AM (540 mins) unless it's in the past for today
+  let targetStartMins = 9 * 60
+  if (isTodaySelected) {
+    const earliestMinutes = Math.ceil((getNowMinutes() + 5) / 30) * 30
+    targetStartMins = Math.max(targetStartMins, earliestMinutes)
+  }
+
+  startTime.value = minutesToTime(Math.min(targetStartMins, 23 * 60 + 30))
+
+  // Adjust End Time
+  const effectiveEndDate = endDate.value || newDate
+  const isSameDayBooking =
+    normalizeDate(newDate).getTime() === normalizeDate(effectiveEndDate).getTime()
+
+  if (isSameDayBooking) {
+    const startMins = timeToMinutes(startTime.value)
+    // Default same-day end time to 1 hour after start, or 6:00 PM if that's later
+    let targetEndMins = Math.max(startMins + 60, 18 * 60) // 18:00 is 6:00 PM
+
+    // But if 6:00 PM is before start+1h, just use start+1h
+    if (targetEndMins < startMins + 60) targetEndMins = startMins + 60
+
+    endTime.value = minutesToTime(Math.min(targetEndMins, 23 * 60 + 30))
+  } else {
+    // For multi-day, default to 6:00 PM
+    endTime.value = "06:00 PM"
+  }
+})
+
+watch(startTime, (newStartTime) => {
+  const effectiveEndDate = endDate.value || startDate.value
+  if (
+    startDate.value &&
+    effectiveEndDate &&
+    normalizeDate(startDate.value).getTime() === normalizeDate(effectiveEndDate).getTime()
+  ) {
+    const startMins = timeToMinutes(newStartTime)
+    const endMins = timeToMinutes(endTime.value)
+
+    if (endMins < startMins + 60) {
+      endTime.value = minutesToTime(Math.min(startMins + 60, 23 * 60 + 30))
+    }
+  }
+})
+
 const toggleStartTime = () => {
-  if (isItemUnavailableForBooking.value) return
+  if (isBookingBlocked.value) return
 
   isStartTimeOpen.value = !isStartTimeOpen.value
   isEndTimeOpen.value = false
 }
 
 const toggleEndTime = () => {
-  if (isItemUnavailableForBooking.value) return
+  if (isBookingBlocked.value) return
 
   isEndTimeOpen.value = !isEndTimeOpen.value
   isStartTimeOpen.value = false
@@ -766,7 +848,7 @@ const selectedBookingWindow = computed(() => {
 
 const canSubmitBooking = computed(
   () =>
-    !isItemUnavailableForBooking.value &&
+    !isBookingBlocked.value &&
     hasBookingSelection.value &&
     selectedBookingWindow.value !== null &&
     !hasRequestedBooking.value &&
@@ -774,7 +856,7 @@ const canSubmitBooking = computed(
 )
 
 const bookingFeedbackMessage = computed(() => {
-  if (isItemUnavailableForBooking.value) {
+  if (isBookingBlocked.value) {
     return bookingAvailabilityMessage.value
   }
 
@@ -784,7 +866,7 @@ const bookingFeedbackMessage = computed(() => {
 })
 
 const bookingFeedbackClass = computed(() => {
-  if (isItemUnavailableForBooking.value) {
+  if (isBookingBlocked.value) {
     return "text-noble-black/60"
   }
 
@@ -800,11 +882,13 @@ const bookingFeedbackClass = computed(() => {
 })
 
 const requestBookingButtonLabel = computed(() =>
-  hasRequestedBooking.value
-    ? "Booking Requested"
-    : isSubmittingBooking.value
-      ? "Requesting Booking..."
-      : "Request Booking",
+  isOwnItem.value
+    ? "Your Listing"
+    : hasRequestedBooking.value
+      ? "Booking Requested"
+      : isSubmittingBooking.value
+        ? "Requesting Booking..."
+        : "Request Booking",
 )
 
 const totalUnits = computed(() => {
@@ -854,6 +938,17 @@ watch(itemId, () => {
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
   void loadFullItemDetails()
+})
+
+watch(isOwnItem, (isOwner) => {
+  if (!isOwner) return
+
+  startDate.value = null
+  endDate.value = null
+  hoverDate.value = null
+  mouseIsDown.value = false
+  isDragging.value = false
+  tempDragStart.value = null
 })
 
 const openLightbox = () => {
@@ -922,6 +1017,8 @@ const canAddToBag = computed(
 )
 
 const addToBagButtonLabel = computed(() => {
+  if (isAddingToBag.value) return "Adding..."
+  if (isOwnItem.value) return "Your Listing"
   if (isItemUnavailableForBooking.value) {
     return `Currently ${unavailableItemLabel.value}`
   }
@@ -930,7 +1027,9 @@ const addToBagButtonLabel = computed(() => {
 })
 
 const mobileBookingButtonLabel = computed(() => {
+  if (isAddingToBag.value) return "Adding..."
   if (isInBag.value) return "Added to Bag"
+  if (isOwnItem.value) return "Your Listing"
   if (!isItemAvailableForBooking.value) return "Unavailable"
 
   return hasBookingSelection.value ? "Add to Bag" : "Check Availability"
@@ -991,7 +1090,7 @@ const handleAddToBag = async () => {
 }
 
 const openBookingModal = () => {
-  if (!import.meta.client || isItemUnavailableForBooking.value) return
+  if (!import.meta.client || isBookingBlocked.value) return
 
   isMobileModalOpen.value = true
   document.body.style.overflow = "hidden"
@@ -1167,7 +1266,7 @@ const resolveBookingErrorMessage = (error: unknown) => {
 const submitBookingRequest = async () => {
   if (
     !item.value ||
-    isItemUnavailableForBooking.value ||
+    isBookingBlocked.value ||
     !selectedBookingWindow.value ||
     isSubmittingBooking.value
   )
@@ -1184,7 +1283,7 @@ const submitBookingRequest = async () => {
 }
 
 const performBookingCreation = async () => {
-  if (!item.value || !selectedBookingWindow.value) return
+  if (!item.value || isBookingBlocked.value || !selectedBookingWindow.value) return
 
   bookingErrorMessage.value = ""
   bookingSuccessMessage.value = ""
@@ -1231,6 +1330,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 onMounted(() => {
+  void fetchAuthUser()
   void loadFullItemDetails()
   updateScrollStatus()
   window.addEventListener("keydown", handleKeydown)
@@ -1247,21 +1347,25 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-screen bg-white font-geist">
-    <Header />
+    <Header @visibility-change="(v) => (isHeaderVisible = v)" />
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 pt-20" @mouseleave="handleCalendarMouseLeave">
       <!-- Back Link -->
-      <NuxtLink
-        :to="backNavigationPath"
-        class="flex items-center gap-2 text-noble-black/70 hover:text-burning-orange transition-colors mb-6 group"
-      >
-        <Icon
-          name="ph:caret-left"
-          size="20"
-          class="transition-transform group-hover:-translate-x-1"
-        />
-        <span class="font-normal">{{ backNavigationLabel }}</span>
-      </NuxtLink>
+      <div class="relative group/tooltip w-fit mb-6">
+        <NuxtLink
+          :to="backNavigationPath"
+          class="flex h-10 w-10 items-center justify-center text-noble-black hover:text-burning-orange border border-noble-black/10 rounded-full transition-all group shadow-sm bg-white"
+        >
+          <Icon
+            name="ph:caret-left"
+            class="w-5 h-5 shrink-0 transition-transform group-hover:-translate-x-0.5"
+          />
+        </NuxtLink>
+        <div class="custom-tooltip">
+          {{ backNavigationLabel }}
+          <div class="tooltip-arrow"></div>
+        </div>
+      </div>
 
       <div v-if="pending && !item" class="space-y-8 pb-28 lg:pb-6 animate-pulse">
         <div class="flex flex-col gap-4">
@@ -1303,26 +1407,28 @@ onUnmounted(() => {
 
       <div v-else-if="item" class="pb-28 lg:pb-0">
         <!-- Title & Actions -->
-        <div class="flex justify-between items-start mb-2">
-          <div>
+        <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-2">
+          <div class="flex-1 min-w-0">
             <div class="mb-3 flex flex-wrap gap-2">
               <span
                 v-for="category in formattedCategories"
                 :key="category"
-                class="rounded-full border-[0.5px] border-cinnamon-ice/30 bg-noble-black/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-noble-black/70"
+                class="rounded-full border-[0.5px] border-cinnamon-ice/30 bg-noble-black/5 px-2.5 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.12em] text-noble-black/70"
               >
                 {{ category }}
               </span>
               <span
                 v-if="item.isTrending"
-                class="rounded-full bg-burning-orange px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white"
+                class="rounded-full bg-burning-orange px-2.5 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.12em] text-white"
               >
                 Trending
               </span>
             </div>
-            <h1 class="text-3xl font-bold text-noble-black">{{ item.name }}</h1>
+            <h1 class="text-2xl sm:text-3xl font-bold text-noble-black break-words leading-tight">
+              {{ item.name }}
+            </h1>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 sm:gap-4 shrink-0">
             <div class="relative flex items-stretch group/tooltip">
               <button
                 class="p-2 text-noble-black/70 hover:text-noble-black transition-all duration-300 ease-in-out group"
@@ -1360,6 +1466,25 @@ onUnmounted(() => {
                 Like
                 <div class="tooltip-arrow"></div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="isOwnItem"
+          class="sticky top-[76px] z-40 mb-6 rounded-2xl border border-burning-orange/40 bg-burning-orange/20 px-4 py-3 shadow-lg shadow-burning-orange/10 backdrop-blur-md sm:px-5"
+        >
+          <div class="flex items-start gap-3">
+            <div
+              class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-burning-orange text-white"
+            >
+              <Icon name="ph:warning-circle" size="20" />
+            </div>
+            <div>
+              <p class="text-sm font-bold text-noble-black">This is your listing</p>
+              <p class="mt-0.5 text-sm leading-5 text-noble-black/70">
+                {{ bookingAvailabilityMessage }}
+              </p>
             </div>
           </div>
         </div>
@@ -1435,14 +1560,14 @@ onUnmounted(() => {
                 </div>
                 <div
                   ref="scrollContainer"
-                  class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide scroll-smooth px-4"
+                  class="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide scroll-smooth px-4"
                   :style="maskStyle"
                   @scroll="handleScroll"
                 >
                   <div
                     v-for="(img, idx) in imageGallery"
                     :key="idx"
-                    class="w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all duration-300 shrink-0 group/thumb"
+                    class="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all duration-300 shrink-0 group/thumb"
                     :class="
                       currentImageIndex === idx
                         ? 'border-burning-orange opacity-100'
@@ -1557,7 +1682,7 @@ onUnmounted(() => {
                           v-if="dayObj.day"
                           class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                           :class="[
-                            dayObj.isUnavailable || dayObj.isPast
+                            dayObj.isUnavailable || dayObj.isPast || isOwnItem
                               ? 'text-gray-300 cursor-not-allowed'
                               : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                             dayObj.isUnavailable ? 'line-through' : '',
@@ -1568,7 +1693,7 @@ onUnmounted(() => {
                               !endDate)
                               ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                               : '',
-                            dayObj.isToday && !isSelected(dayObj.fullDate)
+                            dayObj.isToday && !isSelected(dayObj.fullDate) && !isOwnItem
                               ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                               : '',
                           ]"
@@ -1619,7 +1744,7 @@ onUnmounted(() => {
                             ? 'border-burning-orange ring-1 ring-burning-orange/20'
                             : 'hover:border-burning-orange/50'
                         "
-                        :disabled="isItemUnavailableForBooking"
+                        :disabled="isBookingBlocked"
                         @click="toggleStartTime"
                       >
                         {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
@@ -1658,7 +1783,7 @@ onUnmounted(() => {
                             ? 'border-burning-orange ring-1 ring-burning-orange/20'
                             : 'hover:border-burning-orange/50'
                         "
-                        :disabled="isItemUnavailableForBooking"
+                        :disabled="isBookingBlocked"
                         @click="toggleEndTime"
                       >
                         {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
@@ -1909,7 +2034,7 @@ onUnmounted(() => {
                               v-if="dayObj.day"
                               class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                               :class="[
-                                dayObj.isUnavailable || dayObj.isPast
+                                dayObj.isUnavailable || dayObj.isPast || isOwnItem
                                   ? 'text-gray-300 cursor-not-allowed'
                                   : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                                 dayObj.isUnavailable ? 'line-through' : '',
@@ -1920,7 +2045,7 @@ onUnmounted(() => {
                                   !endDate)
                                   ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                                   : '',
-                                dayObj.isToday && !isSelected(dayObj.fullDate)
+                                dayObj.isToday && !isSelected(dayObj.fullDate) && !isOwnItem
                                   ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                                   : '',
                               ]"
@@ -1970,7 +2095,7 @@ onUnmounted(() => {
                                 ? 'border-burning-orange ring-1 ring-burning-orange/20'
                                 : 'hover:border-burning-orange/50'
                             "
-                            :disabled="isItemUnavailableForBooking"
+                            :disabled="isBookingBlocked"
                             @click="toggleStartTime"
                           >
                             {{ startTime
@@ -2010,7 +2135,7 @@ onUnmounted(() => {
                                 ? 'border-burning-orange ring-1 ring-burning-orange/20'
                                 : 'hover:border-burning-orange/50'
                             "
-                            :disabled="isItemUnavailableForBooking"
+                            :disabled="isBookingBlocked"
                             @click="toggleEndTime"
                           >
                             {{ endTime
@@ -2130,74 +2255,85 @@ onUnmounted(() => {
             </div>
 
             <!-- Redesigned Metadata Container -->
-            <div class="mb-10 rounded-[14px] border border-cinnamon-ice/30 bg-white p-5 shadow-sm">
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-y-8 md:gap-y-0 items-start">
+            <div
+              class="mb-10 rounded-[14px] border border-cinnamon-ice/30 bg-white p-4 sm:p-5 shadow-sm"
+            >
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-y-6 md:gap-y-0 items-start">
                 <!-- Status -->
-                <div class="flex flex-col gap-1 pr-4 md:border-r-[0.5px] border-cinnamon-ice/20">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div class="flex flex-col gap-1 pr-4 border-r-[0.5px] border-cinnamon-ice/20">
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Status</span
                   >
                   <div class="flex items-center gap-2">
                     <div
-                      class="h-1.5 w-1.5 rounded-full"
+                      class="h-1.5 w-1.5 rounded-full shrink-0"
                       :class="
                         isItemUnavailableForBooking ? 'bg-noble-black/30' : 'bg-success-green'
                       "
                     />
-                    <span class="text-[14px] font-semibold text-noble-black">{{
-                      statusLabel
-                    }}</span>
+                    <span
+                      class="text-[13px] sm:text-[14px] font-semibold text-noble-black truncate"
+                      >{{ statusLabel }}</span
+                    >
                   </div>
                 </div>
                 <!-- Condition -->
                 <div
-                  class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
+                  class="flex flex-col gap-1 pl-4 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
                 >
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Condition</span
                   >
                   <span
-                    class="text-[14px] font-semibold"
+                    class="text-[13px] sm:text-[14px] font-semibold truncate"
                     :class="item.condition === 'POOR' ? 'text-burning-orange' : 'text-noble-black'"
                     >{{ formattedCondition }}</span
                   >
                 </div>
                 <!-- Replacement Cost -->
                 <div
-                  class="flex flex-col gap-1 px-0 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20"
+                  class="flex flex-col gap-1 pr-4 md:px-6 md:border-r-[0.5px] border-cinnamon-ice/20 border-t-[0.5px] md:border-t-0 pt-4 md:pt-0 border-cinnamon-ice/10 md:border-transparent"
                 >
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Replacement</span
                   >
-                  <span class="text-[14px] font-semibold text-noble-black">{{
-                    replacementCostLabel
-                  }}</span>
+                  <span
+                    class="text-[13px] sm:text-[14px] font-semibold text-noble-black truncate"
+                    >{{ replacementCostLabel }}</span
+                  >
                 </div>
                 <!-- Tags -->
-                <div class="flex flex-col gap-1 pl-0 md:pl-6">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div
+                  class="flex flex-col gap-1 pl-4 md:pl-6 border-t-[0.5px] md:border-t-0 pt-4 md:pt-0 border-cinnamon-ice/10 md:border-transparent border-l-[0.5px] md:border-l-0"
+                >
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Tags</span
                   >
-                  <div v-if="item.tags.length" class="flex flex-wrap gap-2">
+                  <div v-if="item.tags.length" class="flex flex-wrap gap-1.5">
                     <span
                       v-for="tag in item.tags"
                       :key="tag"
-                      class="rounded-[12px] rounded-tl-[999px] rounded-br-[999px] bg-noble-black/5 px-2.5 py-1 text-[11px] font-medium text-noble-black/60 hover:bg-noble-black/10 transition-colors cursor-default"
+                      class="rounded-[10px] rounded-tl-[999px] rounded-br-[999px] bg-noble-black/5 px-2 py-0.5 text-[10px] font-medium text-noble-black/60"
                     >
                       {{ tag }}
                     </span>
                   </div>
-                  <span v-else class="text-[14px] font-semibold text-noble-black/30">None</span>
+                  <span v-else class="text-[13px] font-semibold text-noble-black/30">None</span>
                 </div>
               </div>
 
               <!-- Horizontal Divider -->
-              <div class="my-8 h-[0.5px] bg-gray-100" />
+              <div class="my-6 sm:my-8 h-[0.5px] bg-gray-100" />
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
                 <!-- Known Issues -->
-                <div class="flex flex-col gap-3">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div class="flex flex-col gap-2.5">
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Known Issues</span
                   >
                   <div v-if="knownIssuesList.length" class="space-y-1">
@@ -2206,23 +2342,24 @@ onUnmounted(() => {
                       :key="issue"
                       class="text-[13px] text-noble-black/70 flex items-start gap-2"
                     >
-                      <span class="flex items-center justify-center h-6 shrink-0"
+                      <span class="flex items-center justify-center h-5 shrink-0"
                         ><span class="w-1 h-1 rounded-full bg-burning-orange"
                       /></span>
-                      <span class="leading-6">{{ issue }}</span>
+                      <span class="leading-relaxed">{{ issue }}</span>
                     </p>
                   </div>
                   <p
                     v-else
                     class="text-[13px] font-medium text-success-green flex items-center gap-1.5"
                   >
-                    No known issues reported
+                    No known issues
                     <Icon name="ph:check-circle-fill" size="14" class="shrink-0" />
                   </p>
                 </div>
                 <!-- Usage Limitations -->
-                <div class="flex flex-col gap-3">
-                  <span class="text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
+                <div class="flex flex-col gap-2.5">
+                  <span
+                    class="text-[9px] sm:text-[10px] font-bold uppercase tracking-[1.5px] text-noble-black/40"
                     >Usage Limitations</span
                   >
                   <div v-if="usageLimitationsList.length" class="space-y-1">
@@ -2231,15 +2368,13 @@ onUnmounted(() => {
                       :key="limitation"
                       class="text-[13px] text-noble-black/70 flex items-start gap-2"
                     >
-                      <span class="flex items-center justify-center h-6 shrink-0"
+                      <span class="flex items-center justify-center h-5 shrink-0"
                         ><span class="w-1 h-1 rounded-full bg-burning-orange"
                       /></span>
-                      <span class="leading-6">{{ limitation }}</span>
+                      <span class="leading-relaxed">{{ limitation }}</span>
                     </p>
                   </div>
-                  <p v-else class="text-[13px] italic text-noble-black/40">
-                    No usage limitations listed
-                  </p>
+                  <p v-else class="text-[13px] italic text-noble-black/40">No limitations listed</p>
                 </div>
               </div>
             </div>
@@ -2437,7 +2572,7 @@ onUnmounted(() => {
                     v-if="dayObj.day"
                     class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                     :class="[
-                      dayObj.isUnavailable || dayObj.isPast
+                      dayObj.isUnavailable || dayObj.isPast || isOwnItem
                         ? 'text-gray-300 cursor-not-allowed'
                         : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                       dayObj.isUnavailable ? 'line-through' : '',
@@ -2448,7 +2583,7 @@ onUnmounted(() => {
                         !endDate)
                         ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                         : '',
-                      dayObj.isToday && !isSelected(dayObj.fullDate)
+                      dayObj.isToday && !isSelected(dayObj.fullDate) && !isOwnItem
                         ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                         : '',
                     ]"
@@ -2498,7 +2633,7 @@ onUnmounted(() => {
                       ? 'border-burning-orange ring-1 ring-burning-orange/20'
                       : 'hover:border-burning-orange/50'
                   "
-                  :disabled="isItemUnavailableForBooking"
+                  :disabled="isBookingBlocked"
                   @click="toggleStartTime"
                 >
                   {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
@@ -2537,7 +2672,7 @@ onUnmounted(() => {
                       ? 'border-burning-orange ring-1 ring-burning-orange/20'
                       : 'hover:border-burning-orange/50'
                   "
-                  :disabled="isItemUnavailableForBooking"
+                  :disabled="isBookingBlocked"
                   @click="toggleEndTime"
                 >
                   {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
@@ -2665,62 +2800,74 @@ onUnmounted(() => {
       >
         <div
           v-if="showPaymentModal"
-          class="fixed inset-0 z-[3000] flex items-center justify-center p-4"
+          class="fixed inset-0 z-[3000] flex items-center justify-center p-4 font-geist"
         >
           <!-- Backdrop -->
           <div
-            class="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm"
+            class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
             @click="showPaymentModal = false"
           ></div>
 
           <!-- Modal Content -->
           <div
-            class="relative bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
+            class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in zoom-in-95 duration-300"
           >
             <!-- Header -->
-            <div class="px-8 pt-8 pb-4 flex items-center justify-between">
+            <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h3 class="text-2xl font-bold text-neutral-800 font-geist">
-                  Complete Booking Request
-                </h3>
-                <p class="text-sm text-neutral-500 mt-1">
+                <h2 class="text-[24px] font-semibold text-noble-black">Complete Booking Request</h2>
+                <p class="mt-1 text-[13px] font-light text-noble-black/50">
                   Funds will be held securely until the rental is complete.
                 </p>
               </div>
               <button
-                class="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
                 @click="showPaymentModal = false"
               >
-                <Icon name="ph:x" size="24" />
+                <Icon name="ph:x" class="w-[18px] h-[18px]" />
               </button>
             </div>
 
-            <!-- Booking Summary Snippet -->
-            <div class="px-8 pb-6">
-              <div class="bg-neutral-50 rounded-2xl p-4 flex gap-4 border border-neutral-100">
-                <img
-                  v-if="item?.thumbnailImage"
-                  :src="item.thumbnailImage"
-                  class="w-16 h-16 rounded-xl object-cover"
-                />
-                <div class="flex flex-col justify-center">
-                  <p class="font-bold text-neutral-800 leading-tight">{{ item?.name }}</p>
-                  <p class="text-xs text-neutral-500 mt-1">
-                    {{ formatDate(startDate) }} - {{ formatDate(endDate || startDate) }}
-                  </p>
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+              <div class="py-6 space-y-8">
+                <!-- Simple Booking Summary -->
+                <div class="flex items-center gap-4">
+                  <img
+                    v-if="item?.thumbnailImage"
+                    :src="item.thumbnailImage"
+                    class="w-16 h-16 rounded-xl object-cover border border-cinnamon-ice/10 shadow-sm"
+                  />
+                  <div
+                    v-else
+                    class="w-16 h-16 rounded-xl bg-noble-black/5 flex items-center justify-center text-noble-black/20"
+                  >
+                    <Icon name="ph:package" size="24" />
+                  </div>
+                  <div class="flex flex-col">
+                    <p class="font-bold text-noble-black text-[15px] leading-tight">
+                      {{ item?.name }}
+                    </p>
+                    <div class="flex items-center gap-2 mt-1.5 text-[12px] text-noble-black/40">
+                      <Icon name="ph:calendar-blank" size="14" />
+                      <span>
+                        {{ formatDate(startDate) }} - {{ formatDate(endDate || startDate) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <!-- Payment Component -->
-            <div class="px-8 pb-8">
-              <WalletPayment
-                :amount="totalPrice"
-                related-entity-type="BOOKING_PENDING"
-                :related-entity-id="item?.id || 'pending'"
-                @success="handlePaymentSuccess"
-                @cancel="showPaymentModal = false"
-              />
+                <!-- Payment Component -->
+                <WalletPayment
+                  variant="minimal"
+                  :amount="totalPrice"
+                  related-entity-type="BOOKING_PENDING"
+                  :related-entity-id="item?.id || 'pending'"
+                  @success="handlePaymentSuccess"
+                  @cancel="showPaymentModal = false"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -2730,15 +2877,27 @@ onUnmounted(() => {
     <!-- Sticky Bottom Bar (Mobile < sm) -->
     <div
       v-if="item"
-      class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-cinnamon-ice/15 p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+      class="sm:hidden fixed left-0 right-0 bg-white border-t border-cinnamon-ice/15 p-4 px-6 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.08)] transition-all duration-300 ease-in-out"
+      :style="
+        user && isHeaderVisible
+          ? { bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))', paddingBottom: '1rem' }
+          : { bottom: '0px', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }
+      "
     >
       <div class="flex items-center justify-between gap-4">
-        <div class="flex flex-col">
+        <div class="flex flex-col min-w-0">
           <div class="flex items-baseline gap-1">
             <span class="text-xl font-bold text-noble-black">{{ priceAmount }}</span>
-            <span class="text-xs text-noble-black/60 font-medium">{{ priceUnitLabel }}</span>
+            <span class="text-xs text-noble-black/60 font-medium truncate">{{
+              priceUnitLabel
+            }}</span>
           </div>
-          <button class="text-[11px] font-bold text-burning-orange" @click="openBookingModal">
+          <button
+            class="text-[11px] font-bold text-left truncate disabled:cursor-not-allowed disabled:text-noble-black/40"
+            :class="isBookingBlocked ? 'text-noble-black/40' : 'text-burning-orange'"
+            :disabled="isBookingBlocked"
+            @click="openBookingModal"
+          >
             {{
               startDate && displayEndDate
                 ? `${formatDate(startDate)} — ${formatDate(displayEndDate)}`
@@ -2747,35 +2906,21 @@ onUnmounted(() => {
           </button>
         </div>
         <button
-          class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
-          :class="isInBag ? 'bg-noble-black' : 'bg-burning-orange'"
+          class="flex-1 max-w-[180px] h-12 flex items-center justify-center gap-2 px-4 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="
+            isBookingBlocked
+              ? 'bg-noble-black/20 text-noble-black/40'
+              : isInBag
+                ? 'bg-noble-black text-white'
+                : 'bg-burning-orange text-white shadow-burning-orange/20'
+          "
+          :disabled="isBookingBlocked"
           @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
         >
-          <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
-          {{
-            isItemUnavailableForBooking
-              ? `Currently ${unavailableItemLabel}`
-              : startDate && displayEndDate
-                ? `${formatDate(startDate)} — ${formatDate(displayEndDate)}`
-                : "Select dates"
-          }}
+          <Icon v-if="isInBag" name="ph:check" size="18" class="stroke-[3]" />
+          {{ mobileBookingButtonLabel }}
         </button>
       </div>
-      <button
-        class="px-6 py-2.5 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 transition-all flex items-center gap-2"
-        :class="
-          isItemUnavailableForBooking
-            ? 'bg-noble-black/60'
-            : isInBag
-              ? 'bg-noble-black'
-              : 'bg-burning-orange'
-        "
-        :disabled="isItemUnavailableForBooking"
-        @click="isInBag ? null : hasBookingSelection ? handleAddToBag() : openBookingModal()"
-      >
-        <Icon v-if="isInBag" name="ph:check" size="14" class="stroke-[3]" />
-        {{ mobileBookingButtonLabel }}
-      </button>
     </div>
 
     <!-- Mobile Full-Screen Booking Modal -->
@@ -2876,7 +3021,7 @@ onUnmounted(() => {
                     v-if="dayObj.day"
                     class="relative w-9 h-9 flex items-center justify-center text-sm rounded-lg transition-all duration-200 z-10 select-none font-semibold"
                     :class="[
-                      dayObj.isUnavailable || dayObj.isPast
+                      dayObj.isUnavailable || dayObj.isPast || isOwnItem
                         ? 'text-gray-300 cursor-not-allowed'
                         : 'text-noble-black hover:bg-burning-orange hover:text-white cursor-pointer',
                       dayObj.isUnavailable ? 'line-through' : '',
@@ -2887,7 +3032,7 @@ onUnmounted(() => {
                         !endDate)
                         ? '!bg-burning-orange !text-white !hover:bg-burning-orange shadow-md scale-110 font-bold'
                         : '',
-                      dayObj.isToday && !isSelected(dayObj.fullDate)
+                      dayObj.isToday && !isSelected(dayObj.fullDate) && !isOwnItem
                         ? 'border-[1.5px] border-burning-orange text-burning-orange font-bold'
                         : '',
                     ]"
@@ -2937,7 +3082,7 @@ onUnmounted(() => {
                       ? 'border-burning-orange ring-1 ring-burning-orange/20'
                       : 'hover:border-burning-orange/50'
                   "
-                  :disabled="isItemUnavailableForBooking"
+                  :disabled="isBookingBlocked"
                   @click="toggleStartTime"
                 >
                   {{ startTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
@@ -2976,7 +3121,7 @@ onUnmounted(() => {
                       ? 'border-burning-orange ring-1 ring-burning-orange/20'
                       : 'hover:border-burning-orange/50'
                   "
-                  :disabled="isItemUnavailableForBooking"
+                  :disabled="isBookingBlocked"
                   @click="toggleEndTime"
                 >
                   {{ endTime }}<Icon name="ph:caret-down" size="16" class="text-gray-400" />
@@ -3059,10 +3204,10 @@ onUnmounted(() => {
           <!-- Modal Footer (Confirm) -->
           <div
             v-if="hasBookingSelection"
-            class="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-cinnamon-ice/15 flex justify-center"
+            class="fixed bottom-0 left-0 right-0 p-4 sm:p-6 bg-white border-t border-cinnamon-ice/15 flex justify-center z-20 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
           >
             <button
-              class="w-full py-4 bg-burning-orange text-white rounded-2xl font-bold text-lg"
+              class="w-full h-14 bg-burning-orange text-white rounded-2xl font-bold text-base sm:text-lg shadow-lg shadow-burning-orange/20 active:scale-95 transition-all"
               @click="closeBookingModal"
             >
               Confirm Selection

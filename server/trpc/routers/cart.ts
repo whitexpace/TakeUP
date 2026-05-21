@@ -83,14 +83,10 @@ type CartEntryRow = {
   lenderEmail: string | null
 }
 
-const getOwnerName = (entry: CartEntryWithItem) => {
-  const lenderUser = entry.item.lender.user
-  return (
-    lenderUser.username ||
-    [lenderUser.firstName, lenderUser.middleName, lenderUser.lastName].filter(Boolean).join(" ") ||
-    lenderUser.email ||
-    entry.item.lenderId
-  )
+const getOwnerDisplayName = (entry: CartEntryWithItem) => {
+  const u = entry.item.lender.user
+  const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ")
+  return fullName || u.username || u.email || entry.item.lenderId
 }
 
 const mapCartEntry = (entry: CartEntryWithItem) => {
@@ -107,17 +103,17 @@ const mapCartEntry = (entry: CartEntryWithItem) => {
     startAt: entry.startAt,
     endAt: entry.endAt,
     lenderId: entry.item.lenderId,
-    lenderName: getOwnerName(entry),
+    lenderName: getOwnerDisplayName(entry),
+    lenderUsername: entry.item.lender.user.username || "",
     listingType: entry.item.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
     createdAt: entry.createdAt,
   }
 }
 
-const getOwnerNameFromRow = (row: CartEntryRow) =>
-  row.lenderUsername ||
-  [row.lenderFirstName, row.lenderMiddleName, row.lenderLastName].filter(Boolean).join(" ") ||
-  row.lenderEmail ||
-  row.lenderId
+const getOwnerDisplayNameFromRow = (row: CartEntryRow) => {
+  const fullName = [row.lenderFirstName, row.lenderLastName].filter(Boolean).join(" ")
+  return fullName || row.lenderUsername || row.lenderEmail || row.lenderId
+}
 
 const mapCartRow = (row: CartEntryRow & { image?: string }) => ({
   id: row.id,
@@ -129,7 +125,8 @@ const mapCartRow = (row: CartEntryRow & { image?: string }) => ({
   startAt: row.startAt,
   endAt: row.endAt,
   lenderId: row.lenderId,
-  lenderName: getOwnerNameFromRow(row),
+  lenderName: getOwnerDisplayNameFromRow(row),
+  lenderUsername: row.lenderUsername || "",
   listingType: row.freeToBorrow ? ("Borrow" as const) : ("Rent" as const),
   createdAt: row.createdAt,
 })

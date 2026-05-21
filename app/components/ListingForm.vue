@@ -67,6 +67,22 @@ type PendingUploadImage = {
   progress: number
 }
 
+type ListingPrefillSuggestion = {
+  skipped?: boolean
+  name?: string
+  description?: string
+  condition?: ItemCondition
+  categories?: ItemCategory[]
+  tags?: string[]
+  rentalFee?: number
+  replacementCost?: number
+  freeToBorrow?: boolean
+  rateOption?: "PER_HOUR" | "PER_DAY"
+  whatItemOffers?: string[]
+  whatIsIncluded?: string[]
+  knownIssues?: string
+}
+
 type AvailabilityRow = {
   id: string
   startDate: string
@@ -159,7 +175,11 @@ const images = ref<ListingImage[]>([])
 const pendingUploads = ref<PendingUploadImage[]>([])
 const primaryImageId = ref<string | null>(null)
 const imageUploadError = ref<string | null>(null)
+const aiPrefillError = ref<string | null>(null)
 const isUploadingImages = ref(false)
+const isGeneratingPrefill = ref(false)
+const lastPrefillImageUrl = ref<string | null>(null)
+const lastAppliedPrefill = ref<ListingPrefillSuggestion | null>(null)
 const lightboxImage = ref<ListingImage | null>(null)
 const showErrors = ref(false)
 const isDragging = ref(false)
@@ -452,9 +472,20 @@ const parseRateValue = (value: string) => {
   return digitsOnly ? Number(digitsOnly) : 0
 }
 
+const blockInvalidPriceChars = (event: KeyboardEvent) => {
+  if (["-", "e", "E", "+", "."].includes(event.key)) {
+    event.preventDefault()
+  }
+}
+
 const handleRateInput = (event: Event) => {
   const target = event.target as HTMLInputElement
-  form.rentalFee = target.value.replace(/[^0-9,]/g, "")
+  const value = target.value
+  const sanitized = value.replace(/\D/g, "")
+  if (sanitized !== value) {
+    target.value = sanitized
+  }
+  form.rentalFee = sanitized
 }
 
 const focusRate = () => {
@@ -473,7 +504,12 @@ const blurRate = () => {
 
 const handleReplacementCostInput = (event: Event) => {
   const target = event.target as HTMLInputElement
-  form.replacementCost = target.value.replace(/[^0-9,]/g, "")
+  const value = target.value
+  const sanitized = value.replace(/\D/g, "")
+  if (sanitized !== value) {
+    target.value = sanitized
+  }
+  form.replacementCost = sanitized
 }
 
 const focusReplacementCost = () => {
@@ -638,6 +674,7 @@ const uploadFileWithProgress = async (file: File): Promise<ListingImage> => {
 
 const uploadFiles = async (files: File[]) => {
   imageUploadError.value = null
+  aiPrefillError.value = null
   if (files.length === 0) {
     resetGalleryInput()
     return
@@ -661,6 +698,9 @@ const uploadFiles = async (files: File[]) => {
     const uploaded = await Promise.all(uploadableFiles.map((f) => uploadFileWithProgress(f)))
     images.value = [...images.value, ...uploaded]
     if (!primaryImageId.value) primaryImageId.value = uploaded[0]!.id
+    if (uploaded[0]?.url) {
+      void maybePrefillFromImage(uploaded[0].url)
+    }
   } catch {
     imageUploadError.value = skippedMessage
       ? `Failed to upload images. ${skippedMessage}`
@@ -705,7 +745,170 @@ const addSuggestedTag = (tag: string) => {
   if (!form.tags.includes(t)) form.tags.push(t)
 }
 
+const arraysEqual = (left: string[] | undefined, right: string[] | undefined) => {
+  if (!left || !right || left.length !== right.length) return false
+  return left.every((value, index) => value === right[index])
+}
+
+const getPrefillErrorMessage = (err: unknown) => {
+  const status =
+    (err as { statusCode?: number; status?: number })?.statusCode ??
+    (err as { status?: number })?.status
+  const serverMessage =
+    (err as { data?: { statusMessage?: string; message?: string } })?.data?.statusMessage ??
+    (err as { data?: { statusMessage?: string; message?: string } })?.data?.message ??
+    (err as { statusMessage?: string })?.statusMessage
+  if (serverMessage) return serverMessage
+  if (status === 503) return "AI prefill is temporarily unavailable."
+  if (status === 401) return "Sign in again to use AI prefill."
+  return "Unable to generate AI suggestions from this photo."
+}
+
+const applyListingPrefill = (prefill: ListingPrefillSuggestion) => {
+  const applied: ListingPrefillSuggestion = {}
+
+  if (!form.name.trim() && prefill.name) {
+    form.name = prefill.name
+    applied.name = prefill.name
+  }
+
+  if (!form.description.trim() && prefill.description) {
+    form.description = prefill.description
+    applied.description = prefill.description
+  }
+
+  if (!form.condition && prefill.condition) {
+    form.condition = prefill.condition
+    applied.condition = prefill.condition
+  }
+
+  if (form.categories.length === 0 && prefill.categories?.length) {
+    form.categories = prefill.categories
+    applied.categories = [...prefill.categories]
+  }
+
+  if (form.tags.length === 0 && prefill.tags?.length) {
+    form.tags = prefill.tags
+    applied.tags = [...prefill.tags]
+  }
+
+  if (form.freeToBorrow === null && typeof prefill.freeToBorrow === "boolean") {
+    form.freeToBorrow = prefill.freeToBorrow
+    applied.freeToBorrow = prefill.freeToBorrow
+  }
+
+  if (
+    form.freeToBorrow !== true &&
+    !form.rentalFee &&
+    typeof prefill.rentalFee === "number" &&
+    prefill.rentalFee > 0
+  ) {
+    form.rentalFee = formatRateValue(String(prefill.rentalFee))
+    applied.rentalFee = prefill.rentalFee
+  }
+
+  if (
+    !form.replacementCost &&
+    typeof prefill.replacementCost === "number" &&
+    prefill.replacementCost > 0
+  ) {
+    form.replacementCost = formatRateValue(String(prefill.replacementCost))
+    applied.replacementCost = prefill.replacementCost
+  }
+
+  if (prefill.rateOption && form.rateOption === "PER_DAY") {
+    form.rateOption = prefill.rateOption
+    applied.rateOption = prefill.rateOption
+  }
+
+  if (whatThisItemOffers.value.length === 0 && prefill.whatItemOffers?.length) {
+    whatThisItemOffers.value = prefill.whatItemOffers
+    applied.whatItemOffers = [...prefill.whatItemOffers]
+  }
+
+  if (whatsIncluded.value.length === 0 && prefill.whatIsIncluded?.length) {
+    whatsIncluded.value = prefill.whatIsIncluded
+    applied.whatIsIncluded = [...prefill.whatIsIncluded]
+  }
+
+  if (!form.knownIssues.trim() && prefill.knownIssues) {
+    form.knownIssues = prefill.knownIssues
+    applied.knownIssues = prefill.knownIssues
+  }
+
+  return Object.keys(applied).length > 0 ? applied : null
+}
+
+const maybePrefillFromImage = async (imageUrl: string) => {
+  if (isGeneratingPrefill.value || lastPrefillImageUrl.value === imageUrl) return
+
+  isGeneratingPrefill.value = true
+  aiPrefillError.value = null
+  lastPrefillImageUrl.value = imageUrl
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const prefill = await $fetch<ListingPrefillSuggestion>("/api/items/prefill", {
+      method: "POST",
+      headers: session?.access_token
+        ? {
+            authorization: `Bearer ${session.access_token}`,
+          }
+        : undefined,
+      body: { imageUrl },
+    })
+    if (prefill.skipped) {
+      lastAppliedPrefill.value = null
+      return
+    }
+
+    lastAppliedPrefill.value = applyListingPrefill(prefill)
+  } catch (err) {
+    aiPrefillError.value = getPrefillErrorMessage(err)
+  } finally {
+    isGeneratingPrefill.value = false
+  }
+}
+
+const clearAiPrefill = () => {
+  const prefill = lastAppliedPrefill.value
+  if (!prefill) return
+
+  if (prefill.name && form.name === prefill.name) form.name = ""
+  if (prefill.description && form.description === prefill.description) form.description = ""
+  if (prefill.condition && form.condition === prefill.condition) form.condition = ""
+  if (prefill.categories && arraysEqual(form.categories, prefill.categories)) form.categories = []
+  if (prefill.tags && arraysEqual(form.tags, prefill.tags)) form.tags = []
+  if (typeof prefill.freeToBorrow === "boolean" && form.freeToBorrow === prefill.freeToBorrow) {
+    form.freeToBorrow = null
+  }
+  if (prefill.rentalFee && form.rentalFee === formatRateValue(String(prefill.rentalFee))) {
+    form.rentalFee = ""
+  }
+  if (
+    prefill.replacementCost &&
+    form.replacementCost === formatRateValue(String(prefill.replacementCost))
+  ) {
+    form.replacementCost = ""
+  }
+  if (prefill.rateOption && form.rateOption === prefill.rateOption) form.rateOption = "PER_DAY"
+  if (prefill.whatItemOffers && arraysEqual(whatThisItemOffers.value, prefill.whatItemOffers)) {
+    whatThisItemOffers.value = []
+  }
+  if (prefill.whatIsIncluded && arraysEqual(whatsIncluded.value, prefill.whatIsIncluded)) {
+    whatsIncluded.value = []
+  }
+  if (prefill.knownIssues && form.knownIssues === prefill.knownIssues) form.knownIssues = ""
+
+  lastAppliedPrefill.value = null
+}
+
 const confirmCancel = () => {
+  // Reset initialFormState to current state so isDirty becomes false,
+  // allowing onBeforeRouteLeave to proceed with navigation.
+  initialFormState.value = getFormStateString()
   showCancelModal.value = false
   emit("cancel")
 }
@@ -827,13 +1030,14 @@ const isStepCompleted = (stepId: string) => {
 
 const formErrors = computed(() => {
   const errors: Record<string, string> = {}
+  const requireDetailChips = props.mode !== "edit"
   if (!coverImage.value) errors.coverImage = "Please upload a cover image"
   if (!form.name.trim()) errors.name = "Item name is required"
   if (form.categories.length === 0) errors.categories = "Please select at least one category"
   if (!form.description.trim()) errors.description = "Description is required"
-  if (whatThisItemOffers.value.length === 0)
+  if (requireDetailChips && whatThisItemOffers.value.length === 0)
     errors.whatThisItemOffers = "Please add at least one feature"
-  if (whatsIncluded.value.length === 0)
+  if (requireDetailChips && whatsIncluded.value.length === 0)
     errors.whatsIncluded = "Please add at least one included item"
   if (form.freeToBorrow === null) errors.listingType = "Please select a listing type"
   if (form.freeToBorrow === false && parseRateValue(form.rentalFee) <= 0)
@@ -860,7 +1064,7 @@ const availabilityRowErrors = computed(() =>
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-[1100px] font-geist pb-20 lg:px-16 xl:px-24">
+  <div class="mx-auto w-full max-w-[1100px] font-geist pb-20 px-4 sm:px-6 lg:px-16 xl:px-24">
     <div v-if="!embedded" class="mb-10">
       <div class="relative group/tooltip w-fit mb-8">
         <NuxtLink
@@ -879,12 +1083,14 @@ const availabilityRowErrors = computed(() =>
       </div>
       <section class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black">
+          <h1
+            class="font-geist text-[28px] sm:text-[36px] font-medium text-noble-black tracking-tight leading-tight"
+          >
             {{ props.mode === "new" ? "Add New Item" : "Edit Listing" }}
           </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
-        <p class="text-[16px] font-light text-noble-black/50">
+        <p class="text-[14px] sm:text-[16px] font-light text-noble-black/50">
           {{
             props.mode === "new"
               ? "Share your items with the community and earn rewards."
@@ -895,18 +1101,18 @@ const availabilityRowErrors = computed(() =>
     </div>
 
     <div
-      class="sticky top-0 z-50 -mx-6 sm:-mx-12 lg:-mx-16 xl:-mx-24 bg-white border-b border-cinnamon-ice/15 shadow-sm pb-6 pt-4 mb-10"
+      class="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-16 xl:-mx-24 bg-white/95 backdrop-blur-sm border-b border-cinnamon-ice/15 shadow-sm pb-4 sm:pb-6 pt-3 sm:pt-4 mb-10"
     >
       <div class="mx-auto max-w-[1100px] lg:px-16 xl:px-24 w-full relative">
         <div class="flex items-center justify-between relative z-10">
           <div
             v-for="(step, index) in STEPS"
             :key="step.id"
-            class="flex flex-col items-center gap-2.5 relative group cursor-pointer"
+            class="flex flex-col items-center gap-2 sm:gap-2.5 relative group cursor-pointer"
             @click="scrollToSection(step.id)"
           >
             <div
-              class="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 border-2"
+              class="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all duration-300 border-2"
               :class="[
                 isStepCompleted(step.id)
                   ? 'bg-burning-orange border-burning-orange text-white shadow-lg shadow-burning-orange/20'
@@ -918,12 +1124,12 @@ const availabilityRowErrors = computed(() =>
               <Icon
                 v-if="isStepCompleted(step.id)"
                 name="ph:check"
-                class="w-[18px] h-[18px] shrink-0"
+                class="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0"
               />
-              <span v-else class="text-[13px] font-bold">{{ index + 1 }}</span>
+              <span v-else class="text-[12px] sm:text-[13px] font-bold">{{ index + 1 }}</span>
             </div>
             <span
-              class="text-[10px] font-bold uppercase tracking-wider transition-colors duration-300"
+              class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-colors duration-300"
               :class="[
                 currentActiveStep === step.id
                   ? 'text-burning-orange'
@@ -933,7 +1139,9 @@ const availabilityRowErrors = computed(() =>
             >
           </div>
         </div>
-        <div class="absolute top-[18px] left-8 right-8 h-[2px] bg-noble-black/10 -z-0">
+        <div
+          class="absolute top-[16px] sm:top-[18px] left-8 right-8 h-[1.5px] sm:h-[2px] bg-noble-black/10 -z-0"
+        >
           <div
             class="h-full bg-burning-orange transition-all duration-500"
             :style="{
@@ -1009,6 +1217,41 @@ const availabilityRowErrors = computed(() =>
           <p v-if="imageUploadError" class="text-[13px] font-medium text-cinnabar-red">
             {{ imageUploadError }}
           </p>
+          <div
+            v-if="isGeneratingPrefill || aiPrefillError || lastAppliedPrefill"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-cinnamon-ice/20 bg-white px-4 py-3"
+          >
+            <div class="flex items-center gap-2 text-[13px] font-semibold">
+              <Icon
+                :name="
+                  aiPrefillError
+                    ? 'ph:warning-circle'
+                    : isGeneratingPrefill
+                      ? 'ph:sparkle'
+                      : 'ph:check-circle'
+                "
+                class="h-4 w-4 shrink-0"
+                :class="aiPrefillError ? 'text-cinnabar-red' : 'text-burning-orange'"
+              />
+              <span :class="aiPrefillError ? 'text-cinnabar-red' : 'text-noble-black/60'">
+                {{
+                  aiPrefillError ??
+                  (isGeneratingPrefill
+                    ? "Analyzing photo for listing suggestions..."
+                    : "AI suggestions applied.")
+                }}
+              </span>
+            </div>
+            <button
+              v-if="lastAppliedPrefill"
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-full border border-cinnamon-ice/20 px-3 py-1 text-[12px] font-bold text-noble-black/50 transition-colors hover:border-cinnabar-red/30 hover:text-cinnabar-red"
+              @click="clearAiPrefill"
+            >
+              <Icon name="ph:x" class="h-3.5 w-3.5 shrink-0" />
+              Clear suggestions
+            </button>
+          </div>
           <div
             v-if="images.length > 0 || pendingUploads.length > 0"
             class="flex items-center gap-4 overflow-x-auto pt-5 pb-3 px-2 scrollbar-hide"
@@ -1318,6 +1561,7 @@ const availabilityRowErrors = computed(() =>
                   @input="handleRateInput"
                   @blur="blurRate"
                   @focus="focusRate"
+                  @keypress="blockInvalidPriceChars"
                 />
                 <div ref="rateUnitDropdownRef" class="relative">
                   <button
@@ -1366,6 +1610,7 @@ const availabilityRowErrors = computed(() =>
                   @input="handleReplacementCostInput"
                   @blur="blurReplacementCost"
                   @focus="focusReplacementCost"
+                  @keypress="blockInvalidPriceChars"
                 />
               </div>
               <p class="helper-text">
@@ -1394,15 +1639,15 @@ const availabilityRowErrors = computed(() =>
                   <label class="form-label opacity-50 uppercase tracking-widest !text-[10px]"
                     >Available From <span class="text-cinnabar-red">*</span></label
                   >
-                  <div class="flex gap-3">
+                  <div class="flex flex-col xs:flex-row gap-3">
                     <CustomCalendar
                       :model-value="availability.startDate"
-                      class="flex-1"
+                      class="w-full xs:flex-1"
                       :min-date="todayStr"
                       @update:model-value="updateAvailabilityField(index, 'startDate', $event)"
                     /><CustomTimePicker
                       :model-value="availability.startTime"
-                      class="w-32"
+                      class="w-full xs:w-32"
                       :min-time="availability.startDate === todayStr ? currentTimeStr : ''"
                       @update:model-value="updateAvailabilityField(index, 'startTime', $event)"
                     />
@@ -1412,15 +1657,15 @@ const availabilityRowErrors = computed(() =>
                   <label class="form-label opacity-50 uppercase tracking-widest !text-[10px]"
                     >Available Until <span class="text-cinnabar-red">*</span></label
                   >
-                  <div class="flex gap-3">
+                  <div class="flex flex-col xs:flex-row gap-3">
                     <CustomCalendar
                       :model-value="availability.endDate"
-                      class="flex-1"
+                      class="w-full xs:flex-1"
                       :min-date="availability.startDate || todayStr"
                       @update:model-value="updateAvailabilityField(index, 'endDate', $event)"
                     /><CustomTimePicker
                       :model-value="availability.endTime"
-                      class="w-32"
+                      class="w-full xs:w-32"
                       :min-time="
                         availability.startDate === availability.endDate
                           ? availability.startTime
@@ -1518,11 +1763,11 @@ const availabilityRowErrors = computed(() =>
       <slot name="danger-zone"></slot>
 
       <div
-        class="mt-8 pt-8 border-t border-cinnamon-ice/10 flex items-center justify-end gap-4 pb-20"
+        class="mt-8 pt-8 border-t border-cinnamon-ice/10 flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4 pb-20"
       >
         <button
           type="button"
-          class="h-12 inline-flex items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange text-burning-orange bg-white px-8 text-[15px] font-bold transition-all hover:bg-burning-orange/5 active:scale-95"
+          class="w-full sm:w-auto h-12 inline-flex items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange text-burning-orange bg-white px-8 text-[15px] font-bold transition-all hover:bg-burning-orange/5 active:scale-95"
           @click="showPreview = true"
         >
           Preview
@@ -1530,7 +1775,7 @@ const availabilityRowErrors = computed(() =>
         <button
           type="submit"
           :disabled="isSubmitting || isUploadingImages"
-          class="h-12 inline-flex items-center justify-center rounded-[10px] bg-burning-orange px-10 text-[15px] font-bold text-white shadow-[0_4px_14px_rgba(232,101,10,0.3)] transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-95 disabled:opacity-50"
+          class="w-full sm:w-auto h-12 inline-flex items-center justify-center rounded-[10px] bg-burning-orange px-10 text-[15px] font-bold text-white shadow-[0_4px_14px_rgba(232,101,10,0.3)] transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-95 disabled:opacity-50"
         >
           {{
             isUploadingImages
@@ -1565,38 +1810,67 @@ const availabilityRowErrors = computed(() =>
           <p class="text-white/70">{{ lightboxImage.name }}</p>
         </div>
       </div>
+      <!-- Discard Changes Modal -->
       <div
         v-if="showCancelModal"
-        class="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[2000] flex items-center justify-center p-4 font-geist"
       >
         <div
-          class="absolute inset-0 bg-noble-black/40 backdrop-blur-[2px]"
+          class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm"
           @click="showCancelModal = false"
         />
         <div
-          class="relative w-full max-w-[360px] overflow-hidden rounded-[28px] bg-white shadow-2xl p-8 text-center"
+          class="relative z-10 w-full max-w-md flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
         >
-          <div
-            class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-cream mx-auto text-cinnabar-red shadow-inner"
-          >
-            <Icon name="ph:warning" class="w-[30px] h-[30px] shrink-0" />
-          </div>
-          <h3 class="mb-3 text-[22px] font-bold text-noble-black">Discard changes?</h3>
-          <p class="mb-10 text-[14px] text-noble-black/40">
-            You have unsaved changes. Are you sure you want to discard them?
-          </p>
-          <div class="flex gap-3 justify-center">
+          <!-- Header -->
+          <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+            <div>
+              <h2 class="text-[24px] font-semibold text-noble-black">Discard changes?</h2>
+              <p class="mt-1 text-[13px] font-light text-noble-black/50">
+                You have unsaved changes. Are you sure you want to discard them?
+              </p>
+            </div>
             <button
-              class="h-10 rounded-xl border border-cinnamon-ice/10 px-6 text-[14px] font-semibold text-noble-black/60 hover:bg-noble-black/5"
+              type="button"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="showCancelModal = false"
             >
-              Stay</button
-            ><button
-              class="h-10 rounded-xl bg-cinnabar-red px-6 text-[14px] font-semibold text-white hover:bg-noble-black transition-all"
-              @click="confirmCancel"
-            >
-              Yes, Discard
+              <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
+          </div>
+
+          <!-- Content (Warning Box) -->
+          <div class="px-6 py-6">
+            <div class="rounded-[16px] border border-cinnabar-red/10 bg-cinnabar-red/[0.03] p-5">
+              <div class="flex items-start gap-3 text-cinnabar-red">
+                <Icon name="ph:warning-circle" class="w-[18px] h-[18px] shrink-0 mt-0.5" />
+                <p class="text-[13px] font-bold leading-relaxed">
+                  Any progress you've made on this listing will be permanently lost.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div
+            class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
+          >
+            <div class="flex gap-3 w-full">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-cinnabar-red bg-white text-[15px] font-semibold text-cinnabar-red transition-all duration-200 hover:bg-cinnabar-red/5"
+                @click="showCancelModal = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-cinnabar-red text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-cinnabar-red/20 hover:brightness-110"
+                @click="confirmCancel"
+              >
+                Yes, Discard
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1609,10 +1883,17 @@ const availabilityRowErrors = computed(() =>
   border-radius: 24px;
   border: 1px solid theme("colors.cinnamon-ice / 20%");
   background-color: theme("colors.cream");
-  padding: 32px;
+  padding: 24px 16px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   transition: all 0.3s ease;
 }
+
+@media (min-width: 640px) {
+  .form-section {
+    padding: 32px;
+  }
+}
+
 .form-section:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
@@ -1679,9 +1960,14 @@ const availabilityRowErrors = computed(() =>
 }
 .section-title {
   font-family: theme("fontFamily.geist");
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   color: theme("colors.noble-black");
+}
+@media (min-width: 640px) {
+  .section-title {
+    font-size: 17px;
+  }
 }
 .section-subtitle {
   font-family: theme("fontFamily.geist");
@@ -1746,12 +2032,17 @@ textarea::placeholder {
 }
 .upload-dropzone {
   width: 100%;
-  padding: 40px;
+  padding: 24px 16px;
   border: 2px dashed theme("colors.cinnamon-ice / 20%");
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
   background-color: theme("colors.white");
+}
+@media (min-width: 640px) {
+  .upload-dropzone {
+    padding: 40px;
+  }
 }
 .upload-dropzone:hover,
 .upload-dropzone.is-dragging {

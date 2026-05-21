@@ -83,12 +83,12 @@ describe("login – verifyGoogleIdToken", () => {
 // Login – additional edge cases for verifyGoogleIdToken
 // ---------------------------------------------------------------------------
 describe("login – verifyGoogleIdToken edge cases", () => {
-  // ✅ Sunny: token with no display name falls back to the email prefix
-  it("uses the email prefix as name when Google name is absent", async () => {
+  // ✅ Sunny: token with no display name falls back to a generic display name
+  it("uses a generic display name when Google name is absent", async () => {
     vi.stubGlobal("$fetch", vi.fn().mockResolvedValueOnce(makeTokenInfo({ name: "" })))
 
     const identity = await verifyGoogleIdToken("no-name-token", VALID_GOOGLE_CLIENT_ID)
-    expect(identity.name).toBe("student") // prefix of student@up.edu.ph
+    expect(identity.name).toBe("UP User")
   })
 
   // 🌧️ Rainy 1: GOOGLE_CLIENT_ID is not configured (empty)

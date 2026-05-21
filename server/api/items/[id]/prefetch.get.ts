@@ -7,6 +7,8 @@ import {
   isPublicVisibleItem,
 } from "../../../utils/item-visibility"
 import { setPublicSWRApiHeaders } from "../../../utils/request-security"
+const isPrismaPoolTimeout = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "P2024"
 
 const itemImageOrderBy: Prisma.ItemImageOrderByWithRelationInput[] = [
   { sortOrder: "asc" },
@@ -124,10 +126,20 @@ const handler = defineCachedEventHandler(
     }
 
     const now = new Date()
-    const item = (await prisma.item.findUnique({
-      where: { id: parsed.data.id },
-      select: prefetchItemSelect,
-    })) as PrefetchItemRecord | null
+    let item: PrefetchItemRecord | null = null
+
+    try {
+      item = (await prisma.item.findUnique({
+        where: { id: parsed.data.id },
+        select: prefetchItemSelect,
+      })) as PrefetchItemRecord | null
+    } catch (error) {
+      if (isPrismaPoolTimeout(error)) {
+        return null
+      }
+
+      throw error
+    }
 
     if (!item || item.adminModerationState !== null || !isPublicVisibleItem(item, now)) {
       return null

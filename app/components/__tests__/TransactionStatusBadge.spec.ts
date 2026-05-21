@@ -28,7 +28,7 @@ const getLabel = (
 
   switch (status) {
     case "PENDING":
-      return role === "BORROWER" ? "To Receive" : "Ready for Approval"
+      return "Pending"
     case "ACTIVE":
       return "In Use"
     case "COMPLETED":
@@ -59,12 +59,12 @@ const getBadgeClass = (status: TransactionStatus): string => {
 
 describe("TransactionStatusBadge logic", () => {
   describe("label", () => {
-    it("returns 'To Receive' for PENDING as BORROWER", () => {
-      expect(getLabel("PENDING", "BORROWER")).toBe("To Receive")
+    it("returns 'Pending' for PENDING as BORROWER", () => {
+      expect(getLabel("PENDING", "BORROWER")).toBe("Pending")
     })
 
-    it("returns 'Ready for Approval' for PENDING as LENDER", () => {
-      expect(getLabel("PENDING", "LENDER")).toBe("Ready for Approval")
+    it("returns 'Pending' for PENDING as LENDER", () => {
+      expect(getLabel("PENDING", "LENDER")).toBe("Pending")
     })
 
     it("returns 'In Use' for ACTIVE (both roles)", () => {

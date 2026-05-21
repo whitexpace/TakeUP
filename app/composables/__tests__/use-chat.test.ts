@@ -71,11 +71,13 @@ const makeMessage = (id: string, overrides: Partial<ChatMessage> = {}): ChatMess
   id,
   conversationId: CONV_ID_1,
   senderUserId: "sender-1",
+  replyToMessageId: null,
   body: `Message ${id}`,
   imageUrl: null,
   isRead: false,
   readAt: null,
   createdAt: "2026-04-20T10:00:00.000Z",
+  replyToMessage: null,
   ...overrides,
 })
 
@@ -95,6 +97,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -232,6 +235,81 @@ describe("useChat", () => {
     })
   })
 
+  it("prefetches later inbox conversations by start index", async () => {
+    fetchMock.mockResolvedValue({ messages: [], nextCursor: null, hasMore: false })
+
+    const chat = useChat()
+    chat.conversations.value = Array.from({ length: 12 }, (_value, index) =>
+      makeConversationSummary(`conv-${index + 1}`),
+    )
+
+    chat.prefetchConversationMessagesForInbox({ startIndex: 8, initialCount: 4 })
+    for (let index = 0; index < 30; index += 1) {
+      await Promise.resolve()
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/chat/messages", {
+      params: { conversationId: "conv-9" },
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/chat/messages", {
+      params: { conversationId: "conv-12" },
+    })
+  })
+
+  it("keeps a stale message load cached when the user switches conversations mid-load", async () => {
+    let resolveFirstMessages!: (value: {
+      messages: ChatMessage[]
+      nextCursor: string | null
+      hasMore: boolean
+    }) => void
+
+    fetchMock.mockImplementation(
+      (url: string, options?: { params?: { conversationId?: string } }) => {
+        if (url !== "/api/chat/messages") return Promise.resolve(undefined)
+
+        if (options?.params?.conversationId === CONV_ID_1) {
+          return new Promise((resolve) => {
+            resolveFirstMessages = resolve
+          })
+        }
+
+        return Promise.resolve({
+          messages: [makeMessage("msg-conv-2", { conversationId: CONV_ID_2 })],
+          nextCursor: null,
+          hasMore: false,
+        })
+      },
+    )
+
+    const chat = useChat()
+    chat.conversations.value = [
+      makeConversationSummary(CONV_ID_1),
+      makeConversationSummary(CONV_ID_2, { transactionId: TX_ID_2 }),
+    ]
+
+    const firstOpen = chat.openConversation(TX_ID_1)
+    await flushPromises()
+
+    const secondOpen = chat.openConversation(TX_ID_2)
+    await secondOpen
+
+    resolveFirstMessages({
+      messages: [makeMessage("msg-conv-1")],
+      nextCursor: null,
+      hasMore: false,
+    })
+    await firstOpen
+
+    fetchMock.mockClear()
+    await chat.openConversation(TX_ID_1)
+
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-conv-1"])
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/chat/messages", {
+      params: { conversationId: CONV_ID_1 },
+    })
+  })
+
   it("loads more messages and prepends older pages", async () => {
     fetchMock
       .mockResolvedValueOnce(makeConversationDetail(CONV_ID_1))
@@ -289,6 +367,55 @@ describe("useChat", () => {
       body: {
         body: "Hello there",
         imageUrl: "https://example.com/chat.jpg",
+        replyToMessageId: null,
+      },
+    })
+  })
+
+  it("sends a reply with optimistic quoted-message metadata", async () => {
+    const originalMessage = makeMessage("msg-original", {
+      senderUserId: "user-conv-1",
+      body: "Original message",
+      createdAt: "2026-04-20T11:59:00.000Z",
+    })
+    const sentMessage = makeMessage("msg-reply", {
+      body: "Replying now",
+      replyToMessageId: "msg-original",
+      replyToMessage: {
+        id: "msg-original",
+        senderUserId: "user-conv-1",
+        body: "Original message",
+        imageUrl: null,
+        createdAt: "2026-04-20T11:59:00.000Z",
+      },
+      createdAt: "2026-04-20T12:00:00.000Z",
+    })
+    fetchMock.mockResolvedValue(sentMessage)
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+    await chat.mergeActiveConversationMessages([originalMessage])
+
+    const pendingSend = chat.sendMessage("Replying now", null, originalMessage)
+
+    expect(chat.messages.value[1]).toMatchObject({
+      body: "Replying now",
+      replyToMessageId: "msg-original",
+      replyToMessage: {
+        id: "msg-original",
+        body: "Original message",
+      },
+      isOptimistic: true,
+    })
+
+    await expect(pendingSend).resolves.toMatchObject({ id: "msg-reply" })
+    expect(fetchMock).toHaveBeenCalledWith(`/api/chat/conversations/${CONV_ID_1}/messages`, {
+      method: "POST",
+      body: {
+        body: "Replying now",
+        imageUrl: null,
+        replyToMessageId: "msg-original",
       },
     })
   })
@@ -315,8 +442,102 @@ describe("useChat", () => {
       body: {
         body: "",
         imageUrl: "https://example.com/chat.jpg",
+        replyToMessageId: null,
       },
     })
+  })
+
+  it("queues consecutive sends while showing both optimistic messages immediately", async () => {
+    vi.useFakeTimers()
+    let resolveFirst!: (message: ChatMessage) => void
+    let resolveSecond!: (message: ChatMessage) => void
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<ChatMessage>((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<ChatMessage>((resolve) => {
+            resolveSecond = resolve
+          }),
+      )
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+
+    vi.setSystemTime(new Date("2026-04-20T10:00:00.000Z"))
+    const firstSend = chat.sendMessage("First")
+    vi.setSystemTime(new Date("2026-04-20T10:00:00.001Z"))
+    const secondSend = chat.sendMessage("Second")
+
+    expect(chat.messages.value.map((message) => message.body)).toEqual(["First", "Second"])
+    expect(chat.messages.value.every((message) => message.isOptimistic)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `/api/chat/conversations/${CONV_ID_1}/messages`, {
+      method: "POST",
+      body: {
+        body: "First",
+        imageUrl: null,
+        replyToMessageId: null,
+      },
+    })
+
+    resolveFirst(makeMessage("msg-first", { body: "First", createdAt: "2099-04-20T10:00:00.000Z" }))
+    await flushPromises()
+
+    expect(chat.messages.value.map((message) => message.body)).toEqual(["First", "Second"])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/chat/conversations/${CONV_ID_1}/messages`, {
+      method: "POST",
+      body: {
+        body: "Second",
+        imageUrl: null,
+        replyToMessageId: null,
+      },
+    })
+
+    resolveSecond(
+      makeMessage("msg-second", {
+        body: "Second",
+        createdAt: "2100-04-20T10:01:00.000Z",
+      }),
+    )
+
+    await expect(firstSend).resolves.toMatchObject({ id: "msg-first" })
+    await expect(secondSend).resolves.toMatchObject({ id: "msg-second" })
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-first", "msg-second"])
+    expect(chat.messages.value.some((message) => message.isOptimistic)).toBe(false)
+  })
+
+  it("replaces a pending optimistic message when realtime echoes the saved row first", async () => {
+    let resolveSend!: (message: ChatMessage) => void
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<ChatMessage>((resolve) => {
+          resolveSend = resolve
+        }),
+    )
+
+    const chat = useChat()
+    chat.conversations.value = [makeConversationSummary(CONV_ID_1)]
+    chat.activeConversation.value = makeConversationDetail(CONV_ID_1)
+
+    const send = chat.sendMessage("Profanity-free message")
+    const savedMessage = makeMessage("msg-saved", { body: "Profanity-free message" })
+
+    chat.onActiveRealtimeMessage(savedMessage, "INSERT")
+
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-saved"])
+    expect(chat.messages.value[0]?.isOptimistic).toBeUndefined()
+
+    resolveSend(savedMessage)
+
+    await expect(send).resolves.toMatchObject({ id: "msg-saved" })
+    expect(chat.messages.value.map((message) => message.id)).toEqual(["msg-saved"])
   })
 
   it("merges polling receipt updates into the active conversation", async () => {

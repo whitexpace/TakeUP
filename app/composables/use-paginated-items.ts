@@ -5,6 +5,7 @@ import type {
   ListedItem,
   PaginatedItemsResponse,
 } from "../types/item-listing"
+import { pruneExpiredEntries, setBoundedMapEntry } from "../utils/bounded-cache"
 import { clearPersistedSessionState, usePersistedSessionState } from "./use-persisted-session-state"
 import { recordPerfEvent, withPerfTimer } from "../utils/performance-telemetry"
 import { useViewerSession } from "./use-viewer-session"
@@ -25,6 +26,7 @@ type PaginatedItemsCacheEntry = {
 }
 
 const PAGINATED_ITEMS_CACHE_TTL_MS = 30_000
+const MAX_PAGINATED_ITEMS_CACHE_ENTRIES = 80
 const paginatedItemsCache = new Map<string, PaginatedItemsCacheEntry>()
 const pendingPaginatedItemsRequests = new Map<string, Promise<PaginatedItemsResponse>>()
 
@@ -38,6 +40,7 @@ const serializePaginatedItemsQuery = (query: PaginatedItemsQuery) =>
     .join("&")
 
 const getCachedPaginatedItemsResponse = (cacheKey: string) => {
+  pruneExpiredEntries(paginatedItemsCache)
   const cachedEntry = paginatedItemsCache.get(cacheKey)
   if (!cachedEntry) {
     return null
@@ -52,10 +55,16 @@ const getCachedPaginatedItemsResponse = (cacheKey: string) => {
 }
 
 const setCachedPaginatedItemsResponse = (cacheKey: string, response: PaginatedItemsResponse) => {
-  paginatedItemsCache.set(cacheKey, {
-    expiresAt: Date.now() + PAGINATED_ITEMS_CACHE_TTL_MS,
-    response: clonePaginatedItemsResponse(response),
-  })
+  pruneExpiredEntries(paginatedItemsCache)
+  setBoundedMapEntry(
+    paginatedItemsCache,
+    cacheKey,
+    {
+      expiresAt: Date.now() + PAGINATED_ITEMS_CACHE_TTL_MS,
+      response: clonePaginatedItemsResponse(response),
+    },
+    MAX_PAGINATED_ITEMS_CACHE_ENTRIES,
+  )
 }
 
 const buildPaginatedItemsQuery = ({

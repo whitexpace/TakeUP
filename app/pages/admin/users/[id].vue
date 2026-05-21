@@ -210,7 +210,9 @@ const performBanUser = async () => {
           />
           <div class="space-y-2">
             <div class="space-y-1">
-              <h1 class="font-montravia text-[32px] font-medium text-noble-black leading-none">
+              <h1
+                class="font-geist text-[32px] font-medium text-noble-black leading-none tracking-tight"
+              >
                 {{ user?.firstName }} {{ user?.lastName }}
               </h1>
               <div class="w-8 h-0.5 bg-burning-orange"></div>

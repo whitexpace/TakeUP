@@ -103,7 +103,9 @@ const getRecordTitle = (record: AdminCommissionRecord) =>
     <!-- Elegant Executive Header -->
     <header class="space-y-3">
       <div class="space-y-2">
-        <h1 class="font-montravia text-[36px] font-medium text-noble-black">Commission Earnings</h1>
+        <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+          Commission Earnings
+        </h1>
         <div class="w-10 h-0.5 bg-burning-orange"></div>
       </div>
       <p class="text-[16px] font-light leading-relaxed text-noble-black/50">

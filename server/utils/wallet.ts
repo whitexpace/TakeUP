@@ -175,14 +175,8 @@ async function ensureWalletRecord(
 ) {
   const prisma = asWalletPrisma(tx || globalPrisma)
 
-  console.warn("[wallet:ensureWalletRecord] called with owner:", owner)
-
   try {
     if (owner.scope === WalletScope.USER) {
-      console.warn(
-        "[wallet:ensureWalletRecord] attempting INSERT for USER scope, userId=",
-        owner.userId,
-      )
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO wallets (id, scope, user_id, currency, balance, status, updated_at)
         VALUES (
@@ -196,15 +190,7 @@ async function ensureWalletRecord(
         )
         ON CONFLICT ("user_id") DO NOTHING
       `)
-      console.warn(
-        "[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for userId=",
-        owner.userId,
-      )
     } else {
-      console.warn(
-        "[wallet:ensureWalletRecord] attempting INSERT for SYSTEM scope, systemKey=",
-        owner.systemKey,
-      )
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO wallets (id, scope, system_key, currency, balance, status, updated_at)
         VALUES (
@@ -218,10 +204,6 @@ async function ensureWalletRecord(
         )
         ON CONFLICT ("system_key") DO NOTHING
       `)
-      console.warn(
-        "[wallet:ensureWalletRecord] INSERT succeeded (or conflict — already existed) for systemKey=",
-        owner.systemKey,
-      )
     }
   } catch (err: unknown) {
     const error = err as { code?: string; name?: string; meta?: { code?: string } }
@@ -244,18 +226,7 @@ async function ensureWalletRecord(
     throw err
   }
 
-  console.warn(
-    "[wallet:ensureWalletRecord] now fetching wallet record back from DB for owner:",
-    owner,
-  )
-  const wallet = await fetchWalletRecord(owner, prisma)
-  console.warn(
-    "[wallet:ensureWalletRecord] fetched wallet id=",
-    wallet.id,
-    "balance=",
-    wallet.balance?.toString?.() ?? wallet.balance,
-  )
-  return wallet
+  return fetchWalletRecord(owner, prisma)
 }
 
 async function lockWallet(
@@ -511,6 +482,7 @@ export async function payWithWallet(
   userId: string,
   amount: number,
   context: { relatedEntityType: string; relatedEntityId: string },
+  tx?: Prisma.TransactionClient,
 ) {
   if (amount <= 0) {
     throw new TRPCError({
@@ -519,8 +491,8 @@ export async function payWithWallet(
     })
   }
 
-  return await globalPrisma.$transaction(async (tx) => {
-    const walletTx = asWalletPrisma(tx)
+  const execute = async (client: Prisma.TransactionClient & WalletPrismaAdapter) => {
+    const walletTx = asWalletPrisma(client)
     const wallet = await lockWallet({ scope: WalletScope.USER, userId }, walletTx)
     if (wallet.status !== "ACTIVE")
       throw new TRPCError({ code: "FORBIDDEN", message: "Wallet is not active." })
@@ -552,7 +524,13 @@ export async function payWithWallet(
     const updatedWallet = await updateWalletBalance(wallet.id, newBalance, walletTx)
 
     return { wallet: updatedWallet, transaction }
-  })
+  }
+
+  if (tx) {
+    return await execute(asWalletPrisma(tx))
+  }
+
+  return await globalPrisma.$transaction(async (newTx) => await execute(asWalletPrisma(newTx)))
 }
 
 /**

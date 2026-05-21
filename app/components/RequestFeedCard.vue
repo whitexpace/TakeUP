@@ -3,22 +3,35 @@
     class="rounded-[24px] border border-cinnamon-ice/30 bg-cream p-6 shadow-sm transition-shadow duration-300 hover:shadow-md"
   >
     <div class="flex items-start justify-between gap-4">
-      <div class="min-w-0">
-        <p class="text-[13px] font-semibold uppercase tracking-[0.14em] text-blue-estate/70">
-          {{ requesterLabel }}
-        </p>
-        <h2 class="mt-2 text-[22px] font-bold leading-tight text-noble-black">
-          {{ post.itemNeeded }}
-        </h2>
+      <div class="flex items-center gap-3 min-w-0">
+        <UserAvatar
+          :avatar-url="post.requester.avatar"
+          :user-name="post.requester.name"
+          size="md"
+          class="shrink-0"
+        />
+        <div class="flex flex-col min-w-0">
+          <span class="text-[15px] font-bold text-noble-black truncate">
+            {{ post.requester.name }}
+          </span>
+          <span class="text-[13px] text-noble-black/50 truncate">
+            @{{ post.requester.username }}
+          </span>
+        </div>
       </div>
       <span class="shrink-0 text-[12px] text-noble-black/50">
         {{ relativeTime }}
       </span>
     </div>
 
-    <p class="mt-4 text-[15px] leading-relaxed text-noble-black/70">
-      {{ post.description }}
-    </p>
+    <div class="mt-5 min-w-0">
+      <h2 class="text-[22px] font-bold leading-tight text-noble-black">
+        {{ post.itemNeeded }}
+      </h2>
+      <p class="mt-2 text-[15px] leading-relaxed text-noble-black/70">
+        {{ post.description }}
+      </p>
+    </div>
 
     <div class="mt-5 grid gap-3 sm:grid-cols-3">
       <div class="rounded-[18px] bg-white/75 px-4 py-3">
@@ -63,13 +76,6 @@ const props = defineProps<{
   showRequesterIdentity?: boolean
 }>()
 
-const requesterLabel = computed(() => {
-  if (props.showRequesterIdentity && props.post.requester.username) {
-    return props.post.requester.username
-  }
-
-  return "Borrower request"
-})
 const requestedDateRange = computed(() =>
   formatRequestDateRange(props.post.requestedFrom, props.post.requestedTo),
 )

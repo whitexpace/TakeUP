@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full min-w-[210px] max-w-[280px] mx-auto relative group"
+    class="bg-white rounded-[14px] border border-cinnamon-ice/20 flex flex-col h-full hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 w-full sm:min-w-[210px] sm:max-w-[280px] mx-auto relative group"
     :class="canNavigate ? 'cursor-pointer' : ''"
     @pointerenter="warmLinkedDestination"
     @focusin="warmLinkedDestination"
@@ -19,7 +19,9 @@
     />
 
     <!-- Image Section (Compact: 180px) -->
-    <div class="relative h-[180px] w-full bg-noble-black/5 rounded-t-[14px]">
+    <div
+      class="relative h-[120px] xs:h-[150px] sm:h-[180px] w-full bg-noble-black/5 rounded-t-[14px]"
+    >
       <!-- Dedicated container for image scale & rounded top -->
       <div class="absolute inset-0 overflow-hidden rounded-t-[14px]">
         <img
@@ -35,32 +37,32 @@
         />
         <div
           v-else
-          class="flex h-full w-full items-center justify-center bg-cream px-6 text-center font-geist text-[12px] font-medium text-noble-black/45"
+          class="flex h-full w-full items-center justify-center bg-cream px-4 sm:px-6 text-center font-geist text-[10px] sm:text-[12px] font-medium text-noble-black/45"
         >
-          No image uploaded
+          No image
         </div>
       </div>
 
       <!-- Rent/Borrow Badge (Modern Solid Style) -->
       <div
-        class="absolute top-[10px] left-[10px] z-10 px-2 py-1 rounded-[6px] font-geist text-[10px] font-bold uppercase tracking-[0.5px] shadow-sm whitespace-nowrap"
+        class="absolute top-2 sm:top-[10px] left-2 sm:left-[10px] z-10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-[4px] sm:rounded-[6px] font-geist text-[8px] sm:text-[10px] font-bold uppercase tracking-[0.5px] shadow-sm whitespace-nowrap"
         :class="topBadge.className"
       >
         {{ topBadge.label }}
       </div>
 
-      <div v-if="!isManagement" class="absolute top-[10px] right-[10px] z-30">
+      <div v-if="!isManagement" class="absolute top-2 sm:top-[10px] right-2 sm:right-[10px] z-30">
         <!-- Like Button (Blurred Circle) -->
         <div class="relative group/tooltip">
           <button
-            class="w-8 h-8 rounded-full bg-white/90 backdrop-blur-[4px] shadow-[0_2px_6px_rgba(0,0,0,0.1)] flex items-center justify-center transition-all duration-200 active:scale-90 group/heart"
+            class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/90 backdrop-blur-[4px] shadow-[0_2px_6px_rgba(0,0,0,0.1)] flex items-center justify-center transition-all duration-200 active:scale-90 group/heart"
             :aria-label="isLiked ? 'Unlike' : 'Like'"
             :aria-pressed="isLiked"
             @click.stop="toggleLike"
           >
             <Icon
               :name="isLiked ? 'ph:heart-fill' : 'ph:heart'"
-              class="w-4 h-4 transition-all duration-200 shrink-0"
+              class="w-3.5 h-3.5 sm:w-4 h-4 transition-all duration-200 shrink-0"
               :class="
                 isLiked
                   ? 'text-burning-orange scale-110'
@@ -82,17 +84,19 @@
     </div>
 
     <!-- Content Area (Tightened: 12px padding) -->
-    <div class="p-3 flex-1 flex flex-col justify-between bg-white min-h-0 rounded-b-[14px]">
+    <div class="p-2 sm:p-3 flex-1 flex flex-col justify-between bg-white min-h-0 rounded-b-[14px]">
       <!-- Row 1: Category & Trending -->
-      <div class="flex items-center justify-between gap-2 mb-1 min-w-0">
-        <div class="text-[11px] font-bold text-burning-orange truncate uppercase tracking-wider">
+      <div class="flex items-center justify-between gap-1 sm:gap-2 mb-0.5 sm:mb-1 min-w-0">
+        <div
+          class="text-[8px] sm:text-[11px] font-bold text-burning-orange truncate uppercase tracking-wider"
+        >
           {{ category }}
         </div>
 
         <div v-if="isTrending" class="relative group/tooltip shrink-0 flex items-center">
           <Icon
             name="ph:trend-up"
-            class="w-3.5 h-3.5 text-blue-estate shrink-0 -translate-y-[0.5px]"
+            class="w-3 sm:w-3.5 h-3 sm:h-3.5 text-blue-estate shrink-0 -translate-y-[0.5px]"
           />
           <!-- Navbar-style Tooltip -->
           <div class="card-tooltip">
@@ -103,27 +107,37 @@
       </div>
 
       <!-- Row 2: Item Name (14px truncated) -->
-      <h3 class="text-[14px] font-light text-noble-black leading-tight truncate mb-2">
+      <h3
+        class="text-[12px] sm:text-[14px] font-medium sm:font-light text-noble-black leading-tight truncate mb-1 sm:mb-2"
+      >
         {{ name }}
       </h3>
 
       <!-- Row 3: Price & Rating (Unified Row) -->
-      <div class="flex items-center justify-between gap-2 mt-auto">
-        <div class="flex items-center gap-1 min-w-0">
-          <span class="text-[15px] font-bold text-burning-orange leading-none">₱{{ price }}</span>
-          <span class="text-[11px] font-light text-noble-black/40 leading-none"
+      <div class="flex items-center justify-between gap-1 sm:gap-2 mt-auto">
+        <div class="flex items-center gap-0.5 sm:gap-1 min-w-0">
+          <span class="text-[13px] sm:text-[15px] font-bold text-burning-orange leading-none"
+            >₱{{ price }}</span
+          >
+          <span class="text-[9px] sm:text-[11px] font-light text-noble-black/40 leading-none"
             >/{{ displayPriceUnit }}</span
           >
         </div>
 
         <!-- Refined Rating -->
-        <div v-if="hasGoodRating && !isManagement" class="flex items-center gap-2 shrink-0">
+        <div
+          v-if="hasGoodRating && !isManagement"
+          class="flex items-center gap-1 sm:gap-2 shrink-0"
+        >
           <Icon
             name="ph:star-fill"
-            class="w-3.5 h-3.5 text-burning-orange shrink-0 -translate-y-[0.5px]"
+            class="w-2.5 sm:w-3.5 h-2.5 sm:h-3.5 text-burning-orange shrink-0 -translate-y-[0.5px]"
           />
-          <span class="text-[13px] font-light text-noble-black leading-none">{{ rating }}</span>
-          <span class="text-[12px] font-light text-noble-black/50 leading-none"
+          <span class="text-[11px] sm:text-[13px] font-light text-noble-black leading-none">{{
+            rating
+          }}</span>
+          <span
+            class="hidden xs:inline text-[10px] sm:text-[12px] font-light text-noble-black/50 leading-none"
             >({{ reviews }})</span
           >
         </div>

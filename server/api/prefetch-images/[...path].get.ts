@@ -24,6 +24,8 @@ const PRIVATE_ROUTE_PREFIXES = [
 ]
 
 const isExternalUrlLike = (value: string) => /^([a-z][a-z\d+.-]*:)?\/\//i.test(value)
+const isPrismaPoolTimeout = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "P2024"
 
 const getDestinationPath = (rawPath: string) => {
   let decodedPath: string
@@ -92,54 +94,64 @@ const handler = defineCachedEventHandler(
     }
 
     const now = new Date()
-    const item = await prisma.item.findFirst({
-      where: {
-        AND: [
-          { id: parsed.data.id },
-          buildPublicVisibleItemWhere(now),
-          { adminModerationState: null },
-        ],
-      },
-      select: {
-        id: true,
-        name: true,
-        status: true,
-        images: {
-          select: {
-            path: true,
-            isPrimary: true,
-            sortOrder: true,
-          },
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    let item = null
+
+    try {
+      item = await prisma.item.findFirst({
+        where: {
+          AND: [
+            { id: parsed.data.id },
+            buildPublicVisibleItemWhere(now),
+            { adminModerationState: null },
+          ],
         },
-        availability: {
-          select: {
-            startDate: true,
-            endDate: true,
-            status: true,
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          images: {
+            select: {
+              path: true,
+              isPrimary: true,
+              sortOrder: true,
+            },
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           },
-        },
-        bookings: {
-          where: {
-            status: { in: [...ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES] },
+          availability: {
+            select: {
+              startDate: true,
+              endDate: true,
+              status: true,
+            },
           },
-          select: {
-            startDate: true,
-            endDate: true,
-            status: true,
+          bookings: {
+            where: {
+              status: { in: [...ITEM_VISIBILITY_BLOCKING_BOOKING_STATUSES] },
+            },
+            select: {
+              startDate: true,
+              endDate: true,
+              status: true,
+            },
           },
-        },
-        lender: {
-          select: {
-            user: {
-              select: {
-                status: true,
+          lender: {
+            select: {
+              user: {
+                select: {
+                  status: true,
+                },
               },
             },
           },
         },
-      },
-    })
+      })
+    } catch (error) {
+      if (isPrismaPoolTimeout(error)) {
+        return { images: [] }
+      }
+
+      throw error
+    }
 
     if (!item || !isPublicVisibleItem(item, now)) {
       return {

@@ -136,12 +136,14 @@ const warmOrderDetailsImmediately = () => {
   >
     <!-- Header -->
     <div
-      class="flex items-center justify-between px-5 py-3 border-b border-cinnamon-ice/15 bg-white/50"
+      class="flex items-center justify-between px-3 sm:px-5 py-2 sm:py-3 border-b border-cinnamon-ice/15 bg-white/50"
     >
-      <span class="text-noble-black text-[14px] font-semibold">{{ borrowerName }}</span>
+      <span class="text-noble-black text-[13px] sm:text-[14px] font-semibold truncate">{{
+        borrowerName
+      }}</span>
 
       <span
-        class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] shrink-0 border"
+        class="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 border shadow-sm scale-90 origin-right sm:scale-100"
         :class="badgeClass"
       >
         {{ request.requestStatusLabel }}
@@ -149,32 +151,20 @@ const warmOrderDetailsImmediately = () => {
     </div>
 
     <!-- Body -->
-    <div class="p-5 flex items-center gap-4 relative">
+    <div class="p-3 sm:p-5 flex items-center gap-3 sm:gap-4 relative">
       <!-- Thumbnail -->
-      <div class="relative shrink-0">
+      <div class="shrink-0">
         <img
           v-if="request.item.thumbnailImage"
           :src="request.item.thumbnailImage"
           :alt="request.item.name"
-          class="w-16 h-16 object-cover rounded-[10px] border border-gray-100"
+          class="w-11 h-11 sm:w-16 sm:h-16 object-cover rounded-lg border border-gray-100"
         />
         <div
           v-else
-          class="w-16 h-16 bg-cinnamon-ice/10 rounded-[10px] border border-gray-100 flex items-center justify-center"
+          class="w-11 h-11 sm:w-16 sm:h-16 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-100"
         >
-          <svg
-            class="w-6 h-6 text-cinnamon-ice/40"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
+          <Icon name="ph:image" class="w-5 h-5 text-gray-300" />
         </div>
       </div>
 
@@ -188,57 +178,69 @@ const warmOrderDetailsImmediately = () => {
           @click.stop
         >
           <h4
-            class="text-noble-black text-[15px] font-bold truncate leading-tight mb-1 group-hover/card:underline"
+            class="text-noble-black text-[14px] sm:text-[15px] font-bold truncate leading-tight group-hover/card:underline"
           >
             {{ request.item.name }}
           </h4>
         </NuxtLink>
         <div
-          class="flex items-center gap-1.5 text-[10px] text-gray-400 font-medium leading-none mb-3"
+          class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-noble-black/40 font-medium"
         >
-          <span class="font-mono tracking-wider">{{ shortId }}</span>
-          <span class="opacity-50 select-none">·</span>
+          <span class="font-mono text-noble-black/25">{{ shortId }}</span>
+          <span class="hidden xs:inline text-noble-black/10">|</span>
           <span>{{ startDateLabel }} to {{ endDateLabel }}</span>
-          <span class="opacity-50 select-none">·</span>
-          <span>{{ duration }}</span>
+          <span class="hidden sm:inline text-noble-black/10">|</span>
+          <span class="hidden sm:inline">{{ duration }}</span>
         </div>
 
-        <!-- Action buttons -->
-        <div v-if="request.status === 'PENDING'" class="flex flex-wrap gap-2 relative z-10">
+        <!-- Action buttons (For Pending Requests) -->
+        <div v-if="request.status === 'PENDING'" class="mt-2 flex gap-2 relative z-10">
           <button
-            class="px-4 py-1.5 rounded-[8px] bg-white border border-burning-orange text-[12px] font-bold text-burning-orange hover:bg-burning-orange/5 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-3 py-1 rounded-lg bg-white border border-burning-orange text-[11px] font-bold text-burning-orange hover:bg-burning-orange/5 transition-all active:scale-95 disabled:opacity-50"
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CANCELLED')"
           >
-            {{ actingStatus === "CANCELLED" ? "Declining..." : "Decline" }}
+            {{ actingStatus === "CANCELLED" ? "..." : "Decline" }}
           </button>
           <button
-            class="px-4 py-1.5 rounded-[8px] bg-burning-orange text-white text-[12px] font-bold hover:brightness-110 transition-all shadow-sm shadow-burning-orange/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-3 py-1 rounded-lg bg-burning-orange text-white text-[11px] font-bold hover:brightness-110 shadow-sm transition-all active:scale-95 disabled:opacity-50"
             :disabled="actingBookingId === request.id"
             @click.stop="handleBookingDecision('CONFIRMED')"
           >
-            {{ actingStatus === "CONFIRMED" ? "Accepting..." : "Accept Request" }}
+            {{ actingStatus === "CONFIRMED" ? "..." : "Accept" }}
           </button>
+        </div>
+        <div v-else-if="request.status === 'CONFIRMED'" class="flex flex-wrap gap-2 relative z-10">
+          <NuxtLink
+            :to="detailPath"
+            :prefetch-on="{ interaction: true }"
+            class="inline-flex items-center gap-1.5 rounded-[8px] bg-burning-orange px-4 py-1.5 text-[12px] font-bold text-white shadow-sm shadow-burning-orange/20 transition-all hover:brightness-110 active:scale-95"
+            @focus="warmOrderDetails"
+            @click.stop
+          >
+            <Icon name="ph:receipt" class="h-3.5 w-3.5 shrink-0" />
+            <span>Order Details</span>
+          </NuxtLink>
         </div>
 
         <!-- Error message -->
-        <div v-if="actionError" class="mt-2 text-[12px] text-cinnabar-red">
+        <div v-if="actionError" class="mt-1 text-[10px] font-bold text-cinnabar-red truncate">
           {{ actionError }}
         </div>
       </div>
 
       <!-- Pricing Info -->
-      <div class="shrink-0 z-10 text-right self-start">
-        <div class="flex flex-col items-end">
-          <p class="text-[13px] text-gray-400 font-medium leading-none mb-1.5">{{ rateLabel }}</p>
-          <div class="flex items-baseline gap-1.5">
-            <span class="text-[11px] text-[#9CA3AF] font-bold uppercase tracking-wider">
-              Total:
-            </span>
-            <span class="text-[16px] font-bold text-burning-orange leading-none">
-              {{ totalLabel }}
-            </span>
-          </div>
+      <div class="shrink-0 text-right">
+        <p class="text-[10px] sm:text-[12px] text-noble-black/30 font-medium leading-none mb-1">
+          {{ rateLabel }}
+        </p>
+        <div class="flex items-center justify-end gap-1">
+          <span class="text-[9px] text-noble-black/20 font-bold uppercase tracking-tight"
+            >Total</span
+          >
+          <p class="text-[14px] sm:text-[16px] font-extrabold text-burning-orange leading-none">
+            {{ totalLabel }}
+          </p>
         </div>
       </div>
     </div>

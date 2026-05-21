@@ -109,6 +109,27 @@ const actionLabel = (type: ResolutionActionType) => {
   }
 }
 
+const blockInvalidNumericChars = (event: KeyboardEvent) => {
+  if (["-", "e", "E", "+", "."].includes(event.key)) {
+    event.preventDefault()
+  }
+}
+
+const handleNumericInput = (
+  event: Event,
+  refVar: "pointDeductionPoints" | "suspensionDurationDays" | "suspendDays",
+) => {
+  const target = event.target as HTMLInputElement
+  const sanitized = target.value.replace(/\D/g, "")
+  if (sanitized !== target.value) {
+    target.value = sanitized
+  }
+  const numValue = Number(sanitized) || 0
+  if (refVar === "pointDeductionPoints") pointDeductionPoints.value = numValue
+  else if (refVar === "suspensionDurationDays") suspensionDurationDays.value = numValue
+  else if (refVar === "suspendDays") suspendDays.value = numValue
+}
+
 const loadDispute = async (options: { force?: boolean } = {}) => {
   isLoading.value = true
   error.value = null
@@ -292,7 +313,9 @@ onMounted(loadDispute)
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="space-y-1">
           <div class="flex items-center gap-3">
-            <h1 class="font-montravia text-[36px] font-medium text-noble-black">Dispute Details</h1>
+            <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+              Dispute Details
+            </h1>
           </div>
           <div class="w-10 h-0.5 bg-burning-orange mb-2"></div>
           <p
@@ -851,9 +874,12 @@ onMounted(loadDispute)
                 </div>
                 <div class="flex gap-3">
                   <input
-                    v-model.number="pointDeductionPoints"
-                    type="number"
+                    :value="pointDeductionPoints"
+                    type="text"
+                    inputmode="numeric"
                     class="w-20 h-11 rounded-xl bg-gray-50 px-4 text-[13px] font-medium text-noble-black outline-none border border-gray-200 focus:border-burning-orange/40"
+                    @keypress="blockInvalidNumericChars"
+                    @input="handleNumericInput($event, 'pointDeductionPoints')"
                   />
                   <select
                     v-model="pointDeductionTargetId"
@@ -884,10 +910,13 @@ onMounted(loadDispute)
                 </div>
                 <div class="flex gap-3">
                   <input
-                    v-model.number="suspensionDurationDays"
-                    type="number"
+                    :value="suspensionDurationDays"
+                    type="text"
+                    inputmode="numeric"
                     placeholder="Days"
                     class="w-20 h-11 rounded-xl bg-gray-50 px-4 text-[13px] font-medium text-noble-black outline-none border border-gray-200 focus:border-burning-orange/40"
+                    @keypress="blockInvalidNumericChars"
+                    @input="handleNumericInput($event, 'suspensionDurationDays')"
                   />
                   <select
                     v-model="suspensionTargetId"
@@ -1034,9 +1063,12 @@ onMounted(loadDispute)
                   >Duration (Days)</label
                 >
                 <input
-                  v-model.number="suspendDays"
-                  type="number"
+                  :value="suspendDays"
+                  type="text"
+                  inputmode="numeric"
                   class="w-full h-11 rounded-xl bg-gray-50 border border-gray-100 px-4 text-[14px] font-medium text-noble-black outline-none focus:border-burning-orange/30 focus:ring-2 focus:ring-burning-orange/10 transition-all"
+                  @keypress="blockInvalidNumericChars"
+                  @input="handleNumericInput($event, 'suspendDays')"
                 />
               </div>
               <div class="space-y-2">

@@ -86,7 +86,9 @@ onMounted(() => {
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div class="space-y-3">
         <div class="space-y-2">
-          <h1 class="font-montravia text-[36px] font-medium text-noble-black">Platform Overview</h1>
+          <h1 class="font-geist text-[36px] font-medium text-noble-black tracking-tight">
+            Platform Overview
+          </h1>
           <div class="w-10 h-0.5 bg-burning-orange"></div>
         </div>
         <p class="text-[16px] font-light leading-relaxed text-noble-black/50">

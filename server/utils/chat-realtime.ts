@@ -6,11 +6,19 @@ type BroadcastableChatMessage = {
   id: string
   conversationId: string
   senderUserId: string
+  replyToMessageId: string | null
   body: string
   imageUrl: string | null
   isRead: boolean
   readAt: Date | string | null
   createdAt: Date | string
+  replyToMessage: {
+    id: string
+    senderUserId: string
+    body: string
+    imageUrl: string | null
+    createdAt: Date | string
+  } | null
 }
 
 const conversationTopic = (conversationId: string) => `chat-conversation-${conversationId}`
@@ -20,12 +28,22 @@ const normalizeMessage = (message: BroadcastableChatMessage) => ({
   id: message.id,
   conversationId: message.conversationId,
   senderUserId: message.senderUserId,
+  replyToMessageId: message.replyToMessageId,
   body: message.body,
   imageUrl: message.imageUrl,
   isRead: message.isRead,
   readAt: message.readAt instanceof Date ? message.readAt.toISOString() : message.readAt,
   createdAt:
     message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt,
+  replyToMessage: message.replyToMessage
+    ? {
+        ...message.replyToMessage,
+        createdAt:
+          message.replyToMessage.createdAt instanceof Date
+            ? message.replyToMessage.createdAt.toISOString()
+            : message.replyToMessage.createdAt,
+      }
+    : null,
 })
 
 export const broadcastChatMessage = async (event: H3Event, message: BroadcastableChatMessage) => {

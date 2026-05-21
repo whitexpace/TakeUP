@@ -65,8 +65,10 @@ export interface CommunityRequest {
   createdAt: Date
   updatedAt: Date
   offersCount: number
+  repliesCount: number
   borrower: CommunityMember
   offers: CommunityOffer[]
+  replies: Reply[]
 }
 
 export interface CommunityRequestComposerInput {
@@ -83,10 +85,12 @@ export interface CommunityRequestComposerInput {
 
 export interface Reply {
   id: string
+  requestId: number
+  parentReplyId: string | null
   user: Pick<CommunityMember, "name" | "avatar" | "username">
   text: string
   upvotes: number
-  isUpvoted?: boolean
+  isUpvoted: boolean
   createdAt: Date
   replies?: Reply[]
 }
@@ -101,18 +105,6 @@ export interface TrendingRequest {
   id: number
   title: string
   offersCount: number
-}
-
-export interface CommunityOfferNotification {
-  id: number
-  requestId: number
-  requestTitle: string
-  recipientId: number
-  actorName: string
-  itemName: string
-  fee: number
-  createdAt: Date
-  read: boolean
 }
 
 export interface CommunityOfferNotification {

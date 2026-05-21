@@ -1,24 +1,26 @@
 <template>
-  <div class="mx-auto py-8 pt-16 max-w-[1600px]">
+  <div class="mx-auto py-8 pt-12 md:pt-16 max-w-[1600px]">
     <!-- Header Section -->
-    <div class="mb-10">
+    <div class="mb-8 md:mb-10">
       <h1
-        class="font-montravia font-semibold text-[48px] text-noble-black leading-tight mb-2 italic"
+        class="font-montravia font-semibold text-[32px] sm:text-[40px] md:text-[48px] text-noble-black leading-tight mb-2 italic tracking-tighter"
       >
         Good {{ greeting }}, {{ firstName }}!
       </h1>
-      <p class="font-geist font-light text-[20px] text-noble-black/50">
+      <p
+        class="font-geist font-light text-[16px] sm:text-[18px] md:text-[20px] text-noble-black/50"
+      >
         Discover items to rent or borrow near you.
       </p>
 
       <!-- Search Bar Section (Modernized) -->
-      <div class="mt-6 sm:mt-8 flex items-center w-full max-w-3xl">
+      <div class="mt-6 sm:mt-8 flex items-center w-full">
         <!-- Unified Search Container -->
         <div
           class="relative flex-1 flex items-center h-[48px] bg-white rounded-[14px] border-[1.5px] border-noble-black/20 px-1.5 transition-all duration-300 focus-within:border-burning-orange focus-within:ring-4 focus-within:ring-burning-orange/5"
         >
           <!-- Search Icon / Clear Button -->
-          <div class="flex items-center justify-center w-10 shrink-0">
+          <div class="flex items-center justify-center w-8 sm:w-10 shrink-0">
             <button
               v-if="searchInput"
               class="text-noble-black/30 hover:text-noble-black/60 transition-colors flex items-center justify-center"
@@ -34,8 +36,8 @@
           <input
             v-model="searchInput"
             type="text"
-            placeholder="Search for items to rent or borrow"
-            class="flex-1 bg-transparent px-2 font-geist font-medium text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
+            placeholder="Search items..."
+            class="flex-1 bg-transparent px-1 sm:px-2 font-geist font-medium text-[14px] sm:text-[15px] text-noble-black placeholder:text-noble-black/30 focus:outline-none"
             @focus="onSearchFocus"
             @blur="onSearchBlur"
             @keydown.down.prevent="moveSuggestionHighlight(1)"
@@ -45,10 +47,11 @@
 
           <!-- Integrated Search Button -->
           <button
-            class="h-9 px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
+            class="h-9 px-4 sm:px-6 bg-burning-orange text-white rounded-[10px] font-bold text-[12px] sm:text-[13px] hover:brightness-110 shadow-md shadow-burning-orange/20 transition-all shrink-0 flex items-center justify-center"
             @click="applySearch"
           >
-            Search
+            <span class="hidden xs:inline">Search</span>
+            <Icon name="ph:magnifying-glass" class="xs:hidden w-4 h-4" />
           </button>
 
           <!-- Suggestions Dropdown -->
@@ -121,7 +124,7 @@
     <!-- Items Grid (Modernized: Fluid & Responsive) -->
     <div
       v-if="cardItems.length > 0 || isLoading"
-      class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8"
+      class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 xs:gap-4 sm:gap-8"
     >
       <ItemCard
         v-for="(item, index) in cardItems"

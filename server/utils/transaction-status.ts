@@ -18,13 +18,10 @@ const getTransactionStatusGroup = (
 
 export const transactionStatusGroups: Record<UiTransactionStatus, PrismaTransactionStatus[]> = {
   PENDING: getTransactionStatusGroup(
-    ["PENDING", "AWAITING_LENDER_APPROVAL"],
+    ["PENDING", "AWAITING_LENDER_APPROVAL", "CONFIRMED", "PAID"],
     [PrismaTransactionStatus.PENDING],
   ),
-  ACTIVE: getTransactionStatusGroup(
-    ["ACTIVE", "CONFIRMED", "PAID", "ONGOING", "IN_DISPUTE", "APPEALED"],
-    [PrismaTransactionStatus.PENDING],
-  ),
+  ACTIVE: getTransactionStatusGroup(["ACTIVE", "ONGOING"], [PrismaTransactionStatus.PENDING]),
   RETURNED: getTransactionStatusGroup(["RETURNED"], [PrismaTransactionStatus.RETURNED]),
   COMPLETED: [PrismaTransactionStatus.COMPLETED],
   CANCELLED: getTransactionStatusGroup(

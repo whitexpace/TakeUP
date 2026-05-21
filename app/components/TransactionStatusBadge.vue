@@ -29,7 +29,7 @@ const label = computed(() => {
 
   switch (props.status) {
     case "PENDING":
-      return props.role === "BORROWER" ? "To Receive" : "Ready for Approval"
+      return "Pending"
     case "ACTIVE":
       return "In Use"
     case "COMPLETED":
