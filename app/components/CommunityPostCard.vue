@@ -17,7 +17,7 @@
           <div class="flex items-center gap-2">
             <NuxtLink
               :to="`/profile/${request.borrower.username}`"
-              class="text-[13px] font-medium text-gray-900 hover:text-burning-orange transition-colors truncate"
+              class="text-[15px] font-bold text-gray-900 hover:text-burning-orange transition-colors truncate"
             >
               {{ request.borrower.name }}
             </NuxtLink>
@@ -25,6 +25,9 @@
               formatRelativeTime(request.createdAt)
             }}</span>
           </div>
+          <span class="text-[13px] text-noble-black/50 truncate">
+            @{{ request.borrower.username }}
+          </span>
         </div>
       </div>
 

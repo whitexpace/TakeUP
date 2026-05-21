@@ -210,10 +210,11 @@ const formatUserName = (user: {
   middleName: string | null
   lastName: string
   email: string
-}) =>
-  user.username ||
-  [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ") ||
-  user.email
+}) => {
+  const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ").trim()
+
+  return fullName || user.username || user.email
+}
 
 const mapCommunityMember = (user: ReplyAuthor) => ({
   userId: user.userId,

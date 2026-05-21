@@ -1,243 +1,414 @@
 <template>
   <Teleport to="body">
-    <transition name="offer-modal">
+    <transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-[2100] flex items-center justify-center bg-noble-black/55 p-4"
-        @click.self="closeModal"
+        class="fixed inset-0 z-[2100] flex items-center justify-center p-4 font-geist"
       >
+        <!-- Overlay -->
+        <div class="absolute inset-0 bg-noble-black/60 backdrop-blur-sm" @click="closeModal" />
+
+        <!-- Modal Container -->
         <div
-          class="w-full max-w-2xl rounded-[28px] border border-cinnamon-ice/30 bg-cream p-6 shadow-2xl md:p-7"
+          class="relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[20px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.15)] overflow-hidden"
         >
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex flex-col gap-1">
-              <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-estate/60">
-                {{ existingOffer ? "Update offer" : "Offer item" }}
-              </p>
-              <h2 class="text-[26px] font-bold leading-tight text-noble-black">
-                {{ requestTitle }}
+          <!-- Header -->
+          <div class="px-6 pt-8 pb-4 flex items-start justify-between gap-4 shrink-0">
+            <div>
+              <h2 class="text-[24px] font-semibold text-noble-black">
+                {{ existingOffer ? "Update Offer" : "Make an Offer" }}
               </h2>
-              <p class="text-[14px] leading-relaxed text-noble-black/55">
-                Pick one of your listings, set the terms, and send the offer directly to the
-                borrower.
+              <p class="mt-1 text-[13px] font-light text-noble-black/50">
+                {{
+                  existingOffer
+                    ? "Update your terms for this request."
+                    : "Set your terms and send this offer directly."
+                }}
               </p>
             </div>
-
             <button
-              class="rounded-full p-2 text-noble-black/40 transition-colors hover:bg-white hover:text-noble-black"
-              aria-label="Close offer form"
+              type="button"
+              class="flex h-10 w-10 items-center justify-center rounded-full text-noble-black transition hover:bg-gray-100"
               @click="closeModal"
             >
               <Icon name="ph:x" class="w-[18px] h-[18px]" />
             </button>
           </div>
 
-          <div
-            v-if="items.length === 0"
-            class="mt-6 rounded-[18px] border border-dashed border-cinnamon-ice/30 bg-white/70 px-5 py-5"
-          >
-            <p class="text-[14px] font-semibold text-noble-black">No offerable items found.</p>
-            <p class="mt-1 text-[13px] leading-relaxed text-noble-black/50">
-              Create a listing first so you can attach a real item to this offer.
-            </p>
-            <button
-              type="button"
-              class="mt-4 rounded-full bg-burning-orange px-5 py-2.5 text-[13px] font-bold text-white transition-all hover:bg-blue-estate"
-              @click="emit('create-item')"
-            >
-              Add new item
-            </button>
-          </div>
+          <!-- Scrollable Content -->
+          <div class="flex-1 overflow-y-auto custom-modal-scrollbar px-6">
+            <div class="space-y-5 py-4 pb-8">
+              <!-- Request Title Info (Visual Hint) -->
+              <div
+                class="mb-2 p-4 rounded-[12px] bg-gray-50 border border-gray-100 flex items-center gap-3"
+              >
+                <div
+                  class="w-10 h-10 rounded-full bg-burning-orange/10 flex items-center justify-center shrink-0"
+                >
+                  <Icon name="ph:hand-heart" class="w-5 h-5 text-burning-orange" />
+                </div>
+                <div class="min-w-0">
+                  <p class="text-[11px] font-bold uppercase tracking-[0.1em] text-noble-black/40">
+                    Responding to
+                  </p>
+                  <h3 class="text-[15px] font-semibold text-noble-black truncate">
+                    {{ requestTitle }}
+                  </h3>
+                </div>
+              </div>
 
-          <div v-else class="mt-6 grid gap-4 md:grid-cols-2">
-            <label class="flex flex-col gap-2 md:col-span-2">
-              <span class="flex items-center justify-between gap-3">
-                <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-                  Your item
-                </span>
+              <!-- Empty State -->
+              <div
+                v-if="items.length === 0"
+                class="rounded-[16px] border border-dashed border-gray-200 bg-gray-50/50 p-8 text-center"
+              >
+                <Icon name="ph:package" class="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p class="text-[15px] font-semibold text-noble-black">No offerable items found</p>
+                <p class="mt-1 text-[13px] text-noble-black/50">
+                  Create a listing first to make an offer.
+                </p>
                 <button
                   type="button"
-                  class="rounded-full border border-cinnamon-ice/25 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-blue-estate transition-all hover:border-blue-estate/20 hover:bg-blue-estate/5"
+                  class="mt-4 inline-flex h-10 items-center justify-center rounded-[12px] bg-burning-orange px-6 text-[14px] font-semibold text-white transition hover:brightness-95 shadow-sm shadow-burning-orange/20"
                   @click="emit('create-item')"
                 >
-                  Add new item
+                  Add New Item
                 </button>
-              </span>
-              <select
-                v-model="selectedItemIdInput"
-                class="w-full rounded-[16px] bg-white px-4 py-3 text-[15px] text-noble-black outline-none transition-all duration-300"
-                :class="
-                  showItemError
-                    ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                    : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
-                "
-                @blur="markTouched('item')"
-              >
-                <option value="">Select an item</option>
-                <option v-for="item in items" :key="item.numericId" :value="String(item.numericId)">
-                  {{ item.name }} · {{ formatFee(item.freeToBorrow ? 0 : item.rentalFee) }}
-                </option>
-              </select>
-              <p v-if="showItemError" class="text-[12px] font-medium text-burning-orange">
-                {{ itemError }}
-              </p>
-            </label>
+              </div>
 
-            <div
-              v-if="selectedItem"
-              class="md:col-span-2 overflow-hidden rounded-[18px] border border-cinnamon-ice/20 bg-white"
-            >
-              <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
-                <div class="h-28 w-full overflow-hidden rounded-[16px] bg-cream sm:w-36">
-                  <img
-                    v-if="selectedItem.thumbnailImage"
-                    :src="selectedItem.thumbnailImage"
-                    :alt="selectedItem.name"
-                    class="h-full w-full object-cover"
-                  />
+              <div v-else class="space-y-5">
+                <!-- Item Selection -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between px-1">
+                    <label class="text-[13px] font-semibold text-noble-black/70"
+                      >Select your item</label
+                    >
+                    <button
+                      type="button"
+                      class="text-[12px] font-bold text-burning-orange hover:underline"
+                      @click="emit('create-item')"
+                    >
+                      + Add New
+                    </button>
+                  </div>
+                  <div ref="itemDropdownRef" class="relative group">
+                    <div
+                      class="flex w-full pl-12 pr-10 py-4 border-[1.5px] border-gray-200 rounded-[10px] bg-white cursor-pointer transition-all duration-300"
+                      :class="[
+                        isItemDropdownOpen
+                          ? 'border-burning-orange shadow-[0_0_0_3px_rgba(232,101,10,0.1)]'
+                          : 'hover:border-burning-orange/30',
+                        { 'border-burning-orange/50': showItemError },
+                      ]"
+                      @click="toggleItemDropdown"
+                    >
+                      <div
+                        class="absolute left-4 top-[18px] text-noble-black/40 group-hover:text-burning-orange transition-colors duration-300 z-10"
+                      >
+                        <Icon name="ph:package" class="w-[18px] h-[18px]" />
+                      </div>
+                      <span
+                        class="text-[15px] transition-colors"
+                        :class="selectedItemIdInput ? 'text-noble-black' : 'text-noble-black/40'"
+                      >
+                        {{ selectedItem?.name || "Choose from your listings" }}
+                      </span>
+                      <Icon
+                        name="ph:caret-down"
+                        class="absolute right-4 top-1/2 -translate-y-1/2 text-noble-black/40 transition-transform duration-300"
+                        :class="{ 'rotate-180': isItemDropdownOpen }"
+                        size="18"
+                      />
+                    </div>
+
+                    <!-- Custom Dropdown List -->
+                    <transition
+                      enter-active-class="transition duration-300 ease-out"
+                      enter-from-class="transform -translate-y-2 opacity-0"
+                      enter-to-class="transform translate-y-0 opacity-100"
+                      leave-active-class="transition duration-200 ease-in"
+                      leave-from-class="transform translate-y-0 opacity-100"
+                      leave-to-class="transform -translate-y-2 opacity-0"
+                    >
+                      <div
+                        v-if="isItemDropdownOpen"
+                        class="absolute z-[100] mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] py-2 overflow-hidden"
+                      >
+                        <div class="max-h-[240px] overflow-y-auto custom-modal-scrollbar">
+                          <button
+                            v-for="item in items"
+                            :key="item.numericId"
+                            type="button"
+                            class="w-full text-left px-5 py-3 text-[14px] transition-all duration-200 flex flex-col gap-0.5"
+                            :class="[
+                              selectedItemIdInput === String(item.numericId)
+                                ? 'bg-burning-orange/5 text-burning-orange font-bold'
+                                : 'text-noble-black hover:bg-gray-50 hover:text-burning-orange',
+                            ]"
+                            @click="selectItemOption(item.numericId)"
+                          >
+                            <span class="font-semibold">{{ item.name }}</span>
+                            <span class="text-[11px] opacity-60">
+                              {{ formatCondition(item.condition) }} ·
+                              {{ item.freeToBorrow ? "Free" : formatFee(item.rentalFee) }}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </transition>
+                  </div>
+                  <p v-if="showItemError" class="text-[11px] font-medium text-burning-orange ml-1">
+                    {{ itemError }}
+                  </p>
+                </div>
+
+                <!-- Selected Item Preview Card -->
+                <transition name="fade">
                   <div
-                    v-else
-                    class="flex h-full w-full items-center justify-center text-[12px] font-semibold uppercase tracking-[0.12em] text-noble-black/30"
+                    v-if="selectedItem"
+                    class="rounded-[12px] border border-gray-100 bg-gray-50/30 p-3"
                   >
-                    No image
+                    <div class="flex items-center gap-4">
+                      <img
+                        v-if="selectedItem.thumbnailImage"
+                        :src="selectedItem.thumbnailImage"
+                        class="h-14 w-14 rounded-[8px] object-cover bg-white shadow-sm"
+                      />
+                      <div
+                        v-else
+                        class="h-14 w-14 rounded-[8px] bg-gray-200 flex items-center justify-center"
+                      >
+                        <Icon name="ph:image" class="text-gray-400" />
+                      </div>
+                      <div class="min-w-0">
+                        <p class="text-[14px] font-semibold text-noble-black truncate">
+                          {{ selectedItem.name }}
+                        </p>
+                        <p class="text-[12px] text-noble-black/50">
+                          {{ formatCondition(selectedItem.condition) }} ·
+                          {{
+                            selectedItem.freeToBorrow ? "Free" : formatFee(selectedItem.rentalFee)
+                          }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </transition>
+
+                <!-- Rental Fee & Condition Grid -->
+                <div class="grid grid-cols-2 gap-4">
+                  <!-- Fee -->
+                  <div class="space-y-1.5">
+                    <label class="text-[13px] font-semibold text-noble-black/70 ml-1"
+                      >Rental Fee</label
+                    >
+                    <div class="relative group">
+                      <div
+                        class="absolute left-4 top-[18px] text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300 z-10"
+                      >
+                        <span class="text-[15px] font-bold">₱</span>
+                      </div>
+                      <input
+                        v-model="feeInput"
+                        type="text"
+                        inputmode="numeric"
+                        placeholder="0"
+                        class="w-full pl-10 pr-4 py-4 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[15px] text-noble-black transition-all duration-300 font-semibold"
+                        :class="{ 'border-burning-orange/50': showFeeError }"
+                        @input="handlePriceInput"
+                        @keypress="blockInvalidPriceChars"
+                        @blur="markTouched('fee')"
+                      />
+                    </div>
+                    <p v-if="showFeeError" class="text-[11px] font-medium text-burning-orange ml-1">
+                      {{ feeError }}
+                    </p>
+                  </div>
+
+                  <!-- Condition -->
+                  <div class="space-y-1.5">
+                    <label class="text-[13px] font-semibold text-noble-black/70 ml-1"
+                      >Condition</label
+                    >
+                    <div ref="conditionDropdownRef" class="relative group">
+                      <div
+                        class="flex w-full pl-12 pr-10 py-4 border-[1.5px] border-gray-200 rounded-[10px] bg-white cursor-pointer transition-all duration-300"
+                        :class="
+                          isConditionDropdownOpen
+                            ? 'border-burning-orange shadow-[0_0_0_3px_rgba(232,101,10,0.1)]'
+                            : 'hover:border-burning-orange/30'
+                        "
+                        @click="toggleConditionDropdown"
+                      >
+                        <div
+                          class="absolute left-4 top-[18px] text-noble-black/40 group-hover:text-burning-orange transition-colors duration-300 z-10"
+                        >
+                          <Icon name="ph:sparkle" class="w-[18px] h-[18px]" />
+                        </div>
+                        <span class="text-[15px] text-noble-black">
+                          {{ formatCondition(condition) }}
+                        </span>
+                        <Icon
+                          name="ph:caret-down"
+                          class="absolute right-4 top-1/2 -translate-y-1/2 text-noble-black/40 transition-transform duration-300"
+                          :class="{ 'rotate-180': isConditionDropdownOpen }"
+                          size="18"
+                        />
+                      </div>
+
+                      <!-- Custom Dropdown List -->
+                      <transition
+                        enter-active-class="transition duration-300 ease-out"
+                        enter-from-class="transform -translate-y-2 opacity-0"
+                        enter-to-class="transform translate-y-0 opacity-100"
+                        leave-active-class="transition duration-200 ease-in"
+                        leave-from-class="transform translate-y-0 opacity-100"
+                        leave-to-class="transform -translate-y-2 opacity-0"
+                      >
+                        <div
+                          v-if="isConditionDropdownOpen"
+                          class="absolute z-[100] mt-2 w-full bg-white border border-cinnamon-ice/30 rounded-[12px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] py-2 overflow-hidden"
+                        >
+                          <div class="max-h-[200px] overflow-y-auto custom-modal-scrollbar">
+                            <button
+                              v-for="option in communityOfferConditions"
+                              :key="option"
+                              type="button"
+                              class="w-full text-left px-5 py-3 text-[14px] transition-all duration-200"
+                              :class="[
+                                condition === option
+                                  ? 'bg-burning-orange/5 text-burning-orange font-bold'
+                                  : 'text-noble-black hover:bg-gray-50 hover:text-burning-orange',
+                              ]"
+                              @click="selectConditionOption(option)"
+                            >
+                              {{ formatCondition(option) }}
+                            </button>
+                          </div>
+                        </div>
+                      </transition>
+                    </div>
                   </div>
                 </div>
-                <div class="flex flex-1 flex-col gap-1">
-                  <p class="text-[16px] font-semibold text-noble-black">{{ selectedItem.name }}</p>
-                  <p class="text-[13px] text-noble-black/55">
-                    {{ formatCondition(selectedItem.condition) }} ·
-                    {{
-                      selectedItem.freeToBorrow
-                        ? "Free to borrow"
-                        : formatFee(selectedItem.rentalFee)
-                    }}
+
+                <!-- Rental Terms -->
+                <div class="relative group">
+                  <div
+                    class="absolute left-4 top-5 text-noble-black/40 group-focus-within:text-burning-orange transition-colors duration-300"
+                  >
+                    <Icon name="ph:notebook" class="w-[18px] h-[18px]" />
+                  </div>
+                  <textarea
+                    id="offer-terms"
+                    v-model="rentalTerms"
+                    rows="3"
+                    placeholder=" "
+                    class="peer w-full pl-12 pr-4 pt-7 pb-2 border-[1.5px] border-gray-200 rounded-[10px] bg-white focus:border-burning-orange focus:shadow-[0_0_0_3px_rgba(232,101,10,0.1)] outline-none text-[15px] text-noble-black transition-all duration-300 resize-none h-32"
+                    @blur="markTouched('rentalTerms')"
+                  ></textarea>
+                  <label
+                    for="offer-terms"
+                    class="absolute left-12 top-5 text-noble-black/40 text-[15px] transition-all duration-300 pointer-events-none peer-placeholder-shown:top-5 peer-placeholder-shown:text-[15px] peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:text-burning-orange peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-[11px]"
+                    >Rental Terms & Details</label
+                  >
+                  <p
+                    v-if="showRentalTermsError"
+                    class="text-[11px] font-medium text-burning-orange mt-1 ml-1"
+                  >
+                    {{ rentalTermsError }}
                   </p>
-                  <p class="text-[13px] text-noble-black/45">
-                    This image will be shown with your offer so the borrower can identify the item.
+                </div>
+
+                <!-- Availability Confirmation -->
+                <div class="pt-2">
+                  <label class="flex items-center gap-3 cursor-pointer group">
+                    <div class="relative">
+                      <input
+                        v-model="availabilityConfirmed"
+                        type="checkbox"
+                        class="peer h-5 w-5 appearance-none rounded-[6px] border-[1.5px] border-gray-200 bg-white transition-all checked:bg-burning-orange checked:border-burning-orange"
+                        @change="markTouched('availability')"
+                      />
+                      <Icon
+                        name="ph:check-bold"
+                        class="absolute inset-0 m-auto text-white opacity-0 peer-checked:opacity-100 transition-opacity"
+                        size="12"
+                      />
+                    </div>
+                    <div class="flex-1">
+                      <span
+                        class="text-[14px] font-medium text-noble-black group-hover:text-burning-orange transition-colors"
+                        >Confirm item availability</span
+                      >
+                      <p class="text-[12px] text-noble-black/40">
+                        Check that the item is ready for the requested dates.
+                      </p>
+                    </div>
+                  </label>
+                  <p
+                    v-if="showAvailabilityError"
+                    class="text-[11px] font-medium text-burning-orange mt-1 ml-8"
+                  >
+                    {{ availabilityError }}
                   </p>
                 </div>
               </div>
+
+              <!-- Server Error -->
+              <transition name="fade">
+                <div
+                  v-if="hasFeedbackError && feedbackMessage"
+                  class="rounded-[10px] bg-cinnabar-red/5 p-3 border border-cinnabar-red/10"
+                >
+                  <p class="text-[12px] font-medium text-cinnabar-red text-center">
+                    {{ feedbackMessage }}
+                  </p>
+                </div>
+              </transition>
             </div>
-
-            <label class="flex flex-col gap-2">
-              <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-                Rental fee
-              </span>
-              <div
-                class="flex items-center rounded-[16px] bg-white px-4"
-                :class="
-                  showFeeError
-                    ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                    : 'border border-cinnamon-ice/30 focus-within:border-blue-estate/30 focus-within:ring-4 focus-within:ring-blue-estate/5'
-                "
-              >
-                <span class="text-[15px] font-semibold text-noble-black/45">PHP</span>
-                <input
-                  v-model="feeInput"
-                  type="number"
-                  inputmode="decimal"
-                  min="0"
-                  step="1"
-                  placeholder="0"
-                  class="w-full border-none bg-transparent px-3 py-3 text-[15px] text-noble-black outline-none"
-                  @blur="markTouched('fee')"
-                />
-              </div>
-              <p v-if="showFeeError" class="text-[12px] font-medium text-burning-orange">
-                {{ feeError }}
-              </p>
-            </label>
-
-            <label class="flex flex-col gap-2">
-              <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-                Condition
-              </span>
-              <select
-                v-model="condition"
-                class="w-full rounded-[16px] border border-cinnamon-ice/30 bg-white px-4 py-3 text-[15px] text-noble-black outline-none transition-all duration-300 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5"
-              >
-                <option v-for="option in communityOfferConditions" :key="option" :value="option">
-                  {{ formatCondition(option) }}
-                </option>
-              </select>
-            </label>
-
-            <label class="flex flex-col gap-2 md:col-span-2">
-              <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-noble-black/45">
-                Rental terms
-              </span>
-              <textarea
-                v-model="rentalTerms"
-                rows="5"
-                placeholder="Share pickup details, inclusions, and any conditions the borrower should know."
-                class="w-full resize-none rounded-[16px] bg-white px-4 py-3 text-[15px] leading-relaxed text-noble-black outline-none transition-all duration-300 placeholder:text-noble-black/30"
-                :class="
-                  showRentalTermsError
-                    ? 'border border-burning-orange/50 ring-4 ring-burning-orange/10'
-                    : 'border border-cinnamon-ice/30 focus:border-blue-estate/30 focus:ring-4 focus:ring-blue-estate/5'
-                "
-                @blur="markTouched('rentalTerms')"
-              ></textarea>
-              <p v-if="showRentalTermsError" class="text-[12px] font-medium text-burning-orange">
-                {{ rentalTermsError }}
-              </p>
-            </label>
           </div>
 
-          <label
-            class="mt-5 flex items-start gap-3 rounded-[18px] bg-white px-4 py-3"
-            :class="
-              showAvailabilityError
-                ? 'border border-burning-orange/40 ring-4 ring-burning-orange/10'
-                : 'border border-cinnamon-ice/25'
-            "
+          <!-- Footer -->
+          <div
+            class="px-6 py-5 border-t border-cinnamon-ice/10 bg-white flex flex-col shrink-0 gap-3"
           >
-            <input
-              v-model="availabilityConfirmed"
-              type="checkbox"
-              class="mt-1 h-4 w-4 rounded border-cinnamon-ice text-blue-estate focus:ring-blue-estate/20"
-              @change="markTouched('availability')"
-            />
-            <div class="flex flex-col gap-1">
-              <span class="text-[14px] font-semibold text-noble-black">
-                I confirm this item is available
-              </span>
-              <span class="text-[13px] leading-relaxed text-noble-black/50">
-                The borrower will see this offer immediately after submission.
-              </span>
-            </div>
-          </label>
-          <p v-if="showAvailabilityError" class="mt-3 text-[12px] font-medium text-burning-orange">
-            {{ availabilityError }}
-          </p>
-
-          <p v-if="hasFeedbackError" class="mt-4 text-[13px] font-medium text-burning-orange">
-            {{ feedbackMessage }}
-          </p>
-
-          <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              v-if="existingOffer"
-              class="rounded-full border border-burning-orange/20 px-6 py-3 text-[14px] font-bold text-burning-orange transition-all hover:bg-burning-orange/5 disabled:cursor-not-allowed disabled:opacity-40"
-              :disabled="isSubmitting"
-              @click="emitCancel"
-            >
-              Cancel Offer
-            </button>
-            <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:ml-auto">
+            <div v-if="existingOffer" class="w-full">
               <button
-                class="rounded-full border border-cinnamon-ice/30 px-6 py-3 text-[14px] font-bold text-noble-black/60 transition-all hover:border-cinnamon-ice/45 hover:bg-white hover:text-noble-black"
+                type="button"
+                class="w-full h-10 px-6 rounded-[12px] bg-cinnabar-red text-white text-[13px] font-semibold shadow-sm shadow-cinnabar-red/20 hover:brightness-110 transition-all duration-300"
                 :disabled="isSubmitting"
+                @click="emitCancel"
+              >
+                Cancel Current Offer
+              </button>
+            </div>
+            <div class="flex gap-3 w-full">
+              <button
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] border-[1.5px] border-burning-orange bg-white text-[15px] font-semibold text-burning-orange transition-all duration-200 hover:bg-burning-orange/5"
                 @click="closeModal"
               >
                 Close
               </button>
               <button
-                class="rounded-full bg-burning-orange px-6 py-3 text-[14px] font-bold text-white shadow-md transition-all hover:bg-blue-estate disabled:cursor-not-allowed disabled:opacity-35 disabled:grayscale"
+                type="button"
+                class="flex-1 h-12 items-center justify-center rounded-[10px] bg-gradient-to-br from-burning-orange to-orange-500 text-[15px] font-semibold text-white transition-all duration-300 shadow-lg shadow-burning-orange/35 hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                 :disabled="!canSubmit || isSubmitting"
                 @click="submitOffer"
               >
-                {{ isSubmitting ? "Saving..." : existingOffer ? "Update Offer" : "Submit Offer" }}
+                <Icon
+                  v-if="isSubmitting"
+                  name="ph:spinner"
+                  class="animate-spin w-4 h-4 mr-2 inline-block"
+                />
+                {{ isSubmitting ? "Sending..." : existingOffer ? "Update Offer" : "Submit Offer" }}
               </button>
             </div>
           </div>
@@ -248,7 +419,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue"
+import { computed, reactive, ref, watch, onMounted, onUnmounted } from "vue"
 import type {
   CommunityOffer,
   CommunityOfferCondition,
@@ -293,6 +464,50 @@ const touchedFields = reactive({
   fee: false,
   rentalTerms: false,
   availability: false,
+})
+
+// Dropdown State
+const isItemDropdownOpen = ref(false)
+const isConditionDropdownOpen = ref(false)
+const itemDropdownRef = ref<HTMLElement | null>(null)
+const conditionDropdownRef = ref<HTMLElement | null>(null)
+
+const toggleItemDropdown = () => {
+  isItemDropdownOpen.value = !isItemDropdownOpen.value
+  if (isItemDropdownOpen.value) isConditionDropdownOpen.value = false
+}
+
+const toggleConditionDropdown = () => {
+  isConditionDropdownOpen.value = !isConditionDropdownOpen.value
+  if (isConditionDropdownOpen.value) isItemDropdownOpen.value = false
+}
+
+const selectItemOption = (numericId: number) => {
+  selectedItemIdInput.value = String(numericId)
+  isItemDropdownOpen.value = false
+  markTouched("item")
+}
+
+const selectConditionOption = (option: CommunityOfferCondition) => {
+  condition.value = option
+  isConditionDropdownOpen.value = false
+}
+
+const handleClickOutside = (event: MouseEvent) => {
+  if (itemDropdownRef.value && !itemDropdownRef.value.contains(event.target as Node)) {
+    isItemDropdownOpen.value = false
+  }
+  if (conditionDropdownRef.value && !conditionDropdownRef.value.contains(event.target as Node)) {
+    isConditionDropdownOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("click", handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener("click", handleClickOutside)
 })
 
 const parsedFee = computed(() => Number(feeInput.value))
@@ -465,6 +680,21 @@ const submitOffer = () => {
   })
 }
 
+const blockInvalidPriceChars = (event: KeyboardEvent) => {
+  if (["-", "e", "E", "+", "."].includes(event.key)) {
+    event.preventDefault()
+  }
+}
+
+const handlePriceInput = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const value = target.value
+  const sanitized = value.replace(/\D/g, "")
+  if (sanitized !== value) {
+    feeInput.value = sanitized
+  }
+}
+
 const emitCancel = () => {
   if (!props.existingOffer) return
   emit("cancel-offer", props.existingOffer.id)
@@ -472,26 +702,30 @@ const emitCancel = () => {
 </script>
 
 <style scoped>
-.offer-modal-enter-active,
-.offer-modal-leave-active {
-  transition: opacity 0.22s ease;
+.custom-modal-scrollbar::-webkit-scrollbar {
+  width: 5px;
 }
 
-.offer-modal-enter-active > div,
-.offer-modal-leave-active > div {
-  transition:
-    transform 0.22s ease,
-    opacity 0.22s ease;
+.custom-modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.offer-modal-enter-from,
-.offer-modal-leave-to {
+.custom-modal-scrollbar::-webkit-scrollbar-thumb {
+  background: theme("colors.cinnamon-ice / 20%");
+  border-radius: 10px;
+}
+
+.custom-modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.cinnamon-ice / 40%");
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
-}
-
-.offer-modal-enter-from > div,
-.offer-modal-leave-to > div {
-  opacity: 0;
-  transform: translateY(10px) scale(0.98);
 }
 </style>

@@ -16,6 +16,7 @@ const {
   withdrawPseudo,
   formattedBalance,
   maskedBalance,
+  balance,
 } = useWallet()
 </script>
 
@@ -28,6 +29,7 @@ const {
       title="My Wallet"
       subtitle="Manage your TakeUP wallet balance and linked accounts"
       :transactions="transactions"
+      :balance="balance"
       :is-balance-visible="isBalanceVisible"
       :formatted-balance="formattedBalance"
       :masked-balance="maskedBalance"

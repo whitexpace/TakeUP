@@ -30,6 +30,11 @@
           <div class="flex-1 flex flex-col min-w-0 gap-3">
             <!-- Title Input -->
             <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <span class="text-[12px] font-bold text-noble-black/50 uppercase tracking-wider"
+                  >Item Name <span class="text-burning-orange">*</span></span
+                >
+              </div>
               <input
                 ref="itemNeededInputRef"
                 v-model="itemNeeded"
@@ -46,6 +51,11 @@
 
             <!-- Description Textarea -->
             <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <span class="text-[12px] font-bold text-noble-black/50 uppercase tracking-wider"
+                  >Description <span class="text-burning-orange">*</span></span
+                >
+              </div>
               <textarea
                 v-model="description"
                 placeholder="Describe the item and requirements..."
@@ -57,11 +67,14 @@
               </p>
             </div>
 
-            <!-- Inline Metadata Row (Compact ONE row on desktop) -->
-            <div class="flex flex-col lg:flex-row gap-3 mt-2">
+            <!-- Metadata Row -->
+            <div class="flex flex-col gap-3 mt-2">
+              <span class="text-[12px] font-bold text-noble-black/50 uppercase tracking-wider"
+                >Availability <span class="text-burning-orange">*</span></span
+              >
               <!-- Unified Date Range Input -->
               <div
-                class="flex-1 flex items-center border-[1.5px] border-cinnamon-ice/30 rounded-[10px] p-1 bg-white"
+                class="w-full flex items-center border-[1.5px] border-cinnamon-ice/30 rounded-[10px] p-1 bg-white"
                 :class="{ 'border-burning-orange/50': showDateRangeError }"
               >
                 <!-- Start Date/Time Stacked -->
@@ -112,24 +125,32 @@
                 </div>
               </div>
 
+              <div class="flex items-center justify-between mt-1">
+                <span class="text-[12px] font-bold text-noble-black/50 uppercase tracking-wider"
+                  >Budget Range <span class="text-burning-orange">*</span></span
+                >
+              </div>
               <!-- Budget Range Input -->
               <div class="flex items-center gap-2">
                 <div
-                  class="flex items-center h-[52px] border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-3 bg-white w-28"
+                  class="flex-1 flex items-center h-[52px] border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-3 bg-white"
                   :class="{ 'border-burning-orange/50': showMinimumPriceError }"
                 >
                   <span class="text-[13px] font-semibold text-gray-400 mr-1">₱</span>
                   <input
                     v-model="minimumPrice"
-                    type="number"
-                    placeholder="Min"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="Min budget"
                     class="w-full bg-transparent text-[13px] text-gray-900 outline-none"
+                    @keypress="blockInvalidPriceChars"
+                    @input="handlePriceInput($event, 'minimumPrice')"
                     @blur="markTouched('minimumPrice')"
                   />
                 </div>
                 <span class="text-gray-300">–</span>
                 <div
-                  class="flex items-center h-[52px] border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-3 bg-white w-28"
+                  class="flex-1 flex items-center h-[52px] border-[1.5px] border-cinnamon-ice/30 rounded-[10px] px-3 bg-white"
                   :class="{
                     'border-burning-orange/50': showMaximumPriceError || showPriceRangeError,
                   }"
@@ -137,9 +158,12 @@
                   <span class="text-[13px] font-semibold text-gray-400 mr-1">₱</span>
                   <input
                     v-model="maximumPrice"
-                    type="number"
-                    placeholder="Max"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="Max budget"
                     class="w-full bg-transparent text-[13px] text-gray-900 outline-none"
+                    @keypress="blockInvalidPriceChars"
+                    @input="handlePriceInput($event, 'maximumPrice')"
                     @blur="markTouched('maximumPrice')"
                   />
                 </div>
@@ -542,6 +566,24 @@ const resetForm = () => {
   attemptedSubmit.value = false
   hasSubmitted.value = false
   resetTouchedFields()
+}
+
+const blockInvalidPriceChars = (event: KeyboardEvent) => {
+  if (["-", "e", "E", "+", "."].includes(event.key)) {
+    event.preventDefault()
+  }
+}
+
+const handlePriceInput = (event: Event, field: "minimumPrice" | "maximumPrice") => {
+  const target = event.target as HTMLInputElement
+  const value = target.value
+
+  // Remove all non-digit characters for integers
+  const sanitized = value.replace(/\D/g, "")
+  if (sanitized !== value) {
+    if (field === "minimumPrice") minimumPrice.value = sanitized
+    else maximumPrice.value = sanitized
+  }
 }
 
 const markUploadedImageAsPersisted = () => {

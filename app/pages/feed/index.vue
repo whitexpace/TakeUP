@@ -789,15 +789,16 @@ const ensureAuthenticatedHeaders = async () => {
 }
 
 const handleCreateRequest = async (payload: CommunityRequestComposerInput) => {
-  const headers = await getAuthHeaders()
-  if (!headers) {
-    requestComposerError.value = "You need to sign in before posting a request."
-    return
-  }
-
   isCreatingRequest.value = true
   feedError.value = null
   requestComposerError.value = null
+
+  const headers = await getAuthHeaders()
+  if (!headers) {
+    requestComposerError.value = "You need to sign in before posting a request."
+    isCreatingRequest.value = false
+    return
+  }
 
   try {
     await $fetch("/api/item-requests", {
@@ -897,17 +898,21 @@ const handleCreateOfferableItem = async (data: Record<string, unknown>) => {
 }
 
 const submitOffer = async (offerInput: CommunityOfferFormInput) => {
+  isSubmittingOffer.value = true
+  feedError.value = null
+  offerComposerError.value = null
+
   const request = selectedRequestForOffer.value
   const headers = await getAuthHeaders()
   if (!headers) {
     offerComposerError.value = "You need to sign in before sending an offer."
+    isSubmittingOffer.value = false
     return
   }
-  if (!request) return
-
-  isSubmittingOffer.value = true
-  feedError.value = null
-  offerComposerError.value = null
+  if (!request) {
+    isSubmittingOffer.value = false
+    return
+  }
 
   try {
     if (existingOfferForCurrentUser.value) {
@@ -939,12 +944,15 @@ const submitOffer = async (offerInput: CommunityOfferFormInput) => {
 }
 
 const cancelOffer = async (offerId: number) => {
-  const headers = await ensureAuthenticatedHeaders()
-  if (!headers) return
-
   isSubmittingOffer.value = true
   feedError.value = null
   offerComposerError.value = null
+
+  const headers = await ensureAuthenticatedHeaders()
+  if (!headers) {
+    isSubmittingOffer.value = false
+    return
+  }
 
   try {
     await $fetch(`/api/request-offers/${offerId}`, {
