@@ -2,18 +2,45 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { useChat } from "../composables/use-chat"
-import type { ChatMessage } from "../composables/use-chat"
+import type { ChatMessage, ChatMessageReaction, ChatReactionUpdate } from "../composables/use-chat"
 import { convertImageFileToWebP } from "~/utils/image-upload"
 import { insertTextAtSelection } from "../utils/chat-composer"
 import { getLastOutgoingMessageId } from "../utils/chat-message-utils"
 import { getChatClosedPreviewLabel } from "#shared/chat-rules"
 import { containsModeratedContent, sanitizeChatMessage } from "#shared/chat-moderation"
+import { CHAT_REACTION_EMOJIS } from "#shared/schemas/chat"
 
 definePageMeta({
   layout: false,
 })
 
-const EMOJI_OPTIONS = ["😀", "😂", "😍", "🥹", "😎", "😭", "👍", "🙏", "🔥", "❤️", "🎉", "👀"]
+const EMOJI_OPTIONS = [
+  "😀",
+  "😄",
+  "😂",
+  "🤣",
+  "😊",
+  "😍",
+  "🥰",
+  "🥹",
+  "😎",
+  "😭",
+  "😮",
+  "😅",
+  "👍",
+  "👏",
+  "🙏",
+  "🔥",
+  "❤️",
+  "💯",
+  "🎉",
+  "✨",
+  "👀",
+  "🤝",
+  "💪",
+  "✅",
+]
+const REACTION_OPTIONS = [...CHAT_REACTION_EMOJIS]
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024
 const REALTIME_SESSION_WAIT_MS = 5_000
 const REALTIME_RETRY_MS = 1_500
@@ -42,9 +69,11 @@ const {
   loadConversations,
   openConversation,
   sendMessage: sendChatMessage,
+  reactToMessage: reactToChatMessage,
   reportConversation,
   onActiveRealtimeMessage,
   onInboxRealtimeMessage,
+  applyReactionUpdate,
   closeConversation,
   loadMoreMessages,
   prefetchConversationMessagesForInbox,
@@ -55,6 +84,7 @@ const router = useRouter()
 const supabase = useSupabaseClient()
 const runtimeConfig = useRuntimeConfig()
 const realtimeChannelId = createRealtimeChannelId()
+const { authUser: currentAuthUser, fetch: fetchAuthUser } = useAuthUser()
 
 const isMobile = ref(false)
 const searchQuery = ref("")
@@ -62,6 +92,7 @@ const newMessage = ref("")
 const replyToMessage = ref<ChatMessage | null>(null)
 const showWarning = ref(false)
 const showEmojiPicker = ref(false)
+const reactionPickerMessageId = ref<string | null>(null)
 const showReportModal = ref(false)
 const reportDescription = ref("")
 const reportError = ref<string | null>(null)
@@ -362,6 +393,26 @@ const clearReplyToMessage = () => {
   replyToMessage.value = null
 }
 
+const isOwnMessage = (message: ChatMessage) =>
+  message.senderUserId !== activeConversation.value?.otherParticipant?.id
+
+const closeReactionPicker = () => {
+  reactionPickerMessageId.value = null
+}
+
+const toggleReactionPicker = (message: ChatMessage) => {
+  if (activeConversation.value?.isExpired || message.isOptimistic) return
+  reactionPickerMessageId.value = reactionPickerMessageId.value === message.id ? null : message.id
+}
+
+const handleReactionSelect = (message: ChatMessage, emoji: string) => {
+  closeReactionPicker()
+  void reactToChatMessage(message, emoji)
+}
+
+const getReactionChipLabel = (reaction: ChatMessageReaction) =>
+  `${reaction.count} ${reaction.count === 1 ? "reaction" : "reactions"}`
+
 let openConversationPromise: Promise<void> | null = null
 let openConversationTransactionId: string | null = null
 let openConversationToken: symbol | null = null
@@ -610,12 +661,15 @@ const handleSubmitReport = async () => {
 }
 
 const handleDocumentClick = (event: MouseEvent) => {
-  if (!showEmojiPicker.value) return
   const target = event.target as Node | null
-  if (target && emojiMenuRef.value?.contains(target)) {
-    return
+
+  if (showEmojiPicker.value && !(target && emojiMenuRef.value?.contains(target))) {
+    showEmojiPicker.value = false
   }
-  showEmojiPicker.value = false
+
+  if (reactionPickerMessageId.value) {
+    reactionPickerMessageId.value = null
+  }
 }
 
 let inboxRealtimeChannel: RealtimeChannel | null = null
@@ -847,7 +901,33 @@ const mapRealtimeMessage = (row: Record<string, unknown>): ChatMessage | null =>
     readAt,
     createdAt: row.created_at,
     replyToMessage: null,
+    reactions: [],
   }
+}
+
+const mapReactionSummaries = (value: unknown): ChatMessageReaction[] => {
+  if (!Array.isArray(value)) return []
+
+  const currentUserId = currentAuthUser.value?.id ?? null
+  return value
+    .map((entry): ChatMessageReaction | null => {
+      if (typeof entry !== "object" || entry === null) return null
+      const reaction = entry as Record<string, unknown>
+      if (typeof reaction.emoji !== "string" || typeof reaction.count !== "number") return null
+      const userIds = Array.isArray(reaction.userIds)
+        ? reaction.userIds.filter((userId): userId is string => typeof userId === "string")
+        : []
+
+      return {
+        emoji: reaction.emoji,
+        count: reaction.count,
+        reactedByCurrentUser: currentUserId
+          ? userIds.includes(currentUserId)
+          : Boolean(reaction.reactedByCurrentUser),
+        userIds,
+      }
+    })
+    .filter((reaction): reaction is ChatMessageReaction => Boolean(reaction))
 }
 
 const mapBroadcastMessage = (value: unknown): ChatMessage | null => {
@@ -899,6 +979,34 @@ const mapBroadcastMessage = (value: unknown): ChatMessage | null => {
     readAt: typeof message.readAt === "string" ? message.readAt : null,
     createdAt: message.createdAt,
     replyToMessage,
+    reactions: mapReactionSummaries(message.reactions),
+  }
+}
+
+const mapBroadcastReaction = (value: unknown): ChatReactionUpdate | null => {
+  if (typeof value !== "object" || value === null) return null
+
+  const payload = value as { reaction?: Record<string, unknown> }
+  const reaction = payload.reaction
+  if (!reaction) return null
+
+  if (
+    typeof reaction.conversationId !== "string" ||
+    typeof reaction.messageId !== "string" ||
+    typeof reaction.emoji !== "string" ||
+    typeof reaction.userId !== "string" ||
+    (reaction.action !== "added" && reaction.action !== "removed")
+  ) {
+    return null
+  }
+
+  return {
+    conversationId: reaction.conversationId,
+    messageId: reaction.messageId,
+    emoji: reaction.emoji,
+    userId: reaction.userId,
+    action: reaction.action,
+    reactions: mapReactionSummaries(reaction.reactions),
   }
 }
 
@@ -912,6 +1020,12 @@ const handleBroadcastMessage = (payload: BroadcastMessagePayload) => {
   }
 
   onInboxRealtimeMessage(message, "INSERT")
+}
+
+const handleBroadcastReaction = (payload: BroadcastMessagePayload) => {
+  const reaction = mapBroadcastReaction(payload.payload)
+  if (!reaction) return
+  applyReactionUpdate(reaction)
 }
 
 const handleInboxRealtimeMessage = (
@@ -970,14 +1084,14 @@ const stopActiveBroadcast = async () => {
 const setupInboxBroadcast = async () => {
   if (inboxBroadcastChannel) return
 
-  const { authUser, fetch: fetchAuthUser } = useAuthUser()
-  const currentUser = authUser.value ?? (await fetchAuthUser().catch(() => null))
+  const currentUser = currentAuthUser.value ?? (await fetchAuthUser().catch(() => null))
   if (!currentUser?.id) return
 
   if (inboxBroadcastChannel) return
   inboxBroadcastChannel = supabase
     .channel(getUserBroadcastTopic(currentUser.id))
     .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .on("broadcast", { event: "reaction" }, handleBroadcastReaction)
     .subscribe((status, error) => {
       logRealtimeStatus("inbox broadcast", status, error)
       if (shouldRetryRealtimeStatus(status)) {
@@ -997,6 +1111,7 @@ const setupActiveBroadcast = async (conversationId: string | null) => {
   activeBroadcastChannel = supabase
     .channel(getConversationBroadcastTopic(conversationId))
     .on("broadcast", { event: "message" }, handleBroadcastMessage)
+    .on("broadcast", { event: "reaction" }, handleBroadcastReaction)
     .subscribe((status, error) => {
       logRealtimeStatus("active broadcast", status, error)
       if (shouldRetryRealtimeStatus(status)) {
@@ -1597,6 +1712,57 @@ onUnmounted(() => {
                     @click="startReplyToMessage(message)"
                   >
                     <Icon name="ph:arrow-bend-up-left" class="shrink-0" size="16" />
+                  </button>
+                  <div class="relative mb-1">
+                    <button
+                      type="button"
+                      title="React"
+                      aria-label="React"
+                      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-noble-black/45 opacity-70 shadow-sm transition hover:text-burning-orange hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30 md:opacity-0 md:group-hover/message:opacity-100"
+                      :disabled="Boolean(activeConversation.isExpired || message.isOptimistic)"
+                      @click.stop="toggleReactionPicker(message)"
+                    >
+                      <Icon name="ph:smiley-sticker" class="shrink-0" size="16" />
+                    </button>
+                    <div
+                      v-if="reactionPickerMessageId === message.id"
+                      class="absolute bottom-10 z-30 flex max-w-[280px] flex-wrap gap-1.5 rounded-2xl border border-cinnamon-ice/30 bg-white/95 p-2 shadow-xl backdrop-blur"
+                      :class="[isOwnMessage(message) ? 'right-0' : 'left-0']"
+                      @click.stop
+                    >
+                      <button
+                        v-for="emoji in REACTION_OPTIONS"
+                        :key="emoji"
+                        type="button"
+                        class="flex h-8 w-8 items-center justify-center rounded-xl text-lg transition hover:bg-cream"
+                        @click="handleReactionSelect(message, emoji)"
+                      >
+                        {{ emoji }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-if="(message.reactions?.length ?? 0) > 0"
+                  class="mt-1.5 flex max-w-full flex-wrap gap-1"
+                  :class="[isOwnMessage(message) ? 'justify-end' : 'justify-start']"
+                >
+                  <button
+                    v-for="reaction in message.reactions ?? []"
+                    :key="reaction.emoji"
+                    type="button"
+                    :title="getReactionChipLabel(reaction)"
+                    class="inline-flex h-7 items-center gap-1 rounded-full border px-2 text-[12px] font-bold shadow-sm transition hover:-translate-y-0.5"
+                    :class="[
+                      reaction.reactedByCurrentUser
+                        ? 'border-burning-orange/40 bg-burning-orange/10 text-burning-orange'
+                        : 'border-cinnamon-ice/40 bg-white text-noble-black/60',
+                    ]"
+                    @click="handleReactionSelect(message, reaction.emoji)"
+                  >
+                    <span class="text-[14px] leading-none">{{ reaction.emoji }}</span>
+                    <span>{{ reaction.count }}</span>
                   </button>
                 </div>
 

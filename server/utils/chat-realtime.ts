@@ -19,6 +19,26 @@ type BroadcastableChatMessage = {
     imageUrl: string | null
     createdAt: Date | string
   } | null
+  reactions?: Array<{
+    emoji: string
+    count: number
+    reactedByCurrentUser: boolean
+    userIds?: string[]
+  }>
+}
+
+type BroadcastableChatReaction = {
+  conversationId: string
+  messageId: string
+  emoji: string
+  userId: string
+  action: "added" | "removed"
+  reactions: Array<{
+    emoji: string
+    count: number
+    reactedByCurrentUser: boolean
+    userIds?: string[]
+  }>
 }
 
 const conversationTopic = (conversationId: string) => `chat-conversation-${conversationId}`
@@ -44,19 +64,12 @@ const normalizeMessage = (message: BroadcastableChatMessage) => ({
             : message.replyToMessage.createdAt,
       }
     : null,
+  reactions: message.reactions ?? [],
 })
 
-export const broadcastChatMessage = async (event: H3Event, message: BroadcastableChatMessage) => {
-  const runtimeConfig = useRuntimeConfig(event)
-  const supabaseUrl = runtimeConfig.public.supabase?.url
-  const serviceRoleKey = runtimeConfig.supabaseServiceRoleKey
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return
-  }
-
+const getChatParticipantIds = async (conversationId: string) => {
   const conversation = await prisma.conversation.findUnique({
-    where: { id: message.conversationId },
+    where: { id: conversationId },
     select: {
       transaction: {
         select: {
@@ -67,21 +80,49 @@ export const broadcastChatMessage = async (event: H3Event, message: Broadcastabl
     },
   })
 
-  const participantIds = [
-    conversation?.transaction.borrowerId,
-    conversation?.transaction.lenderId,
-  ].filter((userId): userId is string => Boolean(userId))
+  return [conversation?.transaction.borrowerId, conversation?.transaction.lenderId].filter(
+    (userId): userId is string => Boolean(userId),
+  )
+}
+
+const sendChatBroadcast = async (
+  event: H3Event,
+  conversationId: string,
+  eventName: "message" | "reaction",
+  payload: Record<string, unknown>,
+) => {
+  const runtimeConfig = useRuntimeConfig(event)
+  const supabaseUrl = runtimeConfig.public.supabase?.url
+  const serviceRoleKey = runtimeConfig.supabaseServiceRoleKey
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return
+  }
+
+  const participantIds = await getChatParticipantIds(conversationId)
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
-  const payload = { message: normalizeMessage(message) }
   const topics = [
-    conversationTopic(message.conversationId),
+    conversationTopic(conversationId),
     ...participantIds.map((userId) => userTopic(userId)),
   ]
 
   await Promise.allSettled(
-    topics.map((topic) => supabase.channel(topic).httpSend("message", payload)),
+    topics.map((topic) => supabase.channel(topic).httpSend(eventName, payload)),
   )
+}
+
+export const broadcastChatMessage = async (event: H3Event, message: BroadcastableChatMessage) => {
+  await sendChatBroadcast(event, message.conversationId, "message", {
+    message: normalizeMessage(message),
+  })
+}
+
+export const broadcastChatReaction = async (
+  event: H3Event,
+  reaction: BroadcastableChatReaction,
+) => {
+  await sendChatBroadcast(event, reaction.conversationId, "reaction", { reaction })
 }

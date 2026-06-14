@@ -376,6 +376,87 @@ describe("chatRouter", () => {
     })
   })
 
+  describe("reactToMessage", () => {
+    it("adds a reaction for a participant", async () => {
+      const queryRaw = vi
+        .fn()
+        .mockResolvedValueOnce([{ id: MSG_ID }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            messageId: MSG_ID,
+            emoji: "👍",
+            count: 1,
+            reactedByCurrentUser: true,
+            userIds: [USER_ID],
+          },
+        ])
+      const ctx = makeContext(mockUser, { $queryRaw: queryRaw })
+
+      const result = await caller(ctx).reactToMessage({
+        conversationId: CONV_ID,
+        messageId: MSG_ID,
+        emoji: "👍",
+      })
+
+      expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({
+        conversationId: CONV_ID,
+        messageId: MSG_ID,
+        emoji: "👍",
+        userId: USER_ID,
+        action: "added",
+        reactions: [
+          {
+            emoji: "👍",
+            count: 1,
+            reactedByCurrentUser: true,
+            userIds: [USER_ID],
+          },
+        ],
+      })
+    })
+
+    it("removes an existing reaction for a participant", async () => {
+      const queryRaw = vi
+        .fn()
+        .mockResolvedValueOnce([{ id: MSG_ID }])
+        .mockResolvedValueOnce([{ id: "reaction-1" }])
+        .mockResolvedValueOnce([])
+      const ctx = makeContext(mockUser, { $queryRaw: queryRaw })
+
+      const result = await caller(ctx).reactToMessage({
+        conversationId: CONV_ID,
+        messageId: MSG_ID,
+        emoji: "❤️",
+      })
+
+      expect(ctx.prisma.$executeRaw).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({
+        conversationId: CONV_ID,
+        messageId: MSG_ID,
+        emoji: "❤️",
+        userId: USER_ID,
+        action: "removed",
+        reactions: [],
+      })
+    })
+
+    it("rejects reactions to messages outside the conversation", async () => {
+      const ctx = makeContext(mockUser, {
+        $queryRaw: vi.fn().mockResolvedValueOnce([]),
+      })
+
+      await expect(
+        caller(ctx).reactToMessage({
+          conversationId: CONV_ID,
+          messageId: MSG_ID,
+          emoji: "🔥",
+        }),
+      ).rejects.toThrow("Message not found in this conversation.")
+    })
+  })
+
   describe("getUnreadCount", () => {
     it("returns total unread count", async () => {
       const ctx = makeContext(mockUser, {
