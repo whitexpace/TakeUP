@@ -506,10 +506,14 @@ const prevStep = () => {
             </div>
           </div>
 
-          <!-- Main Content (Two Columns at lg) -->
-          <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 sm:gap-12 items-start mt-12 sm:mt-16">
+          <!-- Main Content (Two Columns at md) -->
+          <div
+            class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-8 sm:gap-12 items-start mt-12 sm:mt-16"
+          >
             <!-- Left Column: Form Steps (60%) -->
-            <div class="lg:col-span-3 space-y-6 sm:space-y-8 min-h-[300px] sm:min-h-[400px]">
+            <div
+              class="md:col-span-2 lg:col-span-3 space-y-6 sm:space-y-8 min-h-[300px] sm:min-h-[400px]"
+            >
               <div
                 v-if="!reportableTransactions.length"
                 class="rounded-[24px] sm:rounded-[32px] border border-dashed border-cinnamon-ice bg-cream px-5 py-12 sm:py-16 text-center"
@@ -983,7 +987,7 @@ const prevStep = () => {
 
             <!-- Right Column: Info Panel (40%, Sticky) -->
             <aside
-              class="lg:col-span-2 space-y-6 lg:sticky lg:top-8 animate-in fade-in slide-in-from-right-4 duration-700"
+              class="md:col-span-1 lg:col-span-2 space-y-6 lg:sticky lg:top-8 animate-in fade-in slide-in-from-right-4 duration-700"
             >
               <div
                 class="bg-white border border-gray-100 rounded-[20px] sm:rounded-[24px] p-6 sm:p-8 shadow-sm"

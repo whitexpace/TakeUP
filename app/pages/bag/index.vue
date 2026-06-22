@@ -724,7 +724,7 @@ const performLenderBookings = async () => {
     <!-- Mobile Bottom Checkout Bar (Fixed) -->
     <div
       v-if="bagItems.length > 0"
-      class="lg:hidden fixed bottom-16 left-0 w-full bg-white border-t border-gray-100 z-[1000] px-4 py-3 flex items-center justify-between shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-safe transition-transform duration-300 ease-in-out"
+      class="lg:hidden fixed bottom-16 left-0 w-full bg-white border-t border-gray-100 z-[1010] px-4 py-3 flex items-center justify-between shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-safe transition-transform duration-300 ease-in-out"
       :class="!isBottomBarVisible ? 'translate-y-full' : 'translate-y-0'"
     >
       <div class="flex items-center gap-3">
@@ -759,7 +759,7 @@ const performLenderBookings = async () => {
           :disabled="selectedItemIds.size === 0 || isSubmitting"
           @click="handleRequestBooking"
         >
-          {{ isSubmitting ? "..." : "Checkout" }}
+          {{ isSubmitting ? "Requesting..." : "Checkout" }}
         </button>
       </div>
     </div>

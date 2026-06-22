@@ -466,8 +466,8 @@ const getTransactionLabel = (transaction: WalletTransaction) => {
           </p>
         </div>
 
-        <div v-else class="flex-1 overflow-x-auto min-w-0">
-          <table v-if="isSystemWallet" class="w-full text-left min-w-[500px] sm:min-w-0">
+        <div v-else class="flex-1 overflow-x-auto custom-scrollbar min-w-0">
+          <table v-if="isSystemWallet" class="w-full text-left min-w-[600px] sm:min-w-0">
             <thead>
               <tr class="border-b border-gray-50 bg-gray-50/50">
                 <th

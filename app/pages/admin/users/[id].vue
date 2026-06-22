@@ -540,8 +540,8 @@ const performBanUser = async () => {
                   </p>
                 </div>
 
-                <div v-else>
-                  <table class="w-full">
+                <div v-else class="overflow-x-auto custom-scrollbar">
+                  <table class="w-full min-w-[800px] lg:min-w-0">
                     <thead class="sticky top-0 z-10">
                       <tr class="bg-gray-50 border-b border-gray-100">
                         <th

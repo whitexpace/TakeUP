@@ -1049,7 +1049,7 @@ const handleReviewSubmitted = async () => {
         </div>
 
         <!-- Content Grid Skeleton -->
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 sm:gap-8">
           <!-- Left Column Skeletons -->
           <div class="lg:col-span-3 space-y-6 sm:space-y-8">
             <!-- Item Detail Card Skeleton -->
@@ -1083,7 +1083,7 @@ const handleReviewSubmitted = async () => {
           </div>
 
           <!-- Right Column Skeletons -->
-          <div class="lg:col-span-2 space-y-6 sm:space-y-8">
+          <div class="md:col-span-1 lg:col-span-2 space-y-6 sm:space-y-8">
             <!-- Payment Summary Skeleton -->
             <div
               class="bg-white border border-cinnamon-ice/10 rounded-[16px] p-5 sm:p-6 shadow-sm space-y-5 sm:space-y-6"
@@ -1171,9 +1171,9 @@ const handleReviewSubmitted = async () => {
       </div>
 
       <!-- Two-Column Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8 items-start">
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 sm:gap-8 items-start">
         <!-- Left Column (60%) -->
-        <div class="lg:col-span-3 space-y-6 sm:space-y-8">
+        <div class="md:col-span-2 lg:col-span-3 space-y-6 sm:space-y-8">
           <!-- Section 1: Item Details -->
           <div
             class="bg-white border border-[#F0EDE8] rounded-[24px] p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] relative group"
@@ -1568,7 +1568,7 @@ const handleReviewSubmitted = async () => {
         </div>
 
         <!-- Right Column (40%, Sticky) -->
-        <aside class="lg:col-span-2 space-y-6 lg:sticky lg:top-8">
+        <aside class="md:col-span-1 lg:col-span-2 space-y-6 lg:sticky lg:top-8">
           <!-- Quick Action Buttons -->
           <div
             v-if="
